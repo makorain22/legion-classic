@@ -108,6 +108,33 @@ class Map {
   // Increases whenever terrain passability may have changed (editor, load).
   uint32_t revision() const { return revision_; }
 
+  // --- Buildings and fortifications ----------------------------------------
+  // Per tile: bit n set = impassable for Locomotor n; kOccupied = a structure
+  // stands here (nothing else may be built on it). Owned by the simulation:
+  // never saved with the map, rebuilt from the buildings on load.
+  static constexpr uint8_t kOccupied = 0x80;
+  uint8_t block(int tx, int ty) const { return blocks_[static_cast<size_t>(ty) * width_ + tx]; }
+  void setBlock(int tx, int ty, uint8_t bits) {
+    blocks_[static_cast<size_t>(ty) * width_ + tx] = bits;
+    ++revision_;
+  }
+  void clearBlocks() {
+    std::fill(blocks_.begin(), blocks_.end(), uint8_t{0});
+    ++revision_;
+  }
+  // Ground a building could stand on: dry, gently sloped, unoccupied.
+  bool buildable(int tx, int ty) const;
+
+  // --- Oil (the resource) ----------------------------------------------------
+  // Units of crude oil in the ground per tile, 0..255. Supply trucks pump it
+  // out; a tile is used up when it reaches 0.
+  uint8_t oil(int tx, int ty) const { return oil_[static_cast<size_t>(ty) * width_ + tx]; }
+  void setOil(int tx, int ty, uint8_t v) { oil_[static_cast<size_t>(ty) * width_ + tx] = v; }
+  std::vector<uint8_t>& oilData() { return oil_; }
+  const std::vector<uint8_t>& oilData() const { return oil_; }
+  // Adds a natural-looking oil field: richest in the middle, ragged edges.
+  void addOilField(int cx, int cy, int radius, uint32_t seed);
+
   // --- Props ---------------------------------------------------------------
   std::vector<Prop>& props() { return props_; }
   const std::vector<Prop>& props() const { return props_; }
@@ -125,6 +152,8 @@ class Map {
   std::vector<uint16_t> heights_;
   std::vector<uint8_t> splat_;
   std::vector<TileInfo> info_;
+  std::vector<uint8_t> blocks_;
+  std::vector<uint8_t> oil_;
   std::vector<Prop> props_;
   uint16_t waterLevel_ = 0;
   TerrainRules rules_;

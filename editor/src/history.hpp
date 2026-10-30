@@ -38,6 +38,7 @@ class History {
   void touchTerrain(const slave::Map& map, int tx0, int ty0, int tx1, int ty1);
   void touchProps(const slave::Map& map);
   void touchWater(const slave::Map& map);
+  void touchOil(const slave::Map& map);
   void end();  // commits the step (dropped if nothing was touched)
   // Commits a step holding just an action (already done by the caller).
   void push(const std::string& label, std::shared_ptr<Action> action);
@@ -65,6 +66,8 @@ class History {
     std::vector<slave::Prop> props;
     bool hasWater = false;
     uint16_t water = 0;
+    bool hasOil = false;
+    std::vector<uint8_t> oil;
     std::shared_ptr<Action> action;
   };
   static void swapChunk(slave::Map& map, ChunkCopy& c);

@@ -12,6 +12,7 @@ constexpr int kChaseReplanTicks = 15;
 }  // namespace
 
 void Simulation::requestPath(Entity e, Vec2i goal) {
+  if (types_.get(reg_.get<CUnit>(e).type).speed <= 0) return;  // structures stay put
   CMover& m = reg_.get<CMover>(e);
   if (tick_ < m.retryTick) return;  // backing off after failed requests
   m.request = nextRequest_++;
@@ -77,7 +78,15 @@ void Simulation::stepOrders() {
       case OrderType::Idle:
         break;
       case OrderType::Move:
-        if (!m.active && !m.request) o.type = OrderType::Idle;
+        if (!m.active && !m.request) {
+          // Arrived: turn to face the formation's front, then stand.
+          CFacing& f = reg_.get<CFacing>(e);
+          if (o.faceTo < 0 || def.speed <= 0 || turnToward(f.angle, static_cast<Angle>(o.faceTo), f.turnWait, def.turnTicks)) {
+            o.type = OrderType::Idle;
+            o.faceTo = -1;
+            o.forced = false;
+          }
+        }
         break;
       case OrderType::Attack: {
         if (!reg_.alive(o.target) || !reg_.has<CUnit>(o.target)) {
@@ -85,8 +94,9 @@ void Simulation::stepOrders() {
           break;
         }
         const CPosition& tp = reg_.get<CPosition>(o.target);
-        const uint32_t d = distance(tp.x - p.x, tp.y - p.y);
-        if (d <= static_cast<uint32_t>(maxRange(def)) && canSee(u.owner, tp.x, tp.y)) {
+        const int32_t d = effectiveDistance(distance(tp.x - p.x, tp.y - p.y), o.target.index);
+        if (def.speed <= 0) break;  // a gun emplacement fires if it can, but never moves
+        if (d <= maxRange(def) && canSee(u.owner, tp.x, tp.y)) {
           m.active = false;  // in range: stand and fire
           m.request = 0;
         } else if ((!m.active && !m.request) ||
@@ -100,8 +110,8 @@ void Simulation::stepOrders() {
         const CCombat* c = reg_.pool<CCombat>().tryGet(ei);
         if (c && reg_.alive(c->target)) {
           const CPosition& tp = reg_.get<CPosition>(c->target);
-          const uint32_t d = distance(tp.x - p.x, tp.y - p.y);
-          if (d <= static_cast<uint32_t>(maxRange(def))) {
+          const int32_t d = effectiveDistance(distance(tp.x - p.x, tp.y - p.y), c->target.index);
+          if (d <= maxRange(def)) {
             // In range: halt and fight. (Turrets still fire on the move under a
             // plain Move order; attack-move means "stop and engage".)
             m.active = false;
@@ -111,7 +121,7 @@ void Simulation::stepOrders() {
             requestPath(e, o.chasedAt);
           }
         } else if (!m.active && !m.request) {
-          if (distance(o.goal.x - p.x, o.goal.y - p.y) <= 192) o.type = OrderType::Idle;
+          if (distance(o.goal.x - p.x, o.goal.y - p.y) <= 192) o.type = OrderType::Move;  // arrived: face the front
           else requestPath(e, o.goal);  // resume the advance
         }
         break;
@@ -227,12 +237,16 @@ void Simulation::stepSeparation() {
   for (size_t i = 0; i < ents.size(); ++i) {
     const uint32_t e = ents[i];
     const CPosition& p = pos.get(e);
-    const int32_t ra = types_.get(units.get(e).type).radius;
+    const UnitTypeDef& da = types_.get(units.get(e).type);
+    if (da.isStructure()) continue;  // never pushed; their tiles are blocked anyway
+    const int32_t ra = da.radius;
     int32_t px = 0, py = 0;
     spatial_.query(p.x, p.y, ra + 120, [&](uint32_t o) {
       if (o == e) return;
       const CPosition& q = pos.get(o);
-      const int32_t rb = types_.get(units.get(o).type).radius;
+      const UnitTypeDef& db = types_.get(units.get(o).type);
+      if (db.isStructure()) return;
+      const int32_t rb = db.radius;
       // Vehicles keep almost their full width apart; infantry may bunch up.
       const int32_t want = (ra > 60 && rb > 60) ? (ra + rb) * 9 / 10 : (ra + rb) * 7 / 10;
       int32_t dx = p.x - q.x, dy = p.y - q.y;

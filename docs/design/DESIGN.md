@@ -26,6 +26,17 @@ edit it. Place / delete / move anything for any player mid-battle, spawn
 brushes (up to 10,000 units), possess any player, live inspector, god tools,
 snapshot to scenario, and turn any sandbox into a mission with triggers.
 
+## Economy (decided in Milestone 5)
+
+- One resource, **supplies**, from **oil** fields. Supply trucks carry 100 oil
+  (worth $500) from field to Oil Depot. Fields hold up to 255 oil per tile.
+- **Power** from Power Stations; a deficit halves production speed (WW2
+  defences don't need electricity, so they keep firing).
+- Construction Yard builds structures (placed within build range of the
+  side's own structures); Barracks trains infantry; Tank Works builds
+  vehicles, supply trucks and construction trucks.
+- Fortifications are bought tile by tile and placed at once.
+
 ## Balance direction (from playtesting, 30 Oct 2026)
 
 Blitzkrieg-like: slow, deadly, combined arms.
@@ -76,7 +87,10 @@ in the art milestone.
    10,000), select and edit any side's units, inspector, sides and teams,
    possession, artillery / smite / heal, snapshots, shared terrain + unit undo.
    Triggers and objectives come with scenario scripting in Milestone 6.
-5. Economy and base building.
+5. **Economy and base building** – done: oil and supply trucks, power,
+   structures on the grid, four production lines, sidebar with minimap,
+   fortifications (trenches with cover, sandbags, wire, tank traps), stances,
+   formations with right-drag fronts, unit scale pass.
 6. AI and scenario scripting (triggers, objectives), saves and replays.
 7. Art pipeline and content: Germany and Russia, 5 biomes.
 8. Creation tools: rules editor, sprite studio, mods.

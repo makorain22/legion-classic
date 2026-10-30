@@ -44,6 +44,47 @@ enum class CommandType : uint8_t {
   Kill,        // destroy units as if killed in battle (wrecks, bodies)
   Strike,      // artillery: `count` rounds of `weapon` within `radius` of target
   SetTeam,     // player `player` joins team `count` (same team = allies)
+  SetStance,   // units take stance `stance`
+  // --- Economy ----------------------------------------------------------------
+  Produce,        // player queues `amount` of unitType (negative: cancel that many from the end)
+  PlaceBuilding,  // player places the finished structure unitType at `target` (its footprint centre)
+  PlaceWalls,     // player buys fortifications unitType at each of `spawns[].pos` (bought on the spot)
+  Sell,           // structures in `units` are sold for half their cost
+  Deploy,         // construction trucks in `units` unfold into their structure
+  Harvest,        // supply trucks in `units` go to work (at the oil near `target`, if given)
+  SetRally,       // producing structures in `units` send new units to `target`
+  SetCredits,     // player's supplies become `amount`
+};
+
+// Production lines: one per kind of thing a side builds.
+enum class Queue : uint8_t { Buildings = 0, Defenses, Infantry, Vehicles, Count };
+constexpr int QUEUE_COUNT = static_cast<int>(Queue::Count);
+Queue queueFor(UnitCategory c);
+
+struct ProductionQueue {
+  std::vector<uint16_t> items;  // unit types, front one in work
+  int32_t progress = 0;         // ticks of work done on the front item
+  int32_t paid = 0;             // supplies spent on it so far
+  bool ready = false;           // a structure, finished and waiting to be placed
+};
+
+// Each side's economy.
+struct PlayerState {
+  int32_t credits = 0;
+  int32_t powerMade = 0, powerUsed = 0;
+  std::array<ProductionQueue, QUEUE_COUNT> queues;
+  bool defeated = false;
+  bool lowPower() const { return powerUsed > powerMade; }
+};
+
+// Shapes a group takes when it arrives.
+enum class Formation : uint8_t {
+  Box = 0,  // a compact block (default)
+  Line,     // a broad front, two or three ranks deep
+  Column,   // two abreast, for roads and gaps
+  Wedge,    // an arrowhead with the point forward
+  Loose,    // a spread-out block, safer against artillery
+  Count
 };
 
 // A unit created by a SpawnList command: which command (tag), which entry of
@@ -88,9 +129,25 @@ struct Command {
   int32_t radius = 0;             // Strike, leptons
   std::vector<SpawnSpec> spawns;  // SpawnList
   std::vector<UnitEdit> edits;    // Edit
+  // Move / AttackMove: formation, the direction its front faces (Angle, or -1 =
+  // facing the way the group travels), its width in leptons (0 = automatic),
+  // and forced march (no stopping to return fire).
+  Formation formation = Formation::Box;
+  int32_t formFacing = -1;
+  int32_t formWidth = 0;
+  bool forced = false;
+  Stance stance = Stance::Aggressive;  // SetStance
+  int32_t amount = 0;                  // SetCredits
 };
 
-enum class EventType : uint8_t { Fire, Impact, UnitDied };
+enum class EventType : uint8_t {
+  Fire, Impact, UnitDied,
+  StructurePlaced,  // unitType at `at`, for owner
+  StructureSold,    // unitType at `at`
+  UnitReady,        // owner's production finished a unitType (structure: ready to place)
+  CannotBuild,      // owner tried something not allowed (no money, bad spot...)
+  PlayerDefeated,   // owner has nothing left
+};
 
 struct SimEvent {
   EventType type = EventType::Fire;
@@ -107,7 +164,7 @@ struct SimEvent {
 struct SimStats {
   // Milliseconds spent in each step during the last tick (for profiling).
   float msPaths = 0, msOrders = 0, msMove = 0, msSpatial = 0, msSeparation = 0, msVision = 0, msTargeting = 0,
-        msWeapons = 0, msProjectiles = 0;
+        msWeapons = 0, msProjectiles = 0, msEconomy = 0;
   uint32_t pathSearches = 0;
   uint64_t pathExpansions = 0;
   uint32_t pathQueue = 0;
@@ -116,7 +173,8 @@ struct SimStats {
 
 class Simulation {
  public:
-  Simulation(const Map& map, const UnitTypeRegistry& types, const WeaponRegistry& weapons, uint64_t seed);
+  // The simulation owns the map's building layer (Map::block) while it runs.
+  Simulation(Map& map, const UnitTypeRegistry& types, const WeaponRegistry& weapons, uint64_t seed);
 
   void queue(Command cmd) { pending_.push_back(std::move(cmd)); }
   void tick();
@@ -126,6 +184,21 @@ class Simulation {
   const UnitTypeRegistry& types() const { return types_; }
   const WeaponRegistry& weapons() const { return weapons_; }
   const Map& map() const { return map_; }
+  const PlayerState& playerState(uint8_t p) const { return players_[p % MAX_PLAYERS]; }
+
+  // --- Building rules (also used by the UI to show what is allowed) -----------
+  // Top-left tile of a structure whose footprint is centred on `centre`.
+  Vec2i footprintOrigin(int type, Vec2i centre) const;
+  // Ground is clear for this structure (terrain, other structures, units).
+  bool canPlace(int type, Vec2i origin) const;
+  // Within building range of the player's own structures.
+  bool inBuildRange(uint8_t player, int type, Vec2i origin) const;
+  // The player owns what this type requires, and something that can make it.
+  bool canProduce(uint8_t player, int type) const;
+  // Structure entity on a tile, or kNullEntity.
+  Entity structureAt(int tx, int ty) const;
+  // Damage reduction (percent) infantry gets on a tile from fortifications.
+  uint8_t coverAt(int tx, int ty) const;
   const Vision& vision() const { return vision_; }
   Vision& vision() { return vision_; }
   Pathfinder& pathfinder() { return pathfinder_; }
@@ -154,7 +227,8 @@ class Simulation {
   // commands (simulation.cpp)
   Entity spawnUnit(uint16_t type, uint8_t player, Vec2i pos, Angle facing);
   void applyCommand(const Command& cmd);
-  void orderMove(const std::vector<Entity>& units, Vec2i target, OrderType type);
+  void orderMove(const std::vector<Entity>& units, Vec2i target, OrderType type, const Command& cmd);
+  void reactToFire(uint32_t ei, CCombat& c, CUnit& u, const CPosition& p, COrder& o);
   void setOrderIdle(Entity e);
   void applyEdit(const UnitEdit& ed);
 
@@ -168,25 +242,45 @@ class Simulation {
   void stepSeparation();
   void stepVision();
 
+  // economy and structures (economy.cpp)
+  void occupy(uint32_t e, const UnitTypeDef& def, Vec2i origin);
+  void destroyEntity(uint32_t e);
+  void recomputeCover();
+  void stepEconomy();
+  void stepProduction(uint8_t player);
+  void stepHarvesters();
+  void completeUnit(uint8_t player, uint16_t type);
+  Entity producerFor(uint8_t player, const std::string& role) const;
+  Vec2i exitOf(Entity structure) const;
+  void applyEconomyCommand(const Command& cmd);
+  void checkDefeat();
+
   // combat (combat.cpp)
   void stepTargeting();
   void stepWeapons();
   void stepProjectiles();
-  void impact(int weapon, uint8_t owner, Vec2i at, Entity directTarget, Vec2i from);
-  void damage(uint32_t victim, int32_t amount);
+  void impact(int weapon, uint8_t owner, Vec2i at, Entity directTarget, Vec2i from, Entity shooter);
+  void damage(uint32_t victim, int32_t amount, Entity shooter = kNullEntity);
   bool canSee(uint8_t player, int32_t x, int32_t y) const;
   void removeDead();
 
-  const Map& map_;
+  Map& map_;
   const UnitTypeRegistry& types_;
   const WeaponRegistry& weapons_;
-  Registry reg_;
+  mutable Registry reg_;  // pools are created on first use, even from const queries
   Rng rng_;
   uint32_t tick_ = 0;
   std::vector<Command> pending_;
   std::vector<SimEvent> events_;
   std::vector<SpawnRecord> spawnLog_;
   std::array<uint8_t, MAX_PLAYERS> team_{0, 1, 2, 3, 4, 5, 6, 7};
+  std::array<PlayerState, MAX_PLAYERS> players_{};
+  std::vector<uint32_t> tileStructure_;  // entity index per tile, UINT32_MAX = none
+  std::vector<uint8_t> cover_;
+  bool coverDirty_ = false;
+  std::array<bool, MAX_PLAYERS> playedOnce_{};
+  int32_t structureReach_ = 0;  // how far a structure's edge reaches beyond its centre (largest standing)
+  int32_t effectiveDistance(uint32_t d, uint32_t target) const;
   Pathfinder pathfinder_;
   SpatialHash spatial_;
   Vision vision_;

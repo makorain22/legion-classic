@@ -1,0 +1,533 @@
+{
+  "_comment": "Structures: buildings, defences and fortifications. footprint in tiles [width, depth]; power: + produced, - used; role: what it provides (yard builds structures, barracks trains infantry, factory builds vehicles, refinery takes oil); buildRadius: tiles around it where its side may build; cover: % less damage for infantry standing in it; coverAround: same for infantry next to it; blocks: which movement types it stops (default all).",
+  "units": [
+    {
+      "id": "ger_yard",
+      "faction": "ger",
+      "armor": "structure",
+      "name": "Construction Yard",
+      "model": "yard",
+      "footprint": [
+        4,
+        3
+      ],
+      "health": 2000,
+      "power": 20,
+      "role": "yard",
+      "buildRadius": 10,
+      "sight": 7,
+      "cost": 3000,
+      "category": "building"
+    },
+    {
+      "id": "ger_power",
+      "faction": "ger",
+      "armor": "structure",
+      "name": "Power Station",
+      "model": "power",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 700,
+      "power": 100,
+      "role": "power",
+      "buildRadius": 5,
+      "cost": 300,
+      "buildTime": 8,
+      "builtAt": "yard",
+      "requires": [
+        "ger_yard"
+      ]
+    },
+    {
+      "id": "ger_refinery",
+      "faction": "ger",
+      "armor": "structure",
+      "name": "Oil Depot",
+      "model": "refinery",
+      "footprint": [
+        3,
+        3
+      ],
+      "health": 1000,
+      "power": -30,
+      "role": "refinery",
+      "buildRadius": 5,
+      "cost": 1500,
+      "buildTime": 15,
+      "builtAt": "yard",
+      "requires": [
+        "ger_power"
+      ],
+      "freeUnit": "ger_truck"
+    },
+    {
+      "id": "ger_barracks",
+      "faction": "ger",
+      "armor": "structure",
+      "name": "Barracks",
+      "model": "barracks",
+      "footprint": [
+        3,
+        2
+      ],
+      "health": 800,
+      "power": -20,
+      "role": "barracks",
+      "buildRadius": 5,
+      "cost": 500,
+      "buildTime": 10,
+      "builtAt": "yard",
+      "requires": [
+        "ger_power"
+      ]
+    },
+    {
+      "id": "ger_factory",
+      "faction": "ger",
+      "armor": "structure",
+      "name": "Tank Works",
+      "model": "factory",
+      "footprint": [
+        4,
+        3
+      ],
+      "health": 1400,
+      "power": -40,
+      "role": "factory",
+      "buildRadius": 5,
+      "cost": 2000,
+      "buildTime": 20,
+      "builtAt": "yard",
+      "requires": [
+        "ger_refinery"
+      ]
+    },
+    {
+      "id": "ger_tower",
+      "faction": "ger",
+      "armor": "structure",
+      "name": "Watchtower",
+      "model": "tower",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 300,
+      "cost": 250,
+      "buildTime": 6,
+      "sight": 13,
+      "category": "defense",
+      "builtAt": "yard",
+      "requires": [
+        "ger_barracks"
+      ]
+    },
+    {
+      "id": "ger_bunker",
+      "faction": "ger",
+      "armor": "structure",
+      "name": "MG Bunker",
+      "model": "bunker",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 900,
+      "cost": 600,
+      "buildTime": 10,
+      "sight": 7,
+      "category": "defense",
+      "weapons": [
+        "mg_bunker"
+      ],
+      "turret": {
+        "turnTicks": 1
+      },
+      "builtAt": "yard",
+      "requires": [
+        "ger_barracks"
+      ]
+    },
+    {
+      "id": "ger_atgun",
+      "faction": "ger",
+      "armor": "structure",
+      "name": "Anti-Tank Gun Pit",
+      "model": "atgun",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 600,
+      "cost": 800,
+      "buildTime": 12,
+      "sight": 8,
+      "category": "defense",
+      "weapons": [
+        "cannon_at"
+      ],
+      "turret": {
+        "turnTicks": 3
+      },
+      "builtAt": "yard",
+      "requires": [
+        "ger_factory"
+      ]
+    },
+    {
+      "id": "ger_sandbags",
+      "faction": "ger",
+      "armor": "structure",
+      "name": "Sandbags",
+      "model": "sandbags",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 250,
+      "cost": 25,
+      "category": "fortification",
+      "coverAround": 40,
+      "autoTarget": false,
+      "builtAt": "yard",
+      "requires": [
+        "ger_yard"
+      ]
+    },
+    {
+      "id": "ger_trench",
+      "faction": "ger",
+      "armor": "structure",
+      "name": "Trench",
+      "model": "trench",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 1000,
+      "cost": 20,
+      "category": "fortification",
+      "cover": 60,
+      "blocks": [
+        "wheeled"
+      ],
+      "targetable": false,
+      "autoTarget": false,
+      "builtAt": "yard",
+      "requires": [
+        "ger_barracks"
+      ]
+    },
+    {
+      "id": "ger_wire",
+      "faction": "ger",
+      "armor": "structure",
+      "name": "Barbed Wire",
+      "model": "wire",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 120,
+      "cost": 15,
+      "category": "fortification",
+      "blocks": [
+        "foot"
+      ],
+      "autoTarget": false,
+      "builtAt": "yard",
+      "requires": [
+        "ger_yard"
+      ]
+    },
+    {
+      "id": "ger_traps",
+      "faction": "ger",
+      "armor": "structure",
+      "name": "Tank Traps",
+      "model": "traps",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 500,
+      "cost": 30,
+      "category": "fortification",
+      "blocks": [
+        "wheeled",
+        "tracked"
+      ],
+      "autoTarget": false,
+      "builtAt": "yard",
+      "requires": [
+        "ger_yard"
+      ]
+    },
+    {
+      "id": "rus_yard",
+      "faction": "rus",
+      "armor": "structure",
+      "name": "Construction Yard",
+      "model": "yard",
+      "footprint": [
+        4,
+        3
+      ],
+      "health": 2000,
+      "power": 20,
+      "role": "yard",
+      "buildRadius": 10,
+      "sight": 7,
+      "cost": 3000,
+      "category": "building"
+    },
+    {
+      "id": "rus_power",
+      "faction": "rus",
+      "armor": "structure",
+      "name": "Power Station",
+      "model": "power",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 700,
+      "power": 100,
+      "role": "power",
+      "buildRadius": 5,
+      "cost": 300,
+      "buildTime": 8,
+      "builtAt": "yard",
+      "requires": [
+        "rus_yard"
+      ]
+    },
+    {
+      "id": "rus_refinery",
+      "faction": "rus",
+      "armor": "structure",
+      "name": "Oil Depot",
+      "model": "refinery",
+      "footprint": [
+        3,
+        3
+      ],
+      "health": 1000,
+      "power": -30,
+      "role": "refinery",
+      "buildRadius": 5,
+      "cost": 1500,
+      "buildTime": 15,
+      "builtAt": "yard",
+      "requires": [
+        "rus_power"
+      ],
+      "freeUnit": "rus_truck"
+    },
+    {
+      "id": "rus_barracks",
+      "faction": "rus",
+      "armor": "structure",
+      "name": "Barracks",
+      "model": "barracks",
+      "footprint": [
+        3,
+        2
+      ],
+      "health": 800,
+      "power": -20,
+      "role": "barracks",
+      "buildRadius": 5,
+      "cost": 500,
+      "buildTime": 10,
+      "builtAt": "yard",
+      "requires": [
+        "rus_power"
+      ]
+    },
+    {
+      "id": "rus_factory",
+      "faction": "rus",
+      "armor": "structure",
+      "name": "Tank Works",
+      "model": "factory",
+      "footprint": [
+        4,
+        3
+      ],
+      "health": 1400,
+      "power": -40,
+      "role": "factory",
+      "buildRadius": 5,
+      "cost": 2000,
+      "buildTime": 20,
+      "builtAt": "yard",
+      "requires": [
+        "rus_refinery"
+      ]
+    },
+    {
+      "id": "rus_tower",
+      "faction": "rus",
+      "armor": "structure",
+      "name": "Watchtower",
+      "model": "tower",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 300,
+      "cost": 250,
+      "buildTime": 6,
+      "sight": 13,
+      "category": "defense",
+      "builtAt": "yard",
+      "requires": [
+        "rus_barracks"
+      ]
+    },
+    {
+      "id": "rus_bunker",
+      "faction": "rus",
+      "armor": "structure",
+      "name": "MG Bunker",
+      "model": "bunker",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 900,
+      "cost": 600,
+      "buildTime": 10,
+      "sight": 7,
+      "category": "defense",
+      "weapons": [
+        "mg_bunker"
+      ],
+      "turret": {
+        "turnTicks": 1
+      },
+      "builtAt": "yard",
+      "requires": [
+        "rus_barracks"
+      ]
+    },
+    {
+      "id": "rus_atgun",
+      "faction": "rus",
+      "armor": "structure",
+      "name": "Anti-Tank Gun Pit",
+      "model": "atgun",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 600,
+      "cost": 800,
+      "buildTime": 12,
+      "sight": 8,
+      "category": "defense",
+      "weapons": [
+        "cannon_at"
+      ],
+      "turret": {
+        "turnTicks": 3
+      },
+      "builtAt": "yard",
+      "requires": [
+        "rus_factory"
+      ]
+    },
+    {
+      "id": "rus_sandbags",
+      "faction": "rus",
+      "armor": "structure",
+      "name": "Sandbags",
+      "model": "sandbags",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 250,
+      "cost": 25,
+      "category": "fortification",
+      "coverAround": 40,
+      "autoTarget": false,
+      "builtAt": "yard",
+      "requires": [
+        "rus_yard"
+      ]
+    },
+    {
+      "id": "rus_trench",
+      "faction": "rus",
+      "armor": "structure",
+      "name": "Trench",
+      "model": "trench",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 1000,
+      "cost": 20,
+      "category": "fortification",
+      "cover": 60,
+      "blocks": [
+        "wheeled"
+      ],
+      "targetable": false,
+      "autoTarget": false,
+      "builtAt": "yard",
+      "requires": [
+        "rus_barracks"
+      ]
+    },
+    {
+      "id": "rus_wire",
+      "faction": "rus",
+      "armor": "structure",
+      "name": "Barbed Wire",
+      "model": "wire",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 120,
+      "cost": 15,
+      "category": "fortification",
+      "blocks": [
+        "foot"
+      ],
+      "autoTarget": false,
+      "builtAt": "yard",
+      "requires": [
+        "rus_yard"
+      ]
+    },
+    {
+      "id": "rus_traps",
+      "faction": "rus",
+      "armor": "structure",
+      "name": "Tank Traps",
+      "model": "traps",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 500,
+      "cost": 30,
+      "category": "fortification",
+      "blocks": [
+        "wheeled",
+        "tracked"
+      ],
+      "autoTarget": false,
+      "builtAt": "yard",
+      "requires": [
+        "rus_yard"
+      ]
+    }
+  ]
+}

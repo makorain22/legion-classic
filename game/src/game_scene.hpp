@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "battle_fx.hpp"
+#include "sidebar.hpp"
 #include "slave/assets/placeholder_art.hpp"
 #include "slave/map/map.hpp"
 #include "slave/map/map_io.hpp"
@@ -34,6 +35,8 @@ struct SceneOptions {
   bool editorDemo = false;   // scripted editor session, for automated screenshots
   bool liveDemo = false;     // scripted Live Scenario Editor session (units, battle tools)
   bool editorSelfTest = false;  // checks unit placement / undo / redo through the real editor
+  bool economyDemo = false;     // scripted base building, for automated screenshots
+  bool noBases = false;         // start with armies only, no bases (classic skirmish sandbox)
 };
 
 class GameScene final : public slave::Scene {
@@ -91,6 +94,10 @@ class GameScene final : public slave::Scene {
   void restoreSnapshot();
 
   bool& editorShowsFog() { return editorFog_; }
+  void centerOn(slave::Vec2i leptons);
+  void orderMove(slave::Vec2i target, slave::CommandType type = slave::CommandType::Move);
+  bool fogEnabled() const;
+  Sidebar& sidebar() { return *sidebar_; }
   void setPaused(bool p) { paused_ = p; }
   float speed() const { return speed_; }
   void setSpeed(float s) { speed_ = s; }
@@ -120,18 +127,21 @@ class GameScene final : public slave::Scene {
   void selectSameTypeOnScreen(slave::Entity like);
   bool selectableOwner(uint8_t owner) const;  // the editor's select tool can pick any side
   void queueOrder(slave::Command c);          // splits mixed-owner selections per owner
-  void orderMove(slave::Vec2i target, slave::CommandType type = slave::CommandType::Move);
   void orderAttack(slave::Entity target);
+  void rightClick(slave::Vec2f screenPx, bool dragged, slave::Vec2f dragEnd);
   // Can the side we are watching see this tile right now?
   bool watching(int32_t lx, int32_t ly) const;
-  bool fogEnabled() const;
+  void drawGroundLayer(const slave::RectF& view);
+  void drawStructureEffects(float dt);
+  void announce(const slave::SimEvent& ev);
   void drawUnits(const slave::RectF& view);
   void drawHealthBar(uint32_t entity, bool selected);
   void updateCursor();
   void spawnAt(const std::string& typeId, uint8_t player, slave::Vec2i at, int count);
   slave::Vec2i findLand(slave::Vec2i near) const;
-  void centerOn(slave::Vec2i leptons);
   void setupStartingArmies();
+  void buildBase(uint8_t player, slave::Vec2i centre);
+  void runEconomyDemo();
   void updateCameraBounds();
   void drawHud();
   void drawHelp();
@@ -154,11 +164,18 @@ class GameScene final : public slave::Scene {
   slave::TerrainRenderer terrain_;
   slave::Camera cam_;
   std::unique_ptr<Editor> editor_;
+  std::unique_ptr<Sidebar> sidebar_;
+  friend class Sidebar;
+  bool rmbDown_ = false, rmbDragging_ = false;
+  slave::Vec2f rmbStart_;
+  std::string banner_;
+  float bannerTime_ = 0;
   std::array<uint32_t, slave::MAX_PLAYERS> teamColors_{};
   std::array<slave::PlayerSetup, slave::MAX_PLAYERS> players_;
   std::unique_ptr<slave::MapFile> snapshot_;
   bool editorFog_ = false;
   std::vector<slave::UnitArt> unitArt_;  // by unit type index
+  std::vector<bool> trenchTypes_;         // drawn as ground decals that join up
   BattleFx fx_;
 
   uint8_t player_ = 0;  // which side the mouse commands

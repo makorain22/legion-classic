@@ -31,7 +31,7 @@ namespace legion {
 class GameScene;
 
 enum class Tool {
-  Raise, Lower, Smooth, Flatten, Roughen, Paint, Props, Erase,  // terrain
+  Raise, Lower, Smooth, Flatten, Roughen, Paint, Props, Erase, Oil,  // terrain
   PlaceUnits, SelectUnits,                                     // units
   Artillery, Smite, Heal,                                      // battle ("god") tools
   Count
@@ -93,6 +93,7 @@ class Editor {
   void applyPaint(slave::Vec2f c, float dt);
   void applyProps(slave::Vec2f c, float dt);
   void applyErase(slave::Vec2f c);
+  void applyOil(slave::Vec2f c, float dt);
   void afterTerrainEdit(int tx0, int ty0, int tx1, int ty1, bool heights, bool splat);
   void applyRegion(const History::Region& r);
   void drawToolPanel();
@@ -101,7 +102,7 @@ class Editor {
   void drawOpenDialog();
   void drawSaveAsDialog();
   std::string sanitize(const std::string& name) const;
-  bool isTerrainTool() const { return tool_ <= Tool::Erase; }
+  bool isTerrainTool() const { return tool_ <= Tool::Oil; }
 
   // units (unit_tools.cpp)
   void drawUnitsTab();
@@ -152,6 +153,7 @@ class Editor {
   float unitDensity_ = 12;  // units per second while brushing
   float unitAccum_ = 0;
   bool paletteAllFactions_ = false;
+  int paletteCategory_ = 0;  // 0 = everything, else 1 + UnitCategory
   std::shared_ptr<PresenceAction> placing_;  // the brush stroke in progress
 
   // Select-tool dragging.

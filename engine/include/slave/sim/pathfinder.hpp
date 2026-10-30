@@ -53,6 +53,10 @@ class Pathfinder {
   uint32_t builtRevision_ = UINT32_MAX;
   int builtW_ = 0, builtH_ = 0;
   std::array<std::vector<uint32_t>, 3> regions_;
+  // Tiles next to something impassable. Paths pay a little extra to cross
+  // them, so routes keep off riverbanks, cliff edges and building corners
+  // where units snag.
+  std::array<std::vector<uint8_t>, 3> edge_;
 
   // A* scratch arrays, reused between searches (generation-stamped).
   std::vector<uint32_t> gScore_, stamp_, parent_;

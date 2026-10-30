@@ -10,6 +10,7 @@ namespace {
 constexpr int kDX[8] = {1, -1, 0, 0, 1, 1, -1, -1};
 constexpr int kDY[8] = {0, 0, 1, -1, 1, -1, 1, -1};
 constexpr uint32_t kCost[8] = {10, 10, 10, 10, 14, 14, 14, 14};
+constexpr uint32_t kEdgeCost = 5;  // extra for hugging an obstacle
 
 uint32_t octile(int dx, int dy) {
   dx = std::abs(dx);
@@ -66,6 +67,15 @@ void Pathfinder::buildRegions() {
           }
         }
         ++next;
+      }
+    auto& edge = edge_[static_cast<size_t>(li)];
+    edge.assign(static_cast<size_t>(W) * H, 0);
+    for (int y = 0; y < H; ++y)
+      for (int x = 0; x < W; ++x) {
+        if (!reg[static_cast<size_t>(y) * W + x]) continue;
+        bool near = false;
+        for (int d = 0; d < 8 && !near; ++d) near = !map_.passable(x + kDX[d], y + kDY[d], loco);
+        edge[static_cast<size_t>(y) * W + x] = near ? 1 : 0;
       }
   }
 }
@@ -194,7 +204,7 @@ bool Pathfinder::findPath(Vec2i from, Vec2i to, Locomotor loco, std::vector<Vec2
       const size_t ni = static_cast<size_t>(ny) * W + nx;
       visit(ni);
       if (closed_[ni]) continue;
-      const uint32_t g = gScore_[cur.node] + kCost[d];
+      const uint32_t g = gScore_[cur.node] + kCost[d] + (edge_[static_cast<size_t>(loco)][ni] ? kEdgeCost : 0);
       if (g >= gScore_[ni]) continue;
       gScore_[ni] = g;
       parent_[ni] = cur.node;

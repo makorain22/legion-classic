@@ -58,10 +58,16 @@ void History::touchWater(const Map& map) {
   current_.water = map.waterLevel();
 }
 
+void History::touchOil(const Map& map) {
+  if (!recording_ || current_.hasOil) return;
+  current_.hasOil = true;
+  current_.oil = map.oilData();
+}
+
 void History::end() {
   if (!recording_) return;
   recording_ = false;
-  if (current_.chunks.empty() && !current_.hasProps && !current_.hasWater) return;
+  if (current_.chunks.empty() && !current_.hasProps && !current_.hasWater && !current_.hasOil) return;
   undo_.push_back(std::move(current_));
   redo_.clear();
   if (undo_.size() > kMaxSteps) undo_.erase(undo_.begin());
@@ -112,6 +118,7 @@ History::Region History::swapStep(Map& map, Step& s, bool undo) {
     std::swap(map.props(), s.props);
     r.props = true;
   }
+  if (s.hasOil) std::swap(map.oilData(), s.oil);
   if (s.hasWater) {
     const uint16_t cur = map.waterLevel();
     map.setWaterLevel(s.water);

@@ -27,7 +27,7 @@ uint32_t fromImVec(const ImVec4& v) {
   return ch(v.x) | (ch(v.y) << 8) | (ch(v.z) << 16) | 0xFF000000u;
 }
 const char* kOrderNames[] = {"Idle", "Moving", "Attack-moving", "Attacking"};
-const char* kArmorNames[] = {"infantry", "light", "medium", "heavy"};
+const char* kArmorNames[] = {"infantry", "light", "medium", "heavy", "structure"};
 const char* kFactionIds[] = {"ger", "rus"};
 const char* kFactionNames[] = {"Germany", "Russia"};
 Rng& toolRng() {
@@ -551,11 +551,18 @@ void Editor::unitIcon(int type, uint8_t owner, float size) {
 void Editor::drawUnitPalette() {
   const auto& types = scene_.types();
   const std::string& faction = scene_.players()[placeOwner_].faction;
-  ImGui::Checkbox("Show every faction's units", &paletteAllFactions_);
+  ImGui::Checkbox("Every faction", &paletteAllFactions_);
+  ImGui::SameLine();
+  ImGui::SetNextItemWidth(-1);
+  ImGui::Combo("##cat", &paletteCategory_, [](void*, int i) {
+    static const char* names[] = {"Everything", "Infantry", "Vehicles", "Buildings", "Defences", "Fortifications"};
+    return names[i];
+  }, nullptr, 6);
   const float icon = 44.0f;
   for (int i = 0; i < static_cast<int>(types.size()); ++i) {
     const UnitTypeDef& d = types.get(i);
     if (!paletteAllFactions_ && d.faction != faction) continue;
+    if (paletteCategory_ > 0 && static_cast<int>(d.category) != paletteCategory_ - 1) continue;
     ImGui::PushID(i);
     const bool sel = placeType_ == i && tool_ == Tool::PlaceUnits;
     const ImVec2 start = ImGui::GetCursorScreenPos();
@@ -811,6 +818,19 @@ void Editor::drawSidesTab() {
       int ctl = s.human ? 0 : 1;
       ImGui::SetNextItemWidth(-70);
       if (ImGui::Combo("Played by", &ctl, "Human\0Computer (AI in Milestone 6)\0")) s.human = ctl == 0;
+      ImGui::SetNextItemWidth(-70);
+      ImGui::InputInt("Supplies", &s.credits, 500, 5000);
+      s.credits = std::clamp(s.credits, 0, 1000000);
+      if (ImGui::IsItemHovered()) ImGui::SetTooltip("What this side starts with. Saved with the scenario.");
+      ImGui::SameLine();
+      if (ImGui::SmallButton("Give now")) {
+        Command c;
+        c.type = CommandType::SetCredits;
+        c.player = p;
+        c.amount = s.credits;
+        scene_.sim().queue(std::move(c));
+      }
+      if (ImGui::IsItemHovered()) ImGui::SetTooltip("Set this side's supplies in the running battle too.");
       if (ImGui::Button("Start view here")) {
         const ImGuiIO& io = ImGui::GetIO();
         const Vec2f c = scene_.groundAt({io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f});

@@ -42,6 +42,8 @@ class BattleFx {
   // `visible`: whether the watching player can see where this happened.
   void onEvent(const slave::SimEvent& e, bool visible, const std::array<uint32_t, slave::MAX_PLAYERS>& teams);
   void update(float dt);
+  // Smoke (and, when badly hurt, flames) rising from a damaged building.
+  void emitDamage(slave::Vec2i atLeptons, int size, float severity, float dt);
 
   // Craters, scorch marks and bodies: drawn after the terrain, before units.
   void drawGround(slave::SpriteRenderer& r, const slave::RectF& view, const FogAt& fog) const;

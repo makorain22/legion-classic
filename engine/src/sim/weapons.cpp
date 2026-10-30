@@ -11,6 +11,7 @@ bool parseArmor(const std::string& s, ArmorClass& out) {
   else if (s == "light") out = ArmorClass::Light;
   else if (s == "medium") out = ArmorClass::Medium;
   else if (s == "heavy") out = ArmorClass::Heavy;
+  else if (s == "structure") out = ArmorClass::Structure;
   else return false;
   return true;
 }
@@ -24,7 +25,7 @@ bool WeaponRegistry::loadJson(const nlohmann::json& doc, std::string& error) {
     for (const auto& [id, w] : doc.at("warheads").items()) {
       WarheadDef d;
       d.id = id;
-      static const char* names[ARMOR_COUNT] = {"infantry", "light", "medium", "heavy"};
+      static const char* names[ARMOR_COUNT] = {"infantry", "light", "medium", "heavy", "structure"};
       for (int a = 0; a < ARMOR_COUNT; ++a) d.versus[static_cast<size_t>(a)] = w.value(names[a], 100);
       if (w.contains("facing")) {
         const auto& f = w["facing"];

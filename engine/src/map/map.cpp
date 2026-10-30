@@ -56,6 +56,8 @@ void Map::resize(int width, int height, uint16_t baseHeight) {
   splat_.assign(static_cast<size_t>(splatW()) * splatH() * LAYER_COUNT, 0);
   fillLayer(Layer::Grass);
   info_.assign(static_cast<size_t>(width_) * height_, TileInfo{});
+  blocks_.assign(static_cast<size_t>(width_) * height_, 0);
+  oil_.assign(static_cast<size_t>(width_) * height_, 0);
   props_.clear();
   waterLevel_ = 0;
   recomputeInfo();
@@ -136,7 +138,29 @@ bool Map::passable(int tx, int ty, Locomotor loco) const {
   if (!inBounds(tx, ty)) return false;
   const TileInfo& t = info(tx, ty);
   const int li = static_cast<int>(loco);
-  return t.slope <= rules_.maxSlope[li] && t.waterDepth <= rules_.maxWaterDepth[li];
+  return t.slope <= rules_.maxSlope[li] && t.waterDepth <= rules_.maxWaterDepth[li] &&
+         !(blocks_[static_cast<size_t>(ty) * width_ + tx] & (1u << li));
+}
+
+bool Map::buildable(int tx, int ty) const {
+  if (!inBounds(tx, ty)) return false;
+  const TileInfo& t = info(tx, ty);
+  return t.slope <= 24 && t.waterDepth < -4 && !(block(tx, ty) & kOccupied);
+}
+
+void Map::addOilField(int cx, int cy, int radius, uint32_t seed) {
+  for (int y = cy - radius; y <= cy + radius; ++y)
+    for (int x = cx - radius; x <= cx + radius; ++x) {
+      if (!inBounds(x, y) || info(x, y).waterDepth > -4) continue;
+      const int dx = x - cx, dy = y - cy;
+      const int d2 = dx * dx + dy * dy;
+      const int r2 = radius * radius;
+      // Ragged edge: each tile's own random threshold.
+      const int edge = r2 - static_cast<int>(hash2(x, y, seed) % static_cast<uint32_t>(std::max(1, r2 / 2)));
+      if (d2 > edge) continue;
+      const int amount = 90 + (165 * (r2 - d2)) / std::max(1, r2) + static_cast<int>(hash2(y, x, seed) % 30);
+      setOil(x, y, static_cast<uint8_t>(std::clamp(amount, 0, 255)));
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -271,6 +295,34 @@ void Map::generateCountryside(uint64_t seed) {
       props_.push_back({kind, static_cast<uint8_t>(rng.below(4)), x * 256 + rng.range(40, 216),
                         y * 256 + rng.range(40, 216)});
     }
+
+  // --- Oil fields ------------------------------------------------------------
+  // One rich field near each side's half of the map, smaller ones out front to
+  // fight over. Mirrored, so neither side starts with an advantage.
+  std::fill(oil_.begin(), oil_.end(), uint8_t{0});
+  const int r = std::max(3, W / 36);
+  const struct { int fx, fy, rr; } fields[] = {
+      {20, 34, r + 1}, {80, 66, r + 1},  // home fields (percent of the map)
+      {12, 66, r}, {88, 34, r},          // second home fields
+      {50, 18, r}, {50, 82, r},          // contested, north and south
+  };
+  for (const auto& f : fields) {
+    // Nudge each field onto dry, fairly flat ground.
+    int cx = W * f.fx / 100, cy = H * f.fy / 100;
+    for (int tries = 0; tries < 40; ++tries) {
+      if (inBounds(cx, cy) && info(cx, cy).waterDepth < -20 && info(cx, cy).slope < 20) break;
+      cx += static_cast<int>(rng.range(-3, 3));
+      cy += static_cast<int>(rng.range(-3, 3));
+      cx = std::clamp(cx, f.rr + 1, W - f.rr - 2);
+      cy = std::clamp(cy, f.rr + 1, H - f.rr - 2);
+    }
+    addOilField(cx, cy, f.rr, s + static_cast<uint32_t>(cx * 31 + cy));
+  }
+  // Clear trees off the fields so trucks and players can see them.
+  std::erase_if(props_, [&](const Prop& p) {
+    const int tx = p.x >> LEPTON_SHIFT, ty = p.y >> LEPTON_SHIFT;
+    return inBounds(tx, ty) && oil(tx, ty) > 0;
+  });
 }
 
 }  // namespace slave

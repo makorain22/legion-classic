@@ -220,12 +220,49 @@ void BattleFx::onEvent(const SimEvent& ev, bool visible, const std::array<uint32
       }
       break;
     }
+    case EventType::StructurePlaced:
+    case EventType::StructureSold: {
+      if (!visible) return;
+      const UnitTypeDef& def = types_->get(ev.unitType);
+      const Vec2f at = toScreen_(static_cast<float>(ev.at.x), static_cast<float>(ev.at.y));
+      const float spread = def.footW * 10.0f;
+      for (int i = 0; i < 3 + def.footW * 2; ++i)
+        puff({at.x + rnd(-spread, spread), at.y + rnd(-spread * 0.5f, spread * 0.5f)}, tx, ty, fx.dust, 1, rnd(0.8f, 1.4f),
+             0.5f, 1.4f, 0.55f, rgba8(150, 132, 104), 12, 14);
+      break;
+    }
     case EventType::UnitDied: {
       const UnitTypeDef& def = types_->get(ev.unitType);
       const UnitArt& ua = (*unitArt_)[ev.unitType];
       const Vec2f at = toScreen_(static_cast<float>(ev.at.x), static_cast<float>(ev.at.y));
       const uint32_t team = teams[ev.owner % MAX_PLAYERS];
-      if (def.infantry()) {
+      if (def.isStructure()) {
+        // A building goes up in a string of blasts and leaves a burning ruin.
+        if (def.category == UnitCategory::Fortification) {
+          if (visible) puff(at, tx, ty, fx.dust, 2, 0.9f, 0.5f, 1.2f, 0.6f, rgba8(140, 120, 92), 10, 12);
+          break;
+        }
+        const float spread = def.footW * 9.0f;
+        if (visible)
+          for (int i = 0; i < 2 + def.footW; ++i)
+            explosion({at.x + rnd(-spread, spread), at.y + rnd(-spread * 0.5f, spread * 0.5f)}, tx, ty,
+                      1.1f + def.footW * 0.15f, false, true);
+        Decal r;
+        r.x = at.x;
+        r.y = at.y;
+        r.frame = art_->rubble[static_cast<size_t>(std::clamp(std::max(def.footW, def.footH) - 2, 0, 2))];
+        r.life = 600;
+        r.tx = tx;
+        r.ty = ty;
+        addDecal(decals_, kMaxDecals, r);
+        if (wrecks_.size() >= kMaxWrecks) wrecks_.erase(wrecks_.begin());
+        Wreck w;
+        w.lx = ev.at.x;
+        w.ly = ev.at.y;
+        w.bodyFrame = -1;  // nothing standing: just fire and smoke
+        w.burn = kBurnSeconds * 1.5f;
+        wrecks_.push_back(w);
+      } else if (def.infantry()) {
         if (ua.hasCorpse) {
           Decal d;
           d.x = at.x;
@@ -265,6 +302,42 @@ void BattleFx::onEvent(const SimEvent& ev, bool visible, const std::array<uint32
       }
       break;
     }
+    default:
+      break;
+  }
+}
+
+void BattleFx::emitDamage(Vec2i at, int size, float severity, float dt) {
+  // Puffs per second grow with the damage; badly hit buildings also burn.
+  if (rnd() > dt * (1.5f + severity * 6.0f)) return;
+  const EffectArt& fx = art_->effects;
+  const Vec2f s = toScreen_(static_cast<float>(at.x) + rnd(-size * 80.0f, size * 80.0f), static_cast<float>(at.y) + rnd(-size * 80.0f, size * 80.0f));
+  const int tx = at.x >> LEPTON_SHIFT, ty = at.y >> LEPTON_SHIFT;
+  const uint8_t g = static_cast<uint8_t>(40 + 40 * (1.0f - severity));
+  Particle& sm = add(Kind::Puff, s, tx, ty);
+  sm.frame = fx.smoke;
+  sm.h = rnd(14, 24);
+  sm.life = rnd(3.0f, 5.0f);
+  sm.scale0 = 0.5f;
+  sm.scale1 = 2.0f + severity;
+  sm.alpha0 = 0.35f + 0.4f * severity;
+  sm.alpha1 = 0;
+  sm.color = rgba8(g, g, g);
+  sm.vx = rnd(5, 10);
+  sm.vh = rnd(20, 30);
+  sm.drag = 0.3f;
+  if (severity > 0.5f && rnd() < 0.6f) {
+    Particle& f = add(Kind::Flame, {s.x + rnd(-4, 4), s.y}, tx, ty);
+    f.frame = fx.fire[0];
+    f.additive = true;
+    f.h = rnd(10, 20);
+    f.vh = 8;
+    f.life = rnd(0.3f, 0.5f);
+    f.scale0 = 0.4f + 0.4f * severity;
+    f.scale1 = 0.15f;
+    f.alpha0 = 0.85f;
+    f.alpha1 = 0;
+    f.color = rgba8(255, 190, 120);
   }
 }
 

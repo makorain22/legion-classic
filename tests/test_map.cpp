@@ -1,5 +1,7 @@
 #include <doctest/doctest.h>
 
+#include <algorithm>
+
 #include <nlohmann/json.hpp>
 
 #include "slave/map/map_io.hpp"
@@ -95,6 +97,8 @@ TEST_CASE("map files round-trip exactly") {
   CHECK(f.map.height() == 96);
   CHECK(f.map.heights() == m.heights());
   CHECK(f.map.splatData() == m.splatData());
+  CHECK(f.map.oilData() == m.oilData());
+  CHECK(std::count_if(m.oilData().begin(), m.oilData().end(), [](uint8_t v) { return v > 0; }) > 20);
   CHECK(f.map.waterLevel() == m.waterLevel());
   CHECK(f.map.props().size() == m.props().size());
   CHECK(f.map.name == "Test Valley");
@@ -152,15 +156,17 @@ TEST_CASE("units stop at cliffs instead of driving through") {
 TEST_CASE("scenario sides round-trip with the map") {
   Map m(64, 64);
   std::vector<PlayerSetup> players(3);
-  players[0] = {"Wehrmacht", "ger", 0xFF2C3AC4, 0, true, true, 1000, 2000};
-  players[1] = {"Red Army", "rus", 0xFFC46034, 1, true, false, -1, -1};
-  players[2] = {"Partisans", "rus", 0xFF48A042, 1, false, false, 300, 300};
+  players[0] = {"Wehrmacht", "ger", 0xFF2C3AC4, 0, true, true, 1000, 2000, 7000};
+  players[1] = {"Red Army", "rus", 0xFFC46034, 1, true, false, -1, -1, 5000};
+  players[2] = {"Partisans", "rus", 0xFF48A042, 1, false, false, 300, 300, 0};
   MapFile f;
   std::string err;
   REQUIRE(decodeMap(encodeMap(m, {}, players), f, err));
   REQUIRE(f.players.size() == 3);
   CHECK(f.players[0].name == "Wehrmacht");
   CHECK(f.players[0].startY == 2000);
+  CHECK(f.players[0].credits == 7000);
+  CHECK(f.players[2].credits == 0);
   CHECK(f.players[1].faction == "rus");
   CHECK_FALSE(f.players[1].human);
   CHECK(f.players[2].team == 1);

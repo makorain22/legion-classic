@@ -15,7 +15,8 @@
 
 namespace slave {
 
-constexpr uint32_t MAP_FILE_VERSION = 1;
+// 1: terrain, props, units.  2: adds the oil layer and scenario sides.
+constexpr uint32_t MAP_FILE_VERSION = 2;
 
 // A unit placed in a scenario (by type id, so maps survive rule changes).
 struct UnitPlacement {
@@ -35,6 +36,7 @@ struct PlayerSetup {
   bool active = false;
   bool human = true;            // false = computer (the AI arrives in Milestone 6)
   int32_t startX = -1, startY = -1;  // where this side's camera starts, leptons (-1 = map centre)
+  int32_t credits = 5000;            // supplies at the start
 };
 
 struct MapFile {

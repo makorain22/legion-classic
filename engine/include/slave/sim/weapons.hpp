@@ -14,7 +14,7 @@
 
 namespace slave {
 
-enum class ArmorClass : uint8_t { Infantry = 0, Light, Medium, Heavy, Count };
+enum class ArmorClass : uint8_t { Infantry = 0, Light, Medium, Heavy, Structure, Count };
 constexpr int ARMOR_COUNT = static_cast<int>(ArmorClass::Count);
 bool parseArmor(const std::string& s, ArmorClass& out);
 
@@ -26,7 +26,7 @@ enum class HitSide : uint8_t { Front = 0, Side, Rear };
 
 struct WarheadDef {
   std::string id;
-  std::array<int32_t, ARMOR_COUNT> versus{100, 100, 100, 100};  // percent
+  std::array<int32_t, ARMOR_COUNT> versus{100, 100, 100, 100, 100};  // percent
   // Percent damage by side struck, against vehicles only (infantry has no "rear armour").
   std::array<int32_t, 3> facing{100, 100, 100};
 };
@@ -61,7 +61,7 @@ class WeaponRegistry {
   // Damage including the side struck (front / side / rear) for vehicles.
   int32_t damageAgainst(int weapon, ArmorClass armor, HitSide side) const {
     const int32_t base = damageAgainst(weapon, armor);
-    if (armor == ArmorClass::Infantry) return base;
+    if (armor == ArmorClass::Infantry || armor == ArmorClass::Structure) return base;
     return base * warhead(get(weapon).warhead).facing[static_cast<size_t>(side)] / 100;
   }
   // The round a weapon fires at this armour (guns switch to HE against infantry).

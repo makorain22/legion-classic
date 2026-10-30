@@ -20,7 +20,7 @@ namespace legion {
 
 namespace {
 const char* kToolNames[] = {"Raise", "Lower", "Smooth", "Flatten", "Roughen", "Paint ground", "Place props",
-                            "Erase props", "Place units", "Select units", "Artillery", "Smite", "Heal"};
+                            "Erase props", "Oil fields", "Place units", "Select units", "Artillery", "Smite", "Heal"};
 const char* kToolTips[] = {
     "Raise the ground into hills.",
     "Lower the ground into valleys and riverbeds.",
@@ -30,6 +30,7 @@ const char* kToolTips[] = {
     "Paint grass, dirt, mud, roads and more. Edges blend naturally.",
     "Click to place one, drag to scatter trees, bushes or rocks.",
     "Remove trees, bushes and rocks inside the brush.",
+    "Lay down oil for supply trucks to pump. Hold Shift to drain it away.",
     "Place units for any side: one per click, a brush of them, or a whole block.",
     "Select units of any side; drag them to move them; inspect and edit them.",
     "Call down a barrage of 105 mm shells. Hurts every side.",
@@ -60,6 +61,7 @@ uint32_t toolColor(Tool t) {
     case Tool::Paint: return rgba8(120, 200, 255, 220);
     case Tool::Props: return rgba8(120, 236, 96, 220);
     case Tool::Erase: return rgba8(255, 90, 70, 220);
+    case Tool::Oil: return rgba8(60, 50, 40, 240);
     case Tool::PlaceUnits: return rgba8(120, 236, 96, 220);
     case Tool::Artillery: return rgba8(255, 150, 60, 230);
     case Tool::Smite: return rgba8(255, 70, 50, 230);
@@ -81,7 +83,7 @@ void Editor::setActive(bool on) {
 void Editor::setTool(Tool t) {
   if (stroking_) endStroke();
   tool_ = t;
-  tab_ = t <= Tool::Erase ? 0 : t <= Tool::SelectUnits ? 1 : 3;
+  tab_ = t <= Tool::Oil ? 0 : t <= Tool::SelectUnits ? 1 : 3;
   tabRequest_ = tab_;
 }
 
@@ -220,6 +222,7 @@ void Editor::beginStroke() {
   flattenTarget_ = m.heightAt(c.x, c.y);
   propAccum_ = 1.0f;  // a single click places one prop
   if (tool_ == Tool::Props || tool_ == Tool::Erase) history_.touchProps(m);
+  if (tool_ == Tool::Oil) history_.touchOil(m);
 }
 
 void Editor::endStroke() {
@@ -237,6 +240,7 @@ void Editor::strokeAt(Vec2f c, float dt) {
     case Tool::Paint: applyPaint(c, dt); break;
     case Tool::Props: applyProps(c, dt); break;
     case Tool::Erase: applyErase(c); break;
+    case Tool::Oil: applyOil(c, dt); break;
     case Tool::PlaceUnits: applyUnitBrush(c, dt); break;
     case Tool::SelectUnits: break;
     case Tool::Artillery:
@@ -347,6 +351,27 @@ void Editor::applyErase(Vec2f c) {
     const float dx = p.x - c.x, dy = p.y - c.y;
     return dx * dx + dy * dy <= r * r;
   });
+}
+
+void Editor::applyOil(Vec2f c, float dt) {
+  Map& m = scene_.map();
+  const bool drain = (SDL_GetModState() & SDL_KMOD_SHIFT) != 0;
+  const float cx = c.x / LEPTONS_PER_TILE, cy = c.y / LEPTONS_PER_TILE;
+  const float rate = strength_ / 100.0f * 600.0f * dt;
+  for (int y = static_cast<int>(cy - radius_); y <= static_cast<int>(cy + radius_); ++y)
+    for (int x = static_cast<int>(cx - radius_); x <= static_cast<int>(cx + radius_); ++x) {
+      if (!m.inBounds(x, y)) continue;
+      const float d = std::sqrt((x + 0.5f - cx) * (x + 0.5f - cx) + (y + 0.5f - cy) * (y + 0.5f - cy));
+      const float w = falloff(d / radius_, softEdge_);
+      if (w <= 0) continue;
+      // Ragged edges, like a real field.
+      const float n = (hash2(x, y, 0x0111u) % 100) / 100.0f;
+      if (!drain && w < 0.35f && n > w * 2.5f) continue;
+      const int add = static_cast<int>(rate * w * (0.6f + 0.8f * n) + 0.5f);
+      const int v = std::clamp(m.oil(x, y) + (drain ? -add : add), 0, 255);
+      if (!drain && m.info(x, y).waterDepth > -4) continue;  // no oil under water
+      m.setOil(x, y, static_cast<uint8_t>(v));
+    }
 }
 
 void Editor::afterTerrainEdit(int tx0, int ty0, int tx1, int ty1, bool heights, bool splat) {
@@ -540,7 +565,7 @@ void Editor::drawTerrainTab() {
   Map& m = scene_.map();
   ImGui::SeparatorText("Tool");
   const float bw = (kPanelWidth - 26) * 0.5f;
-  for (int i = 0; i <= static_cast<int>(Tool::Erase); ++i) {
+  for (int i = 0; i <= static_cast<int>(Tool::Oil); ++i) {
     const bool sel = static_cast<int>(tool_) == i;
     if (sel) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.62f, 0.50f, 0.22f, 1));
     if (ImGui::Button(kToolNames[i], ImVec2(bw, 0))) tool_ = static_cast<Tool>(i);

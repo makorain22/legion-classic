@@ -22,6 +22,11 @@ enum : uint8_t {
   HELMET = 16, GLASS = 17, LAMP = 18, BOOT = 19,
   TRUNK = 20, LEAF_DARK = 21, LEAF = 22, LEAF_LIGHT = 23, PINE = 24, PINE_DARK = 25,
   ROCK = 26, ROCK_DARK = 27, ROCK_LIGHT = 28, BUSH = 29,
+  // Structures.
+  CONCRETE = 30, CONCRETE_DARK = 31, CONCRETE_LIGHT = 32, BRICK = 33, BRICK_DARK = 34,
+  ROOF = 35, ROOF_DARK = 36, ROOF_LIGHT = 37, WOOD = 38, WOOD_DARK = 39, WINDOW = 40, WINDOW_LIT = 41,
+  SANDBAG = 42, SANDBAG_DARK = 43, EARTH = 44, EARTH_DARK = 45, RUST = 46, TANK_PAINT = 47, TANK_PAINT_DARK = 48,
+  CANVAS = 49, CANVAS_DARK = 50, SOOT = 51,
 };
 
 struct FactionLook {
@@ -70,6 +75,37 @@ VoxelPalette makePalette(const FactionLook& f) {
   p.set(ROCK_DARK, {88, 84, 76, 255});
   p.set(ROCK_LIGHT, {150, 144, 132, 255});
   p.set(BUSH, {72, 90, 46, 255});
+  // Structures: German works are grey concrete under dark roofs; Soviet ones
+  // brick and weathered timber under green-grey tin.
+  if (f.sloped) {
+    p.set(CONCRETE, {128, 122, 108, 255});
+    p.set(ROOF, {84, 96, 78, 255});
+    p.set(WOOD, {112, 90, 64, 255});
+    p.set(TANK_PAINT, {96, 104, 70, 255});
+  } else {
+    p.set(CONCRETE, {132, 132, 126, 255});
+    p.set(ROOF, {78, 74, 72, 255});
+    p.set(WOOD, {104, 88, 68, 255});
+    p.set(TANK_PAINT, {116, 116, 110, 255});
+  }
+  p.set(CONCRETE_DARK, scale(p.color[CONCRETE], 0.78f));
+  p.set(CONCRETE_LIGHT, scale(p.color[CONCRETE], 1.14f));
+  p.set(BRICK, {124, 72, 56, 255});
+  p.set(BRICK_DARK, {92, 54, 44, 255});
+  p.set(ROOF_DARK, scale(p.color[ROOF], 0.76f));
+  p.set(ROOF_LIGHT, scale(p.color[ROOF], 1.2f));
+  p.set(WOOD_DARK, scale(p.color[WOOD], 0.72f));
+  p.set(WINDOW, {40, 46, 50, 255});
+  p.set(WINDOW_LIT, {196, 170, 110, 255});
+  p.set(SANDBAG, {150, 134, 100, 255});
+  p.set(SANDBAG_DARK, {118, 104, 76, 255});
+  p.set(EARTH, {104, 86, 62, 255});
+  p.set(EARTH_DARK, {74, 60, 44, 255});
+  p.set(RUST, {120, 74, 46, 255});
+  p.set(TANK_PAINT_DARK, scale(p.color[TANK_PAINT], 0.75f));
+  p.set(CANVAS, {120, 116, 88, 255});
+  p.set(CANVAS_DARK, {94, 90, 68, 255});
+  p.set(SOOT, {48, 46, 44, 255});
   return p;
 }
 
@@ -307,9 +343,25 @@ constexpr float kTwoPi = 6.2831853f;
 // Bakes a unit in 16 facings for each faction look. With turretZ > 0, every
 // voxel at or above that height becomes a separate turret sheet that the
 // game rotates on its own; the turret turns around its own centre.
+// Scale of one voxel, in tiles. Vehicles and infantry use different scales so
+// their sizes stay true to life: a soldier stands about two thirds as tall as
+// a medium tank, and a tank is under one tile long, so masses of units read as
+// an army on a big battlefield rather than toys on a board.
+constexpr float kVehicleVoxel = 1.0f / 18.0f;
+constexpr float kInfantryVoxel = 1.0f / 32.0f;
+
+BakeOptions unitBake(float voxelTiles) {
+  BakeOptions o;
+  o.voxelTiles = voxelTiles;
+  o.supersample = 2;  // soft edges, no outlines: the gritty look
+  o.outline = false;
+  o.quantize = false;
+  return o;
+}
+
 void addUnit(AtlasBuilder& ab, SpriteCatalog& cat, const std::string& name,
              VoxelModel (*make)(const FactionLook&, int), int animFrames, int turretZ,
-             VoxelModel (*makeCorpse)(const FactionLook&, int) = nullptr) {
+             VoxelModel (*makeCorpse)(const FactionLook&, int) = nullptr, float voxelTiles = kVehicleVoxel) {
   for (const FactionLook& look : kFactions) {
     const VoxelPalette pal = makePalette(look);
     UnitArt art;
@@ -322,7 +374,7 @@ void addUnit(AtlasBuilder& ab, SpriteCatalog& cat, const std::string& name,
       VoxelModel body = full;
       if (turretZ > 0) splitAt(full, turretZ, body, turretModel);
       for (int f = 0; f < 16; ++f) {
-        BakeOptions o;
+        BakeOptions o = unitBake(voxelTiles);
         o.yawRadians = static_cast<float>(f) * kTwoPi / 16.0f;
         o.pivotX = full.sizeX() / 2.0f;
         o.pivotY = full.sizeY() / 2.0f;
@@ -344,12 +396,12 @@ void addUnit(AtlasBuilder& ab, SpriteCatalog& cat, const std::string& name,
           }
       const float cx = (x0 + x1 + 1) / 2.0f, cy = (y0 + y1 + 1) / 2.0f;
       art.hasTurret = true;
-      art.turretOffset = (cx - turretModel.sizeX() / 2.0f) / 16.0f * LEPTONS_PER_TILE;
+      art.turretOffset = (cx - turretModel.sizeX() / 2.0f) * voxelTiles * LEPTONS_PER_TILE;
       art.turret.facings = 16;
       art.turret.animFrames = 1;
       art.turret.first = static_cast<int>(ab.count());
       for (int f = 0; f < 16; ++f) {
-        BakeOptions o;
+        BakeOptions o = unitBake(voxelTiles);
         o.yawRadians = static_cast<float>(f) * kTwoPi / 16.0f;
         o.pivotX = cx;
         o.pivotY = cy;
@@ -364,7 +416,7 @@ void addUnit(AtlasBuilder& ab, SpriteCatalog& cat, const std::string& name,
       art.corpse.facings = 16;
       art.corpse.first = static_cast<int>(ab.count());
       for (int f = 0; f < 16; ++f) {
-        BakeOptions o;
+        BakeOptions o = unitBake(voxelTiles);
         o.yawRadians = static_cast<float>(f) * kTwoPi / 16.0f;
         o.pivotX = dead.sizeX() / 2.0f;
         o.pivotY = dead.sizeY() / 2.0f;
@@ -509,6 +561,474 @@ void addEffects(AtlasBuilder& ab, EffectArt& fx) {
   fx.scorch = ab.add(makeCrater(84, 17, true), 42, 21);
 }
 
+// ---------------------------------------------------------------------------
+// Supply trucks and construction trucks (vehicle scale, 16 facings)
+// ---------------------------------------------------------------------------
+void wheels(VoxelModel& m, std::initializer_list<int> xs, int width, int f) {
+  for (int wx : xs)
+    for (int wy : {0, width - 2}) {
+      m.box(wx, wy, 0, wx + 3, wy + 2, 3, RUBBER);
+      m.set(wx + 1, wy == 0 ? 0 : width - 1, 1 + (f % 2), STEEL);  // hub, turning
+    }
+}
+
+VoxelModel makeSupplyTruck(const FactionLook& look, int f) {
+  VoxelModel m(20, 9, 9);
+  wheels(m, {2, 7, 14}, 9, f);
+  m.box(1, 1, 2, 19, 8, 3, STEEL_DARK);        // chassis
+  m.box(14, 1, 3, 19, 8, 6, BASE);             // cab
+  m.box(15, 1, 6, 19, 8, 7, BASE_DARK);        // cab roof
+  m.box(18, 2, 4, 19, 7, 6, GLASS);            // windscreen
+  if (look.sloped) m.box(18, 2, 3, 20, 7, 5, BASE_DARK);  // snub bonnet
+  // Oil tank on the back: a rounded drum along the bed.
+  for (int x = 2; x < 14; ++x)
+    for (int y = 1; y < 8; ++y)
+      for (int z = 3; z < 9; ++z) {
+        const float dy = y + 0.5f - 4.5f, dz = z + 0.5f - 5.8f;
+        if (dy * dy / 12.0f + dz * dz / 9.0f <= 1.0f) m.set(x, y, z, BASE_DARK);
+      }
+  m.box(2, 3, 8, 14, 6, 9, TEAM);              // stripe along the top
+  m.box(7, 4, 8, 9, 5, 9, STEEL);              // filler cap
+  m.set(19, 1, 3, LAMP);
+  m.set(19, 7, 3, LAMP);
+  return m;
+}
+
+VoxelModel makeConstructionTruck(const FactionLook& look, int f) {
+  VoxelModel m(24, 11, 12);
+  wheels(m, {2, 7, 12, 18}, 11, f);
+  m.box(1, 1, 2, 23, 10, 3, STEEL_DARK);
+  m.box(18, 1, 3, 23, 10, 7, BASE);            // cab
+  m.box(19, 1, 7, 23, 10, 8, BASE_DARK);
+  m.box(22, 2, 4, 23, 9, 6, GLASS);
+  // Folded workshop: a canvas-covered box with a crane on top.
+  m.box(2, 1, 3, 17, 10, 9, CANVAS);
+  m.box(2, 1, 3, 17, 10, 4, CANVAS_DARK);
+  for (int x = 3; x < 17; x += 4) m.box(x, 1, 4, x + 1, 10, 9, CANVAS_DARK);  // ribs
+  m.box(2, 3, 9, 17, 8, 10, TEAM);
+  m.box(5, 5, 10, 6, 6, 12, STEEL);            // crane mast
+  m.box(5, 5, 11, 16, 6, 12, STEEL_DARK);      // jib folded forward
+  (void)look;
+  m.set(23, 1, 3, LAMP);
+  m.set(23, 9, 3, LAMP);
+  return m;
+}
+
+// ---------------------------------------------------------------------------
+// Structures. One voxel = 1/12 tile, so a footprint of W x H tiles is
+// 12W x 12H voxels. Baked once (they don't turn), supersampled.
+// ---------------------------------------------------------------------------
+constexpr float kStructureVoxel = 1.0f / 12.0f;
+
+// Grime: random darker and lighter voxels over a material.
+void weather(VoxelModel& m, uint8_t from, uint8_t dark, uint8_t light, uint32_t seed, int pd = 18, int pl = 8) {
+  speckle(m, from, dark, light, seed, pd, pl);
+}
+
+// A pitched roof along X over [x0,x1) x [y0,y1), eaves at z.
+void pitchedRoofX(VoxelModel& m, int x0, int y0, int x1, int y1, int z, uint8_t c, uint8_t ridge) {
+  const int half = (y1 - y0) / 2;
+  for (int i = 0; i <= half; ++i) {
+    m.box(x0, y0 + i, z + i, x1, y1 - i, z + i + 1, c);
+  }
+  m.box(x0, y0 + half, z + half, x1, y0 + half + 1 + (y1 - y0) % 2, z + half + 1, ridge);
+}
+
+void windowsAlongX(VoxelModel& m, int x0, int x1, int y, int z, int step, uint8_t c = WINDOW) {
+  for (int x = x0; x < x1; x += step) m.box(x, y, z, x + 2, y + 1, z + 2, c);
+}
+void windowsAlongY(VoxelModel& m, int y0, int y1, int x, int z, int step, uint8_t c = WINDOW) {
+  for (int y = y0; y < y1; y += step) m.box(x, y, z, x + 1, y + 2, z + 2, c);
+}
+
+// A vertical cylinder (tanks, chimneys).
+void cylinder(VoxelModel& m, float cx, float cy, float r, int z0, int z1, uint8_t c) {
+  for (int z = z0; z < z1; ++z)
+    for (int y = static_cast<int>(cy - r - 1); y <= static_cast<int>(cy + r + 1); ++y)
+      for (int x = static_cast<int>(cx - r - 1); x <= static_cast<int>(cx + r + 1); ++x) {
+        const float dx = x + 0.5f - cx, dy = y + 0.5f - cy;
+        if (dx * dx + dy * dy <= r * r) m.set(x, y, z, c);
+      }
+}
+
+void sandbagRow(VoxelModel& m, int x0, int y0, int x1, int y1, int h) {
+  m.box(x0, y0, 0, x1, y1, h, SANDBAG);
+  for (int z = 0; z < h; ++z)  // staggered bags
+    for (int y = y0; y < y1; ++y)
+      for (int x = x0; x < x1; ++x)
+        if (((x + y + (z % 2) * 2) % 4) == 0) m.set(x, y, z, SANDBAG_DARK);
+}
+
+VoxelModel makeYard(const FactionLook& look) {
+  VoxelModel m(48, 36, 34);
+  m.box(0, 0, 0, 48, 36, 1, CONCRETE_DARK);              // concrete apron
+  weather(m, CONCRETE_DARK, SOOT, CONCRETE, 11, 10, 12);
+  // Main assembly hall (back), big doors facing the front (+Y).
+  m.box(2, 2, 1, 30, 20, 13, CONCRETE);
+  weather(m, CONCRETE, CONCRETE_DARK, CONCRETE_LIGHT, 12);
+  if (look.sloped) pitchedRoofX(m, 1, 1, 31, 21, 13, ROOF, ROOF_DARK);
+  else {
+    m.box(1, 1, 13, 31, 21, 15, ROOF);                    // flat roof with skylights
+    for (int x = 4; x < 28; x += 6) m.box(x, 6, 15, x + 3, 16, 16, WINDOW);
+  }
+  m.box(8, 19, 1, 22, 20, 11, STEEL_DARK);                // hangar door
+  for (int x = 9; x < 22; x += 3) m.box(x, 20, 1, x + 1, 21, 11, STEEL);
+  windowsAlongY(m, 4, 18, 30, 7, 4);
+  // Office block (front right) with lit windows.
+  m.box(32, 18, 1, 46, 32, 10, look.sloped ? BRICK : CONCRETE_LIGHT);
+  if (look.sloped) weather(m, BRICK, BRICK_DARK, BRICK, 13);
+  m.box(31, 17, 10, 47, 33, 11, ROOF_DARK);
+  windowsAlongX(m, 34, 45, 32, 6, 4, WINDOW_LIT);
+  windowsAlongY(m, 20, 31, 46, 6, 4);
+  m.box(36, 31, 10, 42, 33, 11, TEAM);                    // team panel on the roof edge
+  // Gantry crane over the yard.
+  for (int x : {33, 45}) m.box(x, 2, 1, x + 1, 3, 30, STEEL_DARK);
+  m.box(33, 2, 29, 46, 3, 31, STEEL);
+  m.box(38, 2, 26, 39, 3, 29, STEEL_DARK);                // hook
+  // Stacks of material and a fuel drum cluster on the apron.
+  m.box(4, 25, 1, 12, 32, 4, WOOD);
+  m.box(5, 26, 4, 11, 31, 6, WOOD_DARK);
+  for (int i = 0; i < 4; ++i) cylinder(m, 18.5f + (i % 2) * 3, 27.5f + (i / 2) * 3, 1.3f, 1, 5, RUST);
+  // Flag.
+  m.box(26, 30, 1, 27, 31, 22, STEEL_DARK);
+  m.box(27, 30, 18, 32, 31, 22, TEAM);
+  return m;
+}
+
+VoxelModel makePowerStation(const FactionLook& look) {
+  VoxelModel m(24, 24, 44);
+  m.box(0, 0, 0, 24, 24, 1, CONCRETE_DARK);
+  m.box(2, 6, 1, 20, 22, 14, look.sloped ? BRICK : CONCRETE);
+  weather(m, look.sloped ? BRICK : CONCRETE, look.sloped ? BRICK_DARK : CONCRETE_DARK, look.sloped ? BRICK : CONCRETE_LIGHT, 21);
+  pitchedRoofX(m, 1, 5, 21, 23, 14, ROOF, ROOF_DARK);
+  windowsAlongX(m, 4, 19, 22, 6, 4, WINDOW_LIT);
+  windowsAlongY(m, 8, 21, 20, 6, 4);
+  // Two tall chimneys, sooty at the top.
+  for (float cx : {6.0f, 13.0f}) {
+    cylinder(m, cx, 3.5f, 2.2f, 1, 42, look.sloped ? BRICK_DARK : CONCRETE_DARK);
+    cylinder(m, cx, 3.5f, 2.2f, 36, 42, SOOT);
+  }
+  // Transformer yard.
+  m.box(20, 2, 1, 23, 8, 6, STEEL_DARK);
+  m.box(21, 3, 6, 22, 7, 9, STEEL);
+  m.box(8, 22, 1, 13, 23, 9, TEAM);  // team-painted doors
+  return m;
+}
+
+VoxelModel makeRefinery(const FactionLook& look) {
+  VoxelModel m(36, 36, 26);
+  m.box(0, 0, 0, 36, 36, 1, CONCRETE_DARK);
+  weather(m, CONCRETE_DARK, SOOT, CONCRETE, 31, 16, 6);
+  // Three storage tanks.
+  const struct { float x, y, r; int h; } tanks[] = {{8, 8, 6.0f, 18}, {21, 7, 5.0f, 15}, {8, 22, 5.0f, 15}};
+  for (const auto& t : tanks) {
+    cylinder(m, t.x, t.y, t.r, 1, t.h, look.sloped ? TANK_PAINT : CONCRETE_LIGHT);
+    cylinder(m, t.x, t.y, t.r - 1, t.h, t.h + 1, TANK_PAINT_DARK);  // roof
+    cylinder(m, t.x, t.y, t.r, t.h - 3, t.h - 2, TEAM);            // team band
+  }
+  weather(m, TANK_PAINT, RUST, TANK_PAINT_DARK, 32, 14, 10);
+  weather(m, CONCRETE_LIGHT, RUST, CONCRETE, 33, 12, 10);
+  // Pipes between the tanks and the pump house.
+  m.box(8, 14, 3, 9, 30, 4, STEEL_DARK);
+  m.box(8, 29, 3, 30, 30, 4, STEEL_DARK);
+  m.box(21, 12, 3, 22, 30, 4, STEEL_DARK);
+  // Pump house and loading bay at the front (where trucks unload).
+  m.box(20, 18, 1, 34, 30, 10, look.sloped ? WOOD : CONCRETE);
+  pitchedRoofX(m, 19, 17, 35, 31, 10, ROOF, ROOF_DARK);
+  m.box(24, 30, 1, 30, 31, 7, STEEL_DARK);
+  m.box(14, 32, 1, 34, 36, 2, CONCRETE);  // loading apron
+  for (int x = 15; x < 34; x += 6) m.box(x, 33, 2, x + 3, 35, 4, RUST);  // drums
+  return m;
+}
+
+VoxelModel makeBarracks(const FactionLook& look) {
+  VoxelModel m(36, 24, 26);
+  m.box(0, 0, 0, 36, 24, 1, EARTH);
+  // Long hut.
+  m.box(2, 3, 1, 34, 17, 10, look.sloped ? WOOD : CONCRETE);
+  weather(m, WOOD, WOOD_DARK, WOOD, 41, 30, 0);
+  weather(m, CONCRETE, CONCRETE_DARK, CONCRETE_LIGHT, 42);
+  pitchedRoofX(m, 1, 2, 35, 18, 10, ROOF, ROOF_DARK);
+  windowsAlongX(m, 4, 33, 17, 5, 5);
+  m.box(16, 17, 1, 20, 18, 8, WOOD_DARK);          // door
+  // Sandbagged entrance and a small parade ground.
+  sandbagRow(m, 12, 19, 15, 23, 3);
+  sandbagRow(m, 21, 19, 24, 23, 3);
+  m.box(30, 19, 1, 31, 20, 20, STEEL_DARK);        // flag pole
+  m.box(31, 19, 15, 35, 20, 20, TEAM);
+  return m;
+}
+
+VoxelModel makeFactory(const FactionLook& look) {
+  VoxelModel m(48, 36, 36);
+  m.box(0, 0, 0, 48, 36, 1, CONCRETE_DARK);
+  weather(m, CONCRETE_DARK, SOOT, CONCRETE, 51, 18, 6);
+  const uint8_t wall = look.sloped ? BRICK : CONCRETE;
+  m.box(2, 2, 1, 46, 26, 16, wall);
+  weather(m, wall, look.sloped ? BRICK_DARK : CONCRETE_DARK, look.sloped ? BRICK : CONCRETE_LIGHT, 52);
+  // Saw-tooth roof: a row of north-lit ridges.
+  for (int y = 2; y < 26; y += 6)
+    for (int i = 0; i < 6; ++i) {
+      m.box(1, y + i, 16, 47, y + i + 1, 16 + (5 - i) / 1, ROOF);
+      m.box(1, y, 16, 47, y + 1, 22, WINDOW);  // glazing on the steep side
+    }
+  // Big doors for tanks on the front.
+  m.box(14, 25, 1, 34, 27, 13, STEEL_DARK);
+  for (int x = 15; x < 34; x += 4) m.box(x, 26, 1, x + 1, 27, 13, STEEL);
+  m.box(14, 25, 13, 34, 27, 15, TEAM);
+  windowsAlongY(m, 4, 24, 46, 8, 4);
+  // Chimney.
+  cylinder(m, 42.5f, 6.5f, 2.0f, 16, 34, wall);
+  cylinder(m, 42.5f, 6.5f, 2.0f, 30, 34, SOOT);
+  // Finished hull on the apron.
+  m.box(36, 29, 1, 44, 34, 4, TANK_PAINT_DARK);
+  m.box(38, 30, 4, 42, 33, 6, TANK_PAINT);
+  return m;
+}
+
+VoxelModel makeWatchtower(const FactionLook& look) {
+  VoxelModel m(12, 12, 40);
+  for (int x : {2, 9})
+    for (int y : {2, 9}) m.box(x, y, 0, x + 1, y + 1, 30, WOOD_DARK);  // legs
+  for (int z = 6; z < 28; z += 7) {                                   // cross braces
+    m.box(2, 2, z, 10, 3, z + 1, WOOD);
+    m.box(2, 9, z, 10, 10, z + 1, WOOD);
+  }
+  m.box(1, 1, 28, 11, 11, 30, WOOD);          // platform
+  m.box(1, 1, 30, 11, 2, 32, WOOD_DARK);      // railing
+  m.box(1, 10, 30, 11, 11, 32, WOOD_DARK);
+  m.box(0, 0, 36, 12, 12, 37, ROOF);          // roof
+  m.box(2, 2, 37, 10, 10, 38, ROOF_DARK);
+  for (int x : {1, 10})
+    for (int y : {1, 10}) m.box(x, y, 30, x + 1, y + 1, 36, WOOD_DARK);
+  m.box(5, 5, 37, 7, 7, 39, TEAM);
+  (void)look;
+  return m;
+}
+
+VoxelModel makeBunker(const FactionLook& look) {
+  VoxelModel m(24, 24, 12);
+  m.box(0, 0, 0, 24, 24, 1, EARTH);
+  // Rounded concrete pillbox with earth banked against it.
+  for (int z = 1; z < 9; ++z) {
+    const float r = 10.5f - std::max(0, z - 5) * 1.2f;
+    cylinder(m, 12, 12, r + 1.5f - z * 0.18f, z, z + 1, z < 4 ? EARTH : CONCRETE);
+  }
+  weather(m, EARTH, EARTH_DARK, SANDBAG_DARK, 61, 30, 10);
+  weather(m, CONCRETE, CONCRETE_DARK, CONCRETE_LIGHT, 62, 25, 10);
+  cylinder(m, 12, 12, 7.0f, 9, 10, look.sloped ? CONCRETE_DARK : CONCRETE);
+  // Firing slits all round.
+  for (int a = 0; a < 8; ++a) {
+    const float ang = a * 0.785f;
+    const int x = static_cast<int>(12 + std::cos(ang) * 8.6f), y = static_cast<int>(12 + std::sin(ang) * 8.6f);
+    m.box(x, y, 5, x + 1, y + 1, 6, WINDOW);
+  }
+  m.box(10, 10, 10, 14, 14, 11, TEAM);
+  return m;
+}
+
+// The bunker's machine gun, turning on the roof.
+VoxelModel makeBunkerGun(const FactionLook&) {
+  VoxelModel m(24, 24, 13);
+  m.box(11, 11, 10, 13, 13, 12, STEEL_DARK);
+  m.box(13, 11, 11, 19, 12, 12, STEEL_DARK);
+  return m;
+}
+
+VoxelModel makeAtGunPit(const FactionLook&) {
+  VoxelModel m(24, 24, 8);
+  // A ring of sandbags round a shallow pit.
+  for (int y = 0; y < 24; ++y)
+    for (int x = 0; x < 24; ++x) {
+      const float dx = x + 0.5f - 12, dy = y + 0.5f - 12;
+      const float d = std::sqrt(dx * dx + dy * dy);
+      if (d < 11.5f) m.set(x, y, 0, d < 8.0f ? EARTH_DARK : EARTH);
+      if (d >= 8.5f && d < 11.5f && !(dy > 6 && std::abs(dx) < 2.5f)) {  // gap at the back for the crew
+        const int h = 3 + ((x * 7 + y * 3) % 3 == 0);
+        for (int z = 1; z <= h; ++z) m.set(x, y, z, ((x + y + z) % 3) ? SANDBAG : SANDBAG_DARK);
+      }
+    }
+  return m;
+}
+
+// The gun itself: shield, barrel and trail, turning in the pit.
+VoxelModel makeAtGun(const FactionLook& look) {
+  VoxelModel m(24, 24, 8);
+  m.box(9, 9, 1, 15, 15, 2, TANK_PAINT_DARK);        // carriage
+  m.box(7, 11, 1, 10, 13, 2, TANK_PAINT_DARK);       // trail
+  m.box(13, 8, 2, 14, 16, look.sloped ? 6 : 5, TANK_PAINT);  // shield
+  m.box(12, 11, 3, 23, 13, 4, STEEL_DARK);           // long barrel
+  m.box(22, 11, 3, 24, 13, 4, STEEL);                // muzzle brake
+  m.box(10, 10, 2, 13, 14, 3, TEAM);
+  return m;
+}
+
+// A low, lumpy wall of bags filling the tile, so neighbouring pieces join up.
+VoxelModel makeSandbags(const FactionLook&) {
+  VoxelModel m(12, 12, 4);
+  for (int y = 0; y < 12; ++y)
+    for (int x = 0; x < 12; ++x) {
+      const float dx = std::abs(x + 0.5f - 6.0f), dy = std::abs(y + 0.5f - 6.0f);
+      const int h = (dx < 4.5f && dy < 4.5f) ? 3 : (dx < 6 && dy < 6) ? 2 : 1;
+      for (int z = 0; z < h; ++z) {
+        // Each bag is 3 x 2 voxels, rows offset like brickwork; seams darker.
+        const bool seam = ((x + (z % 2) * 1 + (y / 2) % 2) % 3 == 0) || (y % 2 == 0 && z == h - 1 && x % 3 == 1);
+        m.set(x, y, z, seam ? SANDBAG_DARK : SANDBAG);
+      }
+    }
+  return m;
+}
+
+// Two stakes and a loose coil of wire between them: see-through, so a line of
+// it reads as an entanglement rather than a wall.
+VoxelModel makeWire(const FactionLook&) {
+  VoxelModel m(12, 12, 5);
+  m.box(2, 2, 0, 3, 3, 5, WOOD_DARK);
+  m.box(9, 9, 0, 10, 10, 5, WOOD_DARK);
+  for (int i = 0; i < 24; ++i) {
+    const float t = i / 24.0f * 6.2831853f * 2.0f;  // two loops of the coil
+    const float u = i / 24.0f;
+    const int x = static_cast<int>(1.5f + u * 9.0f + std::cos(t) * 1.4f);
+    const int y = static_cast<int>(1.5f + u * 9.0f + std::sin(t) * 1.4f);
+    const int z = static_cast<int>(2.0f + std::sin(t) * 1.5f);
+    if (i % 3 != 2) m.set(x, y, z, i % 2 ? STEEL : STEEL_DARK);
+  }
+  return m;
+}
+
+// Czech hedgehogs: three crossed girders each.
+VoxelModel makeTankTraps(const FactionLook&) {
+  VoxelModel m(12, 12, 8);
+  auto hog = [&](int cx, int cy) {
+    for (int i = -3; i <= 3; ++i) {
+      m.set(cx + i, cy, 3 + i / 2 + 1, RUST);
+      m.set(cx, cy + i, 4 - i / 2, STEEL_DARK);
+      m.set(cx + i / 2, cy - i / 2, 3 + (i + 3) / 2, RUST);
+      m.set(cx + i, cy + i, 1 + std::abs(i), STEEL_DARK);
+    }
+  };
+  hog(4, 4);
+  hog(8, 8);
+  return m;
+}
+
+// Bakes a structure: one view for the body, and 16 facings of its turret if any.
+void addStructure(AtlasBuilder& ab, SpriteCatalog& cat, const std::string& name, VoxelModel (*make)(const FactionLook&),
+                  VoxelModel (*turret)(const FactionLook&) = nullptr) {
+  for (const FactionLook& look : kFactions) {
+    const VoxelPalette pal = makePalette(look);
+    const VoxelModel body = make(look);
+    UnitArt art;
+    art.body.facings = 1;
+    art.body.animFrames = 1;
+    art.body.first = static_cast<int>(ab.count());
+    BakeOptions o = unitBake(kStructureVoxel);
+    o.pivotX = body.sizeX() / 2.0f;
+    o.pivotY = body.sizeY() / 2.0f;
+    o.shadowAlpha = 110;
+    BakedSprite s = bakeVoxels(body, pal, o);
+    ab.add(std::move(s.image), s.anchorX, s.anchorY);
+    if (turret) {
+      const VoxelModel t = turret(look);
+      art.hasTurret = true;
+      art.turretOffset = 0;
+      art.turret.facings = 16;
+      art.turret.first = static_cast<int>(ab.count());
+      for (int f = 0; f < 16; ++f) {
+        BakeOptions to = unitBake(kStructureVoxel);
+        to.yawRadians = static_cast<float>(f) * kTwoPi / 16.0f;
+        to.pivotX = t.sizeX() / 2.0f;
+        to.pivotY = t.sizeY() / 2.0f;
+        to.shadow = false;
+        BakedSprite ts = bakeVoxels(t, pal, to);
+        ab.add(std::move(ts.image), ts.anchorX, ts.anchorY);
+      }
+    }
+    cat.units[name + "@" + look.id] = art;
+  }
+}
+
+// --- Ground decals for the economy and fortifications -------------------------
+// Diamond tile helpers: (u, v) in [0,1]^2 across the tile, mapped to a 64x32 image.
+template <class F>
+Image tileDecal(F shade) {
+  const int W = 64, H = 32;
+  Image img(W, H);
+  for (int y = 0; y < H; ++y)
+    for (int x = 0; x < W; ++x) {
+      // Inverse of the diamond: screen (x, y) -> tile (u, v).
+      const float sx = (x + 0.5f - W / 2.0f) / (W / 2.0f), sy = (y + 0.5f) / (H / 2.0f) - 1.0f;
+      const float u = (sx + sy) * 0.5f + 0.5f, v = (sy - sx) * 0.5f + 0.5f;
+      if (u < 0 || v < 0 || u > 1 || v > 1) continue;
+      img.at(x, y) = shade(u, v, x, y);
+    }
+  return img;
+}
+
+// A trench segment. `mask`: bit 0 = joins +X neighbour, 1 = +Y, 2 = -X, 3 = -Y.
+Image makeTrenchDecal(int mask) {
+  return tileDecal([&](float u, float v, int x, int y) -> Rgba {
+    // Distance to the trench's centre line(s).
+    const float cu = u - 0.5f, cv = v - 0.5f;
+    float d = std::sqrt(cu * cu + cv * cv);  // the hub
+    if (mask & 1 && u >= 0.5f) d = std::min(d, std::abs(cv));
+    if (mask & 4 && u <= 0.5f) d = std::min(d, std::abs(cv));
+    if (mask & 2 && v >= 0.5f) d = std::min(d, std::abs(cu));
+    if (mask & 8 && v <= 0.5f) d = std::min(d, std::abs(cu));
+    const float n = fbm2(x * 0.3f, y * 0.5f, 900u + static_cast<uint32_t>(mask));
+    const float dd = d + (n - 0.5f) * 0.06f;
+    if (mask == 0 && d > 0.3f) return {0, 0, 0, 0};
+    if (dd < 0.12f) {  // the dug channel: dark, deeper in the middle
+      const float k = 0.45f + dd * 2.5f + n * 0.2f;
+      return {u8(62 * k), u8(50 * k), u8(38 * k), 245};
+    }
+    if (dd < 0.21f) {  // parapet of thrown-up earth and sandbags
+      const bool bag = hash2(x / 2, y, 77) % 4 == 0;
+      const float k = 0.9f + n * 0.3f;
+      return bag ? Rgba{u8(140 * k), u8(124 * k), u8(92 * k), 240} : Rgba{u8(112 * k), u8(92 * k), u8(66 * k), 230};
+    }
+    if (dd < 0.27f) return {u8(96 + n * 20), u8(80 + n * 16), 58, u8((0.27f - dd) / 0.06f * 170)};
+    return {0, 0, 0, 0};
+  });
+}
+
+Image makeOilDecal(int variant) {
+  return tileDecal([&](float u, float v, int x, int y) -> Rgba {
+    const float n = fbm2(x * 0.16f + variant * 13.0f, y * 0.32f, 600u + static_cast<uint32_t>(variant));
+    const float edge = std::min({u, v, 1 - u, 1 - v}) * 4.0f;  // fade at the tile edge
+    const float a = std::clamp((n - 0.38f) * 3.2f, 0.0f, 1.0f) * std::clamp(edge + 0.35f, 0.0f, 1.0f);
+    if (a <= 0.02f) return {0, 0, 0, 0};
+    const float sheen = std::pow(std::clamp(n - 0.7f, 0.0f, 1.0f) * 3.3f, 3.0f);
+    return {u8(18 + 70 * sheen), u8(16 + 60 * sheen), u8(14 + 76 * sheen), u8(a * 225)};
+  });
+}
+
+// Rubble left by a destroyed building, `size` tiles across.
+Image makeRubble(int size, uint32_t seed) {
+  const int W = 64 * size, H = 32 * size;
+  Image img(W, H);
+  for (int y = 0; y < H; ++y)
+    for (int x = 0; x < W; ++x) {
+      const float dx = (x + 0.5f) / W - 0.5f, dy = (y + 0.5f) / H - 0.5f;
+      const float n = fbm2(x * 0.12f, y * 0.24f, seed);
+      const float d = (std::abs(dx) + std::abs(dy)) * 2.0f + (n - 0.5f) * 0.4f;  // a diamond
+      if (d >= 1.0f) continue;
+      const uint32_t h = hash2(x / 2, y / 2, seed);
+      const bool chunk = h % 7 == 0 && d < 0.85f;
+      const float k = chunk ? 0.9f + (h % 50) / 100.0f : 0.35f + n * 0.35f;
+      const Rgba c = chunk ? Rgba{u8(120 * k), u8(116 * k), u8(108 * k), 255}   // broken concrete
+                           : Rgba{u8(60 * k), u8(54 * k), u8(48 * k), u8(220 * std::min(1.0f, (1.0f - d) * 4))};  // soot and ash
+      img.at(x, y) = c;
+    }
+  return img;
+}
+
+void addEconomyDecals(AtlasBuilder& ab, SpriteCatalog& cat) {
+  for (int m = 0; m < 16; ++m) cat.trench[static_cast<size_t>(m)] = ab.add(makeTrenchDecal(m), 32, 16);
+  for (int v = 0; v < 4; ++v) cat.oil[static_cast<size_t>(v)] = ab.add(makeOilDecal(v), 32, 16);
+  for (int s = 0; s < 3; ++s) cat.rubble[static_cast<size_t>(s)] = ab.add(makeRubble(s + 2, 70u + s), 32 * (s + 2), 16 * (s + 2));
+}
+
 }  // namespace
 
 bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error) {
@@ -517,8 +1037,31 @@ bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error) {
 
   addUnit(ab, cat, "tank", &makeTank, 4, 4);
   addUnit(ab, cat, "scoutcar", &makeScoutCar, 3, 5);
-  addUnit(ab, cat, "rifleman", &makeRifleman, 4, 0, &makeRiflemanDead);
+  addUnit(ab, cat, "rifleman", &makeRifleman, 4, 0, &makeRiflemanDead, kInfantryVoxel);
   addEffects(ab, cat.effects);
+  addUnit(ab, cat, "truck", &makeSupplyTruck, 2, 0);
+  addUnit(ab, cat, "mcv", &makeConstructionTruck, 2, 0);
+  addStructure(ab, cat, "yard", &makeYard);
+  addStructure(ab, cat, "power", &makePowerStation);
+  addStructure(ab, cat, "refinery", &makeRefinery);
+  addStructure(ab, cat, "barracks", &makeBarracks);
+  addStructure(ab, cat, "factory", &makeFactory);
+  addStructure(ab, cat, "tower", &makeWatchtower);
+  addStructure(ab, cat, "bunker", &makeBunker, &makeBunkerGun);
+  addStructure(ab, cat, "atgun", &makeAtGunPit, &makeAtGun);
+  addStructure(ab, cat, "sandbags", &makeSandbags);
+  addStructure(ab, cat, "wire", &makeWire);
+  addStructure(ab, cat, "traps", &makeTankTraps);
+  addEconomyDecals(ab, cat);
+  {
+    // Trenches are ground decals; their "unit art" is the lone foxhole piece.
+    for (const FactionLook& look : kFactions) {
+      UnitArt t;
+      t.body.facings = 1;
+      t.body.first = cat.trench[0];
+      cat.units[std::string("trench@") + look.id] = t;
+    }
+  }
 
   struct PropSpec {
     PropKind kind;
@@ -546,8 +1089,8 @@ bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error) {
   Image white(4, 4);
   for (auto& p : white.px) p = {255, 255, 255, 255};
   cat.white = ab.add(std::move(white));
-  cat.selectSmall = ab.add(makeEllipseRing(22, 11), 11, 5);
-  cat.selectLarge = ab.add(makeEllipseRing(46, 23), 23, 11);
+  cat.selectSmall = ab.add(makeEllipseRing(14, 7), 7, 3);
+  cat.selectLarge = ab.add(makeEllipseRing(38, 19), 19, 9);
   cat.moveMarker = ab.add(makeDiamondOutline(32, 16), 16, 8);
 
   for (int size : {1024, 2048, 4096}) {

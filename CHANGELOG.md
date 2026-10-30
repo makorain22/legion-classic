@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.5.0 – Milestone 5: Economy, base building and fortifications (31 Oct 2026)
+
+- Economy: supplies from oil. Supply trucks pump oil fields and drive it to an
+  Oil Depot; fields run dry. Random maps get mirrored home and contested
+  fields. Power stations power the base; low power halves build speed.
+- Structures on the tile grid (they block movement and paths go round them):
+  Construction Yard, Power Station, Oil Depot, Barracks, Tank Works,
+  Watchtower, MG Bunker, Anti-Tank Gun Pit, for Germany and Russia.
+- Fortifications: trenches (60 % cover for infantry, join up into lines,
+  stop wheeled vehicles), sandbags (40 % cover beside them), barbed wire (stops
+  infantry), tank traps (stop vehicles). Dragged out as lines.
+- Production: four lines per side (buildings, defences, infantry, vehicles),
+  paid as work progresses, with prerequisites, build range, rally points and
+  a primary factory. Construction trucks unfold into yards. Selling refunds
+  half. A side with nothing left is defeated; victory / defeat banners.
+- Classic right sidebar: supplies, power bar, minimap (fog, units, camera,
+  click to look, right-click to send), build tabs with progress, READY and
+  queue counts, placement ghosts with green / red footprints, sell mode.
+- Unit behaviour (playtest feedback): stances (aggressive, hold, hold fire);
+  units shot on the march stop to fight back, idle ones go after attackers out
+  of reach; Alt+right-click forced march.
+- Formations: box, line, column, wedge, loose; right-drag to set the front
+  line's position, width and facing; armour in front of infantry in mixed
+  groups; units turn to face the front on arrival.
+- Pathfinding keeps off riverbanks, cliff edges and building corners.
+- Unit scale (playtest feedback): vehicles about 10 % smaller, infantry about
+  half their old size, true to life next to tanks, trees and buildings; soft,
+  outline-free sprites.
+- Structures: build-up fade, dust, smoke and fire when damaged, rubble and a
+  burning ruin when destroyed. Enemy structures stay on the map once seen.
+- Editor: buildings, defences and fortifications in the palette (with a kind
+  filter), oil-field brush (undoable), starting supplies per side.
+- Scenario files v2: oil layer and supplies (v1 files still open).
+- 61 unit tests (adds structures, production, power, oil, trucks, deploy, sell,
+  trenches and cover, defeat, formations, stances, return fire).
+
+
 ## 0.4.0 – Milestone 4: Live Scenario Editor (30 Oct 2026)
 
 - The editor (F2) is now the Live Scenario Editor, in four tabs: Terrain,

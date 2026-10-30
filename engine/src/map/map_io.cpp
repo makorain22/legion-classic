@@ -37,7 +37,8 @@ std::vector<uint8_t> encodeMap(const Map& map, const std::vector<UnitPlacement>&
   auto& ps = j["players"] = nlohmann::json::array();
   for (const PlayerSetup& p : players)
     ps.push_back({{"name", p.name}, {"faction", p.faction}, {"color", p.color}, {"team", p.team},
-                  {"active", p.active}, {"human", p.human}, {"startX", p.startX}, {"startY", p.startY}});
+                  {"active", p.active}, {"human", p.human}, {"startX", p.startX}, {"startY", p.startY},
+                  {"credits", p.credits}});
   const std::string header = j.dump();
 
   std::vector<uint8_t> raw;
@@ -49,6 +50,7 @@ std::vector<uint8_t> encodeMap(const Map& map, const std::vector<UnitPlacement>&
     raw.push_back(static_cast<uint8_t>(h >> 8));
   }
   raw.insert(raw.end(), map.splatData().begin(), map.splatData().end());
+  raw.insert(raw.end(), map.oilData().begin(), map.oilData().end());
 
   mz_ulong compSize = mz_compressBound(static_cast<mz_ulong>(raw.size()));
   std::vector<uint8_t> comp(compSize);
@@ -111,7 +113,8 @@ bool decodeMap(const std::vector<uint8_t>& bytes, MapFile& out, std::string& err
     m.resize(w, h);
     const size_t heightBytes = m.heights().size() * 2;
     const size_t splatBytes = m.splatData().size();
-    const size_t need = 4 + static_cast<size_t>(headerLen) + heightBytes + splatBytes;
+    const size_t oilBytes = version >= 2 ? m.oilData().size() : 0;
+    const size_t need = 4 + static_cast<size_t>(headerLen) + heightBytes + splatBytes + oilBytes;
     if (raw.size() != need) {
       error = "map file is damaged (terrain size)";
       return false;
@@ -119,6 +122,7 @@ bool decodeMap(const std::vector<uint8_t>& bytes, MapFile& out, std::string& err
     const uint8_t* p = raw.data() + 4 + headerLen;
     for (size_t i = 0; i < m.heights().size(); ++i) m.heights()[i] = static_cast<uint16_t>(p[i * 2] | (p[i * 2 + 1] << 8));
     std::memcpy(m.splatData().data(), p + heightBytes, splatBytes);
+    if (oilBytes) std::memcpy(m.oilData().data(), p + heightBytes + splatBytes, oilBytes);
 
     m.name = j.value("name", "Untitled");
     m.author = j.value("author", "");
@@ -153,6 +157,7 @@ bool decodeMap(const std::vector<uint8_t>& bytes, MapFile& out, std::string& err
       p.human = pj.value("human", true);
       p.startX = pj.value("startX", -1);
       p.startY = pj.value("startY", -1);
+      p.credits = pj.value("credits", 5000);
       out.players.push_back(std::move(p));
     }
     m.recomputeInfo();
