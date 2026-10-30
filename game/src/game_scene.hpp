@@ -32,6 +32,8 @@ struct SceneOptions {
   bool startInEditor = false;
   std::string loadMap;       // open this .lmap at start
   bool editorDemo = false;   // scripted editor session, for automated screenshots
+  bool liveDemo = false;     // scripted Live Scenario Editor session (units, battle tools)
+  bool editorSelfTest = false;  // checks unit placement / undo / redo through the real editor
 };
 
 class GameScene final : public slave::Scene {
@@ -62,8 +64,36 @@ class GameScene final : public slave::Scene {
   // Screen-world position of a ground point (leptons), lifted by its height.
   slave::Vec2f groundToScreenWorld(float lx, float ly) const;
   std::vector<slave::UnitPlacement> exportUnits();
-  void replaceWorld(slave::MapFile&& file);  // new or loaded map
+  // New or loaded map. `keepCamera`: stay where we are (snapshot restore).
+  void replaceWorld(slave::MapFile&& file, bool keepCamera = false);
+
+  // Sides of the scenario.
+  std::array<slave::PlayerSetup, slave::MAX_PLAYERS>& players() { return players_; }
+  std::vector<slave::PlayerSetup> playerList() const { return {players_.begin(), players_.end()}; }
+  void applyPlayers();  // after editing players(): colours, teams
+  uint8_t player() const { return player_; }
+  void setPlayer(uint8_t p);  // command and watch this side
+  uint32_t teamColor(int p) const { return teamColors_[static_cast<size_t>(p) % slave::MAX_PLAYERS]; }
+
+  // Units.
+  std::vector<slave::Entity>& selection() { return selection_; }
+  void pruneSelection();
+  slave::Entity pickUnit(slave::Vec2f screenPx, bool ownOnly) const;
+  slave::Vec2f unitScreenWorld(uint32_t entityIndex) const;
+  const slave::UnitArt& unitArt(int type) const { return unitArt_[static_cast<size_t>(type)]; }
+  const slave::WeaponRegistry& weapons() const { return weapons_; }
+  slave::SpriteRenderer& renderer() { return renderer_; }
+  BattleFx& fx() { return fx_; }
+
+  // Snapshots: the whole battle (terrain, units, sides) kept in memory.
+  void takeSnapshot();
+  bool hasSnapshot() const { return snapshot_ != nullptr; }
+  void restoreSnapshot();
+
+  bool& editorShowsFog() { return editorFog_; }
   void setPaused(bool p) { paused_ = p; }
+  float speed() const { return speed_; }
+  void setSpeed(float s) { speed_ = s; }
   bool paused() const { return paused_; }
   void showStatus(const std::string& text, float seconds = 3.0f);
   const std::string& mapsDir() const { return mapsDir_; }
@@ -85,12 +115,11 @@ class GameScene final : public slave::Scene {
     uint32_t tint;
   };
 
-  slave::Vec2f unitScreenWorld(uint32_t entityIndex) const;
   slave::Vec2i mouseWorldLeptons() const;
-  slave::Entity pickUnit(slave::Vec2f screenPx, bool ownOnly) const;
   void selectInBox(slave::Vec2f a, slave::Vec2f b, bool add);
   void selectSameTypeOnScreen(slave::Entity like);
-  void pruneSelection();
+  bool selectableOwner(uint8_t owner) const;  // the editor's select tool can pick any side
+  void queueOrder(slave::Command c);          // splits mixed-owner selections per owner
   void orderMove(slave::Vec2i target, slave::CommandType type = slave::CommandType::Move);
   void orderAttack(slave::Entity target);
   // Can the side we are watching see this tile right now?
@@ -108,6 +137,11 @@ class GameScene final : public slave::Scene {
   void drawHelp();
   void drawDebug();
   void runEditorDemo();
+  void runLiveDemo();
+  void runEditorSelfTest();
+  int selfTestFailures_ = 0;
+  std::vector<slave::Vec2i> before_;
+  slave::Vec2i moveDelta_;
 
   slave::App& app_;
   SceneOptions opt_;
@@ -121,7 +155,9 @@ class GameScene final : public slave::Scene {
   slave::Camera cam_;
   std::unique_ptr<Editor> editor_;
   std::array<uint32_t, slave::MAX_PLAYERS> teamColors_{};
-  std::array<std::string, slave::MAX_PLAYERS> playerNames_;
+  std::array<slave::PlayerSetup, slave::MAX_PLAYERS> players_;
+  std::unique_ptr<slave::MapFile> snapshot_;
+  bool editorFog_ = false;
   std::vector<slave::UnitArt> unitArt_;  // by unit type index
   BattleFx fx_;
 

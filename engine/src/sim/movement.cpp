@@ -269,8 +269,17 @@ void Simulation::stepSeparation() {
 
 void Simulation::stepVision() {
   vision_.begin();
+  // Allies share what they see.
+  std::array<std::array<uint8_t, MAX_PLAYERS>, MAX_PLAYERS> viewers{};
+  std::array<uint8_t, MAX_PLAYERS> viewerCount{};
+  for (int a = 0; a < MAX_PLAYERS; ++a)
+    for (int b = 0; b < MAX_PLAYERS; ++b)
+      if (team_[static_cast<size_t>(a)] == team_[static_cast<size_t>(b)])
+        viewers[static_cast<size_t>(a)][viewerCount[static_cast<size_t>(a)]++] = static_cast<uint8_t>(b);
   reg_.each<CUnit, CPosition>([&](uint32_t, CUnit& u, CPosition& p) {
-    vision_.stamp(u.owner, p.x >> LEPTON_SHIFT, p.y >> LEPTON_SHIFT, types_.get(u.type).sight >> LEPTON_SHIFT);
+    const size_t o = u.owner % MAX_PLAYERS;
+    const int r = types_.get(u.type).sight >> LEPTON_SHIFT;
+    for (uint8_t i = 0; i < viewerCount[o]; ++i) vision_.stamp(viewers[o][i], p.x >> LEPTON_SHIFT, p.y >> LEPTON_SHIFT, r);
   });
   vision_.end();
 }

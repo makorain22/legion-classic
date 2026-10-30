@@ -8,6 +8,7 @@
 // texel belongs to exactly one chunk, so swaps never overlap.
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -18,6 +19,14 @@ namespace legion {
 class History {
  public:
   static constexpr int kChunk = 32;
+
+  // A non-terrain step (units placed, moved, deleted...). The editor supplies
+  // how to take it back and redo it.
+  struct Action {
+    virtual ~Action() = default;
+    virtual void undo() = 0;
+    virtual void redo() = 0;
+  };
 
   struct Region {  // tile range touched by an undo/redo, for redraws
     int tx0 = 0, ty0 = 0, tx1 = -1, ty1 = -1;
@@ -30,6 +39,8 @@ class History {
   void touchProps(const slave::Map& map);
   void touchWater(const slave::Map& map);
   void end();  // commits the step (dropped if nothing was touched)
+  // Commits a step holding just an action (already done by the caller).
+  void push(const std::string& label, std::shared_ptr<Action> action);
   bool recording() const { return recording_; }
 
   bool canUndo() const { return !undo_.empty(); }
@@ -54,9 +65,10 @@ class History {
     std::vector<slave::Prop> props;
     bool hasWater = false;
     uint16_t water = 0;
+    std::shared_ptr<Action> action;
   };
   static void swapChunk(slave::Map& map, ChunkCopy& c);
-  static Region swapStep(slave::Map& map, Step& s);
+  static Region swapStep(slave::Map& map, Step& s, bool undo);
 
   bool recording_ = false;
   Step current_;

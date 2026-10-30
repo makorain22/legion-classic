@@ -76,6 +76,7 @@ struct CProjectile {
   int32_t travelled = 0, total = 0;
   uint16_t weapon = 0;
   uint8_t owner = 0;
+  uint16_t delay = 0;  // ticks before it starts flying (artillery barrages)
 };
 
 }  // namespace slave

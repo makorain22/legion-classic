@@ -67,6 +67,16 @@ void History::end() {
   if (undo_.size() > kMaxSteps) undo_.erase(undo_.begin());
 }
 
+void History::push(const std::string& label, std::shared_ptr<Action> action) {
+  if (!action) return;
+  Step s;
+  s.label = label;
+  s.action = std::move(action);
+  undo_.push_back(std::move(s));
+  redo_.clear();
+  if (undo_.size() > kMaxSteps) undo_.erase(undo_.begin());
+}
+
 void History::swapChunk(Map& map, ChunkCopy& c) {
   int ax, bx, ay, by;
   cornerRange(c.cx, map.width(), ax, bx);
@@ -86,7 +96,8 @@ void History::swapChunk(Map& map, ChunkCopy& c) {
   }
 }
 
-History::Region History::swapStep(Map& map, Step& s) {
+History::Region History::swapStep(Map& map, Step& s, bool undo) {
+  if (s.action) undo ? s.action->undo() : s.action->redo();
   Region r;
   r.tx0 = map.width();
   r.ty0 = map.height();
@@ -114,7 +125,7 @@ History::Region History::undo(Map& map) {
   if (undo_.empty()) return {};
   Step s = std::move(undo_.back());
   undo_.pop_back();
-  const Region r = swapStep(map, s);
+  const Region r = swapStep(map, s, true);
   redo_.push_back(std::move(s));
   return r;
 }
@@ -123,7 +134,7 @@ History::Region History::redo(Map& map) {
   if (redo_.empty()) return {};
   Step s = std::move(redo_.back());
   redo_.pop_back();
-  const Region r = swapStep(map, s);
+  const Region r = swapStep(map, s, false);
   undo_.push_back(std::move(s));
   return r;
 }

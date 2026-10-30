@@ -13,7 +13,10 @@ Simulation::Simulation(const Map& map, const UnitTypeRegistry& types, const Weap
 
 int32_t Simulation::maxRange(const UnitTypeDef& def) const {
   int32_t r = 0;
-  for (int w : def.weapons) r = std::max(r, weapons_.get(w).range);
+  for (int w : def.weapons) {
+    r = std::max(r, weapons_.get(w).range);
+    if (weapons_.get(w).vsInfantry >= 0) r = std::max(r, weapons_.get(weapons_.get(w).vsInfantry).range);
+  }
   return r;
 }
 
@@ -50,6 +53,7 @@ Entity Simulation::spawnUnit(uint16_t type, uint8_t player, Vec2i pos, Angle fac
 
 void Simulation::tick() {
   events_.clear();
+  spawnLog_.clear();
   pathfinder_.refresh();
 
   std::vector<Command> cmds;
@@ -139,7 +143,52 @@ void Simulation::applyCommand(const Command& cmd) {
     }
     case CommandType::Remove:
       for (Entity e : cmd.units)
-        if (reg_.alive(e)) reg_.destroy(e);
+        if (reg_.alive(e) && reg_.has<CUnit>(e)) reg_.destroy(e);
+      break;
+    case CommandType::SpawnList:
+      for (size_t i = 0; i < cmd.spawns.size(); ++i) {
+        const SpawnSpec& s = cmd.spawns[i];
+        if (s.type >= types_.size()) continue;
+        const Entity e = spawnUnit(s.type, s.owner, s.pos, s.facing);
+        if (!e.valid()) continue;
+        if (s.health > 0) reg_.get<CUnit>(e).health = std::min(s.health, types_.get(s.type).maxHealth);
+        spawnLog_.push_back({cmd.tag, cmd.indexBase + static_cast<uint32_t>(i), e});
+      }
+      break;
+    case CommandType::Edit:
+      for (const UnitEdit& ed : cmd.edits) applyEdit(ed);
+      break;
+    case CommandType::Kill:
+      for (Entity e : cmd.units)
+        if (reg_.alive(e) && reg_.has<CUnit>(e)) damage(e.index, INT32_MAX / 2);
+      break;
+    case CommandType::Strike: {
+      if (cmd.weapon >= weapons_.size()) break;
+      const int32_t r = std::max<int32_t>(cmd.radius, 0);
+      for (int i = 0; i < cmd.count; ++i) {
+        Vec2i at = cmd.target;
+        if (r > 0) {  // spread evenly over the disc, not bunched at the centre
+          do {
+            at = {cmd.target.x + rng_.range(-r, r), cmd.target.y + rng_.range(-r, r)};
+          } while (distance(at.x - cmd.target.x, at.y - cmd.target.y) > static_cast<uint32_t>(r));
+        }
+        at.x = std::clamp(at.x, 0, map_.widthLeptons() - 1);
+        at.y = std::clamp(at.y, 0, map_.heightLeptons() - 1);
+        const Entity pe = reg_.create();
+        CProjectile pr;
+        pr.from = pr.to = at;  // falls from the sky: no direction, no rear-armour bonus
+        pr.x = at.x;
+        pr.y = at.y;
+        pr.total = 1;
+        pr.weapon = cmd.weapon;
+        pr.owner = NEUTRAL_OWNER;
+        pr.delay = static_cast<uint16_t>(rng_.below(static_cast<uint32_t>(cmd.count) * 3 + 1));
+        reg_.add<CProjectile>(pe, pr);
+      }
+      break;
+    }
+    case CommandType::SetTeam:
+      if (cmd.player < MAX_PLAYERS) team_[cmd.player] = static_cast<uint8_t>(cmd.count);
       break;
   }
 }
@@ -147,6 +196,32 @@ void Simulation::applyCommand(const Command& cmd) {
 // Group move. Units are split by movement type; each group shares one A*
 // path from its centre, and every unit takes its own formation slot at the
 // end. Units with a clear straight line skip pathfinding entirely.
+void Simulation::applyEdit(const UnitEdit& ed) {
+  if (!reg_.alive(ed.unit) || !reg_.has<CUnit>(ed.unit)) return;
+  CUnit& u = reg_.get<CUnit>(ed.unit);
+  const UnitTypeDef& def = types_.get(u.type);
+  if (ed.move) {
+    const Vec2i p{std::clamp(ed.pos.x, def.radius, map_.widthLeptons() - 1 - def.radius),
+                  std::clamp(ed.pos.y, def.radius, map_.heightLeptons() - 1 - def.radius)};
+    if (map_.passable(p.x >> LEPTON_SHIFT, p.y >> LEPTON_SHIFT, def.locomotor)) {
+      reg_.get<CPosition>(ed.unit) = {p.x, p.y};
+      reg_.get<CPrevPosition>(ed.unit) = {p.x, p.y};  // a jump, not a slide
+      setOrderIdle(ed.unit);
+    }
+  }
+  if (ed.facing >= 0) {
+    const Angle a = angleOfFacing(facingOf(static_cast<Angle>(ed.facing)));
+    reg_.get<CFacing>(ed.unit).angle = a;
+    if (CTurret* t = reg_.tryGet<CTurret>(ed.unit)) t->angle = a;
+  }
+  if (ed.owner >= 0 && ed.owner < MAX_PLAYERS && ed.owner != u.owner) {
+    u.owner = static_cast<uint8_t>(ed.owner);
+    setOrderIdle(ed.unit);  // a defector forgets its old orders and targets
+    if (CCombat* c = reg_.tryGet<CCombat>(ed.unit)) c->target = kNullEntity;
+  }
+  if (ed.health >= 0) u.health = std::clamp(ed.health, 1, def.maxHealth);
+}
+
 void Simulation::orderMove(const std::vector<Entity>& units, Vec2i target, OrderType type) {
   std::array<std::vector<Entity>, 3> groups;
   for (Entity e : units)
@@ -280,6 +355,7 @@ uint64_t Simulation::stateHash() {
   };
   mix(tick_);
   mix(rng_.state());
+  for (uint8_t t : team_) mix(t);
   reg_.each<CUnit, CPosition, CFacing>([&](uint32_t e, CUnit& u, CPosition& p, CFacing& f) {
     mix(e);
     mix(u.type | (uint64_t{u.owner} << 16) | (uint64_t(uint32_t(u.health)) << 32));

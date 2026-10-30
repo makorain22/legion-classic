@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.4.0 – Milestone 4: Live Scenario Editor (30 Oct 2026)
+
+- The editor (F2) is now the Live Scenario Editor, in four tabs: Terrain,
+  Units, Sides and Battle. Everything works while the battle runs.
+- Unit placement for any side from a palette with unit icons: one at a time,
+  a brush that paints units over an area, or a formed block of up to 10,000.
+  A see-through preview shows facing and where units can't stand.
+- Select units of any side; drag to move them; delete, duplicate, kill, stop,
+  turn, give to another side, set health. Live inspector shows a unit's
+  health, order, route, target and weapon reload, or a breakdown of a group.
+- One undo history for terrain and units (100 steps). Unit undo works mid-
+  battle and follows units through delete / restore cycles.
+- Sides: up to 8, with name, faction, colour, team (allies share vision and
+  don't fight), human / computer flag and camera start. Take command of any
+  side; Tab cycles through them.
+- Battle tools: 105 mm artillery barrage, smite, heal brush; pause and speed;
+  snapshot and restore of the whole battle; fog-of-war preview; clear wrecks.
+- Scenario files now store sides and the briefing; older maps still open.
+- Simulation commands for the editor (exact spawns with a spawn log, edits,
+  kill, strike, teams) keep everything deterministic.
+- Balance, from playtest feedback: riflemen miss 30 % of shots; tank guns
+  reach 9.5–10 tiles, hit harder and switch to high-explosive shells against
+  infantry; armour has front / side / rear values (a rear hit knocks out a
+  medium tank in one shot); scout cars see farther; allies share vision.
+- `--editor-selftest` drives the real editor through place, undo, redo,
+  delete, move, give and snapshot, and checks the battlefield after each step.
+- 41 unit tests (adds editor commands, teams, artillery, rear armour, HE
+  switching, side round-trips, undo actions).
+
+
 ## 0.3.0 – Milestone 3: Pathfinding, combat and fog of war (30 Oct 2026)
 
 - Pathfinding for huge maps: A* over the tile grid per movement type (foot,

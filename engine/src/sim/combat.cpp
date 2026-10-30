@@ -54,14 +54,14 @@ void Simulation::stepTargeting() {
     uint32_t bestIdx = UINT32_MAX;
     spatial_.query(p.x, p.y, scan, [&](uint32_t o2) {
       const CUnit& v = units.get(o2);
-      if (v.owner == u.owner || v.health <= 0) return;
+      if (allied(v.owner, u.owner) || v.health <= 0) return;
       const CPosition& q = pos.get(o2);
       const uint32_t d = distance(q.x - p.x, q.y - p.y);
       if (d > static_cast<uint32_t>(scan) || d >= best) return;
       if (!canSee(u.owner, q.x, q.y)) return;
       const ArmorClass armor = types_.get(v.type).armor;
       bool useful = false;
-      for (int w : def.weapons) useful = useful || weapons_.damageAgainst(w, armor) > 0;
+      for (int w : def.weapons) useful = useful || weapons_.damageAgainst(weapons_.forTarget(w, armor), armor) > 0;
       if (!useful) return;
       best = d;
       bestIdx = o2;
@@ -108,7 +108,7 @@ void Simulation::stepWeapons() {
         const uint32_t d = distance(tp.x - p.x, tp.y - p.y);
         const ArmorClass armor = types_.get(units.get(c.target.index).type).armor;
         for (size_t slot = 0; slot < def.weapons.size(); ++slot) {
-          const int w = def.weapons[slot];
+          const int w = weapons_.forTarget(def.weapons[slot], armor);
           const WeaponDef& wd = weapons_.get(w);
           if (c.cooldown[slot] > 0 || d > static_cast<uint32_t>(wd.range)) continue;
           if (weapons_.damageAgainst(w, armor) <= 0) continue;
@@ -130,10 +130,10 @@ void Simulation::stepWeapons() {
     events_.push_back(fire);
     if (wd.projectile == ProjectileKind::Instant) {
       if (static_cast<int32_t>(rng_.below(100)) < wd.accuracy) {
-        impact(s.weapon, owner, s.at, s.target);
+        impact(s.weapon, owner, s.at, s.target, s.from);
       } else {
         const Vec2i miss{s.at.x + rng_.range(-110, 110), s.at.y + rng_.range(-110, 110)};
-        impact(s.weapon, owner, miss, kNullEntity);
+        impact(s.weapon, owner, miss, kNullEntity, s.from);
       }
     } else {
       // Shells scatter more the farther they fly.
@@ -163,31 +163,45 @@ void Simulation::stepProjectiles() {
     uint32_t projectile;
     int weapon;
     uint8_t owner;
-    Vec2i at;
+    Vec2i at, from;
   };
   std::vector<Hit> hits;
   reg_.each<CProjectile>([&](uint32_t ei, CProjectile& pr) {
+    if (pr.delay > 0) {
+      --pr.delay;
+      return;
+    }
     pr.travelled += weapons_.get(pr.weapon).speed;
     if (pr.travelled >= pr.total) {
       pr.x = pr.to.x;
       pr.y = pr.to.y;
-      hits.push_back({ei, pr.weapon, pr.owner, pr.to});
+      hits.push_back({ei, pr.weapon, pr.owner, pr.to, pr.from});
       return;
     }
     pr.x = pr.from.x + static_cast<int32_t>(static_cast<int64_t>(pr.to.x - pr.from.x) * pr.travelled / pr.total);
     pr.y = pr.from.y + static_cast<int32_t>(static_cast<int64_t>(pr.to.y - pr.from.y) * pr.travelled / pr.total);
   });
   for (const Hit& h : hits) {
-    impact(h.weapon, h.owner, h.at, kNullEntity);
+    impact(h.weapon, h.owner, h.at, kNullEntity, h.from);
     dead_.push_back(h.projectile);
   }
 }
 
-void Simulation::impact(int weapon, uint8_t owner, Vec2i at, Entity directTarget) {
+void Simulation::impact(int weapon, uint8_t owner, Vec2i at, Entity directTarget, Vec2i from) {
   const WeaponDef& wd = weapons_.get(weapon);
   auto& units = reg_.pool<CUnit>();
   auto& pos = reg_.pool<CPosition>();
+  auto& facings = reg_.pool<CFacing>();
   bool hit = false;
+  // Which side of the victim the round strikes: a shot travelling the same way
+  // the hull faces hits the thin rear armour.
+  const bool directional = from != at;
+  const Angle flight = directional ? atan2Angle(at.y - from.y, at.x - from.x) : 0;
+  auto sideOf = [&](uint32_t victim) {
+    if (!directional) return HitSide::Front;
+    const int32_t d = std::abs(angleDelta(facings.get(victim).angle, flight));
+    return d <= ANGLE_FULL / 8 ? HitSide::Rear : d < ANGLE_FULL * 3 / 8 ? HitSide::Side : HitSide::Front;
+  };
   if (wd.splash > 0) {
     // Full damage at the centre, half at the edge; own units take half.
     spatial_.query(at.x, at.y, wd.splash, [&](uint32_t o) {
@@ -196,9 +210,9 @@ void Simulation::impact(int weapon, uint8_t owner, Vec2i at, Entity directTarget
       const CPosition& q = pos.get(o);
       const uint32_t d = distance(q.x - at.x, q.y - at.y);
       if (d > static_cast<uint32_t>(wd.splash)) return;
-      int32_t dmg = weapons_.damageAgainst(weapon, types_.get(v.type).armor) *
+      int32_t dmg = weapons_.damageAgainst(weapon, types_.get(v.type).armor, sideOf(o)) *
                     (wd.splash * 2 - static_cast<int32_t>(d)) / (wd.splash * 2);
-      if (v.owner == owner) dmg /= 2;
+      if (allied(v.owner, owner)) dmg /= 2;
       damage(o, dmg);
       hit = true;
     });
@@ -218,7 +232,7 @@ void Simulation::impact(int weapon, uint8_t owner, Vec2i at, Entity directTarget
       });
     }
     if (victim != UINT32_MAX) {
-      damage(victim, weapons_.damageAgainst(weapon, types_.get(units.get(victim).type).armor));
+      damage(victim, weapons_.damageAgainst(weapon, types_.get(units.get(victim).type).armor, sideOf(victim)));
       hit = true;
     }
   }

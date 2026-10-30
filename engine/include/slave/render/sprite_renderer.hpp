@@ -53,6 +53,7 @@ class SpriteRenderer {
 
   void setAtlas(const Image& atlas, std::vector<AtlasFrame> frames);
   const AtlasFrame& frame(int i) const { return frames_[static_cast<size_t>(i)]; }
+  GLuint atlasTexture() const { return atlas_.id(); }  // for UI previews
 
   // Starts a pass in world space (through the camera) or plain screen space.
   void beginWorld(const Camera& cam);

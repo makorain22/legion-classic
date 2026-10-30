@@ -1,18 +1,31 @@
 {
-  "_comment": "Weapons and warheads. range and splash are in tiles; cooldown in ticks (15 per second); speed in leptons per tick (256 = 1 tile). Warhead values are percent damage against each armour class.",
+  "_comment": "Weapons and warheads. range and splash are in tiles; cooldown in ticks (15 per second); speed in leptons per tick (256 = 1 tile). Warhead values are percent damage against each armour class; 'facing' is percent damage by the side of a vehicle that is struck (front / side / rear), so flanking pays. accuracy is the percent chance an instant-hit weapon hits (rifles miss 30% of the time: green troops). A gun's 'vsInfantry' names the round it switches to against soldiers.",
   "warheads": {
-    "bullet":  { "infantry": 100, "light": 30, "medium": 6,  "heavy": 3 },
-    "ap":      { "infantry": 30,  "light": 90, "medium": 100, "heavy": 100 },
-    "he":      { "infantry": 100, "light": 70, "medium": 35,  "heavy": 20 }
+    "bullet":  { "infantry": 100, "light": 30, "medium": 4,   "heavy": 2 },
+    "ap":      { "infantry": 25,  "light": 90, "medium": 100, "heavy": 100,
+                 "facing": { "front": 100, "side": 160, "rear": 450 } },
+    "he":      { "infantry": 100, "light": 70, "medium": 30,  "heavy": 15,
+                 "facing": { "front": 100, "side": 120, "rear": 200 } }
   },
   "weapons": [
     { "id": "rifle", "name": "Bolt-action rifle", "warhead": "bullet", "damage": 14,
-      "range": 4.5, "cooldown": 22, "projectile": "instant", "accuracy": 70, "muzzle": 0 },
+      "range": 5.0, "cooldown": 22, "projectile": "instant", "accuracy": 70, "muzzle": 0 },
     { "id": "mg_light", "name": "Machine gun", "warhead": "bullet", "damage": 7,
-      "range": 5.0, "cooldown": 5, "projectile": "instant", "accuracy": 55, "muzzle": 0 },
-    { "id": "cannon_75", "name": "75 mm gun", "warhead": "ap", "damage": 70,
-      "range": 6.5, "cooldown": 42, "projectile": "shell", "speed": 150, "splash": 0.35, "muzzle": 2 },
-    { "id": "cannon_76", "name": "76 mm gun", "warhead": "ap", "damage": 66,
-      "range": 6.0, "cooldown": 38, "projectile": "shell", "speed": 140, "splash": 0.4, "muzzle": 2 }
+      "range": 5.5, "cooldown": 5, "projectile": "instant", "accuracy": 55, "muzzle": 0 },
+
+    { "id": "cannon_75", "name": "75 mm gun (AP)", "warhead": "ap", "damage": 110,
+      "range": 10.0, "cooldown": 50, "projectile": "shell", "speed": 190, "splash": 0.3, "muzzle": 2,
+      "vsInfantry": "cannon_75_he" },
+    { "id": "cannon_75_he", "name": "75 mm gun (HE)", "warhead": "he", "damage": 85,
+      "range": 9.0, "cooldown": 50, "projectile": "shell", "speed": 170, "splash": 0.9, "muzzle": 2 },
+
+    { "id": "cannon_76", "name": "76 mm gun (AP)", "warhead": "ap", "damage": 105,
+      "range": 9.5, "cooldown": 46, "projectile": "shell", "speed": 180, "splash": 0.3, "muzzle": 2,
+      "vsInfantry": "cannon_76_he" },
+    { "id": "cannon_76_he", "name": "76 mm gun (HE)", "warhead": "he", "damage": 80,
+      "range": 8.5, "cooldown": 46, "projectile": "shell", "speed": 160, "splash": 0.9, "muzzle": 2 },
+
+    { "id": "artillery_105", "name": "105 mm barrage (editor)", "warhead": "he", "damage": 200,
+      "range": 40.0, "cooldown": 60, "projectile": "shell", "speed": 260, "splash": 1.4, "muzzle": 2 }
   ]
 }

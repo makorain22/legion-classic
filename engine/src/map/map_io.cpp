@@ -19,7 +19,8 @@ uint32_t getU32(const uint8_t* p) {
 }
 }  // namespace
 
-std::vector<uint8_t> encodeMap(const Map& map, const std::vector<UnitPlacement>& units) {
+std::vector<uint8_t> encodeMap(const Map& map, const std::vector<UnitPlacement>& units,
+                               const std::vector<PlayerSetup>& players) {
   nlohmann::json j;
   j["engine"] = "Slave Engine 1.0";
   j["name"] = map.name;
@@ -33,6 +34,10 @@ std::vector<uint8_t> encodeMap(const Map& map, const std::vector<UnitPlacement>&
   auto& us = j["units"] = nlohmann::json::array();
   for (const UnitPlacement& u : units)
     us.push_back({{"type", u.type}, {"owner", u.owner}, {"x", u.x}, {"y", u.y}, {"facing", u.facing}, {"health", u.health}});
+  auto& ps = j["players"] = nlohmann::json::array();
+  for (const PlayerSetup& p : players)
+    ps.push_back({{"name", p.name}, {"faction", p.faction}, {"color", p.color}, {"team", p.team},
+                  {"active", p.active}, {"human", p.human}, {"startX", p.startX}, {"startY", p.startY}});
   const std::string header = j.dump();
 
   std::vector<uint8_t> raw;
@@ -136,6 +141,20 @@ bool decodeMap(const std::vector<uint8_t>& bytes, MapFile& out, std::string& err
       u.health = uj.value("health", -1);
       out.units.push_back(std::move(u));
     }
+    out.players.clear();
+    for (const auto& pj : j.value("players", nlohmann::json::array())) {
+      if (out.players.size() >= 8) break;
+      PlayerSetup p;
+      p.name = pj.value("name", "Player " + std::to_string(out.players.size() + 1));
+      p.faction = pj.value("faction", "ger");
+      p.color = pj.value("color", p.color);
+      p.team = static_cast<uint8_t>(pj.value("team", 0) % 8);
+      p.active = pj.value("active", false);
+      p.human = pj.value("human", true);
+      p.startX = pj.value("startX", -1);
+      p.startY = pj.value("startY", -1);
+      out.players.push_back(std::move(p));
+    }
     m.recomputeInfo();
   } catch (const nlohmann::json::exception& e) {
     error = std::string("map file is damaged: ") + e.what();
@@ -145,7 +164,12 @@ bool decodeMap(const std::vector<uint8_t>& bytes, MapFile& out, std::string& err
 }
 
 bool saveMap(const std::string& path, const Map& map, const std::vector<UnitPlacement>& units, std::string& error) {
-  const std::vector<uint8_t> bytes = encodeMap(map, units);
+  return saveMap(path, map, units, {}, error);
+}
+
+bool saveMap(const std::string& path, const Map& map, const std::vector<UnitPlacement>& units,
+             const std::vector<PlayerSetup>& players, std::string& error) {
+  const std::vector<uint8_t> bytes = encodeMap(map, units, players);
   // Write to a temporary file first, so a crash never leaves a half-written map.
   const std::string tmp = path + ".tmp";
   {

@@ -26,16 +26,31 @@ struct UnitPlacement {
   int32_t health = -1;   // -1 = full
 };
 
+// One side in a scenario. Up to 8; `active` sides appear in the game.
+struct PlayerSetup {
+  std::string name;
+  std::string faction = "ger";  // "ger", "rus" (UK later)
+  uint32_t color = 0xFF2C3AC4;  // RGBA8, little-endian (R in the low byte)
+  uint8_t team = 0;             // same team = allies
+  bool active = false;
+  bool human = true;            // false = computer (the AI arrives in Milestone 6)
+  int32_t startX = -1, startY = -1;  // where this side's camera starts, leptons (-1 = map centre)
+};
+
 struct MapFile {
   Map map;
   std::vector<UnitPlacement> units;
+  std::vector<PlayerSetup> players;  // empty = the game's default two sides
 };
 
 bool saveMap(const std::string& path, const Map& map, const std::vector<UnitPlacement>& units, std::string& error);
+bool saveMap(const std::string& path, const Map& map, const std::vector<UnitPlacement>& units,
+             const std::vector<PlayerSetup>& players, std::string& error);
 bool loadMap(const std::string& path, MapFile& out, std::string& error);
 
 // In-memory versions (used by the file functions and by tests).
-std::vector<uint8_t> encodeMap(const Map& map, const std::vector<UnitPlacement>& units);
+std::vector<uint8_t> encodeMap(const Map& map, const std::vector<UnitPlacement>& units,
+                               const std::vector<PlayerSetup>& players = {});
 bool decodeMap(const std::vector<uint8_t>& bytes, MapFile& out, std::string& error);
 
 }  // namespace slave

@@ -102,6 +102,7 @@ TEST_CASE("map files round-trip exactly") {
   CHECK(f.units[1].type == "rus_rifleman");
   CHECK(f.units[1].health == 40);
   CHECK(f.units[0].facing == 512);
+  CHECK(f.players.empty());  // no sides saved: the game uses its defaults
   // Compressed: a 64x96 map should be far smaller than its raw arrays.
   CHECK(bytes.size() < m.splatData().size() / 3);
 }
@@ -146,4 +147,23 @@ TEST_CASE("units stop at cliffs instead of driving through") {
   for (int i = 0; i < 300; ++i) sim.tick();
   CHECK(sim.registry().get<CPosition>(e).x < 15 * 256);
   CHECK_FALSE(sim.registry().get<CMover>(e).active);
+}
+
+TEST_CASE("scenario sides round-trip with the map") {
+  Map m(64, 64);
+  std::vector<PlayerSetup> players(3);
+  players[0] = {"Wehrmacht", "ger", 0xFF2C3AC4, 0, true, true, 1000, 2000};
+  players[1] = {"Red Army", "rus", 0xFFC46034, 1, true, false, -1, -1};
+  players[2] = {"Partisans", "rus", 0xFF48A042, 1, false, false, 300, 300};
+  MapFile f;
+  std::string err;
+  REQUIRE(decodeMap(encodeMap(m, {}, players), f, err));
+  REQUIRE(f.players.size() == 3);
+  CHECK(f.players[0].name == "Wehrmacht");
+  CHECK(f.players[0].startY == 2000);
+  CHECK(f.players[1].faction == "rus");
+  CHECK_FALSE(f.players[1].human);
+  CHECK(f.players[2].team == 1);
+  CHECK_FALSE(f.players[2].active);
+  CHECK(f.players[2].color == 0xFF48A042u);
 }

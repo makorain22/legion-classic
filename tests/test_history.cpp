@@ -92,3 +92,29 @@ TEST_CASE("a new step clears the redo stack") {
   h.end();
   CHECK_FALSE(h.canRedo());
 }
+
+TEST_CASE("actions share the undo stack with terrain steps, in order") {
+  struct Counter : History::Action {
+    int* value;
+    explicit Counter(int* v) : value(v) {}
+    void undo() override { --*value; }
+    void redo() override { ++*value; }
+  };
+  Map m(64, 64);
+  History h;
+  int units = 1;  // the caller already did the action once
+  h.push("Place units", std::make_shared<Counter>(&units));
+  h.begin("brush");  // a terrain step on top
+  edit(h, m, 0, 0, 3, 3, 500, Layer::Dirt);
+  h.end();
+  CHECK(h.undoLabel() == "brush");
+  h.undo(m);
+  CHECK(units == 1);
+  h.undo(m);
+  CHECK(units == 0);
+  CHECK_FALSE(h.canUndo());
+  h.redo(m);
+  CHECK(units == 1);
+  h.push("Again", std::make_shared<Counter>(&units));  // a new step drops the redo branch
+  CHECK_FALSE(h.canRedo());
+}

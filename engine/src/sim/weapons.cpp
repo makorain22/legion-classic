@@ -26,8 +26,13 @@ bool WeaponRegistry::loadJson(const nlohmann::json& doc, std::string& error) {
       d.id = id;
       static const char* names[ARMOR_COUNT] = {"infantry", "light", "medium", "heavy"};
       for (int a = 0; a < ARMOR_COUNT; ++a) d.versus[static_cast<size_t>(a)] = w.value(names[a], 100);
+      if (w.contains("facing")) {
+        const auto& f = w["facing"];
+        d.facing = {f.value("front", 100), f.value("side", 100), f.value("rear", 100)};
+      }
       warheads_.push_back(d);
     }
+    std::vector<std::pair<size_t, std::string>> alts;  // resolved once every weapon is known
     for (const auto& w : doc.at("weapons")) {
       WeaponDef d;
       d.id = w.at("id").get<std::string>();
@@ -59,7 +64,16 @@ bool WeaponRegistry::loadJson(const nlohmann::json& doc, std::string& error) {
         error = "weapon '" + d.id + "': damage, range, cooldown and speed must be positive";
         return false;
       }
+      if (w.contains("vsInfantry")) alts.emplace_back(weapons_.size(), w["vsInfantry"].get<std::string>());
       weapons_.push_back(std::move(d));
+    }
+    for (const auto& [index, altId] : alts) {
+      const int a = find(altId);
+      if (a < 0) {
+        error = "weapon '" + weapons_[index].id + "': unknown vsInfantry weapon '" + altId + "'";
+        return false;
+      }
+      weapons_[index].vsInfantry = a;
     }
   } catch (const nlohmann::json::exception& e) {
     error = std::string("bad weapons data: ") + e.what();

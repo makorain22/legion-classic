@@ -19,7 +19,8 @@ using namespace slave;
 namespace legion {
 
 namespace {
-const char* kToolNames[] = {"Raise", "Lower", "Smooth", "Flatten", "Roughen", "Paint ground", "Place props", "Erase props"};
+const char* kToolNames[] = {"Raise", "Lower", "Smooth", "Flatten", "Roughen", "Paint ground", "Place props",
+                            "Erase props", "Place units", "Select units", "Artillery", "Smite", "Heal"};
 const char* kToolTips[] = {
     "Raise the ground into hills.",
     "Lower the ground into valleys and riverbeds.",
@@ -29,6 +30,11 @@ const char* kToolTips[] = {
     "Paint grass, dirt, mud, roads and more. Edges blend naturally.",
     "Click to place one, drag to scatter trees, bushes or rocks.",
     "Remove trees, bushes and rocks inside the brush.",
+    "Place units for any side: one per click, a brush of them, or a whole block.",
+    "Select units of any side; drag them to move them; inspect and edit them.",
+    "Call down a barrage of 105 mm shells. Hurts every side.",
+    "Destroy every unit under the brush, with wrecks and smoke.",
+    "Restore every unit under the brush to full health.",
 };
 // Swatch colours for the ground layers (approximate, for the panel only).
 const ImVec4 kLayerSwatch[LAYER_COUNT] = {
@@ -54,22 +60,39 @@ uint32_t toolColor(Tool t) {
     case Tool::Paint: return rgba8(120, 200, 255, 220);
     case Tool::Props: return rgba8(120, 236, 96, 220);
     case Tool::Erase: return rgba8(255, 90, 70, 220);
+    case Tool::PlaceUnits: return rgba8(120, 236, 96, 220);
+    case Tool::Artillery: return rgba8(255, 150, 60, 230);
+    case Tool::Smite: return rgba8(255, 70, 50, 230);
+    case Tool::Heal: return rgba8(110, 220, 255, 230);
     default: return kWhite;
   }
 }
 }  // namespace
 
 Editor::Editor(GameScene& scene) : scene_(scene) {}
+Editor::~Editor() = default;
 
 void Editor::setActive(bool on) {
   if (!on && stroking_) endStroke();
   active_ = on;
+  movePending_ = moving_ = false;
+}
+
+void Editor::setTool(Tool t) {
+  if (stroking_) endStroke();
+  tool_ = t;
+  tab_ = t <= Tool::Erase ? 0 : t <= Tool::SelectUnits ? 1 : 3;
+  tabRequest_ = tab_;
 }
 
 void Editor::onWorldReplaced() {
   history_.clear();
   stroking_ = false;
   fineHeights_.clear();
+  pendingTags_.clear();
+  remap_.clear();
+  placing_.reset();
+  movePending_ = moving_ = false;
 }
 
 // ---------------------------------------------------------------------------
@@ -80,11 +103,41 @@ bool Editor::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
   switch (e.type) {
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
       if (e.button.button == SDL_BUTTON_LEFT && !uiMouse) {
+        if (tool_ == Tool::SelectUnits) {
+          // Grabbing a selected unit starts a move; anything else is ordinary selection.
+          const Entity hit = scene_.pickUnit(scene_.mouse(), true);
+          auto& sel = scene_.selection();
+          if (hit.valid() && std::find(sel.begin(), sel.end(), hit) != sel.end()) {
+            movePending_ = true;
+            moving_ = false;
+            moveClicked_ = hit;
+            moveStartMouse_ = scene_.mouse();
+            moveStartGround_ = scene_.groundAt(scene_.mouse());
+            return true;
+          }
+          return false;
+        }
         beginStroke();
         return true;
       }
       return false;
+    case SDL_EVENT_MOUSE_MOTION:
+      if (movePending_ && !moving_ && (scene_.mouse() - moveStartMouse_).length() > 6.0f) moving_ = true;
+      return false;
     case SDL_EVENT_MOUSE_BUTTON_UP:
+      if (e.button.button == SDL_BUTTON_LEFT && movePending_) {
+        movePending_ = false;
+        if (moving_) {
+          moving_ = false;
+          const Vec2f g = scene_.groundAt(scene_.mouse());
+          moveSelection({static_cast<int32_t>(g.x - moveStartGround_.x), static_cast<int32_t>(g.y - moveStartGround_.y)});
+        } else {
+          auto& sel = scene_.selection();
+          if (SDL_GetModState() & SDL_KMOD_SHIFT) std::erase(sel, moveClicked_);
+          else sel = {moveClicked_};
+        }
+        return true;
+      }
       if (e.button.button == SDL_BUTTON_LEFT && stroking_) {
         endStroke();
         return true;
@@ -115,6 +168,24 @@ bool Editor::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
         radius_ = std::min(32.0f, radius_ + 1.0f);
         return true;
       }
+      if (e.key.key == SDLK_COMMA || e.key.key == SDLK_PERIOD) {
+        const int step = e.key.key == SDLK_PERIOD ? 1 : -1;
+        if (tool_ == Tool::PlaceUnits) placeFacing_ = (placeFacing_ + step + 16) & 15;
+        else rotateSelection(step);
+        return true;
+      }
+      if (e.key.key == SDLK_DELETE) {
+        deleteSelection();
+        return true;
+      }
+      if (ctrl && e.key.key == SDLK_D) {
+        duplicateSelection();
+        return true;
+      }
+      if (e.key.key == SDLK_ESCAPE && tool_ == Tool::PlaceUnits) {
+        setTool(Tool::SelectUnits);
+        return true;
+      }
       return false;
     }
     default:
@@ -138,6 +209,10 @@ void Editor::update(float dt) {
 void Editor::beginStroke() {
   stroking_ = true;
   ++strokeCounter_;
+  if (!isTerrainTool()) {
+    beginUnitStroke();
+    return;
+  }
   history_.begin(kToolNames[static_cast<int>(tool_)]);
   const Map& m = scene_.map();
   fineHeights_.assign(m.heights().begin(), m.heights().end());
@@ -149,6 +224,10 @@ void Editor::beginStroke() {
 
 void Editor::endStroke() {
   stroking_ = false;
+  if (!isTerrainTool()) {
+    endUnitStroke();
+    return;
+  }
   history_.end();
 }
 
@@ -158,6 +237,11 @@ void Editor::strokeAt(Vec2f c, float dt) {
     case Tool::Paint: applyPaint(c, dt); break;
     case Tool::Props: applyProps(c, dt); break;
     case Tool::Erase: applyErase(c); break;
+    case Tool::PlaceUnits: applyUnitBrush(c, dt); break;
+    case Tool::SelectUnits: break;
+    case Tool::Artillery:
+    case Tool::Smite:
+    case Tool::Heal: applyGodTool(c, dt); break;
     default: applyHeightTool(c, dt); break;
   }
 }
@@ -317,7 +401,7 @@ std::string Editor::sanitize(const std::string& name) const {
 
 bool Editor::save(const std::string& path) {
   std::string err;
-  if (!saveMap(path, scene_.map(), scene_.exportUnits(), err)) {
+  if (!saveMap(path, scene_.map(), scene_.exportUnits(), scene_.playerList(), err)) {
     lastError_ = err;
     scene_.showStatus("Save failed: " + err, 5);
     return false;
@@ -348,6 +432,9 @@ bool Editor::load(const std::string& path) {
 void Editor::renderWorld(SpriteRenderer& r) {
   if (!active_ || ImGui::GetIO().WantCaptureMouse) return;
   const Vec2f c = scene_.groundAt(scene_.mouse());
+  renderUnitGhosts(r, c);
+  if (tool_ == Tool::SelectUnits) return;
+  if (tool_ == Tool::PlaceUnits && placeMode_ != PlaceMode::Brush) return;
   const uint32_t col = toolColor(tool_);
   const float rl = radius_ * LEPTONS_PER_TILE;
   const int n = std::clamp(static_cast<int>(radius_ * 14), 32, 220);
@@ -374,7 +461,7 @@ void Editor::drawToolPanel() {
   ImGui::SetNextWindowPos(ImVec2(8, 8));
   ImGui::SetNextWindowSize(ImVec2(kPanelWidth, io.DisplaySize.y - 16));
   ImGui::SetNextWindowBgAlpha(0.92f);
-  ImGui::Begin("Map Editor (F2)", nullptr,
+  ImGui::Begin("Live Scenario Editor (F2)", nullptr,
                ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
                    ImGuiWindowFlags_NoSavedSettings);
   Map& m = scene_.map();
@@ -400,17 +487,60 @@ void Editor::drawToolPanel() {
     std::snprintf(nameBuf_, sizeof nameBuf_, "%s", m.name.c_str());
     showSaveAs_ = true;
   }
-  ImGui::SetNextItemWidth(-1);
-  ImGui::InputTextWithHint("##name", "Map name", &m.name);
-  ImGui::SetNextItemWidth(-1);
-  ImGui::InputTextWithHint("##author", "Author", &m.author);
-  ImGui::TextDisabled("%dx%d tiles, %zu props, %zu units", m.width(), m.height(), m.props().size(),
-                      scene_.sim().unitCount());
+  ImGui::TextDisabled("%s  -  %dx%d tiles, %zu props, %zu units", m.name.c_str(), m.width(), m.height(),
+                      m.props().size(), scene_.sim().unitCount());
 
-  // --- Tools --------------------------------------------------------------
+  // --- Tabs ---------------------------------------------------------------
+  if (ImGui::BeginTabBar("##tabs")) {
+    const char* names[] = {"Terrain", "Units", "Sides", "Battle"};
+    for (int i = 0; i < 4; ++i) {
+      const ImGuiTabItemFlags flags = (tabRequest_ == i) ? ImGuiTabItemFlags_SetSelected : 0;
+      if (ImGui::BeginTabItem(names[i], nullptr, flags)) {
+        if (tab_ != i && tabRequest_ < 0) {
+          // Switching tabs picks that tab's main tool.
+          tab_ = i;
+          if (i == 0 && !isTerrainTool()) tool_ = Tool::Raise;
+          if (i == 1 && tool_ != Tool::PlaceUnits && tool_ != Tool::SelectUnits) tool_ = Tool::SelectUnits;
+          if (i == 3 && tool_ < Tool::Artillery) tool_ = Tool::SelectUnits;
+        }
+        switch (i) {
+          case 0: drawTerrainTab(); break;
+          case 1: drawUnitsTab(); break;
+          case 2: drawSidesTab(); break;
+          default: drawBattleTab(); break;
+        }
+        ImGui::EndTabItem();
+      }
+    }
+    tabRequest_ = -1;
+    ImGui::EndTabBar();
+  }
+
+  // --- History (shared by every tab) ----------------------------------------
+  ImGui::SeparatorText("History");
+  ImGui::BeginDisabled(!history_.canUndo());
+  if (ImGui::Button("Undo")) undo();
+  ImGui::EndDisabled();
+  if (history_.canUndo()) {
+    ImGui::SameLine();
+    ImGui::TextDisabled("%s", history_.undoLabel().c_str());
+  }
+  ImGui::BeginDisabled(!history_.canRedo());
+  if (ImGui::Button("Redo")) redo();
+  ImGui::EndDisabled();
+  if (history_.canRedo()) {
+    ImGui::SameLine();
+    ImGui::TextDisabled("%s", history_.redoLabel().c_str());
+  }
+  ImGui::End();
+}
+
+void Editor::drawTerrainTab() {
+  const ImGuiIO& io = ImGui::GetIO();
+  Map& m = scene_.map();
   ImGui::SeparatorText("Tool");
   const float bw = (kPanelWidth - 26) * 0.5f;
-  for (int i = 0; i < static_cast<int>(Tool::Count); ++i) {
+  for (int i = 0; i <= static_cast<int>(Tool::Erase); ++i) {
     const bool sel = static_cast<int>(tool_) == i;
     if (sel) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.62f, 0.50f, 0.22f, 1));
     if (ImGui::Button(kToolNames[i], ImVec2(bw, 0))) tool_ = static_cast<Tool>(i);
@@ -471,33 +601,6 @@ void Editor::drawToolPanel() {
     scene_.terrain().markWaterDirty();
   }
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Sets the water level to the ground height at the screen centre.");
-
-  // --- History ---------------------------------------------------------------
-  ImGui::SeparatorText("History");
-  ImGui::BeginDisabled(!history_.canUndo());
-  if (ImGui::Button("Undo")) undo();
-  ImGui::EndDisabled();
-  if (history_.canUndo()) {
-    ImGui::SameLine();
-    ImGui::TextDisabled("%s", history_.undoLabel().c_str());
-  }
-  ImGui::BeginDisabled(!history_.canRedo());
-  if (ImGui::Button("Redo")) redo();
-  ImGui::EndDisabled();
-  if (history_.canRedo()) {
-    ImGui::SameLine();
-    ImGui::TextDisabled("%s", history_.redoLabel().c_str());
-  }
-
-  // --- World ----------------------------------------------------------------
-  ImGui::SeparatorText("Battle");
-  bool paused = scene_.paused();
-  if (ImGui::Checkbox("Pause the battle", &paused)) scene_.setPaused(paused);
-  ImGui::TextWrapped("Editing works while the battle runs. Right-click still orders your selected units.");
-  ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-  ImGui::TextWrapped("Placing and editing units arrives in Milestone 4.");
-  ImGui::PopStyleColor();
-  ImGui::End();
 }
 
 void Editor::drawNewMapDialog() {

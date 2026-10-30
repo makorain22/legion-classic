@@ -10,7 +10,9 @@
 // What happened (shots, impacts, deaths) is reported as events, which the
 // presentation turns into flashes, explosions and wrecks.
 
+#include <array>
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 #include "slave/core/rng.hpp"
@@ -28,6 +30,7 @@ namespace slave {
 
 constexpr int TICKS_PER_SECOND = 15;
 constexpr int MAX_PLAYERS = 8;
+constexpr uint8_t NEUTRAL_OWNER = 255;  // owner of editor strikes: hurts everyone
 
 enum class CommandType : uint8_t {
   Move,        // units -> target
@@ -35,7 +38,39 @@ enum class CommandType : uint8_t {
   Attack,      // units attack targetUnit
   Stop,        // units stop
   Spawn,       // `count` units of unitType for player at target, facing `facing`
-  Remove,      // delete units
+  Remove,      // delete units (no death effects)
+  SpawnList,   // exact placements in `spawns`; spawned entities are logged under `tag`
+  Edit,        // change position / facing / owner / health of units (`edits`)
+  Kill,        // destroy units as if killed in battle (wrecks, bodies)
+  Strike,      // artillery: `count` rounds of `weapon` within `radius` of target
+  SetTeam,     // player `player` joins team `count` (same team = allies)
+};
+
+// A unit created by a SpawnList command: which command (tag), which entry of
+// its list (index), and the new entity.
+struct SpawnRecord {
+  uint32_t tag = 0;
+  uint32_t index = 0;
+  Entity entity;
+};
+
+// One unit to create, exactly as described (editor placement, undo, snapshots).
+struct SpawnSpec {
+  uint16_t type = 0;
+  uint8_t owner = 0;
+  Vec2i pos;
+  Angle facing = 0;
+  int32_t health = -1;  // -1 = full
+};
+
+// A change to one unit. Fields left at their "keep" value are not touched.
+struct UnitEdit {
+  Entity unit;
+  bool move = false;
+  Vec2i pos;
+  int32_t facing = -1;  // Angle, or -1 = keep
+  int16_t owner = -1;   // -1 = keep
+  int32_t health = -1;  // -1 = keep (clamped to 1..max)
 };
 
 struct Command {
@@ -47,6 +82,12 @@ struct Command {
   uint16_t count = 1;
   Angle facing = 0;
   std::vector<Entity> units;
+  uint32_t tag = 0;               // SpawnList: label for the spawn log
+  uint32_t indexBase = 0;         // SpawnList: logged index of spawns[0]
+  uint16_t weapon = 0;            // Strike
+  int32_t radius = 0;             // Strike, leptons
+  std::vector<SpawnSpec> spawns;  // SpawnList
+  std::vector<UnitEdit> edits;    // Edit
 };
 
 enum class EventType : uint8_t { Fire, Impact, UnitDied };
@@ -89,6 +130,11 @@ class Simulation {
   Vision& vision() { return vision_; }
   Pathfinder& pathfinder() { return pathfinder_; }
   const std::vector<SimEvent>& events() const { return events_; }  // from the last tick
+  // Units created by SpawnList commands in the last tick, with their tags.
+  const std::vector<SpawnRecord>& spawnLog() const { return spawnLog_; }
+  // Teams: players on the same team are allies (no targeting, shared vision).
+  uint8_t team(uint8_t player) const { return player < MAX_PLAYERS ? team_[player] : NEUTRAL_OWNER; }
+  bool allied(uint8_t a, uint8_t b) const { return a == b || (a < MAX_PLAYERS && b < MAX_PLAYERS && team_[a] == team_[b]); }
   const SimStats& stats() const { return stats_; }
 
   // Deterministic checksum of the whole simulation state. Two runs given the
@@ -110,6 +156,7 @@ class Simulation {
   void applyCommand(const Command& cmd);
   void orderMove(const std::vector<Entity>& units, Vec2i target, OrderType type);
   void setOrderIdle(Entity e);
+  void applyEdit(const UnitEdit& ed);
 
   // movement (movement.cpp)
   void requestPath(Entity e, Vec2i goal);
@@ -125,7 +172,7 @@ class Simulation {
   void stepTargeting();
   void stepWeapons();
   void stepProjectiles();
-  void impact(int weapon, uint8_t owner, Vec2i at, Entity directTarget);
+  void impact(int weapon, uint8_t owner, Vec2i at, Entity directTarget, Vec2i from);
   void damage(uint32_t victim, int32_t amount);
   bool canSee(uint8_t player, int32_t x, int32_t y) const;
   void removeDead();
@@ -138,6 +185,8 @@ class Simulation {
   uint32_t tick_ = 0;
   std::vector<Command> pending_;
   std::vector<SimEvent> events_;
+  std::vector<SpawnRecord> spawnLog_;
+  std::array<uint8_t, MAX_PLAYERS> team_{0, 1, 2, 3, 4, 5, 6, 7};
   Pathfinder pathfinder_;
   SpatialHash spatial_;
   Vision vision_;

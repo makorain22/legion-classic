@@ -29,10 +29,29 @@ ImVec4 toImVec(uint32_t c) {
 }
 }  // namespace
 
+namespace {
+std::array<PlayerSetup, MAX_PLAYERS> defaultPlayers() {
+  const uint32_t colors[MAX_PLAYERS] = {rgba8(196, 58, 44),  rgba8(52, 96, 196),  rgba8(66, 160, 72),
+                                        rgba8(214, 184, 62), rgba8(220, 120, 40), rgba8(132, 72, 180),
+                                        rgba8(60, 170, 170), rgba8(210, 210, 200)};
+  std::array<PlayerSetup, MAX_PLAYERS> p;
+  for (int i = 0; i < MAX_PLAYERS; ++i) {
+    p[static_cast<size_t>(i)].name = "Player " + std::to_string(i + 1);
+    p[static_cast<size_t>(i)].faction = i % 2 ? "rus" : "ger";
+    p[static_cast<size_t>(i)].color = colors[i];
+    p[static_cast<size_t>(i)].team = static_cast<uint8_t>(i);
+  }
+  p[0].name = "Germany";
+  p[0].active = true;
+  p[1].name = "Russia";
+  p[1].active = true;
+  return p;
+}
+}  // namespace
+
 GameScene::GameScene(App& app, SceneOptions opt) : app_(app), opt_(opt) {
-  teamColors_ = {rgba8(196, 58, 44),  rgba8(52, 96, 196),  rgba8(66, 160, 72),  rgba8(214, 184, 62),
-                 rgba8(220, 120, 40), rgba8(132, 72, 180), rgba8(60, 170, 170), rgba8(210, 210, 200)};
-  playerNames_ = {"Germany", "Russia", "Player 3", "Player 4", "Player 5", "Player 6", "Player 7", "Player 8"};
+  players_ = defaultPlayers();
+  for (int i = 0; i < MAX_PLAYERS; ++i) teamColors_[static_cast<size_t>(i)] = players_[static_cast<size_t>(i)].color;
   showHelp_ = opt.showHelp;
   showDebug_ = opt.showDebug;
 }
@@ -96,7 +115,8 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
   return true;
 }
 
-void GameScene::replaceWorld(MapFile&& file) {
+void GameScene::replaceWorld(MapFile&& file, bool keepCamera) {
+  const Vec2f camera = cam_.center();
   selection_.clear();
   for (auto& g : groups_) g.clear();
   markers_.clear();
@@ -105,6 +125,16 @@ void GameScene::replaceWorld(MapFile&& file) {
   map_.recomputeInfo();
   sim_ = std::make_unique<Simulation>(map_, types_, weapons_, opt_.seed);
   terrain_.setMap(map_);
+  players_ = defaultPlayers();
+  for (size_t i = 0; i < file.players.size() && i < players_.size(); ++i) players_[i] = file.players[i];
+  applyPlayers();
+  if (!players_[player_].active) {
+    for (uint8_t i = 0; i < MAX_PLAYERS; ++i)
+      if (players_[i].active) {
+        player_ = i;
+        break;
+      }
+  }
   for (const UnitPlacement& u : file.units) {
     const int t = types_.find(u.type);
     if (t < 0) {
@@ -119,10 +149,60 @@ void GameScene::replaceWorld(MapFile&& file) {
     c.facing = u.facing;
     sim_->queue(std::move(c));
   }
-  if (!file.units.empty()) sim_->tick();
+  sim_->tick();  // apply teams and spawns
   updateCameraBounds();
-  centerOn({map_.widthLeptons() / 2, map_.heightLeptons() / 2});
+  if (keepCamera) cam_.setCenter(camera);
+  else {
+    const PlayerSetup& me = players_[player_];
+    if (me.startX >= 0) centerOn({me.startX, me.startY});
+    else centerOn({map_.widthLeptons() / 2, map_.heightLeptons() / 2});
+  }
   if (editor_) editor_->onWorldReplaced();
+}
+
+void GameScene::applyPlayers() {
+  for (uint8_t i = 0; i < MAX_PLAYERS; ++i) {
+    PlayerSetup& p = players_[i];
+    p.color |= 0xFF000000u;
+    teamColors_[i] = p.color;
+    if (sim_) {
+      Command c;
+      c.type = CommandType::SetTeam;
+      c.player = i;
+      c.count = p.team;
+      sim_->queue(std::move(c));
+    }
+  }
+}
+
+void GameScene::setPlayer(uint8_t p) {
+  if (p >= MAX_PLAYERS) return;
+  player_ = p;
+  selection_.clear();
+  attackMoveMode_ = false;
+  showStatus("Now commanding " + players_[p].name + " (you see what they see)", 2.5f);
+}
+
+void GameScene::takeSnapshot() {
+  snapshot_ = std::make_unique<MapFile>();
+  snapshot_->map = map_;
+  snapshot_->units = exportUnits();
+  snapshot_->players = playerList();
+  showStatus("Snapshot taken: " + std::to_string(snapshot_->units.size()) + " units", 2.5f);
+}
+
+void GameScene::restoreSnapshot() {
+  if (!snapshot_) return;
+  MapFile copy;
+  copy.map = snapshot_->map;
+  copy.units = snapshot_->units;
+  copy.players = snapshot_->players;
+  const uint8_t me = player_;
+  const uint64_t t0 = SDL_GetTicksNS();
+  replaceWorld(std::move(copy), true);
+  SLV_INFO("Snapshot restored in %.0f ms", (SDL_GetTicksNS() - t0) / 1e6);
+  if (players_[me].active) player_ = me;
+  showStatus("Snapshot restored", 2.5f);
 }
 
 std::vector<UnitPlacement> GameScene::exportUnits() {
@@ -236,7 +316,7 @@ Entity GameScene::pickUnit(Vec2f screenPx, bool ownOnly) const {
   int64_t bestDepth = INT64_MIN;
   for (uint32_t e : reg.pool<CUnit>().entities()) {
     const CUnit& u = reg.pool<CUnit>().get(e);
-    if (ownOnly && u.owner != player_) continue;
+    if (ownOnly && !selectableOwner(u.owner)) continue;
     if (u.owner != player_) {
       const CPosition& lp = reg.pool<CPosition>().get(e);
       if (!watching(lp.x, lp.y)) continue;  // can't click what you can't see
@@ -260,7 +340,7 @@ void GameScene::selectInBox(Vec2f a, Vec2f b, bool add) {
   const RectF box = RectF::fromPoints(a, b);
   Registry& reg = sim_->registry();
   for (uint32_t e : reg.pool<CUnit>().entities()) {
-    if (reg.pool<CUnit>().get(e).owner != player_) continue;
+    if (!selectableOwner(reg.pool<CUnit>().get(e).owner)) continue;
     const Vec2f s = cam_.worldToScreen(unitScreenWorld(e));
     if (!box.contains({s.x, s.y - 6})) continue;
     const Entity h = reg.handle(e);
@@ -276,7 +356,7 @@ void GameScene::selectSameTypeOnScreen(Entity like) {
   const RectF view{0, 0, static_cast<float>(app_.pixelWidth()), static_cast<float>(app_.pixelHeight())};
   for (uint32_t e : reg.pool<CUnit>().entities()) {
     const CUnit& u = reg.pool<CUnit>().get(e);
-    if (u.owner != player_ || u.type != type) continue;
+    if (!selectableOwner(u.owner) || u.type != type) continue;
     if (view.contains(cam_.worldToScreen(unitScreenWorld(e)))) selection_.push_back(reg.handle(e));
   }
 }
@@ -284,6 +364,25 @@ void GameScene::selectSameTypeOnScreen(Entity like) {
 void GameScene::pruneSelection() {
   Registry& reg = sim_->registry();
   std::erase_if(selection_, [&](Entity e) { return !reg.alive(e); });
+}
+
+bool GameScene::selectableOwner(uint8_t owner) const {
+  return owner == player_ || (editor_ && editor_->selectsAnyOwner());
+}
+
+void GameScene::queueOrder(Command c) {
+  // Each side's units are ordered separately (editor selections can mix sides).
+  Registry& reg = sim_->registry();
+  std::array<std::vector<Entity>, MAX_PLAYERS> byOwner;
+  for (Entity e : c.units)
+    if (reg.alive(e)) byOwner[reg.get<CUnit>(e).owner % MAX_PLAYERS].push_back(e);
+  for (uint8_t p = 0; p < MAX_PLAYERS; ++p) {
+    if (byOwner[p].empty()) continue;
+    Command part = c;
+    part.player = p;
+    part.units = std::move(byOwner[p]);
+    sim_->queue(std::move(part));
+  }
 }
 
 void GameScene::orderMove(Vec2i target, CommandType type) {
@@ -294,7 +393,7 @@ void GameScene::orderMove(Vec2i target, CommandType type) {
   c.player = player_;
   c.target = target;
   c.units = selection_;
-  sim_->queue(std::move(c));
+  queueOrder(std::move(c));
   markers_.push_back({groundToScreenWorld(static_cast<float>(target.x), static_cast<float>(target.y)), 0,
                       type == CommandType::AttackMove ? kAttackRed : kSelectGreen});
 }
@@ -307,12 +406,12 @@ void GameScene::orderAttack(Entity target) {
   c.player = player_;
   c.targetUnit = target;
   c.units = selection_;
-  sim_->queue(std::move(c));
+  queueOrder(std::move(c));
   const CPosition& p = sim_->registry().get<CPosition>(target);
   markers_.push_back({groundToScreenWorld(static_cast<float>(p.x), static_cast<float>(p.y)), 0, kAttackRed});
 }
 
-bool GameScene::fogEnabled() const { return !revealMap_ && !editor_->active(); }
+bool GameScene::fogEnabled() const { return !revealMap_ && (!editor_->active() || editorFog_); }
 
 bool GameScene::watching(int32_t lx, int32_t ly) const {
   return !fogEnabled() || sim_->vision().visible(player_, lx >> LEPTON_SHIFT, ly >> LEPTON_SHIFT);
@@ -416,10 +515,13 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
         showStatus(std::string("Screenshot saved to ") + app_.userDir() + name, 4);
       } else if (k == SDLK_SPACE) paused_ = !paused_;
       else if (k == SDLK_TAB) {
-        player_ = player_ == 0 ? 1 : 0;
-        selection_.clear();
-        attackMoveMode_ = false;
-        showStatus("Now commanding " + playerNames_[player_] + " (you see what they see)", 2.5f);
+        for (int i = 1; i <= MAX_PLAYERS; ++i) {  // next active side
+          const uint8_t p = static_cast<uint8_t>((player_ + i) % MAX_PLAYERS);
+          if (players_[p].active) {
+            setPlayer(p);
+            break;
+          }
+        }
       } else if (k == SDLK_S && !ctrl) {
         pruneSelection();
         Command c;
@@ -431,7 +533,7 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
         Registry& reg = sim_->registry();
         for (uint32_t i : reg.pool<CUnit>().entities())
           if (reg.pool<CUnit>().get(i).owner == player_) selection_.push_back(reg.handle(i));
-      } else if (k == SDLK_DELETE) {
+      } else if (k == SDLK_DELETE && !editor_->active()) {
         Command c;
         c.type = CommandType::Remove;
         c.units = selection_;
@@ -489,6 +591,7 @@ void GameScene::onTick() {
     }
   }
   sim_->tick();
+  editor_->onSimTick(sim_->spawnLog());
   const auto& events = sim_->events();
   for (const SimEvent& ev : events) {
     const bool seen = watching(ev.at.x, ev.at.y) || (ev.type == EventType::Fire && watching(ev.from.x, ev.from.y));
@@ -520,6 +623,8 @@ void GameScene::onUpdate(float dt, float alpha) {
 
   ++frame_;
   if (opt_.editorDemo) runEditorDemo();
+  if (opt_.liveDemo) runLiveDemo();
+  if (opt_.editorSelfTest) runEditorSelfTest();
   editor_->update(dt);
   terrain_.update();
   if (fogEnabled()) terrain_.setFog(&sim_->vision().grid(player_), sim_->vision().revision() * 16u + player_);
@@ -565,6 +670,187 @@ void GameScene::runEditorDemo() {
     stroke(Tool::Lower, 3, 100, {c.x + 10 * T, c.y - 10 * T}, {c.x + 10 * T, c.y - 10 * T}, 20);
     editor_->undo();  // takes the last dip back out
     editor_->save(mapsDir_ + "editor_demo.lmap");
+  }
+}
+
+// Drives the real editor through place / undo / redo / delete / move / give
+// and checks the battlefield after each step. Run with --editor-selftest.
+void GameScene::runEditorSelfTest() {
+  Registry& reg = sim_->registry();
+  auto count = [&]() { return static_cast<int>(reg.pool<CUnit>().size()); };
+  auto check = [&](bool ok, const char* what) {
+    if (!ok) ++selfTestFailures_;
+    SLV_INFO("EDITOR SELFTEST %s: %s (units %d)", ok ? "ok  " : "FAIL", what, count());
+  };
+  auto selectAll = [&]() {
+    selection_.clear();
+    for (uint32_t i : reg.pool<CUnit>().entities()) selection_.push_back(reg.handle(i));
+  };
+  static int placed = 0;
+  // Steps run every 8 frames so each command has been applied by a tick.
+  if (frame_ % 8 != 0) return;
+  switch (frame_ / 8) {
+    case 1: {
+      editor_->setActive(true);
+      Command rm;
+      rm.type = CommandType::Remove;
+      for (uint32_t i : reg.pool<CUnit>().entities()) rm.units.push_back(reg.handle(i));
+      sim_->queue(std::move(rm));
+      break;
+    }
+    case 2:
+      check(count() == 0, "battlefield cleared");
+      editor_->setPlaceUnit("ger_rifleman", 0, PlaceMode::Block, 10);
+      mouse_ = {app_.pixelWidth() * 0.6f, app_.pixelHeight() * 0.5f};
+      editor_->beginStroke();
+      editor_->endStroke();
+      break;
+    case 3:
+      placed = count();
+      check(placed >= 6 && placed <= 10, "place a block of 10 (those on dry land)");
+      editor_->undo();
+      break;
+    case 4: check(count() == 0, "undo the placement"); editor_->redo(); break;
+    case 5: check(count() == placed, "redo the placement"); selectAll(); editor_->deleteSelection(); break;
+    case 6: check(count() == 0, "delete the selection"); editor_->undo(); break;
+    case 7: {
+      check(count() == placed, "undo the delete brings them back");
+      selectAll();
+      before_.clear();
+      for (uint32_t i : reg.pool<CUnit>().entities()) before_.push_back({reg.pool<CPosition>().get(i).x, reg.pool<CPosition>().get(i).y});
+      // Pick a direction where every unit lands on dry ground.
+      const int32_t T = LEPTONS_PER_TILE;
+      moveDelta_ = {};
+      for (Vec2i d : {Vec2i{3 * T, 0}, Vec2i{0, 3 * T}, Vec2i{-3 * T, 0}, Vec2i{0, -3 * T}}) {
+        bool ok = true;
+        for (const Vec2i& p : before_) ok = ok && map_.passable((p.x + d.x) >> LEPTON_SHIFT, (p.y + d.y) >> LEPTON_SHIFT, Locomotor::Foot);
+        if (ok) {
+          moveDelta_ = d;
+          break;
+        }
+      }
+      editor_->moveSelection(moveDelta_);
+      break;
+    }
+    case 8: {
+      bool ok = moveDelta_.x != 0 || moveDelta_.y != 0;
+      size_t k = 0;
+      for (uint32_t i : reg.pool<CUnit>().entities()) {
+        const CPosition& p = reg.pool<CPosition>().get(i);
+        // Separation may nudge units a little after they land.
+        ok = ok && k < before_.size() && std::abs(p.x - before_[k].x - moveDelta_.x) < 64 &&
+             std::abs(p.y - before_[k].y - moveDelta_.y) < 64;
+        ++k;
+      }
+      check(ok, "move the selection 3 tiles");
+      editor_->undo();
+      break;
+    }
+    case 9: {
+      bool ok = true;
+      size_t k = 0;
+      for (uint32_t i : reg.pool<CUnit>().entities()) {
+        const CPosition& p = reg.pool<CPosition>().get(i);
+        ok = ok && k < before_.size() && std::abs(p.x - before_[k].x) < 64 && std::abs(p.y - before_[k].y) < 64;
+        ++k;
+      }
+      check(ok, "undo the move");
+      selectAll();
+      editor_->setSelectionOwner(1);
+      break;
+    }
+    case 10: {
+      bool all = true;
+      for (uint32_t i : reg.pool<CUnit>().entities()) all = all && reg.pool<CUnit>().get(i).owner == 1;
+      check(all && count() == placed, "give units to side 2");
+      editor_->undo();
+      break;
+    }
+    case 11: {
+      bool all = true;
+      for (uint32_t i : reg.pool<CUnit>().entities()) all = all && reg.pool<CUnit>().get(i).owner == 0;
+      check(all, "undo the gift");
+      editor_->undo();  // the placement itself, through two respawns' worth of remapping
+      break;
+    }
+    case 12:
+      check(count() == 0, "undo the original placement after delete/undo");
+      takeSnapshot();  // an empty battlefield
+      editor_->redo();
+      break;
+    case 13: check(count() == placed, "redo the placement once more"); restoreSnapshot(); break;
+    case 14:
+      check(count() == 0, "restore the empty snapshot");
+      SLV_INFO("EDITOR SELFTEST %s (%d failures)", selfTestFailures_ ? "FAILED" : "PASSED", selfTestFailures_);
+      quit_ = true;
+      break;
+    default: break;
+  }
+}
+
+// A scripted Live Scenario Editor session for the automated screenshots:
+// places two forces with the unit tools, sets them fighting, calls in
+// artillery, then selects a tank to show the inspector.
+void GameScene::runLiveDemo() {
+  const float W = static_cast<float>(app_.pixelWidth()), H = static_cast<float>(app_.pixelHeight());
+  auto clickAt = [&](float fx, float fy) {
+    mouse_ = {W * fx, H * fy};
+    editor_->beginStroke();
+    editor_->strokeAt(groundAt(mouse_), 1.0f / 60.0f);
+    editor_->endStroke();
+  };
+  if (frame_ == 2) {
+    editor_->setActive(true);
+    paused_ = false;
+    // Clear the default armies so the scene is built entirely with the editor.
+    Command rm;
+    rm.type = CommandType::Remove;
+    for (uint32_t i : sim_->registry().pool<CUnit>().entities()) rm.units.push_back(sim_->registry().handle(i));
+    sim_->queue(std::move(rm));
+    editor_->setPlaceFacing(14);
+    editor_->setPlaceFacing(12);
+    editor_->setPlaceUnit("ger_medium_tank", 0, PlaceMode::Block, 6);
+    clickAt(0.78f, 0.80f);
+    editor_->setPlaceUnit("ger_rifleman", 0, PlaceMode::Block, 24);
+    clickAt(0.90f, 0.70f);
+    editor_->setPlaceFacing(4);
+    editor_->setPlaceUnit("rus_rifleman", 1, PlaceMode::Block, 40);
+    clickAt(0.42f, 0.52f);
+    editor_->setPlaceUnit("rus_medium_tank", 1, PlaceMode::Block, 4);
+    clickAt(0.36f, 0.66f);
+  }
+  if (frame_ == 6) {
+    Registry& reg = sim_->registry();
+    Command g, r;
+    g.type = r.type = CommandType::AttackMove;
+    for (uint32_t i : reg.pool<CUnit>().entities()) (reg.pool<CUnit>().get(i).owner == 0 ? g : r).units.push_back(reg.handle(i));
+    mouse_ = {W * 0.42f, H * 0.55f};
+    g.target = mouseWorldLeptons();
+    mouse_ = {W * 0.80f, H * 0.78f};
+    r.target = mouseWorldLeptons();
+    queueOrder(std::move(g));
+    queueOrder(std::move(r));
+  }
+  if (frame_ == 150) {
+    editor_->setTool(Tool::Artillery);
+    editor_->setBrush(3, 40);
+    clickAt(0.42f, 0.52f);
+  }
+  if (frame_ == 290) {
+    editor_->setTool(Tool::SelectUnits);
+    selection_.clear();
+    Registry& reg = sim_->registry();
+    for (uint32_t i : reg.pool<CUnit>().entities())
+      if (types_.get(reg.pool<CUnit>().get(i).type).id == "ger_medium_tank") {
+        selection_.push_back(reg.handle(i));
+        break;
+      }
+    mouse_ = {W * 0.6f, H * 0.6f};
+  }
+  if (frame_ == 340) {  // second picture: the unit palette with a block of ghosts under the mouse
+    editor_->setPlaceFacing(10);
+    editor_->setPlaceUnit("rus_rifleman", 1, PlaceMode::Block, 30);
+    mouse_ = {W * 0.62f, H * 0.30f};
   }
 }
 
@@ -749,11 +1035,11 @@ void GameScene::drawHud() {
                    ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove);
   ImGui::TextColored(ImVec4(0.92f, 0.78f, 0.36f, 1), "LEGION CLASSIC");
   ImGui::SameLine();
-  ImGui::TextDisabled("Slave Engine 1.0  |  Milestone 3");
+  ImGui::TextDisabled("Slave Engine 1.0  |  Milestone 4");
   ImGui::Text("Map: %s (%dx%d)", map_.name.c_str(), map_.width(), map_.height());
   ImGui::Text("Commanding:");
   ImGui::SameLine();
-  ImGui::TextColored(toImVec(teamColors_[player_]), "%s", playerNames_[player_].c_str());
+  ImGui::TextColored(toImVec(teamColors_[player_]), "%s", players_[player_].name.c_str());
   ImGui::SameLine();
   ImGui::TextDisabled("(Tab)");
   ImGui::Text("Selected: %zu   Units: %zu", selection_.size(), sim_->unitCount());
@@ -777,11 +1063,15 @@ void GameScene::drawHelp() {
     ImGui::TextUnformatted(what);
   };
   if (editor_->active()) {
-    row("Left drag", "Use the current tool");
-    row("Ctrl+Z / Ctrl+Y", "Undo / redo");
+    row("Left click/drag", "Use the current tool");
+    row("Ctrl+Z / Ctrl+Y", "Undo / redo (terrain and units)");
     row("[ / ]", "Brush size");
-    row("Ctrl+S", "Save map");
-    row("Right click", "Still orders your selected units");
+    row(", / .", "Turn the units being placed / selected");
+    row("Delete", "Delete selected units (undoable)");
+    row("Ctrl+D", "Duplicate selected units");
+    row("Esc", "Placing units: back to Select");
+    row("Ctrl+S", "Save scenario");
+    row("Right click", "Orders the selection (each side's own units)");
     row("F2", "Close the editor");
     ImGui::Separator();
   }

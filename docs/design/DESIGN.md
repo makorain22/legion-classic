@@ -26,6 +26,18 @@ edit it. Place / delete / move anything for any player mid-battle, spawn
 brushes (up to 10,000 units), possess any player, live inspector, god tools,
 snapshot to scenario, and turn any sandbox into a mission with triggers.
 
+## Balance direction (from playtesting, 30 Oct 2026)
+
+Blitzkrieg-like: slow, deadly, combined arms.
+- Infantry are inexperienced: rifles hit 70 % of the time. They can't hurt
+  tanks; dedicated anti-tank units come later.
+- Tanks outrange everything, kill infantry with HE and vehicles with AP, and
+  will be expensive (costs arrive with the economy in Milestone 5).
+- Armour has front / side / rear values; a rear hit can kill a tank outright.
+- Units see less far than tanks can shoot; scouts spot for the guns.
+- Unit scale: try smaller units (or a wider default view) in the art
+  milestone so battles read as bigger.
+
 ## Art direction
 
 Gritty and realistic, in the spirit of Blitzkrieg: painted, blended terrain
@@ -60,7 +72,10 @@ in the art milestone.
    a per-tick search budget, collision via spatial hash, data-driven weapons /
    warheads / armour, turrets, shells with splash, attack and attack-move,
    per-side fog of war, battle effects, 10,000-unit battles at ~13 ms a tick.
-4. **Live Scenario Editor** (first main deliverable).
+4. **Live Scenario Editor** – done: unit palette (one / brush / block up to
+   10,000), select and edit any side's units, inspector, sides and teams,
+   possession, artillery / smite / heal, snapshots, shared terrain + unit undo.
+   Triggers and objectives come with scenario scripting in Milestone 6.
 5. Economy and base building.
 6. AI and scenario scripting (triggers, objectives), saves and replays.
 7. Art pipeline and content: Germany and Russia, 5 biomes.

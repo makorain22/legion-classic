@@ -47,6 +47,7 @@ class Texture {
   void bind(int unit = 0) const;
   int width() const { return w_; }
   int height() const { return h_; }
+  GLuint id() const { return id_; }
 
  private:
   GLuint id_ = 0;

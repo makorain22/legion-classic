@@ -15,7 +15,8 @@ struct World {
     std::string err;
     REQUIRE(weapons.loadJson(nlohmann::json::parse(R"({
       "warheads": {"bullet": {"infantry":100,"light":30,"medium":6,"heavy":3},
-                   "ap": {"infantry":30,"light":90,"medium":100,"heavy":100}},
+                   "ap": {"infantry":30,"light":90,"medium":100,"heavy":100,
+                          "facing":{"front":100,"side":160,"rear":450}}},
       "weapons": [
         {"id":"rifle","warhead":"bullet","damage":14,"range":4.5,"cooldown":22,"accuracy":100},
         {"id":"gun","warhead":"ap","damage":70,"range":6.5,"cooldown":40,"projectile":"shell","speed":150,"splash":0.35}
@@ -139,4 +140,72 @@ TEST_CASE("combat is deterministic") {
   CHECK(a.first == b.first);
   CHECK(a.second == b.second);
   CHECK(a.second < 78);  // the armies actually fought
+}
+
+TEST_CASE("guns switch to HE against infantry; vehicles take more damage from the side and rear") {
+  WeaponRegistry weapons;
+  std::string err;
+  REQUIRE(weapons.loadJson(nlohmann::json::parse(R"({
+    "warheads": {"ap": {"infantry":25,"heavy":100,"facing":{"front":100,"side":160,"rear":450}},
+                 "he": {"infantry":100,"heavy":15}},
+    "weapons": [
+      {"id":"ap","warhead":"ap","damage":100,"range":10,"cooldown":50,"projectile":"shell","vsInfantry":"he"},
+      {"id":"he","warhead":"he","damage":80,"range":9,"cooldown":50,"projectile":"shell","splash":0.9}
+    ]})"), err));
+  const int ap = weapons.find("ap"), he = weapons.find("he");
+  CHECK(weapons.forTarget(ap, ArmorClass::Infantry) == he);
+  CHECK(weapons.forTarget(ap, ArmorClass::Heavy) == ap);
+  CHECK(weapons.damageAgainst(ap, ArmorClass::Heavy, HitSide::Front) == 100);
+  CHECK(weapons.damageAgainst(ap, ArmorClass::Heavy, HitSide::Side) == 160);
+  CHECK(weapons.damageAgainst(ap, ArmorClass::Heavy, HitSide::Rear) == 450);
+  CHECK(weapons.damageAgainst(ap, ArmorClass::Infantry, HitSide::Rear) == 25);  // no rear armour on a man
+
+  // Unknown alternative rounds are reported.
+  WeaponRegistry bad;
+  CHECK_FALSE(bad.loadJson(nlohmann::json::parse(R"({"warheads":{"ap":{}},
+    "weapons":[{"id":"x","warhead":"ap","damage":1,"range":1,"cooldown":1,"vsInfantry":"nope"}]})"), err));
+}
+
+TEST_CASE("a shot into a tank's rear is deadlier than one into its front") {
+  World w;
+  // Two identical duels: the target faces away from (rear) or towards (front) the shooter.
+  auto duel = [&](Angle targetFacing) {
+    Simulation sim(w.map, w.types, w.weapons, 3);
+    Command c;
+    c.type = CommandType::Spawn;
+    c.unitType = 0;
+    c.player = 0;
+    c.target = {20 * 256, 32 * 256};
+    c.facing = 0;
+    sim.queue(c);
+    c.player = 1;
+    c.target = {25 * 256, 32 * 256};
+    c.facing = targetFacing;
+    sim.queue(c);
+    sim.tick();
+    Entity shooter, target;
+    for (uint32_t e : sim.registry().pool<CUnit>().entities())
+      (sim.registry().pool<CUnit>().get(e).owner == 0 ? shooter : target) = sim.registry().handle(e);
+    Command a;
+    a.type = CommandType::Attack;
+    a.units = {shooter};
+    a.targetUnit = target;
+    sim.queue(a);
+    // Freeze the target so it neither turns nor shoots back.
+    sim.registry().remove<CCombat>(target);
+    int32_t firstHit = 0;
+    for (int i = 0; i < 300 && sim.registry().alive(target); ++i) {
+      sim.tick();
+      for (const SimEvent& ev : sim.events())
+        if (ev.type == EventType::Impact && ev.hit && !firstHit && sim.registry().alive(target))
+          firstHit = 400 - sim.registry().get<CUnit>(target).health;
+    }
+    return firstHit;
+  };
+  const int32_t rear = duel(0);                      // facing +X, away from the shooter in the west
+  const int32_t front = duel(angleOfFacing(8));      // facing -X, towards the shooter
+  // Splash falls off from the burst point, so a hit deals 50-100 % of the table value.
+  CHECK(front > 0);
+  CHECK(front <= 70);
+  CHECK(rear >= 157);
 }

@@ -20,9 +20,15 @@ bool parseArmor(const std::string& s, ArmorClass& out);
 
 enum class ProjectileKind : uint8_t { Instant = 0, Shell };
 
+// Which side of a vehicle a round strikes, judged from its line of flight
+// against the hull's facing.
+enum class HitSide : uint8_t { Front = 0, Side, Rear };
+
 struct WarheadDef {
   std::string id;
   std::array<int32_t, ARMOR_COUNT> versus{100, 100, 100, 100};  // percent
+  // Percent damage by side struck, against vehicles only (infantry has no "rear armour").
+  std::array<int32_t, 3> facing{100, 100, 100};
 };
 
 struct WeaponDef {
@@ -37,6 +43,7 @@ struct WeaponDef {
   int32_t accuracy = 100;    // percent chance to hit (instant weapons)
   uint16_t warhead = 0;
   uint8_t muzzle = 1;        // muzzle-flash size class 0..2 (presentation)
+  int vsInfantry = -1;       // a gun's alternative round against infantry (e.g. HE), or -1
 };
 
 class WeaponRegistry {
@@ -50,6 +57,17 @@ class WeaponRegistry {
   int32_t damageAgainst(int weapon, ArmorClass armor) const {
     const WeaponDef& w = get(weapon);
     return w.damage * warhead(w.warhead).versus[static_cast<size_t>(armor)] / 100;
+  }
+  // Damage including the side struck (front / side / rear) for vehicles.
+  int32_t damageAgainst(int weapon, ArmorClass armor, HitSide side) const {
+    const int32_t base = damageAgainst(weapon, armor);
+    if (armor == ArmorClass::Infantry) return base;
+    return base * warhead(get(weapon).warhead).facing[static_cast<size_t>(side)] / 100;
+  }
+  // The round a weapon fires at this armour (guns switch to HE against infantry).
+  int forTarget(int weapon, ArmorClass armor) const {
+    const WeaponDef& w = get(weapon);
+    return (armor == ArmorClass::Infantry && w.vsInfantry >= 0) ? w.vsInfantry : weapon;
   }
 
  private:
