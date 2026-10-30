@@ -1,0 +1,62 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache third-party downloads
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: deps-windows-${{ hashFiles('CMakeLists.txt') }}
+
+      - name: Configure
+        run: cmake -S . -B build -A x64
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Unit tests
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $dst = "dist/LegionClassic"
+          New-Item -ItemType Directory -Force $dst | Out-Null
+          Copy-Item build/bin/LegionClassic.exe $dst/
+          Copy-Item -Recurse build/bin/content $dst/content
+          Copy-Item README.md $dst/
+          Copy-Item docs/PLAYING.md $dst/
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: LegionClassic-Windows
+          path: dist/
+          retention-days: 30
+
+  linux-tests:
+    name: Engine tests (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -G "Unix Makefiles" -DLEGION_BUILD_GAME=OFF -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build --parallel
+      - name: Unit tests
+        run: ctest --test-dir build --output-on-failure

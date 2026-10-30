@@ -1,0 +1,18 @@
+{
+  "_comment": "Unit types. Speeds are leptons per tick (256 leptons = 1 tile, 15 ticks = 1 second). turnTicks = ticks per 1/16 turn (0 = instant). Placeholder stats until Milestone 3 adds combat.",
+  "units": [
+    { "id": "ger_medium_tank", "name": "Medium Tank", "faction": "ger", "model": "tank",
+      "locomotor": "tracked", "speed": 22, "turnTicks": 2, "radius": 110, "animTicks": 2, "health": 400 },
+    { "id": "ger_scout_car", "name": "Scout Car", "faction": "ger", "model": "scoutcar",
+      "locomotor": "wheeled", "speed": 44, "turnTicks": 1, "radius": 90, "animTicks": 1, "health": 160 },
+    { "id": "ger_rifleman", "name": "Grenadier", "faction": "ger", "model": "rifleman",
+      "locomotor": "foot", "speed": 12, "turnTicks": 0, "radius": 40, "animTicks": 3, "health": 100 },
+
+    { "id": "rus_medium_tank", "name": "Medium Tank", "faction": "rus", "model": "tank",
+      "locomotor": "tracked", "speed": 24, "turnTicks": 2, "radius": 110, "animTicks": 2, "health": 360 },
+    { "id": "rus_scout_car", "name": "Scout Car", "faction": "rus", "model": "scoutcar",
+      "locomotor": "wheeled", "speed": 42, "turnTicks": 1, "radius": 90, "animTicks": 1, "health": 150 },
+    { "id": "rus_rifleman", "name": "Rifleman", "faction": "rus", "model": "rifleman",
+      "locomotor": "foot", "speed": 12, "turnTicks": 0, "radius": 40, "animTicks": 3, "health": 90 }
+  ]
+}
