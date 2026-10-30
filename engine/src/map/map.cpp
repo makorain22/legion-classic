@@ -117,6 +117,7 @@ Layer Map::dominantLayer(int sx, int sy) const {
 }
 
 void Map::recomputeInfo(int tx0, int ty0, int tx1, int ty1) {
+  ++revision_;
   tx0 = std::max(0, tx0);
   ty0 = std::max(0, ty0);
   tx1 = std::min(width_ - 1, tx1);

@@ -1,54 +1,131 @@
 #include "slave/sim/simulation.hpp"
 
 #include <algorithm>
+#include <chrono>
 
 namespace slave {
 
-Simulation::Simulation(const Map& map, const UnitTypeRegistry& types, uint64_t seed)
-    : map_(map), types_(types), rng_(seed) {}
+Simulation::Simulation(const Map& map, const UnitTypeRegistry& types, const WeaponRegistry& weapons, uint64_t seed)
+    : map_(map), types_(types), weapons_(weapons), rng_(seed), pathfinder_(map) {
+  spatial_.reset(map.widthLeptons(), map.heightLeptons());
+  vision_.resize(map.width(), map.height());
+}
 
-Vec2i Simulation::clampToMap(Vec2i p, int32_t margin) const {
-  return {std::clamp(p.x, margin, map_.widthLeptons() - 1 - margin),
-          std::clamp(p.y, margin, map_.heightLeptons() - 1 - margin)};
+int32_t Simulation::maxRange(const UnitTypeDef& def) const {
+  int32_t r = 0;
+  for (int w : def.weapons) r = std::max(r, weapons_.get(w).range);
+  return r;
 }
 
 Entity Simulation::spawnUnit(uint16_t type, uint8_t player, Vec2i pos, Angle facing) {
   const UnitTypeDef& def = types_.get(type);
-  pos = clampToMap(pos, def.radius);
+  pos.x = std::clamp(pos.x, def.radius, map_.widthLeptons() - 1 - def.radius);
+  pos.y = std::clamp(pos.y, def.radius, map_.heightLeptons() - 1 - def.radius);
+  // Never place a unit in water or on a cliff: move it to the nearest ground it can stand on.
+  const int tx = pos.x >> LEPTON_SHIFT, ty = pos.y >> LEPTON_SHIFT;
+  if (!map_.passable(tx, ty, def.locomotor)) {
+    bool found = false;
+    for (int r = 1; r <= 8 && !found; ++r)
+      for (int dy = -r; dy <= r && !found; ++dy)
+        for (int dx = -r; dx <= r && !found; ++dx) {
+          if (std::max(std::abs(dx), std::abs(dy)) != r || !map_.passable(tx + dx, ty + dy, def.locomotor)) continue;
+          pos = {(tx + dx) * LEPTONS_PER_TILE + (pos.x & 255), (ty + dy) * LEPTONS_PER_TILE + (pos.y & 255)};
+          found = true;
+        }
+    if (!found) return kNullEntity;
+  }
   const Entity e = reg_.create();
+  const Angle a = angleOfFacing(facingOf(facing));
   reg_.add<CPosition>(e, {pos.x, pos.y});
   reg_.add<CPrevPosition>(e, {pos.x, pos.y});
-  reg_.add<CFacing>(e, {angleOfFacing(facingOf(facing)), 0});
+  reg_.add<CFacing>(e, {a, 0});
   reg_.add<CUnit>(e, {type, player, def.maxHealth});
-  reg_.add<CMoveOrder>(e, {});
+  reg_.add<CMover>(e, {});
+  reg_.add<COrder>(e, {});
   reg_.add<CAnim>(e, {});
+  if (!def.weapons.empty()) reg_.add<CCombat>(e, {});
+  if (def.turret) reg_.add<CTurret>(e, {a, 0});
   return e;
 }
 
 void Simulation::tick() {
-  // 1. Commands queued since the last tick, in arrival order.
+  events_.clear();
+  pathfinder_.refresh();
+
   std::vector<Command> cmds;
   cmds.swap(pending_);
   for (const Command& c : cmds) applyCommand(c);
 
-  // 2. Movement.
+  // Timing is for the profiler only; it never feeds back into the game.
+  using Clock = std::chrono::steady_clock;
+  auto t = Clock::now();
+  auto lap = [&t](float& out) {
+    const auto now = Clock::now();
+    out = std::chrono::duration<float, std::milli>(now - t).count();
+    t = now;
+  };
+  processPathQueue();
+  lap(stats_.msPaths);
+  stepOrders();
+  lap(stats_.msOrders);
   stepMovement();
-
+  lap(stats_.msMove);
+  rebuildSpatial();
+  lap(stats_.msSpatial);
+  stepSeparation();
+  lap(stats_.msSeparation);
+  if (tick_ % 4 == 0) stepVision();
+  lap(stats_.msVision);
+  stepTargeting();
+  lap(stats_.msTargeting);
+  stepWeapons();
+  lap(stats_.msWeapons);
+  stepProjectiles();
+  lap(stats_.msProjectiles);
+  removeDead();
+  stats_.projectiles = static_cast<uint32_t>(reg_.pool<CProjectile>().size());
   ++tick_;
+}
+
+void Simulation::setOrderIdle(Entity e) {
+  if (auto* o = reg_.tryGet<COrder>(e)) *o = COrder{};
+  if (auto* m = reg_.tryGet<CMover>(e)) {
+    m->active = false;
+    m->request = 0;
+    m->path.clear();
+  }
+  if (auto* c = reg_.tryGet<CCombat>(e)) c->target = kNullEntity;
 }
 
 void Simulation::applyCommand(const Command& cmd) {
   switch (cmd.type) {
     case CommandType::Move:
-      applyMove(cmd);
+      orderMove(cmd.units, cmd.target, OrderType::Move);
       break;
+    case CommandType::AttackMove:
+      orderMove(cmd.units, cmd.target, OrderType::AttackMove);
+      break;
+    case CommandType::Attack: {
+      if (!reg_.alive(cmd.targetUnit) || !reg_.has<CUnit>(cmd.targetUnit)) break;
+      for (Entity e : cmd.units) {
+        if (!reg_.alive(e) || !reg_.has<CCombat>(e) || e == cmd.targetUnit) continue;
+        COrder& o = reg_.get<COrder>(e);
+        o = COrder{};
+        o.type = OrderType::Attack;
+        o.target = cmd.targetUnit;
+        reg_.get<CCombat>(e).target = cmd.targetUnit;
+        const CPosition& tp = reg_.get<CPosition>(cmd.targetUnit);
+        o.chasedAt = {tp.x, tp.y};
+        requestPath(e, o.chasedAt);
+      }
+      break;
+    }
     case CommandType::Stop:
       for (Entity e : cmd.units)
-        if (auto* m = reg_.tryGet<CMoveOrder>(e)) m->active = false;
+        if (reg_.alive(e)) setOrderIdle(e);
       break;
     case CommandType::Spawn: {
       if (cmd.unitType >= types_.size()) break;
-      // Spawn in a square block centred on the target, one unit per slot.
       const int32_t spacing = std::max(128, types_.get(cmd.unitType).radius * 2);
       int32_t side = 1;
       while (side * side < cmd.count) ++side;
@@ -61,150 +138,136 @@ void Simulation::applyCommand(const Command& cmd) {
       break;
     }
     case CommandType::Remove:
-      for (Entity e : cmd.units) reg_.destroy(e);
+      for (Entity e : cmd.units)
+        if (reg_.alive(e)) reg_.destroy(e);
       break;
   }
 }
 
-// Group move: units keep a tidy square formation around the target point.
-// Each unit takes the formation slot nearest to it, so groups don't cross over.
-void Simulation::applyMove(const Command& cmd) {
-  std::vector<Entity> units;
-  units.reserve(cmd.units.size());
-  for (Entity e : cmd.units)
-    if (reg_.alive(e) && reg_.has<CMoveOrder>(e)) units.push_back(e);
-  if (units.empty()) return;
-
-  int32_t spacing = 128;
+// Group move. Units are split by movement type; each group shares one A*
+// path from its centre, and every unit takes its own formation slot at the
+// end. Units with a clear straight line skip pathfinding entirely.
+void Simulation::orderMove(const std::vector<Entity>& units, Vec2i target, OrderType type) {
+  std::array<std::vector<Entity>, 3> groups;
   for (Entity e : units)
-    spacing = std::max(spacing, types_.get(reg_.get<CUnit>(e).type).radius * 2);
+    if (reg_.alive(e) && reg_.has<CMover>(e))
+      groups[static_cast<size_t>(types_.get(reg_.get<CUnit>(e).type).locomotor)].push_back(e);
 
-  const int32_t n = static_cast<int32_t>(units.size());
-  int32_t side = 1;
-  while (side * side < n) ++side;
+  for (int li = 0; li < 3; ++li) {
+    std::vector<Entity>& g = groups[static_cast<size_t>(li)];
+    if (g.empty()) continue;
+    const Locomotor loco = static_cast<Locomotor>(li);
 
-  // Formation slots, nearest to the target first.
-  struct Slot { Vec2i p; bool taken; };
-  std::vector<Slot> slots;
-  slots.reserve(static_cast<size_t>(side) * side);
-  for (int32_t gy = 0; gy < side; ++gy)
-    for (int32_t gx = 0; gx < side; ++gx)
-      slots.push_back({clampToMap({cmd.target.x + (gx * 2 - (side - 1)) * spacing / 2,
-                                   cmd.target.y + (gy * 2 - (side - 1)) * spacing / 2},
-                                  64),
-                       false});
-  std::stable_sort(slots.begin(), slots.end(), [&](const Slot& a, const Slot& b) {
-    return distance(a.p.x - cmd.target.x, a.p.y - cmd.target.y) <
-           distance(b.p.x - cmd.target.x, b.p.y - cmd.target.y);
-  });
-
-  // Units farthest from the target choose first (they have the longest trip).
-  std::stable_sort(units.begin(), units.end(), [&](Entity a, Entity b) {
-    const auto& pa = reg_.get<CPosition>(a);
-    const auto& pb = reg_.get<CPosition>(b);
-    return distance(pa.x - cmd.target.x, pa.y - cmd.target.y) >
-           distance(pb.x - cmd.target.x, pb.y - cmd.target.y);
-  });
-
-  // Huge groups (live-editor armies): nearest-slot matching is O(n^2), so
-  // instead match units to slots in the same row-major order.
-  if (n > 400) {
-    auto rowMajor = [&](Vec2i a, Vec2i b) { return a.y != b.y ? a.y < b.y : a.x < b.x; };
-    std::stable_sort(units.begin(), units.end(), [&](Entity a, Entity b) {
-      const auto& pa = reg_.get<CPosition>(a);
-      const auto& pb = reg_.get<CPosition>(b);
-      return rowMajor({pa.x, pa.y}, {pb.x, pb.y});
+    // Formation slots: a square block around the target, nearest first.
+    int32_t spacing = 128;
+    for (Entity e : g) spacing = std::max(spacing, types_.get(reg_.get<CUnit>(e).type).radius * 2);
+    const int32_t n = static_cast<int32_t>(g.size());
+    int32_t side = 1;
+    while (side * side < n) ++side;
+    std::vector<Vec2i> slots;
+    for (int32_t gy = 0; gy < side; ++gy)
+      for (int32_t gx = 0; gx < side; ++gx)
+        slots.push_back({target.x + (gx * 2 - (side - 1)) * spacing / 2, target.y + (gy * 2 - (side - 1)) * spacing / 2});
+    std::stable_sort(slots.begin(), slots.end(), [&](Vec2i a, Vec2i b) {
+      return distance(a.x - target.x, a.y - target.y) < distance(b.x - target.x, b.y - target.y);
     });
     slots.resize(static_cast<size_t>(n));
-    std::stable_sort(slots.begin(), slots.end(),
-                     [&](const Slot& a, const Slot& b) { return rowMajor(a.p, b.p); });
-    for (size_t i = 0; i < units.size(); ++i) {
-      auto& m = reg_.get<CMoveOrder>(units[i]);
-      m.tx = slots[i].p.x;
-      m.ty = slots[i].p.y;
-      m.active = true;
-    }
-    return;
-  }
 
-  for (Entity e : units) {
-    const auto& p = reg_.get<CPosition>(e);
-    size_t best = 0;
-    uint32_t bestDist = UINT32_MAX;
-    for (size_t i = 0; i < static_cast<size_t>(n); ++i) {
-      if (slots[i].taken) continue;
-      const uint32_t d = distance(slots[i].p.x - p.x, slots[i].p.y - p.y);
-      if (d < bestDist) {
-        bestDist = d;
-        best = i;
+    // Leader: the unit nearest the group's centre. Its path is shared.
+    int64_t cx = 0, cy = 0;
+    for (Entity e : g) {
+      cx += reg_.get<CPosition>(e).x;
+      cy += reg_.get<CPosition>(e).y;
+    }
+    cx /= n;
+    cy /= n;
+    Entity leader = g.front();
+    uint32_t bestD = UINT32_MAX;
+    for (Entity e : g) {
+      const CPosition& p = reg_.get<CPosition>(e);
+      const uint32_t d = distance(static_cast<int32_t>(p.x - cx), static_cast<int32_t>(p.y - cy));
+      if (d < bestD) {
+        bestD = d;
+        leader = e;
       }
     }
-    slots[best].taken = true;
-    auto& m = reg_.get<CMoveOrder>(e);
-    m.tx = slots[best].p.x;
-    m.ty = slots[best].p.y;
-    m.active = true;
-  }
-}
+    const CPosition& lp = reg_.get<CPosition>(leader);
+    const Vec2i lpos{lp.x, lp.y};
+    for (Vec2i& s : slots) s = pathfinder_.nearestReachable(lpos, s, loco);
+    std::vector<Vec2i> groupPath;
+    pathfinder_.findPath(lpos, target, loco, groupPath, 400000);
+    ++stats_.pathSearches;
+    stats_.pathExpansions += pathfinder_.expansionsLastCall();
 
-void Simulation::stepMovement() {
-  reg_.each<CMoveOrder, CPosition, CPrevPosition, CFacing, CUnit, CAnim>(
-      [&](uint32_t, CMoveOrder& order, CPosition& pos, CPrevPosition& prev, CFacing& facing,
-          CUnit& unit, CAnim& anim) {
-        prev.x = pos.x;
-        prev.y = pos.y;
-        anim.moving = false;
-        if (!order.active) return;
-
-        const UnitTypeDef& def = types_.get(unit.type);
-        const int32_t dx = order.tx - pos.x;
-        const int32_t dy = order.ty - pos.y;
-        const uint32_t dist = distance(dx, dy);
-        if (dist <= static_cast<uint32_t>(def.speed)) {
-          pos.x = order.tx;
-          pos.y = order.ty;
-          order.active = false;
-          anim.moving = dist > 0;
-          return;
-        }
-
-        // Turn in visible 1/16 steps before driving, like the classics.
-        const Angle desired = atan2Angle(dy, dx);
-        const int32_t wantFacing = facingOf(desired);
-        const int32_t haveFacing = facingOf(facing.angle);
-        if (wantFacing != haveFacing) {
-          if (def.turnTicks == 0) {
-            facing.angle = angleOfFacing(wantFacing);
-          } else {
-            if (facing.turnWait > 0) {
-              --facing.turnWait;
-              return;
-            }
-            const int32_t delta = angleDelta(facing.angle, desired);
-            facing.angle = angleOfFacing(haveFacing + (delta > 0 ? 1 : -1));
-            facing.turnWait = static_cast<uint8_t>(def.turnTicks - 1);
-            if (facingOf(facing.angle) != wantFacing) return;
+    // Assign slots: farthest units choose first (small groups), or by
+    // row-major order (huge groups, where matching would be too slow).
+    std::vector<Entity> order = g;
+    std::vector<bool> taken(slots.size(), false);
+    auto rowMajor = [](Vec2i a, Vec2i b) { return a.y != b.y ? a.y < b.y : a.x < b.x; };
+    std::vector<size_t> assigned(order.size());
+    if (n > 400) {
+      std::stable_sort(order.begin(), order.end(), [&](Entity a, Entity b) {
+        const CPosition &pa = reg_.get<CPosition>(a), &pb = reg_.get<CPosition>(b);
+        return rowMajor({pa.x, pa.y}, {pb.x, pb.y});
+      });
+      std::vector<size_t> idx(slots.size());
+      for (size_t i = 0; i < idx.size(); ++i) idx[i] = i;
+      std::stable_sort(idx.begin(), idx.end(), [&](size_t a, size_t b) { return rowMajor(slots[a], slots[b]); });
+      for (size_t i = 0; i < order.size(); ++i) assigned[i] = idx[i];
+    } else {
+      std::stable_sort(order.begin(), order.end(), [&](Entity a, Entity b) {
+        const CPosition &pa = reg_.get<CPosition>(a), &pb = reg_.get<CPosition>(b);
+        return distance(pa.x - target.x, pa.y - target.y) > distance(pb.x - target.x, pb.y - target.y);
+      });
+      for (size_t k = 0; k < order.size(); ++k) {
+        const CPosition& p = reg_.get<CPosition>(order[k]);
+        size_t best = 0;
+        uint32_t bd = UINT32_MAX;
+        for (size_t i = 0; i < slots.size(); ++i) {
+          if (taken[i]) continue;
+          const uint32_t d = distance(slots[i].x - p.x, slots[i].y - p.y);
+          if (d < bd) {
+            bd = d;
+            best = i;
           }
         }
+        taken[best] = true;
+        assigned[k] = best;
+      }
+    }
 
-        // Drive straight at the target, unless the next tile is a cliff or deep
-        // water for this kind of unit. (Pathfinding around obstacles: Milestone 3.)
-        const int32_t nx = pos.x + static_cast<int32_t>(static_cast<int64_t>(dx) * def.speed / dist);
-        const int32_t ny = pos.y + static_cast<int32_t>(static_cast<int64_t>(dy) * def.speed / dist);
-        const int ctx = pos.x >> LEPTON_SHIFT, cty = pos.y >> LEPTON_SHIFT;
-        const int ntx = nx >> LEPTON_SHIFT, nty = ny >> LEPTON_SHIFT;
-        if ((ntx != ctx || nty != cty) && !map_.passable(ntx, nty, def.locomotor)) {
-          order.active = false;
-          return;
+    for (size_t k = 0; k < order.size(); ++k) {
+      const Entity e = order[k];
+      const Vec2i slot = slots[assigned[k]];
+      const CPosition& p = reg_.get<CPosition>(e);
+      const Vec2i pos{p.x, p.y};
+      COrder& o = reg_.get<COrder>(e);
+      o = COrder{};
+      o.type = type;
+      o.goal = slot;
+      if (auto* c = reg_.tryGet<CCombat>(e)) c->target = kNullEntity;
+
+      if (pathfinder_.lineClear(pos, slot, loco)) {
+        setPath(e, {slot});
+        continue;
+      }
+      // Join the shared path at the farthest early waypoint we can see.
+      int join = -1;
+      const int look = std::min<int>(static_cast<int>(groupPath.size()) - 1, 6);
+      for (int j = look; j >= 0; --j)
+        if (pathfinder_.lineClear(pos, groupPath[static_cast<size_t>(j)], loco)) {
+          join = j;
+          break;
         }
-        pos.x = nx;
-        pos.y = ny;
-        anim.moving = true;
-        if (++anim.timer >= def.animTicks) {
-          anim.timer = 0;
-          anim.frame = static_cast<uint8_t>((anim.frame + 1) & 3);
-        }
-      });
+      if (join >= 0) {
+        std::vector<Vec2i> path(groupPath.begin() + join, groupPath.end());
+        if (!path.empty() && path.back() != slot) path.push_back(slot);
+        setPath(e, std::move(path));
+      } else {
+        requestPath(e, slot);
+      }
+    }
+  }
 }
 
 uint64_t Simulation::stateHash() {
@@ -222,6 +285,11 @@ uint64_t Simulation::stateHash() {
     mix(u.type | (uint64_t{u.owner} << 16) | (uint64_t(uint32_t(u.health)) << 32));
     mix(uint64_t(uint32_t(p.x)) | (uint64_t(uint32_t(p.y)) << 32));
     mix(f.angle);
+    if (const CTurret* t = reg_.pool<CTurret>().tryGet(e)) mix(t->angle);
+  });
+  reg_.each<CProjectile>([&](uint32_t e, CProjectile& pr) {
+    mix(e);
+    mix(uint64_t(uint32_t(pr.x)) | (uint64_t(uint32_t(pr.y)) << 32));
   });
   return h;
 }

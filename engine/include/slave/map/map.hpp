@@ -105,6 +105,8 @@ class Map {
   void recomputeInfo(int tx0, int ty0, int tx1, int ty1);  // inclusive tile range
   bool passable(int tx, int ty, Locomotor loco) const;
   TerrainRules& rules() { return rules_; }
+  // Increases whenever terrain passability may have changed (editor, load).
+  uint32_t revision() const { return revision_; }
 
   // --- Props ---------------------------------------------------------------
   std::vector<Prop>& props() { return props_; }
@@ -126,6 +128,7 @@ class Map {
   std::vector<Prop> props_;
   uint16_t waterLevel_ = 0;
   TerrainRules rules_;
+  uint32_t revision_ = 0;
 };
 
 }  // namespace slave

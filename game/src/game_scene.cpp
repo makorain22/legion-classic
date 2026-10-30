@@ -19,6 +19,7 @@ namespace legion {
 
 namespace {
 constexpr uint32_t kSelectGreen = rgba8(120, 236, 96);
+constexpr uint32_t kAttackRed = rgba8(236, 70, 52);
 constexpr float kEdgeScrollPx = 6.0f;
 constexpr float kScrollSpeed = 1100.0f;  // screen pixels per second
 constexpr float kPxPerUnit = iso::HEIGHT_PX_PER_TILE / HEIGHT_UNITS_PER_TILE;
@@ -36,10 +37,15 @@ GameScene::GameScene(App& app, SceneOptions opt) : app_(app), opt_(opt) {
   showDebug_ = opt.showDebug;
 }
 
-GameScene::~GameScene() = default;
+GameScene::~GameScene() {
+  if (cursorArrow_) SDL_DestroyCursor(cursorArrow_);
+  if (cursorCross_) SDL_DestroyCursor(cursorCross_);
+}
 
 bool GameScene::init(const std::string& contentDir, std::string& error) {
+  if (!weapons_.loadFile(contentDir + "rules/weapons.json", error)) return false;
   if (!types_.loadFile(contentDir + "rules/units.json", error)) return false;
+  if (!types_.resolveWeapons(weapons_, error)) return false;
   if (!buildPlaceholderArt(art_, error)) return false;
   if (!renderer_.init(error)) return false;
   if (!terrain_.init(error)) return false;
@@ -53,7 +59,13 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
       error = "unit '" + t.id + "' uses unknown model '" + t.model + "'";
       return false;
     }
-    unitSheets_.push_back(it->second);
+    unitArt_.push_back(it->second);
+  }
+  fx_.init(&art_, &unitArt_, &types_, &weapons_,
+           [this](float lx, float ly) { return groundToScreenWorld(lx, ly); });
+  if (!app_.offscreen()) {
+    cursorArrow_ = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_DEFAULT);
+    cursorCross_ = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_CROSSHAIR);
   }
 
   mapsDir_ = app_.userDir() + "maps/";
@@ -88,9 +100,10 @@ void GameScene::replaceWorld(MapFile&& file) {
   selection_.clear();
   for (auto& g : groups_) g.clear();
   markers_.clear();
+  fx_.clear();
   map_ = std::move(file.map);
   map_.recomputeInfo();
-  sim_ = std::make_unique<Simulation>(map_, types_, opt_.seed);
+  sim_ = std::make_unique<Simulation>(map_, types_, weapons_, opt_.seed);
   terrain_.setMap(map_);
   for (const UnitPlacement& u : file.units) {
     const int t = types_.find(u.type);
@@ -164,7 +177,8 @@ void GameScene::spawnAt(const std::string& typeId, uint8_t player, Vec2i at, int
 void GameScene::setupStartingArmies() {
   const int32_t T = LEPTONS_PER_TILE;
   const int mid = map_.height() / 2;
-  const int west = map_.width() * 14 / 128, east = map_.width() * 114 / 128;
+  // The demo battle starts with the armies a short drive apart.
+  const int west = map_.width() * (opt_.demo ? 50 : 14) / 128, east = map_.width() * (opt_.demo ? 78 : 114) / 128;
   const Vec2i g = findLand({west * T, mid * T}), r = findLand({east * T, mid * T});
   spawnAt("ger_medium_tank", 0, {g.x, g.y - 4 * T}, 6);
   spawnAt("ger_scout_car", 0, {g.x + 5 * T, g.y + 4 * T}, 4);
@@ -177,7 +191,8 @@ void GameScene::setupStartingArmies() {
     spawnAt("rus_medium_tank", 1, {map_.width() * 2 / 3 * T, map_.height() * 2 / 3 * T},
             opt_.stressUnits - opt_.stressUnits / 2);
   }
-  centerOn({g.x + 6 * T, g.y});
+  if (opt_.demo) centerOn({(g.x + r.x) / 2, (g.y + r.y) / 2});
+  else centerOn({g.x + 6 * T, g.y});
 }
 
 void GameScene::centerOn(Vec2i l) { cam_.setCenter(groundToScreenWorld(static_cast<float>(l.x), static_cast<float>(l.y))); }
@@ -222,6 +237,10 @@ Entity GameScene::pickUnit(Vec2f screenPx, bool ownOnly) const {
   for (uint32_t e : reg.pool<CUnit>().entities()) {
     const CUnit& u = reg.pool<CUnit>().get(e);
     if (ownOnly && u.owner != player_) continue;
+    if (u.owner != player_) {
+      const CPosition& lp = reg.pool<CPosition>().get(e);
+      if (!watching(lp.x, lp.y)) continue;  // can't click what you can't see
+    }
     const Vec2f s = unitScreenWorld(e);
     const float hw = std::max(7.0f, types_.get(u.type).radius * 0.2f);
     const float hh = hw * 0.85f;
@@ -267,16 +286,36 @@ void GameScene::pruneSelection() {
   std::erase_if(selection_, [&](Entity e) { return !reg.alive(e); });
 }
 
-void GameScene::orderMove(Vec2i target) {
+void GameScene::orderMove(Vec2i target, CommandType type) {
   pruneSelection();
   if (selection_.empty()) return;
   Command c;
-  c.type = CommandType::Move;
+  c.type = type;
   c.player = player_;
   c.target = target;
   c.units = selection_;
   sim_->queue(std::move(c));
-  markers_.push_back({groundToScreenWorld(static_cast<float>(target.x), static_cast<float>(target.y)), 0});
+  markers_.push_back({groundToScreenWorld(static_cast<float>(target.x), static_cast<float>(target.y)), 0,
+                      type == CommandType::AttackMove ? kAttackRed : kSelectGreen});
+}
+
+void GameScene::orderAttack(Entity target) {
+  pruneSelection();
+  if (selection_.empty() || !sim_->registry().alive(target)) return;
+  Command c;
+  c.type = CommandType::Attack;
+  c.player = player_;
+  c.targetUnit = target;
+  c.units = selection_;
+  sim_->queue(std::move(c));
+  const CPosition& p = sim_->registry().get<CPosition>(target);
+  markers_.push_back({groundToScreenWorld(static_cast<float>(p.x), static_cast<float>(p.y)), 0, kAttackRed});
+}
+
+bool GameScene::fogEnabled() const { return !revealMap_ && !editor_->active(); }
+
+bool GameScene::watching(int32_t lx, int32_t ly) const {
+  return !fogEnabled() || sim_->vision().visible(player_, lx >> LEPTON_SHIFT, ly >> LEPTON_SHIFT);
 }
 
 // ---------------------------------------------------------------------------
@@ -300,11 +339,25 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
       if (uiMouse) break;
       if (e.button.button == SDL_BUTTON_LEFT) {
+        if (attackMoveMode_) {
+          attackMoveMode_ = false;
+          const Entity hit = pickUnit(mouse_, false);
+          if (hit.valid() && sim_->registry().get<CUnit>(hit).owner != player_) orderAttack(hit);
+          else orderMove(mouseWorldLeptons(), CommandType::AttackMove);
+          break;
+        }
         lmbDown_ = true;
         dragging_ = false;
         dragStart_ = mouse_;
       } else if (e.button.button == SDL_BUTTON_RIGHT) {
-        orderMove(mouseWorldLeptons());
+        if (attackMoveMode_) {
+          attackMoveMode_ = false;
+          break;
+        }
+        const Entity hit = pickUnit(mouse_, false);
+        const bool ctrl = (SDL_GetModState() & SDL_KMOD_CTRL) != 0;
+        if (hit.valid() && sim_->registry().get<CUnit>(hit).owner != player_) orderAttack(hit);
+        else orderMove(mouseWorldLeptons(), ctrl ? CommandType::AttackMove : CommandType::Move);
       } else if (e.button.button == SDL_BUTTON_MIDDLE) {
         mmbDown_ = true;
       }
@@ -345,7 +398,13 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
       if (uiKeys) break;
       const SDL_Keycode k = e.key.key;
       const bool ctrl = (e.key.mod & SDL_KMOD_CTRL) != 0;
-      if (k == SDLK_ESCAPE) selection_.clear();
+      if (k == SDLK_ESCAPE) {
+        if (attackMoveMode_) attackMoveMode_ = false;
+        else selection_.clear();
+      } else if (k == SDLK_A && !ctrl) {
+        pruneSelection();
+        attackMoveMode_ = !selection_.empty();
+      }
       else if (k == SDLK_F1) showHelp_ = !showHelp_;
       else if (k == SDLK_F2) editor_->setActive(!editor_->active());
       else if (k == SDLK_F3) showDebug_ = !showDebug_;
@@ -359,7 +418,8 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
       else if (k == SDLK_TAB) {
         player_ = player_ == 0 ? 1 : 0;
         selection_.clear();
-        showStatus("Now commanding " + playerNames_[player_], 2.5f);
+        attackMoveMode_ = false;
+        showStatus("Now commanding " + playerNames_[player_] + " (you see what they see)", 2.5f);
       } else if (k == SDLK_S && !ctrl) {
         pruneSelection();
         Command c;
@@ -414,21 +474,26 @@ void GameScene::onTick() {
     for (uint32_t i : reg.pool<CUnit>().entities())
       (reg.pool<CUnit>().get(i).owner == 0 ? ger : rus).push_back(reg.handle(i));
     const int32_t T = LEPTONS_PER_TILE;
+    // Both sides advance on each other, fighting whatever they meet.
     selection_ = ger;
-    if (!ger.empty()) {
-      const CPosition& p = reg.get<CPosition>(ger.front());
-      orderMove({p.x + 12 * T, p.y + 2 * T});
-    }
-    if (!rus.empty()) {
-      const CPosition& p = reg.get<CPosition>(rus.front());
+    if (!ger.empty() && !rus.empty()) {
+      const CPosition& gp = reg.get<CPosition>(ger.front());
+      const CPosition& rp = reg.get<CPosition>(rus.front());
+      orderMove({rp.x + 4 * T, rp.y}, CommandType::AttackMove);
       Command c;
-      c.type = CommandType::Move;
+      c.type = CommandType::AttackMove;
+      c.player = 1;
       c.units = rus;
-      c.target = {p.x - 12 * T, p.y - 2 * T};
+      c.target = {gp.x - 4 * T, gp.y};
       sim_->queue(std::move(c));
     }
   }
   sim_->tick();
+  const auto& events = sim_->events();
+  for (const SimEvent& ev : events) {
+    const bool seen = watching(ev.at.x, ev.at.y) || (ev.type == EventType::Fire && watching(ev.from.x, ev.from.y));
+    fx_.onEvent(ev, seen, teamColors_);
+  }
 }
 
 void GameScene::onUpdate(float dt, float alpha) {
@@ -457,8 +522,18 @@ void GameScene::onUpdate(float dt, float alpha) {
   if (opt_.editorDemo) runEditorDemo();
   editor_->update(dt);
   terrain_.update();
+  if (fogEnabled()) terrain_.setFog(&sim_->vision().grid(player_), sim_->vision().revision() * 16u + player_);
+  else terrain_.setFog(nullptr, 0);
+  terrain_.updateFog(dt);
+  fx_.update(dt * timeScale());
+  hovered_ = app_.offscreen() || ImGui::GetIO().WantCaptureMouse ? Entity{} : pickUnit(mouse_, false);
+  updateCursor();
 
   for (Marker& m : markers_) m.age += dt;
+  if (attackMoveMode_) {
+    pruneSelection();
+    if (selection_.empty()) attackMoveMode_ = false;
+  }
   std::erase_if(markers_, [](const Marker& m) { return m.age > 0.6f; });
   if (statusTime_ > 0) statusTime_ -= dt;
 }
@@ -506,59 +581,40 @@ void GameScene::onRender() {
   terrain_.draw(cam_, time_);
   renderer_.beginWorld(cam_);
 
-  Registry& reg = sim_->registry();
   const RectF view = cam_.visibleWorld(120);
+  const bool fog = fogEnabled();
+  const BattleFx::FogAt fogAt = [&](int tx, int ty) -> uint8_t { return fog ? terrain_.fogAt(tx, ty) : 255; };
 
+  fx_.drawGround(renderer_, view, fogAt);
   for (Entity e : selection_) {
     const Vec2f s = unitScreenWorld(e.index);
-    const bool big = types_.get(reg.get<CUnit>(e).type).radius > 60;
+    const bool big = types_.get(sim_->registry().get<CUnit>(e).type).radius > 60;
     renderer_.sprite(big ? art_.selectLarge : art_.selectSmall, s.x, s.y, kWhite, kSelectGreen);
   }
+  drawUnits(view);
+  fx_.drawAir(renderer_, view, fogAt);
 
-  // Units and props, sorted back to front.
-  drawList_.clear();
-  uint32_t order = 0;
-  for (const Prop& p : map_.props()) {
-    const Vec2f flat = iso::worldToScreen(static_cast<float>(p.x), static_cast<float>(p.y));
-    if (flat.x < view.x0 || flat.x > view.x1 || flat.y < view.y0 || flat.y > view.y1 + 400) continue;
-    const Vec2f s = groundToScreenWorld(static_cast<float>(p.x), static_cast<float>(p.y));
-    if (!view.contains(s)) continue;
-    const auto& variants = art_.props[static_cast<size_t>(p.kind)];
-    drawList_.push_back({iso::depthKey(p.x, p.y), order++, variants[p.variant % variants.size()], s.x, s.y, kWhite});
-  }
-  auto& units = reg.pool<CUnit>();
-  for (size_t i = 0; i < units.size(); ++i) {
-    const uint32_t e = units.entities()[i];
-    const CUnit& u = units.data()[i];
-    const Vec2f s = unitScreenWorld(e);
-    if (!view.contains(s)) continue;
-    const CFacing& f = reg.pool<CFacing>().get(e);
-    const CAnim& a = reg.pool<CAnim>().get(e);
-    const SpriteSheet& sheet = unitSheets_[u.type];
-    const int frame = sheet.frame(facingOf(f.angle), a.moving ? a.frame : 0);
-    const CPosition& p = reg.pool<CPosition>().get(e);
-    drawList_.push_back({iso::depthKey(p.x, p.y), order++, frame, s.x, s.y, teamColors_[u.owner]});
-  }
-  std::sort(drawList_.begin(), drawList_.end(), [](const DrawItem& a, const DrawItem& b) {
-    return a.depth != b.depth ? a.depth < b.depth : a.order < b.order;
-  });
-  for (const DrawItem& d : drawList_) renderer_.sprite(d.frame, d.x, d.y, d.team);
-
-  for (Entity e : selection_) {
-    const Vec2f s = unitScreenWorld(e.index);
-    const CUnit& u = reg.get<CUnit>(e);
-    const UnitTypeDef& def = types_.get(u.type);
-    const float w = def.radius > 60 ? 28.0f : 12.0f;
-    const float y = std::floor(s.y) - (def.radius > 60 ? 30.0f : 24.0f);
-    const float x = std::floor(s.x - w / 2);
-    const float frac = std::clamp(static_cast<float>(u.health) / def.maxHealth, 0.0f, 1.0f);
-    renderer_.rect(x - 1, y - 1, w + 2, 4, rgba8(10, 10, 8));
-    renderer_.rect(x, y, std::floor(w * frac), 2, frac > 0.5f ? kSelectGreen : rgba8(230, 200, 60));
+  // Health bars: the selection, the unit under the mouse, and (debug) every damaged unit.
+  Registry& reg = sim_->registry();
+  for (Entity e : selection_) drawHealthBar(e.index, true);
+  if (hovered_.valid() && reg.alive(hovered_) &&
+      std::find(selection_.begin(), selection_.end(), hovered_) == selection_.end())
+    drawHealthBar(hovered_.index, false);
+  if (allHealthBars_) {
+    auto& units = reg.pool<CUnit>();
+    for (size_t i = 0; i < units.size(); ++i) {
+      const uint32_t e = units.entities()[i];
+      const CUnit& u = units.data()[i];
+      if (u.health >= types_.get(u.type).maxHealth) continue;
+      const CPosition& p = reg.pool<CPosition>().get(e);
+      if (u.owner != player_ && !watching(p.x, p.y)) continue;
+      if (view.contains(unitScreenWorld(e))) drawHealthBar(e, false);
+    }
   }
 
   for (const Marker& m : markers_) {
     const uint8_t alpha = static_cast<uint8_t>(255 * (1.0f - m.age / 0.6f));
-    renderer_.sprite(art_.moveMarker, m.pos.x, m.pos.y, kWhite, rgba8(120, 236, 96, alpha));
+    renderer_.sprite(art_.moveMarker, m.pos.x, m.pos.y, kWhite, (m.color & 0x00FFFFFFu) | (uint32_t(alpha) << 24));
   }
   editor_->renderWorld(renderer_);
   renderer_.flush();
@@ -570,6 +626,107 @@ void GameScene::onRender() {
     renderer_.rectOutline(std::floor(r.x0), std::floor(r.y0), std::floor(r.width()), std::floor(r.height()), 1,
                           kSelectGreen);
     renderer_.flush();
+  }
+}
+
+// Units, wrecks and props, sorted back to front. Vehicles with turrets are two
+// sprites: the hull, then the turret on top at its own pivot and facing.
+void GameScene::drawUnits(const RectF& view) {
+  Registry& reg = sim_->registry();
+  const bool fog = fogEnabled();
+  drawList_.clear();
+  uint32_t order = 0;
+  for (const Prop& p : map_.props()) {
+    const Vec2f flat = iso::worldToScreen(static_cast<float>(p.x), static_cast<float>(p.y));
+    if (flat.x < view.x0 || flat.x > view.x1 || flat.y < view.y0 || flat.y > view.y1 + 400) continue;
+    const Vec2f s = groundToScreenWorld(static_cast<float>(p.x), static_cast<float>(p.y));
+    if (!view.contains(s)) continue;
+    uint32_t tint = kWhite;
+    if (fog) {
+      const uint8_t f = terrain_.fogAt(p.x >> LEPTON_SHIFT, p.y >> LEPTON_SHIFT);
+      if (f == 0) continue;
+      const float k = f < 128 ? 0.48f * f / 128.0f : 0.48f + 0.52f * (f - 128) / 127.0f;
+      const uint8_t c = static_cast<uint8_t>(255 * k);
+      tint = rgba8(c, c, c);
+    }
+    const auto& variants = art_.props[static_cast<size_t>(p.kind)];
+    drawList_.push_back({iso::depthKey(p.x, p.y), order++, variants[p.variant % variants.size()], s.x, s.y, kWhite, tint});
+  }
+  for (const BattleFx::Wreck& w : fx_.wrecks()) {
+    const Vec2f s = groundToScreenWorld(static_cast<float>(w.lx), static_cast<float>(w.ly));
+    if (!view.contains(s)) continue;
+    float k = 1.0f;
+    if (fog) {
+      const uint8_t f = terrain_.fogAt(w.lx >> LEPTON_SHIFT, w.ly >> LEPTON_SHIFT);
+      if (f == 0) continue;
+      k = f < 128 ? 0.48f * f / 128.0f : 0.48f + 0.52f * (f - 128) / 127.0f;
+    }
+    // Burnt-out hulks: blackened, still faintly showing their markings.
+    const uint8_t c = static_cast<uint8_t>(std::clamp(92.0f * k, 0.0f, 255.0f));
+    const uint32_t tint = rgba8(c, static_cast<uint8_t>(c * 0.92f), static_cast<uint8_t>(c * 0.85f));
+    const int64_t depth = iso::depthKey(w.lx, w.ly);
+    drawList_.push_back({depth, order++, w.bodyFrame, s.x, s.y, w.team, tint});
+    if (w.turretFrame >= 0) {
+      const Vec2f t = groundToScreenWorld(w.lx + w.turretShift.x, w.ly + w.turretShift.y);
+      drawList_.push_back({depth, order++, w.turretFrame, t.x, t.y, w.team, tint});
+    }
+  }
+  auto& units = reg.pool<CUnit>();
+  auto& turrets = reg.pool<CTurret>();
+  for (size_t i = 0; i < units.size(); ++i) {
+    const uint32_t e = units.entities()[i];
+    const CUnit& u = units.data()[i];
+    const CPosition& p = reg.pool<CPosition>().get(e);
+    if (fog && u.owner != player_ && !sim_->vision().visible(player_, p.x >> LEPTON_SHIFT, p.y >> LEPTON_SHIFT)) continue;
+    const Vec2f s = unitScreenWorld(e);
+    if (!view.contains(s)) continue;
+    const CFacing& f = reg.pool<CFacing>().get(e);
+    const CAnim& a = reg.pool<CAnim>().get(e);
+    const UnitArt& art = unitArt_[u.type];
+    const int64_t depth = iso::depthKey(p.x, p.y);
+    const int facing = facingOf(f.angle);
+    drawList_.push_back({depth, order++, art.body.frame(facing, a.moving ? a.frame : 0), s.x, s.y, teamColors_[u.owner], kWhite});
+    if (art.hasTurret) {
+      const CTurret* t = turrets.tryGet(e);
+      const int tf = t ? facingOf(t->angle) : facing;
+      // The pivot turns with the hull's drawn facing, so it stays on the hull.
+      const float ang = static_cast<float>(angleOfFacing(facing)) * (6.2831853f / ANGLE_FULL);
+      const CPrevPosition& q = reg.pool<CPrevPosition>().get(e);
+      const float lx = q.x + (p.x - q.x) * alpha_ + std::cos(ang) * art.turretOffset;
+      const float ly = q.y + (p.y - q.y) * alpha_ + std::sin(ang) * art.turretOffset;
+      const Vec2f ts = groundToScreenWorld(lx, ly);
+      drawList_.push_back({depth, order++, art.turret.frame(tf, 0), std::round(ts.x), std::round(ts.y), teamColors_[u.owner], kWhite});
+    }
+  }
+  std::sort(drawList_.begin(), drawList_.end(), [](const DrawItem& a, const DrawItem& b) {
+    return a.depth != b.depth ? a.depth < b.depth : a.order < b.order;
+  });
+  for (const DrawItem& d : drawList_) renderer_.sprite(d.frame, d.x, d.y, d.team, d.tint);
+}
+
+void GameScene::drawHealthBar(uint32_t e, bool selected) {
+  Registry& reg = sim_->registry();
+  const CUnit& u = reg.pool<CUnit>().get(e);
+  const UnitTypeDef& def = types_.get(u.type);
+  const Vec2f s = unitScreenWorld(e);
+  const bool big = def.radius > 60;
+  const float w = big ? 28.0f : 12.0f;
+  const float y = std::floor(s.y) - (big ? 30.0f : 24.0f);
+  const float x = std::floor(s.x - w / 2);
+  const float frac = std::clamp(static_cast<float>(u.health) / def.maxHealth, 0.0f, 1.0f);
+  const uint32_t col = frac > 0.6f ? kSelectGreen : frac > 0.3f ? rgba8(230, 200, 60) : kAttackRed;
+  renderer_.rect(x - 1, y - 1, w + 2, 4, rgba8(10, 10, 8, selected ? 255 : 200));
+  renderer_.rect(x, y, std::max(1.0f, std::floor(w * frac)), 2, col);
+}
+
+void GameScene::updateCursor() {
+  if (!cursorCross_) return;
+  bool cross = attackMoveMode_;
+  if (!cross && !selection_.empty() && hovered_.valid() && sim_->registry().alive(hovered_))
+    cross = sim_->registry().get<CUnit>(hovered_).owner != player_;
+  if (cross != crossShown_) {
+    SDL_SetCursor(cross ? cursorCross_ : cursorArrow_);
+    crossShown_ = cross;
   }
 }
 
@@ -592,7 +749,7 @@ void GameScene::drawHud() {
                    ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove);
   ImGui::TextColored(ImVec4(0.92f, 0.78f, 0.36f, 1), "LEGION CLASSIC");
   ImGui::SameLine();
-  ImGui::TextDisabled("Slave Engine 1.0  |  Milestone 2");
+  ImGui::TextDisabled("Slave Engine 1.0  |  Milestone 3");
   ImGui::Text("Map: %s (%dx%d)", map_.name.c_str(), map_.width(), map_.height());
   ImGui::Text("Commanding:");
   ImGui::SameLine();
@@ -602,6 +759,7 @@ void GameScene::drawHud() {
   ImGui::Text("Selected: %zu   Units: %zu", selection_.size(), sim_->unitCount());
   if (paused_) ImGui::TextColored(ImVec4(1, 0.6f, 0.3f, 1), "PAUSED (Space)");
   else if (speed_ != 1.0f) ImGui::TextColored(ImVec4(1, 0.85f, 0.4f, 1), "Speed x%.2g", speed_);
+  if (attackMoveMode_) ImGui::TextColored(ImVec4(1, 0.45f, 0.35f, 1), "ATTACK-MOVE: left-click a destination (Esc cancels)");
   if (statusTime_ > 0) ImGui::TextColored(ImVec4(0.6f, 0.95f, 0.6f, 1), "%s", status_.c_str());
   ImGui::TextDisabled(editing ? "F2 close editor   F1 help" : "F2 editor   F1 help   F3 debug");
   ImGui::End();
@@ -630,11 +788,13 @@ void GameScene::drawHelp() {
   row("Left click", "Select a unit (Shift: add/remove)");
   row("Left drag", "Box-select your units");
   row("Double-click", "Select all of that type on screen");
-  row("Right click", "Move selected units");
+  row("Right click", "Move; on an enemy: attack it");
+  row("A, then click", "Attack-move (fight on the way)");
+  row("Ctrl+right click", "Attack-move");
   row("Ctrl+1..9 / 1..9", "Set / recall control group");
   row("Ctrl+A", "Select all your units");
   row("S", "Stop");
-  row("Tab", "Command the other side");
+  row("Tab", "Command (and see as) the other side");
   row("Arrows / edges", "Scroll the map");
   row("Middle drag", "Pan the map");
   row("Mouse wheel", "Zoom 0.5x / 1x / 2x");
@@ -669,6 +829,16 @@ void GameScene::drawDebug() {
   ImGui::SameLine();
   ImGui::SetNextItemWidth(120);
   ImGui::SliderFloat("Speed", &speed_, 0.25f, 8.0f, "x%.2f", ImGuiSliderFlags_Logarithmic);
+  ImGui::Checkbox("Reveal map", &revealMap_);
+  ImGui::SameLine();
+  ImGui::Checkbox("All health bars", &allHealthBars_);
+  const SimStats& st = sim_->stats();
+  ImGui::Text("Sim ms: path %.2f  orders %.2f  move %.2f  hash %.2f  push %.2f", st.msPaths, st.msOrders, st.msMove,
+              st.msSpatial, st.msSeparation);
+  ImGui::Text("        vision %.2f  target %.2f  fire %.2f  shells %.2f", st.msVision, st.msTargeting, st.msWeapons,
+              st.msProjectiles);
+  ImGui::Text("Path searches %u (queue %u)   shells in flight %u   effects %zu / %zu", st.pathSearches, st.pathQueue,
+              st.projectiles, fx_.particleCount(), fx_.decalCount());
   if (ImGui::Button("State hash")) lastHash_ = sim_->stateHash();
   if (lastHash_) {
     ImGui::SameLine();

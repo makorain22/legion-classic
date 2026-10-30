@@ -69,6 +69,7 @@ struct BakeOptions {
   bool outline = true;      // dark 1-pixel outline (only without supersampling)
   bool quantize = true;     // snap colours to 32 levels per channel (retro look)
   int supersample = 1;      // 2-4: render larger and average down for soft edges
+  const VoxelModel* shadowModel = nullptr;  // cast the shadow from this model instead (same frame)
   uint8_t shadowAlpha = 96;
 };
 

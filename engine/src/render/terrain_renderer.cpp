@@ -54,7 +54,14 @@ uniform sampler2D uSplat1;
 uniform sampler2D uMacro;
 uniform vec2 uMapSize;
 uniform float uTexScale;
+uniform sampler2D uFog;
 out vec4 fragColor;
+// Fog of war: unexplored ground is black, explored ground out of sight is
+// darkened and drained of colour, visible ground is untouched.
+vec3 applyFog(vec3 col, float v) {
+  vec3 dim = mix(vec3(dot(col, vec3(0.30, 0.59, 0.11))), col, 0.45) * 0.48;
+  return v < 0.5 ? dim * smoothstep(0.0, 0.5, v) : mix(dim, col, smoothstep(0.5, 1.0, v));
+}
 void main() {
   vec2 suv = vTile / uMapSize;
   vec4 s0 = texture(uSplat0, suv);
@@ -96,6 +103,7 @@ void main() {
   col = mix(col, col * vec3(0.90, 1.05, 0.92), clamp((0.45 - hue) * 2.0, 0.0, 1.0) * 0.5);
 
   col *= vExtra;  // slope lighting
+  col = applyFog(col, texture(uFog, vTile / uMapSize).r);
   fragColor = vec4(col, 1.0);
 }
 )";
@@ -104,8 +112,16 @@ const char* kWaterFragment = R"(#version 330 core
 in vec2 vTile;
 in float vExtra;  // depth in height units (64 per tile)
 uniform sampler2D uMacro;
+uniform sampler2D uFog;
+uniform vec2 uMapSize;
 uniform float uTime;
 out vec4 fragColor;
+// Fog of war: unexplored ground is black, explored ground out of sight is
+// darkened and drained of colour, visible ground is untouched.
+vec3 applyFog(vec3 col, float v) {
+  vec3 dim = mix(vec3(dot(col, vec3(0.30, 0.59, 0.11))), col, 0.45) * 0.48;
+  return v < 0.5 ? dim * smoothstep(0.0, 0.5, v) : mix(dim, col, smoothstep(0.5, 1.0, v));
+}
 void main() {
   float d = vExtra;
   if (d <= 0.0) discard;
@@ -120,6 +136,9 @@ void main() {
   float shore = 1.0 - smoothstep(0.0, 4.0, d);
   col = mix(col, vec3(0.50, 0.47, 0.38), shore * 0.45 * smoothstep(0.35, 0.65, r));
   float alpha = mix(0.25, 0.92, smoothstep(0.0, 18.0, d));
+  float fog = texture(uFog, vTile / uMapSize).r;
+  col = applyFog(col, fog);
+  alpha = mix(1.0, alpha, smoothstep(0.0, 0.5, fog));  // the shroud is opaque
   fragColor = vec4(col, alpha);
 }
 )";
@@ -216,7 +235,55 @@ void TerrainRenderer::setMap(const Map& map) {
   splatDirty_[1] = 0;
   splatDirty_[2] = map.splatW() - 1;
   splatDirty_[3] = map.splatH() - 1;
+  const size_t tiles = static_cast<size_t>(map.width()) * map.height();
+  fog_.allocate(map.width(), map.height(), {true, false, false});
+  fogTarget_.assign(tiles, 255);
+  fogCur_.assign(tiles, 255);
+  fogPixels_.assign(tiles, 0xFFFFFFFFu);
+  fog_.update(0, 0, map.width(), map.height(), fogPixels_.data());
+  fogRevision_ = UINT32_MAX;
+  fogOn_ = false;
+  fogAnimating_ = false;
   update();
+}
+
+void TerrainRenderer::setFog(const std::vector<uint8_t>* grid, uint32_t revision) {
+  if (!map_) return;
+  const bool on = grid != nullptr && grid->size() == fogTarget_.size();
+  if (on == fogOn_ && (!on || revision == fogRevision_)) return;
+  fogOn_ = on;
+  fogRevision_ = revision;
+  if (!on) {
+    std::fill(fogTarget_.begin(), fogTarget_.end(), 255);
+  } else {
+    const auto& g = *grid;
+    for (size_t i = 0; i < g.size(); ++i)
+      fogTarget_[i] = (g[i] & 1) ? 255 : (g[i] & 2) ? 128 : 0;
+  }
+  fogAnimating_ = true;
+}
+
+void TerrainRenderer::updateFog(float dt) {
+  if (!fogAnimating_) return;
+  // About a fifth of a second for a full fade.
+  const int step = std::max(1, static_cast<int>(dt * 1300.0f));
+  bool changed = false, moving = false;
+  for (size_t i = 0; i < fogCur_.size(); ++i) {
+    const int c = fogCur_[i], t = fogTarget_[i];
+    if (c == t) continue;
+    const int n = c < t ? std::min(t, c + step) : std::max(t, c - step);
+    fogCur_[i] = static_cast<uint8_t>(n);
+    fogPixels_[i] = 0xFF000000u | (static_cast<uint32_t>(n) * 0x010101u);
+    changed = true;
+    moving |= n != t;
+  }
+  if (changed) fog_.update(0, 0, map_->width(), map_->height(), fogPixels_.data());
+  fogAnimating_ = moving;
+}
+
+uint8_t TerrainRenderer::fogAt(int tx, int ty) const {
+  if (!map_ || !map_->inBounds(tx, ty)) return 0;
+  return fogCur_[static_cast<size_t>(ty) * map_->width() + tx];
 }
 
 void TerrainRenderer::markHeightsDirty(int tx0, int ty0, int tx1, int ty1) {
@@ -381,10 +448,12 @@ void TerrainRenderer::draw(const Camera& cam, float timeSeconds) {
   glUniform1i(terrainShader_.uniform("uMacro"), 3);
   glUniform2f(terrainShader_.uniform("uMapSize"), static_cast<float>(map_->width()), static_cast<float>(map_->height()));
   glUniform1f(terrainShader_.uniform("uTexScale"), kTexScale);
+  glUniform1i(terrainShader_.uniform("uFog"), 4);
   layers_.bind(0);
   splat0_.bind(1);
   splat1_.bind(2);
   macro_.bind(3);
+  fog_.bind(4);
   for (const auto& c : chunks_) {
     if (!c->bounds.intersects(view)) continue;
     glBindVertexArray(c->vao);
@@ -401,7 +470,10 @@ void TerrainRenderer::draw(const Camera& cam, float timeSeconds) {
     setCameraUniforms(waterShader_, cam, depthMax_);
     glUniform1i(waterShader_.uniform("uMacro"), 0);
     glUniform1f(waterShader_.uniform("uTime"), timeSeconds);
+    glUniform1i(waterShader_.uniform("uFog"), 1);
+    glUniform2f(waterShader_.uniform("uMapSize"), static_cast<float>(map_->width()), static_cast<float>(map_->height()));
     macro_.bind(0);
+    fog_.bind(1);
     for (const auto& c : chunks_) {
       if (!c->waterVerts || !c->bounds.intersects(view)) continue;
       glBindVertexArray(c->waterVao);

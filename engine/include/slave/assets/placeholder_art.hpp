@@ -24,10 +24,30 @@ struct SpriteSheet {
   int frame(int facing, int anim) const { return first + (anim % animFrames) * facings + facing; }
 };
 
+// Everything needed to draw one kind of unit.
+struct UnitArt {
+  SpriteSheet body;
+  bool hasTurret = false;
+  SpriteSheet turret;         // 16 facings, drawn on top of the body
+  float turretOffset = 0;     // turret pivot, in leptons along the body's forward axis
+  bool hasCorpse = false;
+  SpriteSheet corpse;         // 16 facings (fallen infantry)
+};
+
+// Procedural battle effects.
+struct EffectArt {
+  std::array<int, 8> explosion{};  // fireball animation
+  std::array<int, 4> fire{};       // flickering flames
+  std::array<int, 3> flash{};      // muzzle flash: small, medium, large
+  int smoke = 0, dust = 0, spark = 0;
+  int craterSmall = 0, craterLarge = 0, scorch = 0;
+};
+
 struct SpriteCatalog {
   Image atlas;
   std::vector<AtlasFrame> frames;
-  std::unordered_map<std::string, SpriteSheet> units;  // by "model@faction", e.g. "tank@ger"
+  std::unordered_map<std::string, UnitArt> units;  // by "model@faction", e.g. "tank@ger"
+  EffectArt effects;
   std::array<std::vector<int>, static_cast<size_t>(PropKind::Count)> props;
   int white = 0;        // solid white block, for lines, bars and boxes
   int selectSmall = 0;  // selection ellipse for infantry

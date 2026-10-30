@@ -60,6 +60,10 @@ class SpriteRenderer {
 
   // Queues a sprite whose anchor sits at (x, y). Drawn in queue order.
   void sprite(int frameIndex, float x, float y, uint32_t team = kWhite, uint32_t tint = kWhite);
+  // Same, scaled around the anchor (smoke puffs, flashes). Not pixel-snapped.
+  void spriteScaled(int frameIndex, float x, float y, float scale, uint32_t tint = kWhite);
+  // Switches between normal and additive blending (fire, flashes). Flushes.
+  void setAdditive(bool on);
   // Solid rectangle (uses the atlas' white block).
   void rect(float x, float y, float w, float h, uint32_t color);
   void rectOutline(float x, float y, float w, float h, float thickness, uint32_t color);
@@ -85,6 +89,7 @@ class SpriteRenderer {
   size_t streamCapacity_ = 0;
   std::vector<SpriteInstance> queue_;
   int whiteFrame_ = 0;
+  bool additive_ = false;
   size_t drawCalls_ = 0, spritesDrawn_ = 0;
 };
 

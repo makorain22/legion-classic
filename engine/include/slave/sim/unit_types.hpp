@@ -8,6 +8,8 @@
 
 #include <nlohmann/json_fwd.hpp>
 
+#include "slave/sim/weapons.hpp"
+
 namespace slave {
 
 enum class Locomotor : uint8_t { Foot, Wheeled, Tracked };
@@ -23,6 +25,13 @@ struct UnitTypeDef {
   int32_t radius = 96;      // selection / spacing radius in leptons
   int32_t animTicks = 2;    // ticks per animation frame while moving
   int32_t maxHealth = 100;
+  ArmorClass armor = ArmorClass::Light;
+  int32_t sight = 7 * 256;  // leptons
+  std::vector<std::string> weaponIds;
+  std::vector<int> weapons;  // resolved indices into WeaponRegistry
+  bool turret = false;       // weapons on a turret that turns on its own
+  int32_t turretTurnTicks = 1;
+  bool infantry() const { return locomotor == Locomotor::Foot; }
 };
 
 class UnitTypeRegistry {
@@ -31,6 +40,8 @@ class UnitTypeRegistry {
   // fills `error` on bad data.
   bool loadJson(const nlohmann::json& doc, std::string& error);
   bool loadFile(const std::string& path, std::string& error);
+  // Looks up every unit's weapon ids. Call after loading weapons.
+  bool resolveWeapons(const WeaponRegistry& weapons, std::string& error);
 
   int find(const std::string& id) const;  // -1 if missing
   const UnitTypeDef& get(int index) const { return types_[static_cast<size_t>(index)]; }

@@ -105,7 +105,9 @@ class Registry {
     } else {
       index = static_cast<uint32_t>(generations_.size());
       generations_.push_back(0);
+      used_.push_back(0);
     }
+    used_[index] = 1;
     ++alive_;
     return {index, generations_[index]};
   }
@@ -115,12 +117,13 @@ class Registry {
     for (auto& p : pools_)
       if (p) p->remove(e.index);
     ++generations_[e.index];
+    used_[e.index] = 0;
     freeList_.push_back(e.index);
     --alive_;
   }
 
   bool alive(Entity e) const {
-    return e.index < generations_.size() && generations_[e.index] == e.generation;
+    return e.index < generations_.size() && used_[e.index] && generations_[e.index] == e.generation;
   }
   Entity handle(uint32_t index) const { return {index, generations_[index]}; }
   size_t aliveCount() const { return alive_; }
@@ -129,6 +132,7 @@ class Registry {
     for (auto& p : pools_)
       if (p) p->clear();
     generations_.clear();
+    used_.clear();
     freeList_.clear();
     alive_ = 0;
   }
@@ -157,7 +161,7 @@ class Registry {
   template <class A, class... Rest, class Fn>
   void each(Fn&& fn) {
     auto& first = pool<A>();
-    std::tuple<Pool<Rest>&...> others(pool<Rest>()...);
+    [[maybe_unused]] std::tuple<Pool<Rest>&...> others(pool<Rest>()...);
     auto& ents = first.entities();
     auto& data = first.data();
     for (size_t i = 0; i < ents.size(); ++i) {
@@ -170,6 +174,7 @@ class Registry {
  private:
   std::vector<std::unique_ptr<detail::PoolBase>> pools_;
   std::vector<uint32_t> generations_;
+  std::vector<uint8_t> used_;
   std::vector<uint32_t> freeList_;
   size_t alive_ = 0;
 };

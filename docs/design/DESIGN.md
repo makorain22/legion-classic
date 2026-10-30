@@ -43,7 +43,12 @@ in the art milestone.
 3. Tiles are 64 × 32 diamonds. Heights are stored at tile corners, 64 units per tile of height. Ground layers are a splat map at 2 × 2 texels per tile.
 4. All world changes go through `Command`s queued to the simulation.
 5. Game data lives in `content/` as JSON; no unit names in engine code.
-6. Rendering only reads the simulation; it never changes it.
+6. Rendering only reads the simulation; it never changes it. The simulation
+   reports shots, impacts and deaths as events; effects are drawn from those
+   and may use their own random numbers.
+7. Each tick runs: commands, path requests (budgeted), orders, movement,
+   spatial hash, separation, vision (every 4 ticks), targeting (staggered),
+   weapons, projectiles, removal of the dead.
 
 ## Milestones
 
@@ -51,7 +56,10 @@ in the art milestone.
    selection, group moves, 10,000-unit stress test.
 2. **Terrain and maps** – done: height mesh, blended ground layers, water,
    random countryside, .lmap files, F2 editor with terrain tools and undo.
-3. Units and combat: pathfinding on huge maps, weapons, fog of war, mass performance.
+3. **Units and combat** – done: region-checked A* with shared group routes and
+   a per-tick search budget, collision via spatial hash, data-driven weapons /
+   warheads / armour, turrets, shells with splash, attack and attack-move,
+   per-side fog of war, battle effects, 10,000-unit battles at ~13 ms a tick.
 4. **Live Scenario Editor** (first main deliverable).
 5. Economy and base building.
 6. AI and scenario scripting (triggers, objectives), saves and replays.

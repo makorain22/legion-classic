@@ -278,27 +278,235 @@ Image makeDiamondOutline(int w, int h) {
   return img;
 }
 
-void addSheet(AtlasBuilder& ab, SpriteCatalog& cat, const std::string& name,
-              VoxelModel (*make)(const FactionLook&, int), int animFrames) {
+// A fallen rifleman, lying along +X.
+VoxelModel makeRiflemanDead(const FactionLook& look, int) {
+  VoxelModel m(11, 5, 3);
+  m.box(0, 1, 0, 4, 3, 1, UNIFORM_DARK);  // legs
+  m.box(0, 1, 0, 1, 3, 1, BOOT);
+  m.box(4, 0, 0, 8, 4, 2, TEAM);          // torso
+  m.box(4, 0, 0, 8, 4, 1, UNIFORM_DARK);
+  m.box(8, 1, 0, 10, 3, 2, SKIN);         // head
+  m.box(8, 1, 1, 10, 3, 2, HELMET);
+  m.box(3, 4, 0, 9, 5, 1, STEEL_DARK);    // dropped rifle
+  (void)look;
+  return m;
+}
+
+// Copies voxels with z >= zMin into `top` and the rest into `bottom`.
+void splitAt(const VoxelModel& m, int zMin, VoxelModel& bottom, VoxelModel& top) {
+  bottom = VoxelModel(m.sizeX(), m.sizeY(), m.sizeZ());
+  top = VoxelModel(m.sizeX(), m.sizeY(), m.sizeZ());
+  for (int z = 0; z < m.sizeZ(); ++z)
+    for (int y = 0; y < m.sizeY(); ++y)
+      for (int x = 0; x < m.sizeX(); ++x)
+        if (const uint8_t c = m.get(x, y, z)) (z >= zMin ? top : bottom).set(x, y, z, c);
+}
+
+constexpr float kTwoPi = 6.2831853f;
+
+// Bakes a unit in 16 facings for each faction look. With turretZ > 0, every
+// voxel at or above that height becomes a separate turret sheet that the
+// game rotates on its own; the turret turns around its own centre.
+void addUnit(AtlasBuilder& ab, SpriteCatalog& cat, const std::string& name,
+             VoxelModel (*make)(const FactionLook&, int), int animFrames, int turretZ,
+             VoxelModel (*makeCorpse)(const FactionLook&, int) = nullptr) {
   for (const FactionLook& look : kFactions) {
     const VoxelPalette pal = makePalette(look);
-    SpriteSheet sheet;
-    sheet.facings = 16;
-    sheet.animFrames = animFrames;
-    sheet.first = static_cast<int>(ab.count());
+    UnitArt art;
+    art.body.facings = 16;
+    art.body.animFrames = animFrames;
+    art.body.first = static_cast<int>(ab.count());
+    VoxelModel turretModel;
     for (int a = 0; a < animFrames; ++a) {
-      const VoxelModel m = make(look, a);
+      const VoxelModel full = make(look, a);
+      VoxelModel body = full;
+      if (turretZ > 0) splitAt(full, turretZ, body, turretModel);
       for (int f = 0; f < 16; ++f) {
         BakeOptions o;
-        o.yawRadians = static_cast<float>(f) * 2.0f * 3.14159265f / 16.0f;
-        o.pivotX = m.sizeX() / 2.0f;
-        o.pivotY = m.sizeY() / 2.0f;
-        BakedSprite s = bakeVoxels(m, pal, o);
+        o.yawRadians = static_cast<float>(f) * kTwoPi / 16.0f;
+        o.pivotX = full.sizeX() / 2.0f;
+        o.pivotY = full.sizeY() / 2.0f;
+        o.shadowModel = &full;
+        BakedSprite s = bakeVoxels(body, pal, o);
         ab.add(std::move(s.image), s.anchorX, s.anchorY);
       }
     }
-    cat.units[name + "@" + look.id] = sheet;
+    if (turretZ > 0) {
+      // Turret centre: middle of the turret's lowest layer.
+      int x0 = 1000, x1 = -1, y0 = 1000, y1 = -1;
+      for (int y = 0; y < turretModel.sizeY(); ++y)
+        for (int x = 0; x < turretModel.sizeX(); ++x)
+          if (turretModel.get(x, y, turretZ)) {
+            x0 = std::min(x0, x);
+            x1 = std::max(x1, x);
+            y0 = std::min(y0, y);
+            y1 = std::max(y1, y);
+          }
+      const float cx = (x0 + x1 + 1) / 2.0f, cy = (y0 + y1 + 1) / 2.0f;
+      art.hasTurret = true;
+      art.turretOffset = (cx - turretModel.sizeX() / 2.0f) / 16.0f * LEPTONS_PER_TILE;
+      art.turret.facings = 16;
+      art.turret.animFrames = 1;
+      art.turret.first = static_cast<int>(ab.count());
+      for (int f = 0; f < 16; ++f) {
+        BakeOptions o;
+        o.yawRadians = static_cast<float>(f) * kTwoPi / 16.0f;
+        o.pivotX = cx;
+        o.pivotY = cy;
+        o.shadow = false;
+        BakedSprite s = bakeVoxels(turretModel, pal, o);
+        ab.add(std::move(s.image), s.anchorX, s.anchorY);
+      }
+    }
+    if (makeCorpse) {
+      const VoxelModel dead = makeCorpse(look, 0);
+      art.hasCorpse = true;
+      art.corpse.facings = 16;
+      art.corpse.first = static_cast<int>(ab.count());
+      for (int f = 0; f < 16; ++f) {
+        BakeOptions o;
+        o.yawRadians = static_cast<float>(f) * kTwoPi / 16.0f;
+        o.pivotX = dead.sizeX() / 2.0f;
+        o.pivotY = dead.sizeY() / 2.0f;
+        o.shadowAlpha = 60;
+        BakedSprite s = bakeVoxels(dead, pal, o);
+        ab.add(std::move(s.image), s.anchorX, s.anchorY);
+      }
+    }
+    cat.units[name + "@" + look.id] = art;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Procedural battle effects
+// ---------------------------------------------------------------------------
+float noise2(float x, float y, uint32_t seed) {
+  const int ix = static_cast<int>(std::floor(x)), iy = static_cast<int>(std::floor(y));
+  const float fx = x - ix, fy = y - iy;
+  auto v = [&](int a, int b) { return (hash2(a, b, seed) & 1023) / 1023.0f; };
+  const float sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+  const float t = v(ix, iy) + (v(ix + 1, iy) - v(ix, iy)) * sx;
+  const float b2 = v(ix, iy + 1) + (v(ix + 1, iy + 1) - v(ix, iy + 1)) * sx;
+  return t + (b2 - t) * sy;
+}
+float fbm2(float x, float y, uint32_t seed) {
+  return noise2(x, y, seed) * 0.55f + noise2(x * 2.1f, y * 2.1f, seed + 7) * 0.3f + noise2(x * 4.3f, y * 4.3f, seed + 13) * 0.15f;
+}
+uint8_t u8(float v) { return static_cast<uint8_t>(std::clamp(v, 0.0f, 255.0f)); }
+
+// One frame of a fireball that blooms, then turns to dark smoke.
+Image makeExplosionFrame(int frame, int frames) {
+  const int S = 72;
+  Image img(S, S);
+  const float t = static_cast<float>(frame) / (frames - 1);
+  const float radius = S * 0.5f * (0.30f + 0.62f * std::sqrt(t));
+  for (int y = 0; y < S; ++y)
+    for (int x = 0; x < S; ++x) {
+      const float dx = x + 0.5f - S / 2.0f, dy = (y + 0.5f - S * 0.58f) * 1.15f;
+      const float n = fbm2(x * 0.12f + frame * 0.7f, y * 0.12f, 900u + frame);
+      const float d = std::sqrt(dx * dx + dy * dy) / radius + (n - 0.5f) * 0.55f;
+      if (d >= 1.0f) continue;
+      const float heat = (1.0f - t * 1.15f) * (1.0f - d * 0.75f) + (n - 0.5f) * 0.35f;
+      float r, g, b;
+      if (heat > 0.72f) { r = 255; g = 236; b = 170; }
+      else if (heat > 0.5f) { r = 252; g = 172; b = 64; }
+      else if (heat > 0.3f) { r = 214; g = 96; b = 36; }
+      else if (heat > 0.12f) { r = 104; g = 58; b = 36; }
+      else { const float k = 40 + n * 40; r = k + 6; g = k; b = k - 4; }
+      const float edge = std::clamp((1.0f - d) * 3.5f, 0.0f, 1.0f);
+      const float alpha = edge * (heat > 0.12f ? 1.0f : 0.85f - t * 0.35f);
+      img.at(x, y) = {u8(r), u8(g), u8(b), u8(alpha * 255)};
+    }
+  return img;
+}
+
+Image makePuff(int S, Rgba color, uint32_t seed, float maxAlpha) {
+  Image img(S, S);
+  for (int y = 0; y < S; ++y)
+    for (int x = 0; x < S; ++x) {
+      const float dx = (x + 0.5f) / S - 0.5f, dy = (y + 0.5f) / S - 0.5f;
+      const float n = fbm2(x * 0.25f, y * 0.25f, seed);
+      const float d = std::sqrt(dx * dx + dy * dy) * 2.0f + (n - 0.5f) * 0.6f;
+      if (d >= 1.0f) continue;
+      const float shade = 0.75f + n * 0.5f - dy * 0.4f;  // lit from above
+      img.at(x, y) = {u8(color.r * shade), u8(color.g * shade), u8(color.b * shade),
+                      u8((1.0f - d) * (1.0f - d) * 2.2f * maxAlpha * 255)};
+    }
+  return img;
+}
+
+Image makeFlash(int S) {
+  Image img(S, S);
+  const float c = S / 2.0f;
+  for (int y = 0; y < S; ++y)
+    for (int x = 0; x < S; ++x) {
+      const float dx = x + 0.5f - c, dy = y + 0.5f - c;
+      const float d = std::sqrt(dx * dx + dy * dy) / c;
+      const float a = std::atan2(dy, dx);
+      const float rays = 0.55f + 0.45f * std::pow(std::abs(std::cos(a * 3.0f)), 6.0f);
+      const float v = std::clamp(1.0f - d / rays, 0.0f, 1.0f);
+      if (v <= 0) continue;
+      img.at(x, y) = {255, u8(200 + 55 * v), u8(110 + 120 * v * v), u8(v * 255)};
+    }
+  return img;
+}
+
+Image makeFlame(int frame) {
+  const int W = 14, H = 22;
+  Image img(W, H);
+  for (int y = 0; y < H; ++y)
+    for (int x = 0; x < W; ++x) {
+      const float u = (x + 0.5f) / W - 0.5f, v = 1.0f - (y + 0.5f) / H;  // v: 0 bottom, 1 top
+      const float n = fbm2(x * 0.4f, y * 0.35f - frame * 1.7f, 400u + frame);
+      const float width = (1.0f - v) * 0.5f * (0.7f + n * 0.6f);
+      if (std::abs(u) > width) continue;
+      const float heat = (1.0f - v) * (1.0f - std::abs(u) / std::max(0.01f, width)) + n * 0.3f;
+      const Rgba c = heat > 0.8f ? Rgba{255, 230, 150, 255} : heat > 0.45f ? Rgba{250, 150, 50, 255} : Rgba{200, 70, 30, 255};
+      img.at(x, y) = {c.r, c.g, c.b, u8(std::min(1.0f, heat * 1.6f) * 230)};
+    }
+  return img;
+}
+
+// Ground decals, squashed 2:1 to lie flat in the isometric view.
+Image makeCrater(int W, uint32_t seed, bool scorchOnly) {
+  const int H = W / 2;
+  Image img(W, H);
+  for (int y = 0; y < H; ++y)
+    for (int x = 0; x < W; ++x) {
+      const float dx = (x + 0.5f) / W - 0.5f, dy = ((y + 0.5f) / H - 0.5f);
+      const float n = fbm2(x * 0.18f, y * 0.36f, seed);
+      const float d = std::sqrt(dx * dx + dy * dy) * 2.0f + (n - 0.5f) * 0.45f;
+      if (d >= 1.0f) continue;
+      if (scorchOnly) {
+        img.at(x, y) = {18, 15, 12, u8((1.0f - d) * 1.6f * 150)};
+        continue;
+      }
+      if (d < 0.55f) {  // the pit
+        const float k = 0.45f + n * 0.4f + dy * 0.6f;
+        img.at(x, y) = {u8(58 * k), u8(48 * k), u8(36 * k), 235};
+      } else if (d < 0.78f) {  // thrown-up rim, lit on the far side
+        const float k = 0.75f + n * 0.35f - dy * 0.6f;
+        img.at(x, y) = {u8(92 * k), u8(78 * k), u8(60 * k), u8(150 + 70 * (0.78f - d) / 0.23f)};
+      } else {  // scattered earth
+        if (hash2(x, y, seed) % 3 == 0) img.at(x, y) = {u8(90 + n * 30), u8(74 + n * 24), 54, u8((1.0f - d) * 4.0f * 200)};
+      }
+    }
+  return img;
+}
+
+void addEffects(AtlasBuilder& ab, EffectArt& fx) {
+  for (int i = 0; i < 8; ++i) fx.explosion[static_cast<size_t>(i)] = ab.add(makeExplosionFrame(i, 8), 36, 48);
+  for (int i = 0; i < 4; ++i) fx.fire[static_cast<size_t>(i)] = ab.add(makeFlame(i), 7, 21);
+  const int flashSizes[3] = {10, 18, 30};
+  for (int i = 0; i < 3; ++i) fx.flash[static_cast<size_t>(i)] = ab.add(makeFlash(flashSizes[i]), flashSizes[i] / 2, flashSizes[i] / 2);
+  fx.smoke = ab.add(makePuff(36, {92, 88, 82, 255}, 71, 0.55f), 18, 18);
+  fx.dust = ab.add(makePuff(28, {128, 108, 80, 255}, 77, 0.6f), 14, 18);
+  Image spark(3, 3);
+  for (auto& p : spark.px) p = {255, 226, 150, 255};
+  fx.spark = ab.add(std::move(spark), 1, 1);
+  fx.craterSmall = ab.add(makeCrater(30, 11, false), 15, 7);
+  fx.craterLarge = ab.add(makeCrater(54, 13, false), 27, 13);
+  fx.scorch = ab.add(makeCrater(84, 17, true), 42, 21);
 }
 
 }  // namespace
@@ -307,9 +515,10 @@ bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error) {
   const VoxelPalette pal = makePalette(kFactions[0]);
   AtlasBuilder ab;
 
-  addSheet(ab, cat, "tank", &makeTank, 4);
-  addSheet(ab, cat, "scoutcar", &makeScoutCar, 3);
-  addSheet(ab, cat, "rifleman", &makeRifleman, 4);
+  addUnit(ab, cat, "tank", &makeTank, 4, 4);
+  addUnit(ab, cat, "scoutcar", &makeScoutCar, 3, 5);
+  addUnit(ab, cat, "rifleman", &makeRifleman, 4, 0, &makeRiflemanDead);
+  addEffects(ab, cat.effects);
 
   struct PropSpec {
     PropKind kind;

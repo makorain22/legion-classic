@@ -4,7 +4,8 @@ A 2.5D isometric real-time strategy game in the spirit of the 1990s classics,
 set in an alternate-history 1940s–1950s war, built on its own engine,
 **Slave Engine 1.0**, with a Live Scenario Editor built in.
 
-**Status:** Milestone 2 of 10 (terrain, maps and the editor shell). See [`docs/design/DESIGN.md`](docs/design/DESIGN.md)
+**Status:** Milestone 3 of 10 (pathfinding, combat, fog of war and mass
+battles). Next: Milestone 4, the Live Scenario Editor. See [`docs/design/DESIGN.md`](docs/design/DESIGN.md)
 for the full plan and [`docs/PLAYING.md`](docs/PLAYING.md) for controls.
 
 ## Getting a playable build

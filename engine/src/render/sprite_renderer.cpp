@@ -154,6 +154,19 @@ void SpriteRenderer::sprite(int frameIndex, float x, float y, uint32_t team, uin
   queue_.push_back(s);
 }
 
+void SpriteRenderer::spriteScaled(int frameIndex, float x, float y, float scale, uint32_t tint) {
+  const AtlasFrame& f = frames_[static_cast<size_t>(frameIndex)];
+  queue_.push_back({x - f.anchorX * scale, y - f.anchorY * scale, f.w * scale, f.h * scale, f.u0, f.v0, f.u1, f.v1,
+                    tint, kWhite});
+}
+
+void SpriteRenderer::setAdditive(bool on) {
+  if (on == additive_) return;
+  flush();
+  additive_ = on;
+  glBlendFunc(GL_SRC_ALPHA, on ? GL_ONE : GL_ONE_MINUS_SRC_ALPHA);
+}
+
 void SpriteRenderer::rect(float x, float y, float w, float h, uint32_t color) {
   const AtlasFrame& f = frames_[static_cast<size_t>(whiteFrame_)];
   const float u = (f.u0 + f.u1) * 0.5f, v = (f.v0 + f.v1) * 0.5f;

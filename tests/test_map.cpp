@@ -130,7 +130,8 @@ TEST_CASE("units stop at cliffs instead of driving through") {
   UnitTypeRegistry types;
   std::string err;
   REQUIRE(types.loadJson(nlohmann::json::parse(R"({"units":[{"id":"t","model":"m","speed":24,"turnTicks":0,"locomotor":"tracked"}]})"), err));
-  Simulation sim(map, types, 1);
+  WeaponRegistry noWeapons;
+  Simulation sim(map, types, noWeapons, 1);
   Command spawn;
   spawn.type = CommandType::Spawn;
   spawn.target = {10 * 256, 10 * 256};
@@ -144,5 +145,5 @@ TEST_CASE("units stop at cliffs instead of driving through") {
   sim.queue(move);
   for (int i = 0; i < 300; ++i) sim.tick();
   CHECK(sim.registry().get<CPosition>(e).x < 15 * 256);
-  CHECK_FALSE(sim.registry().get<CMoveOrder>(e).active);
+  CHECK_FALSE(sim.registry().get<CMover>(e).active);
 }

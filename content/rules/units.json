@@ -1,18 +1,28 @@
 {
-  "_comment": "Unit types. Speeds are leptons per tick (256 leptons = 1 tile, 15 ticks = 1 second). turnTicks = ticks per 1/16 turn (0 = instant). Placeholder stats until Milestone 3 adds combat.",
+  "_comment": "Unit types. speed: leptons per tick (256 leptons = 1 tile, 15 ticks = 1 second). turnTicks: ticks per 1/16 turn (0 = instant). sight in tiles. armor: infantry, light, medium or heavy. Placeholder stats until balancing.",
   "units": [
     { "id": "ger_medium_tank", "name": "Medium Tank", "faction": "ger", "model": "tank",
-      "locomotor": "tracked", "speed": 22, "turnTicks": 2, "radius": 110, "animTicks": 2, "health": 400 },
+      "locomotor": "tracked", "speed": 22, "turnTicks": 2, "radius": 128, "animTicks": 2,
+      "health": 420, "armor": "heavy", "sight": 7, "weapons": ["cannon_75", "mg_light"],
+      "turret": { "turnTicks": 2 } },
     { "id": "ger_scout_car", "name": "Scout Car", "faction": "ger", "model": "scoutcar",
-      "locomotor": "wheeled", "speed": 44, "turnTicks": 1, "radius": 90, "animTicks": 1, "health": 160 },
+      "locomotor": "wheeled", "speed": 44, "turnTicks": 1, "radius": 100, "animTicks": 1,
+      "health": 160, "armor": "light", "sight": 10, "weapons": ["mg_light"],
+      "turret": { "turnTicks": 1 } },
     { "id": "ger_rifleman", "name": "Grenadier", "faction": "ger", "model": "rifleman",
-      "locomotor": "foot", "speed": 12, "turnTicks": 0, "radius": 40, "animTicks": 3, "health": 100 },
+      "locomotor": "foot", "speed": 12, "turnTicks": 0, "radius": 40, "animTicks": 3,
+      "health": 100, "armor": "infantry", "sight": 6, "weapons": ["rifle"] },
 
     { "id": "rus_medium_tank", "name": "Medium Tank", "faction": "rus", "model": "tank",
-      "locomotor": "tracked", "speed": 24, "turnTicks": 2, "radius": 110, "animTicks": 2, "health": 360 },
+      "locomotor": "tracked", "speed": 24, "turnTicks": 2, "radius": 128, "animTicks": 2,
+      "health": 380, "armor": "heavy", "sight": 6, "weapons": ["cannon_76", "mg_light"],
+      "turret": { "turnTicks": 2 } },
     { "id": "rus_scout_car", "name": "Scout Car", "faction": "rus", "model": "scoutcar",
-      "locomotor": "wheeled", "speed": 42, "turnTicks": 1, "radius": 90, "animTicks": 1, "health": 150 },
+      "locomotor": "wheeled", "speed": 42, "turnTicks": 1, "radius": 100, "animTicks": 1,
+      "health": 150, "armor": "light", "sight": 9, "weapons": ["mg_light"],
+      "turret": { "turnTicks": 1 } },
     { "id": "rus_rifleman", "name": "Rifleman", "faction": "rus", "model": "rifleman",
-      "locomotor": "foot", "speed": 12, "turnTicks": 0, "radius": 40, "animTicks": 3, "health": 90 }
+      "locomotor": "foot", "speed": 12, "turnTicks": 0, "radius": 40, "animTicks": 3,
+      "health": 90, "armor": "infantry", "sight": 6, "weapons": ["rifle"] }
   ]
 }

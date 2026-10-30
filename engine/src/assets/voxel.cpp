@@ -99,11 +99,14 @@ BakedSprite bakeVoxels(const VoxelModel& model, const VoxelPalette& pal, const B
     maxX = std::max(maxX, p.x);
     maxY = std::max(maxY, p.y);
   };
+  const VoxelModel& shadowSrc = opt.shadowModel ? *opt.shadowModel : model;
   for (int i = 0; i < 8; ++i) {
     const V3 w = proj.world((i & 1) ? model.sizeX() : 0, (i & 2) ? model.sizeY() : 0,
                             (i & 4) ? model.sizeZ() : 0);
     grow(Projector::screen(w));
-    if (opt.shadow) grow(Projector::screen(Projector::toGround(w)));
+    const V3 ws = proj.world((i & 1) ? shadowSrc.sizeX() : 0, (i & 2) ? shadowSrc.sizeY() : 0,
+                             (i & 4) ? shadowSrc.sizeZ() : 0);
+    if (opt.shadow) grow(Projector::screen(Projector::toGround(ws)));
   }
   grow({0, 0});
   constexpr int kMargin = 2;
@@ -130,6 +133,28 @@ BakedSprite bakeVoxels(const VoxelModel& model, const VoxelPalette& pal, const B
     return P2{(s.x + offX) * S, (s.y + offY) * S};
   };
 
+  // Drop shadow, cast by the shadow model (the whole vehicle even when only
+  // the hull is being baked, so the turret still has a shadow).
+  if (opt.shadow) {
+    auto mark = [&](int px, int py, float) { shadow[static_cast<size_t>(py) * w + px] = 1; };
+    for (int z = 0; z < shadowSrc.sizeZ(); ++z)
+      for (int y = 0; y < shadowSrc.sizeY(); ++y)
+        for (int x = 0; x < shadowSrc.sizeX(); ++x) {
+          if (!shadowSrc.get(x, y, z)) continue;
+          for (const Face& f : kFaces) {
+            if (shadowSrc.get(x + static_cast<int>(f.n.x), y + static_cast<int>(f.n.y), z + static_cast<int>(f.n.z)))
+              continue;
+            P2 g[4];
+            for (int k = 0; k < 4; ++k)
+              g[k] = toImage(Projector::toGround(proj.world(static_cast<float>(x + f.corners[k][0]),
+                                                            static_cast<float>(y + f.corners[k][1]),
+                                                            static_cast<float>(z + f.corners[k][2]))));
+            rasterTriangle(g[0], g[1], g[2], 0, 0, 0, w, h, mark);
+            rasterTriangle(g[0], g[2], g[3], 0, 0, 0, w, h, mark);
+          }
+        }
+  }
+
   for (int z = 0; z < model.sizeZ(); ++z)
     for (int y = 0; y < model.sizeY(); ++y)
       for (int x = 0; x < model.sizeX(); ++x) {
@@ -144,14 +169,6 @@ BakedSprite bakeVoxels(const VoxelModel& model, const VoxelPalette& pal, const B
             wc[k] = proj.world(static_cast<float>(x + f.corners[k][0]),
                                static_cast<float>(y + f.corners[k][1]),
                                static_cast<float>(z + f.corners[k][2]));
-
-          if (opt.shadow) {
-            P2 g[4];
-            for (int k = 0; k < 4; ++k) g[k] = toImage(Projector::toGround(wc[k]));
-            auto mark = [&](int px, int py, float) { shadow[static_cast<size_t>(py) * w + px] = 1; };
-            rasterTriangle(g[0], g[1], g[2], 0, 0, 0, w, h, mark);
-            rasterTriangle(g[0], g[2], g[3], 0, 0, 0, w, h, mark);
-          }
 
           const V3 n = proj.rotateNormal(f.n);
           if (n.x * kView.x + n.y * kView.y + n.z * kView.z <= 0.01f) continue;  // faces away

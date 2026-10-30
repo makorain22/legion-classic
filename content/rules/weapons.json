@@ -1,0 +1,18 @@
+{
+  "_comment": "Weapons and warheads. range and splash are in tiles; cooldown in ticks (15 per second); speed in leptons per tick (256 = 1 tile). Warhead values are percent damage against each armour class.",
+  "warheads": {
+    "bullet":  { "infantry": 100, "light": 30, "medium": 6,  "heavy": 3 },
+    "ap":      { "infantry": 30,  "light": 90, "medium": 100, "heavy": 100 },
+    "he":      { "infantry": 100, "light": 70, "medium": 35,  "heavy": 20 }
+  },
+  "weapons": [
+    { "id": "rifle", "name": "Bolt-action rifle", "warhead": "bullet", "damage": 14,
+      "range": 4.5, "cooldown": 22, "projectile": "instant", "accuracy": 70, "muzzle": 0 },
+    { "id": "mg_light", "name": "Machine gun", "warhead": "bullet", "damage": 7,
+      "range": 5.0, "cooldown": 5, "projectile": "instant", "accuracy": 55, "muzzle": 0 },
+    { "id": "cannon_75", "name": "75 mm gun", "warhead": "ap", "damage": 70,
+      "range": 6.5, "cooldown": 42, "projectile": "shell", "speed": 150, "splash": 0.35, "muzzle": 2 },
+    { "id": "cannon_76", "name": "76 mm gun", "warhead": "ap", "damage": 66,
+      "range": 6.0, "cooldown": 38, "projectile": "shell", "speed": 140, "splash": 0.4, "muzzle": 2 }
+  ]
+}

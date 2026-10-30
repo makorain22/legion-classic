@@ -32,6 +32,16 @@ bool UnitTypeRegistry::loadJson(const nlohmann::json& doc, std::string& error) {
       d.radius = u.value("radius", d.radius);
       d.animTicks = u.value("animTicks", d.animTicks);
       d.maxHealth = u.value("health", d.maxHealth);
+      if (!parseArmor(u.value("armor", std::string("light")), d.armor)) {
+        error = "unit '" + d.id + "': unknown armor";
+        return false;
+      }
+      if (u.contains("sight")) d.sight = static_cast<int32_t>(u["sight"].get<double>() * 256.0 + 0.5);
+      if (u.contains("weapons")) d.weaponIds = u["weapons"].get<std::vector<std::string>>();
+      if (u.contains("turret")) {
+        d.turret = true;
+        d.turretTurnTicks = u["turret"].value("turnTicks", 1);
+      }
       if (!parseLocomotor(u.value("locomotor", "tracked"), d.locomotor)) {
         error = "unit '" + d.id + "': unknown locomotor";
         return false;
@@ -67,6 +77,25 @@ bool UnitTypeRegistry::loadFile(const std::string& path, std::string& error) {
   if (!loadJson(doc, error)) {
     error = path + ": " + error;
     return false;
+  }
+  return true;
+}
+
+bool UnitTypeRegistry::resolveWeapons(const WeaponRegistry& weapons, std::string& error) {
+  for (UnitTypeDef& d : types_) {
+    d.weapons.clear();
+    for (const std::string& id : d.weaponIds) {
+      const int w = weapons.find(id);
+      if (w < 0) {
+        error = "unit '" + d.id + "' uses unknown weapon '" + id + "'";
+        return false;
+      }
+      d.weapons.push_back(w);
+    }
+    if (d.weapons.size() > 2) {
+      error = "unit '" + d.id + "' has more than 2 weapons";
+      return false;
+    }
   }
   return true;
 }

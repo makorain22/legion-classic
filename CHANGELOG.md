@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.3.0 – Milestone 3: Pathfinding, combat and fog of war (30 Oct 2026)
+
+- Pathfinding for huge maps: A* over the tile grid per movement type (foot,
+  wheeled, tracked) with region labels, so impossible trips are rejected at
+  once and clicks on water or cliffs go to the nearest reachable spot. Paths
+  are smoothed into straight runs.
+- Group orders: one shared route per group, formation slots at the
+  destination, and a per-tick search budget so ordering 5,000 units never
+  freezes the game. Units that get stuck re-plan; failed searches back off.
+- Collision: units keep their spacing (vehicles nearly their full width,
+  infantry closer) using a spatial hash; pushes never shove units into water
+  or cliffs.
+- Combat: weapons, warheads and armour classes from `content/rules/weapons.json`.
+  Rifles, machine guns and 75/76 mm tank guns; instant-hit weapons roll for
+  accuracy, shells fly, scatter and burst with splash damage.
+- Turrets turn independently of the hull, one facing step at a time; tanks
+  fire on the move, infantry stop to shoot.
+- Orders: attack (chases a moving target), attack-move (stops to fight anything
+  on the way, then carries on), move, stop. Right-click an enemy to attack;
+  A or Ctrl+right-click to attack-move.
+- Fog of war per side: unexplored ground is black, explored ground out of view
+  is dimmed, edges fade smoothly. Enemies are hidden and can't be targeted
+  unless seen. Tab switches side and view; the editor reveals everything.
+- Battle effects: muzzle flashes, tracers, shell bursts with thrown earth and
+  sparks, craters and scorch marks, fallen infantry, and burning wrecks
+  pouring black smoke before leaving blackened hulks.
+- Tanks and scout cars are now baked as separate hull and turret sprites.
+- Debug panel: per-step simulation timings, path statistics, reveal map,
+  health bars on every damaged unit.
+- Performance: a 10,000-unit battle (7,000 infantry, 3,000 tanks) on a
+  512 × 512 map averages about 13 ms per simulation tick (66 ms budget).
+- 34 unit tests (adds pathfinding, group movement, combat, vision and
+  determinism of whole battles).
+
+
 ## 0.2.0 – Milestone 2: Terrain, maps and the editor shell (30 Oct 2026)
 
 - New art direction: gritty and realistic in the spirit of Blitzkrieg.

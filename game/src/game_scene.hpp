@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "battle_fx.hpp"
 #include "slave/assets/placeholder_art.hpp"
 #include "slave/map/map.hpp"
 #include "slave/map/map_io.hpp"
@@ -23,7 +24,7 @@ class Editor;
 struct SceneOptions {
   int mapSize = 128;
   uint64_t seed = 1940;
-  bool demo = false;         // scripted orders, for automated screenshots
+  bool demo = false;         // scripted battle, for automated screenshots
   int stressUnits = 0;       // spawn this many extra units at start
   float zoom = 1.0f;
   bool showHelp = true;
@@ -73,6 +74,7 @@ class GameScene final : public slave::Scene {
   struct Marker {
     slave::Vec2f pos;  // screen-world
     float age = 0;
+    uint32_t color = 0;
   };
   struct DrawItem {
     int64_t depth;
@@ -80,6 +82,7 @@ class GameScene final : public slave::Scene {
     int frame;
     float x, y;
     uint32_t team;
+    uint32_t tint;
   };
 
   slave::Vec2f unitScreenWorld(uint32_t entityIndex) const;
@@ -88,7 +91,14 @@ class GameScene final : public slave::Scene {
   void selectInBox(slave::Vec2f a, slave::Vec2f b, bool add);
   void selectSameTypeOnScreen(slave::Entity like);
   void pruneSelection();
-  void orderMove(slave::Vec2i target);
+  void orderMove(slave::Vec2i target, slave::CommandType type = slave::CommandType::Move);
+  void orderAttack(slave::Entity target);
+  // Can the side we are watching see this tile right now?
+  bool watching(int32_t lx, int32_t ly) const;
+  bool fogEnabled() const;
+  void drawUnits(const slave::RectF& view);
+  void drawHealthBar(uint32_t entity, bool selected);
+  void updateCursor();
   void spawnAt(const std::string& typeId, uint8_t player, slave::Vec2i at, int count);
   slave::Vec2i findLand(slave::Vec2i near) const;
   void centerOn(slave::Vec2i leptons);
@@ -103,6 +113,7 @@ class GameScene final : public slave::Scene {
   SceneOptions opt_;
   slave::Map map_;
   slave::UnitTypeRegistry types_;
+  slave::WeaponRegistry weapons_;
   std::unique_ptr<slave::Simulation> sim_;
   slave::SpriteCatalog art_;
   slave::SpriteRenderer renderer_;
@@ -111,7 +122,8 @@ class GameScene final : public slave::Scene {
   std::unique_ptr<Editor> editor_;
   std::array<uint32_t, slave::MAX_PLAYERS> teamColors_{};
   std::array<std::string, slave::MAX_PLAYERS> playerNames_;
-  std::vector<slave::SpriteSheet> unitSheets_;  // by unit type index
+  std::vector<slave::UnitArt> unitArt_;  // by unit type index
+  BattleFx fx_;
 
   uint8_t player_ = 0;  // which side the mouse commands
   std::vector<slave::Entity> selection_;
@@ -130,6 +142,13 @@ class GameScene final : public slave::Scene {
   float speed_ = 1.0f;
   bool quit_ = false;
   bool showHelp_ = true, showDebug_ = false;
+  bool attackMoveMode_ = false;  // "A": next left click attack-moves
+  bool revealMap_ = false;       // debug: no fog of war
+  bool allHealthBars_ = false;   // debug: health bars on every damaged unit
+  slave::Entity hovered_;
+  SDL_Cursor* cursorArrow_ = nullptr;
+  SDL_Cursor* cursorCross_ = nullptr;
+  bool crossShown_ = false;
   uint64_t lastHash_ = 0;
   std::string status_;
   float statusTime_ = 0;

@@ -70,7 +70,8 @@ TEST_CASE("unit type loading rejects bad data") {
 TEST_CASE("units turn in 16 steps, then drive to the target and stop") {
   Map map(64, 64);
   const auto types = makeTypes();
-  Simulation sim(map, types, 1);
+  WeaponRegistry noWeapons;
+  Simulation sim(map, types, noWeapons, 1);
   sim.queue(spawn(0, 0, {1000, 1000}, 1));
   sim.tick();
   auto units = allUnits(sim);
@@ -91,13 +92,14 @@ TEST_CASE("units turn in 16 steps, then drive to the target and stop") {
   CHECK(p.x == 1000);
   CHECK(p.y == 5000);
   CHECK(facingOf(reg.get<CFacing>(units[0]).angle) == 4);
-  CHECK_FALSE(reg.get<CMoveOrder>(units[0]).active);
+  CHECK_FALSE(reg.get<CMover>(units[0]).active);
 }
 
 TEST_CASE("group move gives every unit its own formation slot") {
   Map map(64, 64);
   const auto types = makeTypes();
-  Simulation sim(map, types, 1);
+  WeaponRegistry noWeapons;
+  Simulation sim(map, types, noWeapons, 1);
   sim.queue(spawn(1, 0, {2000, 2000}, 25));
   sim.tick();
   Command move;
@@ -121,7 +123,8 @@ TEST_CASE("simulation is deterministic: same commands, same state hash") {
   Map map(128, 128);
   const auto types = makeTypes();
   auto run = [&]() {
-    Simulation sim(map, types, 1234);
+    WeaponRegistry noWeapons;
+  Simulation sim(map, types, noWeapons, 1234);
     sim.queue(spawn(0, 0, {3000, 3000}, 300));
     sim.queue(spawn(1, 1, {20000, 20000}, 700));
     sim.tick();
@@ -141,7 +144,8 @@ TEST_CASE("simulation is deterministic: same commands, same state hash") {
 TEST_CASE("units never leave the map") {
   Map map(16, 16);
   const auto types = makeTypes();
-  Simulation sim(map, types, 1);
+  WeaponRegistry noWeapons;
+  Simulation sim(map, types, noWeapons, 1);
   sim.queue(spawn(0, 0, {-5000, 99999}, 4));
   sim.tick();
   Command move;
