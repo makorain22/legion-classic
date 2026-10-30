@@ -15,10 +15,10 @@ jobs:
     name: Windows build
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Cache third-party downloads
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: build/_deps
           key: deps-windows-${{ hashFiles('CMakeLists.txt') }}
@@ -43,7 +43,7 @@ jobs:
           Copy-Item docs/PLAYING.md $dst/
 
       - name: Upload build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: LegionClassic-Windows
           path: dist/
@@ -53,7 +53,7 @@ jobs:
     name: Engine tests (Linux)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Configure
         run: cmake -S . -B build -G "Unix Makefiles" -DLEGION_BUILD_GAME=OFF -DCMAKE_BUILD_TYPE=Release
       - name: Build
