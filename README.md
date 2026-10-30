@@ -4,7 +4,7 @@ A 2.5D isometric real-time strategy game in the spirit of the 1990s classics,
 set in an alternate-history 1940s–1950s war, built on its own engine,
 **Slave Engine 1.0**, with a Live Scenario Editor built in.
 
-**Status:** Milestone 1 of 10 (foundations). See [`docs/design/DESIGN.md`](docs/design/DESIGN.md)
+**Status:** Milestone 2 of 10 (terrain, maps and the editor shell). See [`docs/design/DESIGN.md`](docs/design/DESIGN.md)
 for the full plan and [`docs/PLAYING.md`](docs/PLAYING.md) for controls.
 
 ## Getting a playable build
@@ -34,6 +34,7 @@ build/bin/LegionClassic                # run the game
 | --- | --- |
 | `engine/` | Slave Engine: deterministic simulation (`sim/`, `core/`, `ecs/`, `map/`) and presentation (`render/`, `assets/`, `platform/`) |
 | `game/` | Legion Classic itself: scenes, HUD, game rules glue |
+| `editor/` | The built-in map editor (F2): tools, panels, undo history |
 | `content/` | All game data (unit stats, later maps and art). Mods copy this layout |
 | `tests/` | Unit tests (doctest), including the determinism test |
 | `tools/` | Build-time scripts and tools |
@@ -51,5 +52,5 @@ build/bin/LegionClassic                # run the game
 
 ## Third-party code
 
-SDL 3 (zlib), Dear ImGui (MIT), nlohmann/json (MIT), stb (public domain / MIT),
+SDL 3 (zlib), Dear ImGui (MIT), nlohmann/json (MIT), stb (public domain / MIT), miniz (MIT),
 doctest (MIT), glad-generated OpenGL loader (public domain / CC0).

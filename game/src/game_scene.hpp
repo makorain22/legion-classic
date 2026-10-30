@@ -1,6 +1,6 @@
 #pragma once
-// Legion Classic - the battlefield scene (Milestone 1: a sandbox with units
-// you can select and move, plus spawn tools that grow into the Live Editor).
+// Legion Classic - the battlefield scene: the running world, the camera, unit
+// control, and the editor overlay (F2) that edits the world while it runs.
 
 #include <array>
 #include <memory>
@@ -9,6 +9,7 @@
 
 #include "slave/assets/placeholder_art.hpp"
 #include "slave/map/map.hpp"
+#include "slave/map/map_io.hpp"
 #include "slave/platform/app.hpp"
 #include "slave/render/camera.hpp"
 #include "slave/render/sprite_renderer.hpp"
@@ -17,19 +18,25 @@
 
 namespace legion {
 
+class Editor;
+
 struct SceneOptions {
   int mapSize = 128;
   uint64_t seed = 1940;
-  bool demo = false;       // scripted orders, for automated screenshots
-  int stressUnits = 0;     // spawn this many extra units at start
+  bool demo = false;         // scripted orders, for automated screenshots
+  int stressUnits = 0;       // spawn this many extra units at start
   float zoom = 1.0f;
   bool showHelp = true;
   bool showDebug = false;
+  bool startInEditor = false;
+  std::string loadMap;       // open this .lmap at start
+  bool editorDemo = false;   // scripted editor session, for automated screenshots
 };
 
 class GameScene final : public slave::Scene {
  public:
   GameScene(slave::App& app, SceneOptions opt);
+  ~GameScene() override;
   bool init(const std::string& contentDir, std::string& error);
 
   void onEvent(const SDL_Event& e, bool uiWantsMouse, bool uiWantsKeyboard) override;
@@ -39,7 +46,28 @@ class GameScene final : public slave::Scene {
   void onImGui() override;
   float timeScale() const override { return paused_ ? 0.0f : speed_; }
   bool wantsQuit() const override { return quit_; }
+
+  // --- Used by the editor -------------------------------------------------
   const slave::SpriteCatalog& art() const { return art_; }
+  slave::Map& map() { return map_; }
+  slave::TerrainRenderer& terrain() { return terrain_; }
+  slave::Simulation& sim() { return *sim_; }
+  const slave::UnitTypeRegistry& types() const { return types_; }
+  slave::App& app() { return app_; }
+  slave::Camera& camera() { return cam_; }
+  // Ground point under a screen pixel, in leptons (follows hills).
+  slave::Vec2f groundAt(slave::Vec2f screenPx) const;
+  slave::Vec2f mouse() const { return mouse_; }
+  // Screen-world position of a ground point (leptons), lifted by its height.
+  slave::Vec2f groundToScreenWorld(float lx, float ly) const;
+  std::vector<slave::UnitPlacement> exportUnits();
+  void replaceWorld(slave::MapFile&& file);  // new or loaded map
+  void setPaused(bool p) { paused_ = p; }
+  bool paused() const { return paused_; }
+  void showStatus(const std::string& text, float seconds = 3.0f);
+  const std::string& mapsDir() const { return mapsDir_; }
+  const std::string& currentMapPath() const { return currentMapPath_; }
+  void setCurrentMapPath(const std::string& p) { currentMapPath_ = p; }
 
  private:
   struct Marker {
@@ -54,7 +82,6 @@ class GameScene final : public slave::Scene {
     uint32_t team;
   };
 
-  // Helpers
   slave::Vec2f unitScreenWorld(uint32_t entityIndex) const;
   slave::Vec2i mouseWorldLeptons() const;
   slave::Entity pickUnit(slave::Vec2f screenPx, bool ownOnly) const;
@@ -63,11 +90,14 @@ class GameScene final : public slave::Scene {
   void pruneSelection();
   void orderMove(slave::Vec2i target);
   void spawnAt(const std::string& typeId, uint8_t player, slave::Vec2i at, int count);
+  slave::Vec2i findLand(slave::Vec2i near) const;
   void centerOn(slave::Vec2i leptons);
   void setupStartingArmies();
+  void updateCameraBounds();
   void drawHud();
   void drawHelp();
   void drawDebug();
+  void runEditorDemo();
 
   slave::App& app_;
   SceneOptions opt_;
@@ -78,10 +108,10 @@ class GameScene final : public slave::Scene {
   slave::SpriteRenderer renderer_;
   slave::TerrainRenderer terrain_;
   slave::Camera cam_;
+  std::unique_ptr<Editor> editor_;
   std::array<uint32_t, slave::MAX_PLAYERS> teamColors_{};
   std::array<std::string, slave::MAX_PLAYERS> playerNames_;
-  std::vector<int> unitSheet_;  // unit type -> index of SpriteSheet in sheets_
-  std::vector<slave::SpriteSheet> sheets_;
+  std::vector<slave::SpriteSheet> unitSheets_;  // by unit type index
 
   uint8_t player_ = 0;  // which side the mouse commands
   std::vector<slave::Entity> selection_;
@@ -94,6 +124,8 @@ class GameScene final : public slave::Scene {
   std::vector<Marker> markers_;
   std::vector<DrawItem> drawList_;
   float alpha_ = 0;
+  float time_ = 0;
+  int frame_ = 0;
   bool paused_ = false;
   float speed_ = 1.0f;
   bool quit_ = false;
@@ -101,6 +133,8 @@ class GameScene final : public slave::Scene {
   uint64_t lastHash_ = 0;
   std::string status_;
   float statusTime_ = 0;
+  std::string mapsDir_;
+  std::string currentMapPath_;
 };
 
 }  // namespace legion

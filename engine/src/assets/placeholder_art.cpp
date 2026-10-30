@@ -60,16 +60,16 @@ VoxelPalette makePalette(const FactionLook& f) {
   p.set(GLASS, {126, 156, 168, 255});
   p.set(LAMP, {236, 214, 140, 255});
   p.set(BOOT, {40, 32, 24, 255});
-  p.set(TRUNK, {94, 66, 40, 255});
-  p.set(LEAF_DARK, {44, 80, 32, 255});
-  p.set(LEAF, {62, 106, 40, 255});
-  p.set(LEAF_LIGHT, {92, 138, 52, 255});
-  p.set(PINE, {40, 80, 50, 255});
-  p.set(PINE_DARK, {26, 58, 38, 255});
-  p.set(ROCK, {130, 126, 118, 255});
-  p.set(ROCK_DARK, {92, 88, 82, 255});
-  p.set(ROCK_LIGHT, {164, 160, 150, 255});
-  p.set(BUSH, {70, 112, 44, 255});
+  p.set(TRUNK, {78, 62, 46, 255});
+  p.set(LEAF_DARK, {44, 60, 30, 255});
+  p.set(LEAF, {66, 86, 42, 255});
+  p.set(LEAF_LIGHT, {96, 114, 58, 255});
+  p.set(PINE, {44, 66, 44, 255});
+  p.set(PINE_DARK, {30, 46, 34, 255});
+  p.set(ROCK, {122, 116, 106, 255});
+  p.set(ROCK_DARK, {88, 84, 76, 255});
+  p.set(ROCK_LIGHT, {150, 144, 132, 255});
+  p.set(BUSH, {72, 90, 46, 255});
   return p;
 }
 
@@ -173,103 +173,82 @@ void speckle(VoxelModel& m, uint8_t from, uint8_t a, uint8_t b, uint32_t seed, i
       }
 }
 
-VoxelModel makeTree(int v) {
-  VoxelModel m(18, 18, 24);
-  const float r = 5.0f + (v % 2);
-  const float cz = 14.0f + (v % 3);
-  m.box(8, 8, 0, 10, 10, static_cast<int>(cz) - 2, TRUNK);
-  m.ellipsoid(9, 9, cz, r, r, r * 0.9f, LEAF);
-  m.ellipsoid(9 + (v % 2 ? 2.5f : -2.0f), 9 + 1.5f, cz - 2.0f, r * 0.6f, r * 0.6f, r * 0.6f, LEAF);
-  speckle(m, LEAF, LEAF_DARK, LEAF_LIGHT, 1234u + v, 22, 14);
-  // Sunlit crown.
-  for (int z = static_cast<int>(cz) + 2; z < m.sizeZ(); ++z)
+// ---------------------------------------------------------------------------
+// Trees, bushes and rocks: twice the voxel resolution of units and baked with
+// supersampling, for the soft, natural look of the gritty art direction.
+// ---------------------------------------------------------------------------
+constexpr float kPropVoxel = 1.0f / 32.0f;
+
+// Leafy canopy made of several overlapping blobs, darker underneath.
+void canopy(VoxelModel& m, int v, float cx, float cy, float cz, float r, int blobs) {
+  for (int i = 0; i < blobs; ++i) {
+    const uint32_t h = hash32(static_cast<uint32_t>(v * 131 + i * 7919 + 17));
+    const float ox = ((h & 255) / 255.0f - 0.5f) * r * 1.1f;
+    const float oy = (((h >> 8) & 255) / 255.0f - 0.5f) * r * 1.1f;
+    const float oz = (((h >> 16) & 255) / 255.0f - 0.5f) * r * 0.6f;
+    const float rr = r * (0.55f + ((h >> 24) & 255) / 255.0f * 0.35f);
+    m.ellipsoid(cx + ox, cy + oy, cz + oz, rr, rr, rr * 0.8f, LEAF);
+  }
+  m.ellipsoid(cx, cy, cz, r * 0.8f, r * 0.8f, r * 0.7f, LEAF);
+  for (int z = 0; z < m.sizeZ(); ++z)
     for (int y = 0; y < m.sizeY(); ++y)
-      for (int x = 0; x < m.sizeX(); ++x)
-        if (m.get(x, y, z) == LEAF && hash32(x * 7 + y * 131 + z * 977 + v) % 3 == 0)
-          m.set(x, y, z, LEAF_LIGHT);
+      for (int x = 0; x < m.sizeX(); ++x) {
+        if (m.get(x, y, z) != LEAF) continue;
+        const uint32_t h = hash32(static_cast<uint32_t>((z * 211 + y) * 97 + x) ^ (v * 7777u)) % 100;
+        const bool under = z < cz - r * 0.2f;
+        if (h < (under ? 45u : 18u)) m.set(x, y, z, LEAF_DARK);
+        else if (!under && h > 82) m.set(x, y, z, LEAF_LIGHT);
+      }
+}
+
+VoxelModel makeTree(int v) {
+  VoxelModel m(40, 40, 54);
+  const float cz = 34.0f + (v % 3) * 2.0f;
+  m.box(19, 19, 0, 22, 22, static_cast<int>(cz) - 6, TRUNK);  // trunk
+  for (int i = 0; i < 3; ++i) {                                // branches
+    const int dx = (i == 0) ? 3 : (i == 1) ? -3 : 0, dy = (i == 2) ? 3 : -1;
+    m.box(20 + std::min(0, dx), 20 + std::min(0, dy), 18 + i * 4, 21 + std::max(0, dx), 21 + std::max(0, dy),
+          20 + i * 4, TRUNK);
+  }
+  canopy(m, v, 20.5f, 20.5f, cz, 11.0f + (v % 2) * 2.0f, 6);
   return m;
 }
 
 VoxelModel makePine(int v) {
-  VoxelModel m(14, 14, 28);
-  m.box(6, 6, 0, 8, 8, 6, TRUNK);
-  const int top = 24 + (v % 3);
-  for (int z = 4; z < top; ++z) {
-    float r = 1.0f + (top - z) * 0.24f;
-    if (z % 4 == 0) r -= 0.8f;  // tiered branches
-    for (int y = 0; y < 14; ++y)
-      for (int x = 0; x < 14; ++x) {
-        const float dx = x + 0.5f - 7.0f, dy = y + 0.5f - 7.0f;
-        if (dx * dx + dy * dy <= r * r) m.set(x, y, z, PINE);
+  VoxelModel m(28, 28, 60);
+  m.box(13, 13, 0, 15, 15, 12, TRUNK);
+  const int top = 52 + (v % 3) * 3;
+  for (int z = 8; z < top; ++z) {
+    float r = 1.2f + (top - z) * 0.24f;
+    if (z % 6 < 2) r *= 0.78f;  // tiered branches
+    for (int y = 0; y < 28; ++y)
+      for (int x = 0; x < 28; ++x) {
+        const float dx = x + 0.5f - 14.0f, dy = y + 0.5f - 14.0f;
+        const float jag = (hash2(x, y, static_cast<uint32_t>(z + v * 101)) % 100) / 100.0f * 1.2f;
+        if (dx * dx + dy * dy <= (r + jag - 0.6f) * (r + jag - 0.6f)) m.set(x, y, z, PINE);
       }
   }
-  speckle(m, PINE, PINE_DARK, LEAF_DARK, 77u + v, 30, 8);
+  speckle(m, PINE, PINE_DARK, LEAF_DARK, 77u + v, 34, 8);
   return m;
 }
 
 VoxelModel makeBush(int v) {
-  VoxelModel m(11, 11, 7);
-  m.ellipsoid(5.5f, 5.5f, 2.5f, 4.0f + (v % 2) * 0.6f, 3.6f, 3.0f, BUSH);
-  speckle(m, BUSH, LEAF_DARK, LEAF_LIGHT, 999u + v, 25, 15);
+  VoxelModel m(24, 24, 16);
+  canopy(m, v + 50, 12.0f, 12.0f, 6.0f, 7.0f + (v % 2), 4);
+  for (int z = 0; z < m.sizeZ(); ++z)  // bushes get their own, slightly yellower green
+    for (int y = 0; y < 24; ++y)
+      for (int x = 0; x < 24; ++x)
+        if (m.get(x, y, z) == LEAF) m.set(x, y, z, BUSH);
   return m;
 }
 
 VoxelModel makeRock(int v) {
-  VoxelModel m(11, 9, 5);
-  m.ellipsoid(5.5f, 4.5f, 1.2f, 4.2f - (v % 2), 3.2f, 2.6f, ROCK);
-  speckle(m, ROCK, ROCK_DARK, ROCK_LIGHT, 4242u + v, 25, 20);
+  VoxelModel m(24, 20, 12);
+  const float r = 8.0f - (v % 2) * 1.5f;
+  m.ellipsoid(12, 10, 2.5f, r, r * 0.75f, 5.5f, ROCK);
+  m.ellipsoid(12 + (v % 2 ? 4.0f : -4.0f), 11, 2.0f, r * 0.6f, r * 0.5f, 3.5f, ROCK);
+  speckle(m, ROCK, ROCK_DARK, ROCK_LIGHT, 4242u + v, 28, 18);
   return m;
-}
-
-// ---------------------------------------------------------------------------
-// Procedural 64 x 32 terrain tiles
-// ---------------------------------------------------------------------------
-bool inDiamond(int x, int y) {
-  const int half = y < 16 ? (y + 1) * 2 : (32 - y) * 2;
-  return x >= 32 - half && x < 32 + half;
-}
-
-Image makeTile(Terrain t, int variant) {
-  static const Rgba grass[5] = {{78, 110, 46, 255}, {70, 100, 42, 255}, {88, 120, 52, 255},
-                                {62, 90, 38, 255},  {98, 128, 58, 255}};
-  static const Rgba meadow[5] = {{92, 124, 50, 255}, {104, 134, 56, 255}, {84, 114, 46, 255},
-                                 {116, 142, 62, 255}, {76, 106, 42, 255}};
-  static const Rgba dirt[5] = {{124, 98, 64, 255}, {112, 88, 56, 255}, {136, 110, 74, 255},
-                               {100, 80, 52, 255},  {146, 120, 82, 255}};
-  const Rgba* pal = t == Terrain::Dirt ? dirt : t == Terrain::Meadow ? meadow : grass;
-
-  Image img(64, 32);
-  const uint32_t seed = static_cast<uint32_t>(t) * 1000 + variant * 37 + 5;
-  for (int y = 0; y < 32; ++y)
-    for (int x = 0; x < 64; ++x) {
-      if (!inDiamond(x, y)) continue;
-      // Clumpy noise: pixels pairs share a value horizontally.
-      const uint32_t h = hash2(x / 2, y, seed) % 100;
-      int idx = h < 46 ? 0 : h < 68 ? 1 : h < 84 ? 2 : h < 95 ? 3 : 4;
-      img.at(x, y) = pal[idx];
-    }
-  // Details: grass blades, flowers, pebbles.
-  for (int y = 1; y < 32; ++y)
-    for (int x = 0; x < 64; ++x) {
-      if (!inDiamond(x, y) || !inDiamond(x, y - 1)) continue;
-      const uint32_t h = hash2(x, y, seed + 17);
-      if (t == Terrain::Dirt) {
-        if (h % 41 == 0) img.at(x, y) = {156, 146, 128, 255};
-        else if (h % 47 == 0) img.at(x, y) = {84, 66, 44, 255};
-      } else {
-        if (h % 29 == 0) {
-          img.at(x, y) = pal[4];
-          img.at(x, y - 1) = {static_cast<uint8_t>(std::min(255, pal[4].r + 14)),
-                              static_cast<uint8_t>(std::min(255, pal[4].g + 14)), pal[4].b, 255};
-        }
-        if (t == Terrain::Meadow) {
-          if (h % 89 == 0) img.at(x, y) = {232, 214, 112, 255};
-          else if (h % 113 == 0) img.at(x, y) = {236, 234, 224, 255};
-          else if (h % 151 == 0) img.at(x, y) = {196, 92, 84, 255};
-        }
-      }
-    }
-  return img;
 }
 
 Image makeEllipseRing(int w, int h) {
@@ -337,23 +316,23 @@ bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error) {
     VoxelModel (*make)(int);
     int variants;
   };
-  for (const PropSpec& p : {PropSpec{PropKind::Tree, &makeTree, 4}, PropSpec{PropKind::Pine, &makePine, 3},
-                            PropSpec{PropKind::Bush, &makeBush, 3}, PropSpec{PropKind::Rock, &makeRock, 3}}) {
+  for (const PropSpec& p : {PropSpec{PropKind::Tree, &makeTree, 5}, PropSpec{PropKind::Pine, &makePine, 3},
+                            PropSpec{PropKind::Bush, &makeBush, 4}, PropSpec{PropKind::Rock, &makeRock, 3}}) {
     for (int v = 0; v < p.variants; ++v) {
       const VoxelModel m = p.make(v);
       BakeOptions o;
       o.yawRadians = 0.7f + v * 1.9f;
       o.pivotX = m.sizeX() / 2.0f;
       o.pivotY = m.sizeY() / 2.0f;
+      o.voxelTiles = kPropVoxel;
+      o.supersample = 2;
+      o.outline = false;
+      o.quantize = false;
+      o.shadowAlpha = 110;
       BakedSprite s = bakeVoxels(m, pal, o);
       cat.props[static_cast<size_t>(p.kind)].push_back(ab.add(std::move(s.image), s.anchorX, s.anchorY));
     }
   }
-
-  for (int t = 0; t < static_cast<int>(Terrain::Count); ++t)
-    for (int v = 0; v < 4; ++v)
-      cat.tiles[static_cast<size_t>(t)][static_cast<size_t>(v)] =
-          ab.add(makeTile(static_cast<Terrain>(t), v), 32, 0);
 
   Image white(4, 4);
   for (auto& p : white.px) p = {255, 255, 255, 255};

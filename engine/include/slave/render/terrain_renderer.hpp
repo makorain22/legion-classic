@@ -1,15 +1,20 @@
 #pragma once
-// Slave Engine - terrain drawing.
-// The map is cut into 32 x 32-tile chunks, each uploaded to the GPU once and
-// rebuilt only when edited. Only chunks on screen are drawn, so a 512 x 512
-// map costs about the same per frame as a small one.
+// Slave Engine - terrain and water drawing.
+//
+// The ground is a lit height mesh, cut into 32 x 32-tile chunks that are
+// uploaded once and rebuilt only when edited. A shader blends eight tileable
+// ground textures per pixel using the map's splat weights, with height-based
+// blending and large-scale tone variation so no tile grid is visible. Water
+// is a translucent animated surface whose colour follows the depth below it.
+// A depth buffer lets hills hide the water and terrain behind them.
 
 #include <memory>
+#include <string>
 #include <vector>
 
-#include "slave/assets/placeholder_art.hpp"
 #include "slave/map/map.hpp"
-#include "slave/render/sprite_renderer.hpp"
+#include "slave/render/camera.hpp"
+#include "slave/render/gl.hpp"
 
 namespace slave {
 
@@ -17,27 +22,35 @@ class TerrainRenderer {
  public:
   static constexpr int kChunk = 32;
 
-  void build(const Map& map, const SpriteCatalog& art, const SpriteRenderer& renderer);
-  // Rebuilds the chunk containing tile (tx, ty), e.g. after an editor change.
-  void rebuildTile(int tx, int ty);
-  void draw(SpriteRenderer& renderer, const Camera& cam);
+  TerrainRenderer();
+  ~TerrainRenderer();
+  bool init(std::string& error);
+
+  void setMap(const Map& map);  // builds every chunk and the splat textures
+  void markHeightsDirty(int tx0, int ty0, int tx1, int ty1);
+  void markSplatDirty(int sx0, int sy0, int sx1, int sy1);
+  void markWaterDirty();  // water level changed
+  void update();          // applies pending rebuilds (call once per frame)
+  void draw(const Camera& cam, float timeSeconds);
 
   size_t chunksDrawnLastFrame() const { return drawn_; }
   size_t chunkCount() const { return chunks_.size(); }
 
  private:
-  struct Chunk {
-    int cx = 0, cy = 0;
-    RectF bounds;
-    std::unique_ptr<StaticSprites> sprites;
-  };
+  struct Chunk;
   void buildChunk(Chunk& c);
+  void uploadSplat(int sx0, int sy0, int sx1, int sy1);
 
   const Map* map_ = nullptr;
-  const SpriteCatalog* art_ = nullptr;
-  const SpriteRenderer* renderer_ = nullptr;
+  gl::Shader terrainShader_, waterShader_;
+  gl::TextureArray layers_;
+  gl::Texture macro_, splat0_, splat1_;
+  GLuint indexBuffer_ = 0;
+  GLsizei indexCount_ = 0;
   int chunksX_ = 0, chunksY_ = 0;
-  std::vector<Chunk> chunks_;
+  std::vector<std::unique_ptr<Chunk>> chunks_;
+  int splatDirty_[4] = {1, 1, 0, 0};  // x0, y0, x1, y1 (empty when x0 > x1)
+  float depthMax_ = 1.0f;
   size_t drawn_ = 0;
 };
 

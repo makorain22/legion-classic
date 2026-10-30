@@ -28,7 +28,6 @@ struct SpriteCatalog {
   Image atlas;
   std::vector<AtlasFrame> frames;
   std::unordered_map<std::string, SpriteSheet> units;  // by "model@faction", e.g. "tank@ger"
-  std::array<std::array<int, 4>, static_cast<size_t>(Terrain::Count)> tiles{};
   std::array<std::vector<int>, static_cast<size_t>(PropKind::Count)> props;
   int white = 0;        // solid white block, for lines, bars and boxes
   int selectSmall = 0;  // selection ellipse for infantry

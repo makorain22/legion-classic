@@ -66,7 +66,9 @@ struct BakeOptions {
   float yawRadians = 0.0f;          // 0 = model's +X points along world +X
   float pivotX = 0, pivotY = 0;     // rotation centre in voxel units (ground level)
   bool shadow = true;
-  bool outline = true;
+  bool outline = true;      // dark 1-pixel outline (only without supersampling)
+  bool quantize = true;     // snap colours to 32 levels per channel (retro look)
+  int supersample = 1;      // 2-4: render larger and average down for soft edges
   uint8_t shadowAlpha = 96;
 };
 

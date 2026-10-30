@@ -16,7 +16,7 @@ namespace {
 void usage() {
   SLV_INFO("Options: --windowed WxH | --fullscreen | --map N | --seed N | --zoom 0.5|1|2 | --spawn N\n"
            "         --offscreen --frames N --screenshot out.png --demo --fixed-dt --no-help --debug\n"
-           "         --dump-atlas atlas.png");
+           "         --dump-atlas atlas.png --editor --open map.lmap");
 }
 }  // namespace
 
@@ -43,6 +43,9 @@ int main(int argc, char** argv) {
     else if (a == "--no-help") opt.showHelp = false;
     else if (a == "--debug") opt.showDebug = true;
     else if (a == "--dump-atlas") dumpAtlas = next();
+    else if (a == "--editor") opt.startInEditor = true;
+    else if (a == "--editor-demo") opt.editorDemo = true;
+    else if (a == "--open") opt.loadMap = next();
     else if (a == "--help" || a == "-h") { usage(); return 0; }
     else SLV_WARN("Unknown option: %s", a.c_str());
   }
@@ -50,7 +53,7 @@ int main(int argc, char** argv) {
   slave::App app;
   if (!app.init(cfg)) return 1;
   slave::log::init((app.userDir() + "legion.log").c_str());
-  SLV_INFO("Legion Classic 0.1 (Milestone 1) on Slave Engine 1.0");
+  SLV_INFO("Legion Classic 0.1 (Milestone 2) on Slave Engine 1.0");
 
   std::string contentDir = "content/";
   if (const char* base = SDL_GetBasePath()) contentDir = std::string(base) + "content/";

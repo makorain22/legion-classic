@@ -55,22 +55,70 @@ Texture::~Texture() {
   if (id_) glDeleteTextures(1, &id_);
 }
 
-void Texture::create(const Image& image) {
+namespace {
+void applyParams(GLenum target, TextureParams p) {
+  glTexParameteri(target, GL_TEXTURE_MIN_FILTER,
+                  p.linear ? (p.mipmaps ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR) : GL_NEAREST);
+  glTexParameteri(target, GL_TEXTURE_MAG_FILTER, p.linear ? GL_LINEAR : GL_NEAREST);
+  const GLint wrap = p.repeat ? GL_REPEAT : GL_CLAMP_TO_EDGE;
+  glTexParameteri(target, GL_TEXTURE_WRAP_S, wrap);
+  glTexParameteri(target, GL_TEXTURE_WRAP_T, wrap);
+}
+}  // namespace
+
+void Texture::create(const Image& image, TextureParams params) {
   if (!id_) glGenTextures(1, &id_);
   w_ = image.w;
   h_ = image.h;
   glBindTexture(GL_TEXTURE_2D, id_);
   glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w_, h_, 0, GL_RGBA, GL_UNSIGNED_BYTE, image.px.data());
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  applyParams(GL_TEXTURE_2D, params);
+  if (params.mipmaps) glGenerateMipmap(GL_TEXTURE_2D);
+}
+
+void Texture::allocate(int w, int h, TextureParams params) {
+  if (!id_) glGenTextures(1, &id_);
+  w_ = w;
+  h_ = h;
+  glBindTexture(GL_TEXTURE_2D, id_);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+  applyParams(GL_TEXTURE_2D, params);
+}
+
+void Texture::update(int x, int y, int w, int h, const void* rgba) {
+  glBindTexture(GL_TEXTURE_2D, id_);
+  glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+  glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, w, h, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
 }
 
 void Texture::bind(int unit) const {
   glActiveTexture(GL_TEXTURE0 + unit);
   glBindTexture(GL_TEXTURE_2D, id_);
+}
+
+TextureArray::~TextureArray() {
+  if (id_) glDeleteTextures(1, &id_);
+}
+
+void TextureArray::create(const std::vector<Image>& layers) {
+  if (layers.empty()) return;
+  if (!id_) glGenTextures(1, &id_);
+  glBindTexture(GL_TEXTURE_2D_ARRAY, id_);
+  const int w = layers[0].w, h = layers[0].h;
+  glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+  glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA8, w, h, static_cast<GLsizei>(layers.size()), 0, GL_RGBA,
+               GL_UNSIGNED_BYTE, nullptr);
+  for (size_t i = 0; i < layers.size(); ++i)
+    glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, static_cast<GLint>(i), w, h, 1, GL_RGBA, GL_UNSIGNED_BYTE,
+                    layers[i].px.data());
+  applyParams(GL_TEXTURE_2D_ARRAY, {true, true, true});
+  glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
+}
+
+void TextureArray::bind(int unit) const {
+  glActiveTexture(GL_TEXTURE0 + unit);
+  glBindTexture(GL_TEXTURE_2D_ARRAY, id_);
 }
 
 #ifndef NDEBUG

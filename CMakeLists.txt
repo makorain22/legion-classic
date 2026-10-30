@@ -60,8 +60,16 @@ FetchContent_Declare(doctest
   GIT_REPOSITORY https://github.com/doctest/doctest.git
   GIT_TAG        v2.5.3
   GIT_SHALLOW    TRUE)
+FetchContent_Declare(miniz
+  GIT_REPOSITORY https://github.com/richgel999/miniz.git
+  GIT_TAG        3.1.2
+  GIT_SHALLOW    TRUE)
 set(JSON_BuildTests OFF CACHE INTERNAL "")
-FetchContent_MakeAvailable(nlohmann_json stb)
+set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(BUILD_FUZZERS OFF CACHE BOOL "" FORCE)
+set(INSTALL_PROJECT OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(nlohmann_json stb miniz)
 
 # glad: OpenGL 3.3 core loader (generated, checked in under external/glad)
 add_library(glad STATIC external/glad/src/gl.c)
@@ -79,8 +87,9 @@ if(LEGION_BUILD_GAME)
     ${imgui_SOURCE_DIR}/imgui_widgets.cpp
     ${imgui_SOURCE_DIR}/imgui_demo.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
-    ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp)
-  target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends)
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+    ${imgui_SOURCE_DIR}/misc/cpp/imgui_stdlib.cpp)
+  target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends ${imgui_SOURCE_DIR}/misc/cpp)
   target_link_libraries(imgui PUBLIC SDL3::SDL3-static)
 endif()
 
@@ -107,7 +116,7 @@ file(GLOB_RECURSE SLAVE_CORE_SOURCES CONFIGURE_DEPENDS
   engine/src/map/*.cpp)
 add_library(slave_core STATIC ${SLAVE_CORE_SOURCES})
 target_include_directories(slave_core PUBLIC engine/include)
-target_link_libraries(slave_core PUBLIC nlohmann_json::nlohmann_json)
+target_link_libraries(slave_core PUBLIC nlohmann_json::nlohmann_json PRIVATE miniz)
 legion_warnings(slave_core)
 
 # ---------------------------------------------------------------------------
@@ -127,8 +136,9 @@ if(LEGION_BUILD_GAME)
   # -------------------------------------------------------------------------
   # Legion Classic executable
   # -------------------------------------------------------------------------
-  file(GLOB_RECURSE LEGION_SOURCES CONFIGURE_DEPENDS game/src/*.cpp)
+  file(GLOB_RECURSE LEGION_SOURCES CONFIGURE_DEPENDS game/src/*.cpp editor/src/*.cpp)
   add_executable(LegionClassic WIN32 ${LEGION_SOURCES})
+  target_include_directories(LegionClassic PRIVATE game/src editor/src)
   target_link_libraries(LegionClassic PRIVATE slave)
   legion_warnings(LegionClassic)
   set_target_properties(LegionClassic PROPERTIES
@@ -149,7 +159,9 @@ if(LEGION_BUILD_TESTS)
   FetchContent_MakeAvailable(doctest)
   enable_testing()
   file(GLOB_RECURSE TEST_SOURCES CONFIGURE_DEPENDS tests/*.cpp)
-  add_executable(slave_tests ${TEST_SOURCES})
+  # Editor logic without graphics (undo history) is tested too.
+  add_executable(slave_tests ${TEST_SOURCES} editor/src/history.cpp)
+  target_include_directories(slave_tests PRIVATE editor/src)
   target_link_libraries(slave_tests PRIVATE slave_core doctest::doctest)
   legion_warnings(slave_tests)
   add_test(NAME slave_tests COMMAND slave_tests)

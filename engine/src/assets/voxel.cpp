@@ -109,13 +109,17 @@ BakedSprite bakeVoxels(const VoxelModel& model, const VoxelPalette& pal, const B
   constexpr int kMargin = 2;
   const int offX = -static_cast<int>(std::floor(minX)) + kMargin;
   const int offY = -static_cast<int>(std::floor(minY)) + kMargin;
-  const int w = static_cast<int>(std::ceil(maxX)) + offX + kMargin;
-  const int h = static_cast<int>(std::ceil(maxY)) + offY + kMargin;
+  const int outW = static_cast<int>(std::ceil(maxX)) + offX + kMargin;
+  const int outH = static_cast<int>(std::ceil(maxY)) + offY + kMargin;
+
+  // Supersampling: render S times larger, then average down for soft edges.
+  const int S = std::max(1, opt.supersample);
+  const int w = outW * S, h = outH * S;
 
   BakedSprite out;
-  out.image = Image(w, h);
   out.anchorX = offX;
   out.anchorY = offY;
+  Image hi(w, h);
   std::vector<float> zbuf(static_cast<size_t>(w) * h, -std::numeric_limits<float>::infinity());
   std::vector<uint8_t> covered(static_cast<size_t>(w) * h, 0);
   std::vector<uint8_t> shadow(static_cast<size_t>(w) * h, 0);
@@ -123,7 +127,7 @@ BakedSprite bakeVoxels(const VoxelModel& model, const VoxelPalette& pal, const B
 
   auto toImage = [&](V3 wpt) {
     const P2 s = Projector::screen(wpt);
-    return P2{s.x + offX, s.y + offY};
+    return P2{(s.x + offX) * S, (s.y + offY) * S};
   };
 
   for (int z = 0; z < model.sizeZ(); ++z)
@@ -160,6 +164,9 @@ BakedSprite bakeVoxels(const VoxelModel& model, const VoxelPalette& pal, const B
           Rgba col;
           if (pal.isTeam[ci]) {
             col = {to8(128.0f * pal.teamLevel[ci] * shade * 1.08f), 0, 0, kTeamAlpha};
+          } else if (!opt.quantize) {
+            const Rgba b = pal.color[ci];
+            col = {to8(b.r * shade), to8(b.g * shade), to8(b.b * shade), 255};
           } else {
             const Rgba b = pal.color[ci];
             // Quantise to 32 levels per channel for a limited-palette look.
@@ -179,7 +186,7 @@ BakedSprite bakeVoxels(const VoxelModel& model, const VoxelPalette& pal, const B
             zbuf[i] = depth;
             covered[i] = 1;
             isTop[i] = top;
-            out.image.px[i] = col;
+            hi.px[i] = col;
           };
           rasterTriangle(s[0], s[1], s[2], d[0], d[1], d[2], w, h, plot);
           rasterTriangle(s[0], s[2], s[3], d[0], d[2], d[3], w, h, plot);
@@ -195,14 +202,15 @@ BakedSprite bakeVoxels(const VoxelModel& model, const VoxelPalette& pal, const B
       const bool below = y + 1 < h && covered[i + w] && !isTop[i + w];
       const bool above = y > 0 && !covered[i - w];
       if (!below && !above) continue;
-      Rgba& c = out.image.px[i];
-      if (c.a == kTeamAlpha) c.r = to8(c.r * 1.18f);
-      else c = {to8(c.r * 1.2f + 6), to8(c.g * 1.2f + 6), to8(c.b * 1.2f + 6), c.a};
+      Rgba& c = hi.px[i];
+      const float k = S > 1 ? 1.1f : 1.2f;
+      if (c.a == kTeamAlpha) c.r = to8(c.r * (k - 0.02f));
+      else c = {to8(c.r * k + 4), to8(c.g * k + 4), to8(c.b * k + 4), c.a};
     }
 
   // Dark one-pixel outline around the silhouette, for readability at 1x zoom.
   std::vector<uint8_t> outline(static_cast<size_t>(w) * h, 0);
-  if (opt.outline) {
+  if (opt.outline && S == 1) {
     for (int y = 0; y < h; ++y)
       for (int x = 0; x < w; ++x) {
         const size_t i = static_cast<size_t>(y) * w + x;
@@ -211,15 +219,50 @@ BakedSprite bakeVoxels(const VoxelModel& model, const VoxelPalette& pal, const B
                             (y > 0 && covered[i - w]) || (y < h - 1 && covered[i + w]);
         if (edgePx) {
           outline[i] = 1;
-          out.image.px[i] = {22, 20, 18, 255};
+          hi.px[i] = {22, 20, 18, 255};
         }
       }
   }
 
   if (opt.shadow) {
     for (size_t i = 0; i < shadow.size(); ++i)
-      if (shadow[i] && !covered[i] && !outline[i]) out.image.px[i] = {0, 0, 0, opt.shadowAlpha};
+      if (shadow[i] && !covered[i] && !outline[i]) hi.px[i] = {0, 0, 0, opt.shadowAlpha};
   }
+
+  if (S == 1) {
+    out.image = std::move(hi);
+    return out;
+  }
+
+  // Average each S x S block. Team-colour pixels can't be blended (the shader
+  // needs the marker alpha), so a block is team-coloured if most of it is.
+  out.image = Image(outW, outH);
+  for (int y = 0; y < outH; ++y)
+    for (int x = 0; x < outW; ++x) {
+      float r = 0, g = 0, b = 0, a = 0, teamBright = 0;
+      int team = 0, solid = 0;
+      for (int sy = 0; sy < S; ++sy)
+        for (int sx = 0; sx < S; ++sx) {
+          const Rgba& c = hi.at(x * S + sx, y * S + sy);
+          if (c.a == kTeamAlpha) {
+            ++team;
+            teamBright += c.r;
+            continue;
+          }
+          if (c.a == 255) ++solid;
+          r += c.r * c.a;
+          g += c.g * c.a;
+          b += c.b * c.a;
+          a += c.a;
+        }
+      if (team > 0 && team >= solid) {
+        out.image.at(x, y) = {to8(teamBright / team), 0, 0, kTeamAlpha};
+      } else if (a > 0) {
+        uint8_t alpha = to8(a / (S * S));
+        if (alpha == kTeamAlpha) alpha = kTeamAlpha - 1;
+        out.image.at(x, y) = {to8(r / a), to8(g / a), to8(b / a), alpha};
+      }
+    }
   return out;
 }
 

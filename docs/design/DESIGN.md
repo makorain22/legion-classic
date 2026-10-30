@@ -12,7 +12,7 @@ essentials. Keep both in sync when decisions change.
 | Target | Windows 10/11 64-bit PC; Linux possible later |
 | Setting | Alternate-history 1940s–1950s |
 | Factions | Germany and Russia first, United Kingdom third |
-| Art | Voxel-baked placeholder sprites, replaceable by hand-drawn PNGs |
+| Art | Gritty, realistic, Blitzkrieg-inspired; voxel-baked sprites (supersampled), replaceable by hand-drawn PNGs |
 | Facings | 16 visible facings, animations at 8–10 fps (heavy retro feel) |
 | Sidebar | Classic right sidebar, minimap on top |
 | Language | English |
@@ -26,21 +26,31 @@ edit it. Place / delete / move anything for any player mid-battle, spawn
 brushes (up to 10,000 units), possess any player, live inspector, god tools,
 snapshot to scenario, and turn any sandbox into a mission with triggers.
 
+## Art direction
+
+Gritty and realistic, in the spirit of Blitzkrieg: painted, blended terrain
+with no visible grid; muted olive, brown and grey palette; soft shadows; fine,
+weathered units with camouflage and grime and no outlines; lasting battle
+damage (craters, scorch marks, wrecks, smoke); summer, autumn and winter
+biomes. Terrain follows this from Milestone 2; units and buildings move to it
+in the art milestone.
+
 ## Core technical rules
 
 1. The simulation is deterministic: integers and fixed point only, seeded RNG,
    fixed 15 ticks per second. `Simulation::stateHash()` must match across runs.
 2. 1 tile = 256 leptons. Angles are 0–4095; 16 facings of 256 each.
-3. Tiles are 64 × 32 diamonds; height levels are 16 px.
+3. Tiles are 64 × 32 diamonds. Heights are stored at tile corners, 64 units per tile of height. Ground layers are a splat map at 2 × 2 texels per tile.
 4. All world changes go through `Command`s queued to the simulation.
 5. Game data lives in `content/` as JSON; no unit names in engine code.
 6. Rendering only reads the simulation; it never changes it.
 
 ## Milestones
 
-1. **Foundations** – done in this build: project, CI, loop, camera, terrain,
-   voxel-baked sprites, selection, group moves, 10,000-unit stress test.
-2. Terrain and maps: heights, cliffs, water, autotiling, save/load, editor shell.
+1. **Foundations** – done: project, CI, loop, camera, voxel-baked sprites,
+   selection, group moves, 10,000-unit stress test.
+2. **Terrain and maps** – done: height mesh, blended ground layers, water,
+   random countryside, .lmap files, F2 editor with terrain tools and undo.
 3. Units and combat: pathfinding on huge maps, weapons, fog of war, mass performance.
 4. **Live Scenario Editor** (first main deliverable).
 5. Economy and base building.

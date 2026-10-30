@@ -187,9 +187,18 @@ void Simulation::stepMovement() {
           }
         }
 
-        // Drive straight at the target.
-        pos.x += static_cast<int32_t>(static_cast<int64_t>(dx) * def.speed / dist);
-        pos.y += static_cast<int32_t>(static_cast<int64_t>(dy) * def.speed / dist);
+        // Drive straight at the target, unless the next tile is a cliff or deep
+        // water for this kind of unit. (Pathfinding around obstacles: Milestone 3.)
+        const int32_t nx = pos.x + static_cast<int32_t>(static_cast<int64_t>(dx) * def.speed / dist);
+        const int32_t ny = pos.y + static_cast<int32_t>(static_cast<int64_t>(dy) * def.speed / dist);
+        const int ctx = pos.x >> LEPTON_SHIFT, cty = pos.y >> LEPTON_SHIFT;
+        const int ntx = nx >> LEPTON_SHIFT, nty = ny >> LEPTON_SHIFT;
+        if ((ntx != ctx || nty != cty) && !map_.passable(ntx, nty, def.locomotor)) {
+          order.active = false;
+          return;
+        }
+        pos.x = nx;
+        pos.y = ny;
         anim.moving = true;
         if (++anim.timer >= def.animTicks) {
           anim.timer = 0;
