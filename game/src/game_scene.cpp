@@ -71,24 +71,26 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
   if (!types_.resolveWeapons(weapons_, error)) return false;
   if (!types_.resolveLinks(error)) return false;
   scenariosDir_ = contentDir + "scenarios/";
+  // Settings first: they say whether to use the art pack.
+  const bool firstStart = !settings_.load(app_.userDir() + "settings.json");
   ArtOptions artOpt;
   artOpt.overrideDir = contentDir + "art";
   artOpt.exportDir = opt_.exportSprites;
+  {
+    std::error_code ec;
+    const std::string pack = contentDir + "art/blitzkrieg";
+    if (!opt_.noArtPack && settings_.artPack && std::filesystem::exists(pack + "/sprites.json", ec)) {
+      artOpt.packDirs.push_back(pack);
+      artPack_ = true;
+    }
+  }
   if (!buildPlaceholderArt(art_, error, artOpt)) return false;
   if (!renderer_.init(error)) return false;
   if (!terrain_.init(error)) return false;
   renderer_.setAtlas(art_.atlas, art_.frames);
   renderer_.setWhiteFrame(art_.white);
 
-  for (const UnitTypeDef& t : types_.all()) {
-    auto it = art_.units.find(t.model + "@" + t.faction);
-    if (it == art_.units.end()) it = art_.units.find(t.model + "@ger");
-    if (it == art_.units.end()) {
-      error = "unit '" + t.id + "' uses unknown model '" + t.model + "'";
-      return false;
-    }
-    unitArt_.push_back(it->second);
-  }
+  if (!pickUnitArt(error)) return false;
   trenchTypes_.assign(types_.size(), false);
   for (size_t i = 0; i < types_.size(); ++i) trenchTypes_[i] = types_.get(static_cast<int>(i)).model == "trench";
   fx_.init(&art_, &unitArt_, &types_, &weapons_,
@@ -103,7 +105,7 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
   replaysDir_ = app_.userDir() + "replays/";
   std::error_code ec;
   for (const std::string& d : {mapsDir_, savesDir_, replaysDir_}) std::filesystem::create_directories(d, ec);
-  if (!settings_.load(app_.userDir() + "settings.json")) {
+  if (firstStart) {
     showHelp_ = opt_.showHelp;  // first start: show the controls once
     settings_.save(app_.userDir() + "settings.json");
   } else {
@@ -150,6 +152,26 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
   return true;
 }
 
+// Each unit type's sprites: the art for this map's biome when there is any
+// (winter paint on snow), else the faction's, else the German model.
+bool GameScene::pickUnitArt(std::string& error) {
+  unitArt_.clear();
+  const std::string biome = std::string("~") + biomeId(map_.biome);
+  for (const UnitTypeDef& t : types_.all()) {
+    const std::string key = t.model + "@" + t.faction;
+    auto it = art_.units.find(key + biome);
+    if (it == art_.units.end()) it = art_.units.find(key);
+    if (it == art_.units.end()) it = art_.units.find(t.model + "@ger" + biome);
+    if (it == art_.units.end()) it = art_.units.find(t.model + "@ger");
+    if (it == art_.units.end()) {
+      error = "unit '" + t.id + "' uses unknown model '" + t.model + "'";
+      return false;
+    }
+    unitArt_.push_back(it->second);
+  }
+  return true;
+}
+
 void GameScene::replaceWorld(MapFile&& file, bool keepCamera) {
   const Vec2f camera = cam_.center();
   selection_.clear();
@@ -158,6 +180,10 @@ void GameScene::replaceWorld(MapFile&& file, bool keepCamera) {
   fx_.clear();
   map_ = std::move(file.map);
   map_.recomputeInfo();
+  {
+    std::string err;
+    if (!pickUnitArt(err)) SLV_WARN("%s", err.c_str());
+  }
   sim_ = std::make_unique<Simulation>(map_, types_, weapons_, opt_.seed);
   terrain_.setMap(map_);
   players_ = defaultPlayers();
@@ -1361,6 +1387,7 @@ void GameScene::drawUnits(const RectF& view) {
   }
   auto& units = reg.pool<CUnit>();
   auto& turrets = reg.pool<CTurret>();
+  auto& combats = reg.pool<CCombat>();
   for (size_t i = 0; i < units.size(); ++i) {
     const uint32_t e = units.entities()[i];
     const CUnit& u = units.data()[i];
@@ -1393,7 +1420,24 @@ void GameScene::drawUnits(const RectF& view) {
     // Structures sort by their front corner, so units behind them are hidden by them.
     const int64_t depth = def.isStructure() ? iso::depthKey(p.x + def.footW * 96, p.y + def.footH * 96) - 1 : iso::depthKey(p.x, p.y);
     const int facing = facingOf(f.angle);
-    drawList_.push_back({depth, order++, art.body.frame(facing, a.moving ? a.frame : 0), s.x, s.y, teamColor(u.owner), tint});
+    int anim = a.moving ? a.frame : 0;
+    if (art.walkFrames > 0) {
+      // Sprite art: time-driven walk cycle, each man out of step with the next.
+      const int phase = static_cast<int>((e * 2654435761u) >> 28);
+      anim = 0;
+      if (a.moving) {
+        anim = art.walkFirst + (static_cast<int>(time_ * 1000.0f / art.walkMs) + phase) % art.walkFrames;
+      } else if (art.shootFrames > 0 && !def.weapons.empty()) {
+        if (const CCombat* cb = combats.tryGet(e); cb && cb->target.valid()) {
+          // Aim at the target; play the shot just after the weapon fires.
+          const int cooldown = weapons_.get(def.weapons[0]).cooldown;
+          const float since = (static_cast<float>(cooldown - cb->cooldown[0]) + alpha_) * (1000.0f / TICKS_PER_SECOND);
+          const int step = static_cast<int>(since / art.shootMs);
+          anim = art.shootFirst + (step >= 0 && step < art.shootFrames ? step : 0);
+        }
+      }
+    }
+    drawList_.push_back({depth, order++, art.body.frame(facing, anim), s.x, s.y, teamColor(u.owner), tint});
     if (art.hasTurret) {
       const CTurret* t = turrets.tryGet(e);
       const int tf = t ? facingOf(t->angle) : facing;

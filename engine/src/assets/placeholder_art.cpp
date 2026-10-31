@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
+#include <atomic>
 #include <fstream>
+#include <thread>
 
 #include <nlohmann/json.hpp>
 
@@ -539,6 +541,7 @@ VoxelModel makeTankTraps(const FactionLook&) {
 void addStructure(AtlasBuilder& ab, SpriteCatalog& cat, const std::string& name, VoxelModel (*make)(const FactionLook&),
                   VoxelModel (*turret)(const FactionLook&) = nullptr) {
   for (const FactionLook& look : kFactions) {
+    if (cat.units.count(name + "@" + look.id)) continue;  // an art pack provides it
     const VoxelPalette pal = makePalette(look);
     const VoxelModel body = make(look);
     UnitArt art;
@@ -724,11 +727,109 @@ void exportArt(const AtlasBuilder& ab, const SpriteCatalog& cat, const std::stri
   SLV_INFO("Exported %d sprites to %s", written, dir.c_str());
 }
 
+
+// --- Art packs -------------------------------------------------------------------------
+// Loads a pack's units (see art_pack.hpp) straight into the atlas. Units it
+// provides are not baked from voxels.
+void loadArtPack(AtlasBuilder& ab, SpriteCatalog& cat, const std::string& dir) {
+  namespace fs = std::filesystem;
+  std::error_code ec;
+  std::ifstream in(dir + "/sprites.json");
+  if (!in) return;
+  const nlohmann::json meta = nlohmann::json::parse(in, nullptr, false);
+  if (!meta.is_object() || !meta.contains("_units") || !meta["_units"].is_object()) {
+    SLV_WARN("Art pack %s: sprites.json has no _units block", dir.c_str());
+    return;
+  }
+  auto two = [](int v) { return (v < 10 ? std::string("0") : std::string()) + std::to_string(v); };
+  struct Want {
+    std::string name;
+    Image img;
+    int ax = 0, ay = 0;
+  };
+  std::vector<Want> wants;
+  std::vector<std::pair<std::string, UnitArt>> arts;
+  for (const auto& [key, u] : meta["_units"].items()) {
+    if (!u.is_object()) continue;
+    UnitArt art;
+    const std::string base = "units/" + key + "/";
+    auto sheet = [&](SpriteSheet& sh, const std::string& prefix, int facings, int frames, bool single) {
+      sh.facings = std::max(1, facings);
+      sh.animFrames = std::max(1, frames);
+      sh.first = static_cast<int>(ab.count() + wants.size());
+      for (int a = 0; a < sh.animFrames; ++a)
+        for (int f = 0; f < sh.facings; ++f) {
+          std::string n = base + prefix;
+          if (!single) n += "_f" + two(f) + (prefix == "turret" || (prefix == "corpse" && sh.animFrames == 1) ? "" : "_a" + std::to_string(a));
+          wants.push_back({n, {}, 0, 0});
+        }
+    };
+    const int facings = u.value("facings", 16), frames = u.value("frames", 1);
+    sheet(art.body, "body", facings, frames, facings == 1 && frames == 1);
+    if (u.contains("walk") && u["walk"].is_array() && u["walk"].size() == 3) {
+      art.walkFirst = u["walk"][0].get<int>();
+      art.walkFrames = u["walk"][1].get<int>();
+      art.walkMs = std::max(20, u["walk"][2].get<int>());
+    }
+    if (u.contains("shoot") && u["shoot"].is_array() && u["shoot"].size() == 3) {
+      art.shootFirst = u["shoot"][0].get<int>();
+      art.shootFrames = u["shoot"][1].get<int>();
+      art.shootMs = std::max(20, u["shoot"][2].get<int>());
+    }
+    if (u.contains("turret") && u["turret"].is_object()) {
+      art.hasTurret = true;
+      art.turretOffset = u["turret"].value("offset", 0.0f);
+      sheet(art.turret, "turret", u["turret"].value("facings", 16), 1, false);
+    }
+    if (u.contains("corpse") && u["corpse"].is_object()) {
+      art.hasCorpse = true;
+      art.corpseMs = u["corpse"].value("ms", 100);
+      sheet(art.corpse, "corpse", u["corpse"].value("facings", 4), u["corpse"].value("frames", 1), false);
+    }
+    if (fs::exists(dir + "/icons/" + key + ".png", ec)) {
+      art.icon = static_cast<int>(ab.count() + wants.size());
+      wants.push_back({"icons/" + key, {}, 0, 0});
+    }
+    arts.push_back({key, art});
+  }
+  // Read the PNGs on all cores.
+  std::atomic<size_t> next{0};
+  std::atomic<int> missing{0};
+  auto work = [&] {
+    for (size_t i; (i = next++) < wants.size();) {
+      Want& w = wants[i];
+      if (!w.img.loadPng(dir + "/" + w.name + ".png")) {
+        w.img = Image(1, 1);
+        ++missing;
+        continue;
+      }
+      if (meta.contains(w.name) && meta[w.name].is_array() && meta[w.name].size() == 2) {
+        w.ax = meta[w.name][0].get<int>();
+        w.ay = meta[w.name][1].get<int>();
+      } else {
+        w.ax = w.img.w / 2;
+        w.ay = w.img.h * 3 / 4;
+      }
+      w.img = fromPngColours(w.img);
+    }
+  };
+  {
+    std::vector<std::thread> pool;
+    const unsigned n = std::max(1u, std::min(12u, std::thread::hardware_concurrency()));
+    for (unsigned t = 0; t < n; ++t) pool.emplace_back(work);
+    for (auto& t : pool) t.join();
+  }
+  for (Want& w : wants) ab.add(std::move(w.img), w.ax, w.ay);
+  for (auto& [key, art] : arts) cat.units[key] = art;
+  SLV_INFO("Art pack %s: %zu units, %zu sprites%s", dir.c_str(), arts.size(), wants.size(),
+           missing ? (" (" + std::to_string(missing.load()) + " missing)").c_str() : "");
+}
 }  // namespace
 
 bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error, const ArtOptions& options) {
   const VoxelPalette pal = makePalette(kFactions[0]);
   AtlasBuilder ab;
+  for (const std::string& dir : options.packDirs) loadArtPack(ab, cat, dir);
 
   {
     BakeQueue q(ab);
@@ -757,6 +858,7 @@ bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error, const ArtOption
   {
     // Trenches are ground decals; their "unit art" is the lone foxhole piece.
     for (const FactionLook& look : kFactions) {
+      if (cat.units.count(std::string("trench@") + look.id)) continue;
       UnitArt t;
       t.body.facings = 1;
       t.body.first = cat.trench[0];

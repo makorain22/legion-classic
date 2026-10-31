@@ -84,6 +84,7 @@ bool Settings::load(const std::string& path) {
   showInfoPanel = j.value("showInfoPanel", showInfoPanel);
   showCards = j.value("showCards", showCards);
   showChips = j.value("showChips", showChips);
+  artPack = j.value("artPack", artPack);
   if (j.contains("keys") && j["keys"].is_object()) {
     for (int a = 0; a < ACTION_COUNT; ++a) {
       const std::string name = actionLabel(static_cast<InputAction>(a));
@@ -106,6 +107,7 @@ bool Settings::save(const std::string& path) const {
   j["showInfoPanel"] = showInfoPanel;
   j["showCards"] = showCards;
   j["showChips"] = showChips;
+  j["artPack"] = artPack;
   auto& ks = j["keys"] = nlohmann::json::object();
   for (int a = 0; a < ACTION_COUNT; ++a) {
     auto& arr = ks[actionLabel(static_cast<InputAction>(a))] = nlohmann::json::array();

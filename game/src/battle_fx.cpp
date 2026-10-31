@@ -16,7 +16,7 @@ constexpr size_t kMaxCorpses = 4000;
 constexpr size_t kMaxWrecks = 1500;
 constexpr float kBurnSeconds = 22.0f;
 constexpr float kWreckSeconds = 180.0f;   // burnt-out hulks stay this long
-constexpr float kCorpseSeconds = 75.0f;
+constexpr float kCorpseSeconds = 600.0f;  // the dead stay on the field for ten minutes
 
 uint32_t withAlpha(uint32_t rgb, float a) {
   return (rgb & 0x00FFFFFFu) | (static_cast<uint32_t>(std::clamp(a, 0.0f, 1.0f) * 255.0f) << 24);
@@ -268,6 +268,9 @@ void BattleFx::onEvent(const SimEvent& ev, bool visible, const std::array<uint32
           d.x = at.x;
           d.y = at.y;
           d.frame = ua.corpse.frame(facingOf(ev.facing), 0);
+          d.animFrames = ua.corpse.animFrames;
+          d.animStride = ua.corpse.facings;
+          d.animSec = std::max(0.02f, ua.corpseMs / 1000.0f);
           d.team = team;
           d.life = kCorpseSeconds * rnd(0.85f, 1.15f);
           d.tx = tx;
@@ -412,7 +415,8 @@ void BattleFx::drawGround(SpriteRenderer& r, const RectF& view, const FogAt& fog
     const float fade = std::clamp((d.life - d.age) / 8.0f, 0.0f, 1.0f);  // fade out over the last 8 s
     const float k = fogBrightness(f);
     const uint32_t tint = withAlpha(scaleRgb(kWhite, k), fade * d.alpha);
-    r.sprite(d.frame, d.x, d.y, d.team, tint);
+    const int step = d.animFrames > 1 ? std::min(d.animFrames - 1, static_cast<int>(d.age / d.animSec)) : 0;
+    r.sprite(d.frame + step * d.animStride, d.x, d.y, d.team, tint);
   };
   for (const Decal& d : decals_) draw(d);
   for (const Decal& d : corpses_) draw(d);

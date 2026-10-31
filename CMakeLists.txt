@@ -161,7 +161,8 @@ if(LEGION_BUILD_TESTS)
   enable_testing()
   file(GLOB_RECURSE TEST_SOURCES CONFIGURE_DEPENDS tests/*.cpp)
   # Editor logic without graphics (undo history) is tested too.
-  add_executable(slave_tests ${TEST_SOURCES} editor/src/history.cpp)
+  # So is the Blitzkrieg file reader (it needs no graphics either).
+  add_executable(slave_tests ${TEST_SOURCES} editor/src/history.cpp engine/src/assets/blitzkrieg.cpp)
   target_include_directories(slave_tests PRIVATE editor/src)
   target_link_libraries(slave_tests PRIVATE slave_core doctest::doctest)
   # Some tests play whole games with the real rules.

@@ -465,6 +465,7 @@ void Menus::drawSettings() {
       changed |= ImGui::Checkbox("Show the game info panel (I)", &st.showInfoPanel);
       changed |= ImGui::Checkbox("Unit cards over fireteams, platoons and companies", &st.showCards);
       changed |= ImGui::Checkbox("Chips for enemy forces detected in the fog", &st.showChips);
+      changed |= ImGui::Checkbox("Use the Blitzkrieg art pack when installed (restart to apply)", &st.artPack);
       ImGui::EndTabItem();
     }
     if (ImGui::BeginTabItem("Controls")) {

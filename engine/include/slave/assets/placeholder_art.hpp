@@ -15,13 +15,17 @@
 
 namespace slave {
 
-// A sprite with 16 facings and N animation frames:
-// frame index = first + anim * facings + facing.
+// A sprite drawn in `facings` directions (16, 8, 4 or 1) with N animation
+// frames: frame index = first + anim * facings + facing. Callers always pass
+// one of 16 facings; sheets with fewer use the nearest.
 struct SpriteSheet {
   int first = 0;
   int facings = 16;
   int animFrames = 1;
-  int frame(int facing, int anim) const { return first + (anim % animFrames) * facings + facing % facings; }
+  int frame(int facing16, int anim) const {
+    const int f = facings == 16 ? facing16 : ((facing16 & 15) * facings + 8) / 16;
+    return first + (anim % animFrames) * facings + f % facings;
+  }
 };
 
 // Everything needed to draw one kind of unit.
@@ -31,7 +35,15 @@ struct UnitArt {
   SpriteSheet turret;         // 16 facings, drawn on top of the body
   float turretOffset = 0;     // turret pivot, in leptons along the body's forward axis
   bool hasCorpse = false;
-  SpriteSheet corpse;         // 16 facings (fallen infantry)
+  SpriteSheet corpse;         // fallen infantry; with several frames, the fall is played and the last one stays
+  int corpseMs = 0;           // per corpse frame
+  // Body animations. With walkFrames = 0 the walk cycle is the simulation's
+  // frame counter over all body frames (voxel art). Otherwise body frame 0
+  // stands still, walkFrames frames from walkFirst play while moving and
+  // shootFrames frames from shootFirst play when firing.
+  int walkFirst = 0, walkFrames = 0, walkMs = 100;
+  int shootFirst = 0, shootFrames = 0, shootMs = 100;
+  int icon = -1;              // picture for the sidebar (atlas frame); -1 = draw the unit
 };
 
 // Procedural battle effects.
@@ -68,6 +80,9 @@ struct ArtOptions {
   // When set, every sprite is written here as a PNG, in the layout the
   // override folder uses, ready to be repainted.
   std::string exportDir;
+  // Art packs (see art_pack.hpp): complete units that replace the voxel
+  // models, loaded before them. Later packs win.
+  std::vector<std::string> packDirs;
 };
 
 // Builds every sprite (voxel models baked in 16 facings, effects, decals),
@@ -89,12 +104,17 @@ void forEachSprite(const SpriteCatalog& cat, F fn) {
     } else {
       for (int a = 0; a < art.body.animFrames; ++a)
         for (int f = 0; f < art.body.facings; ++f)
-          fn(dir + "body_f" + two(f) + "_a" + std::to_string(a), art.body.frame(f, a));
+          fn(dir + "body_f" + two(f) + "_a" + std::to_string(a), art.body.first + a * art.body.facings + f);
     }
     if (art.hasTurret)
-      for (int f = 0; f < art.turret.facings; ++f) fn(dir + "turret_f" + two(f), art.turret.frame(f, 0));
-    if (art.hasCorpse)
-      for (int f = 0; f < art.corpse.facings; ++f) fn(dir + "corpse_f" + two(f), art.corpse.frame(f, 0));
+      for (int f = 0; f < art.turret.facings; ++f) fn(dir + "turret_f" + two(f), art.turret.first + f);
+    if (art.hasCorpse) {
+      for (int a = 0; a < art.corpse.animFrames; ++a)
+        for (int f = 0; f < art.corpse.facings; ++f)
+          fn(dir + "corpse_f" + two(f) + (art.corpse.animFrames > 1 ? "_a" + std::to_string(a) : std::string()),
+             art.corpse.first + a * art.corpse.facings + f);
+    }
+    if (art.icon >= 0) fn("icons/" + name, art.icon);
   }
   for (size_t k = 0; k < cat.props.size(); ++k)
     for (size_t v = 0; v < cat.props[k].size(); ++v)

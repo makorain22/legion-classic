@@ -43,6 +43,14 @@ uint32_t shade(uint32_t c, float k) {
 // Draws a unit's sprite (body and turret) scaled into a box.
 void drawIcon(ImDrawList* dl, const SpriteRenderer& r, const UnitArt& art, ImVec2 p0, ImVec2 size, ImU32 tint) {
   const ImTextureRef tex(static_cast<ImTextureID>(r.atlasTexture()));
+  if (art.icon >= 0) {
+    // A painted picture (art pack): fill the box.
+    const AtlasFrame& ic = r.frame(art.icon);
+    const float k = std::min(size.x / ic.w, size.y / ic.h);
+    const ImVec2 o(p0.x + (size.x - ic.w * k) * 0.5f, p0.y + (size.y - ic.h * k) * 0.5f);
+    dl->AddImage(tex, o, ImVec2(o.x + ic.w * k, o.y + ic.h * k), ImVec2(ic.u0, ic.v0), ImVec2(ic.u1, ic.v1), tint);
+    return;
+  }
   const AtlasFrame& body = r.frame(art.body.frame(14, 0));
   const float scale = std::min({size.x / body.w, size.y / body.h, 2.0f}) * 0.92f;
   const ImVec2 o(p0.x + (size.x - body.w * scale) * 0.5f, p0.y + (size.y - body.h * scale) * 0.5f);

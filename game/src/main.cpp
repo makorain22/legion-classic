@@ -9,8 +9,10 @@
 #include <string>
 
 #include "game_scene.hpp"
+#include "slave/assets/art_pack.hpp"
 #include "slave/core/log.hpp"
 #include "slave/platform/app.hpp"
+#include "slave/sim/unit_types.hpp"
 
 namespace {
 void usage() {
@@ -18,7 +20,33 @@ void usage() {
            "         --offscreen --frames N --screenshot out.png --demo --fixed-dt --no-help --debug\n"
            "         --dump-atlas atlas.png --editor --open map.lmap --editor-demo --live-demo\n"
            "         --menu --ai-battle --biome temperate|winter|desert|tropical|urban --gallery\n"
-           "         --export-sprites DIR (write every sprite as PNG for repainting; see docs/ART_PIPELINE.md)");
+           "         --export-sprites DIR (write every sprite as PNG for repainting; see docs/ART_PIPELINE.md)\n"
+           "         --import-blitzkrieg DATA (make the Blitzkrieg art pack from the game's Data folder)");
+}
+
+// Renders the Blitzkrieg art pack into content/art/blitzkrieg (no window needed).
+int importBlitzkrieg(const std::string& dataDir, const std::string& contentDir) {
+  slave::BlitzkriegImport job;
+  job.dataDir = dataDir;
+  job.mappingFile = contentDir + "art/blitzkrieg.json";
+  job.outDir = contentDir + "art/blitzkrieg";
+  slave::UnitTypeRegistry types;
+  std::string error;
+  if (!types.loadFile(contentDir + "rules/buildings.json", error)) {
+    std::fprintf(stderr, "Can't read the building rules: %s\n", error.c_str());
+    return 1;
+  }
+  for (const slave::UnitTypeDef& t : types.all())
+    if (t.isStructure()) job.footprints[t.model] = {t.footW, t.footH};
+  std::string report;
+  std::printf("Importing Blitzkrieg art from %s ...\n", dataDir.c_str());
+  if (!slave::importBlitzkrieg(job, error, report)) {
+    std::fprintf(stderr, "Import failed: %s\n", error.c_str());
+    return 1;
+  }
+  std::printf("%s", report.c_str());
+  std::printf("Blitzkrieg is (c) Nival and licensed for non-commercial use only: keep this pack to yourself.\n");
+  return 0;
 }
 }  // namespace
 
@@ -26,7 +54,7 @@ int main(int argc, char** argv) {
   slave::AppConfig cfg;
   cfg.title = "Legion Classic";
   legion::SceneOptions opt;
-  std::string dumpAtlas;
+  std::string dumpAtlas, importDir;
   // Started with no options (double-click): the main menu.
   opt.showMenu = argc <= 1;
 
@@ -55,6 +83,8 @@ int main(int argc, char** argv) {
     else if (a == "--gallery") opt.gallery = true;
     else if (a == "--org-demo") opt.orgDemo = true;
     else if (a == "--export-sprites") opt.exportSprites = next();
+    else if (a == "--import-blitzkrieg") importDir = next();
+    else if (a == "--no-art-pack") opt.noArtPack = true;
     else if (a == "--no-bases") opt.noBases = true;
     else if (a == "--menu") opt.showMenu = true;
     else if (a == "--ai-battle") opt.aiBattle = true;
@@ -66,6 +96,12 @@ int main(int argc, char** argv) {
     else if (a == "--open") opt.loadMap = next();
     else if (a == "--help" || a == "-h") { usage(); return 0; }
     else SLV_WARN("Unknown option: %s", a.c_str());
+  }
+
+  if (!importDir.empty()) {
+    std::string contentDir = "content/";
+    if (const char* base = SDL_GetBasePath()) contentDir = std::string(base) + "content/";
+    return importBlitzkrieg(importDir, contentDir);
   }
 
   slave::App app;

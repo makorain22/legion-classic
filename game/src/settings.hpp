@@ -40,6 +40,7 @@ struct Settings {
   bool showInfoPanel = false;  // the top-left game info box
   bool showCards = true;       // NATO cards over bound units
   bool showChips = true;       // chips for enemies detected in the fog
+  bool artPack = true;         // use content/art/blitzkrieg when present (takes effect on restart)
   // Two bindings per action.
   std::array<std::array<KeyCombo, 2>, ACTION_COUNT> keys{};
 

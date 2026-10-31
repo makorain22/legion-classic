@@ -62,6 +62,7 @@ struct SceneOptions {
   bool liveDemo = false;     // scripted Live Scenario Editor session (units, battle tools)
   bool editorSelfTest = false;  // checks unit placement / undo / redo through the real editor
   std::string exportSprites;     // write every sprite as a PNG here, then quit
+  bool noArtPack = false;        // ignore content/art/blitzkrieg (compare with the built-in art)
   bool gallery = false;
   bool orgDemo = false;          // fireteams, platoons, a garrison and fog chips, for screenshots         // every unit lined up, for screenshots of the art
   bool economyDemo = false;     // scripted base building, for automated screenshots
@@ -129,6 +130,7 @@ class GameScene final : public slave::Scene {
   slave::Entity pickUnit(slave::Vec2f screenPx, bool ownOnly) const;
   slave::Vec2f unitScreenWorld(uint32_t entityIndex) const;
   const slave::UnitArt& unitArt(int type) const { return unitArt_[static_cast<size_t>(type)]; }
+  bool artPack() const { return artPack_; }  // the Blitzkrieg art pack is in use
   const slave::WeaponRegistry& weapons() const { return weapons_; }
   slave::SpriteRenderer& renderer() { return renderer_; }
   BattleFx& fx() { return fx_; }
@@ -305,6 +307,8 @@ class GameScene final : public slave::Scene {
   std::unique_ptr<slave::MapFile> snapshot_;
   bool editorFog_ = false;
   std::vector<slave::UnitArt> unitArt_;  // by unit type index
+  bool artPack_ = false;
+  bool pickUnitArt(std::string& error);
   std::vector<bool> trenchTypes_;         // drawn as ground decals that join up
   BattleFx fx_;
 

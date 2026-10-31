@@ -513,6 +513,7 @@ void BakeQueue::run() {
 void addUnit(BakeQueue& q, SpriteCatalog& cat, const std::string& name, UnitBuilder make, int animFrames,
              CorpseBuilder corpse, float voxelTiles) {
   for (const FactionLook& look : kFactions) {
+    if (cat.units.count(name + "@" + look.id)) continue;  // an art pack provides it
     const VoxelPalette pal = makePalette(look);
     UnitArt art;
     art.body.facings = 16;

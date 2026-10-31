@@ -15,3 +15,6 @@ CMakeUserPresets.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Art packs made from other games: personal use only, never committed
+content/art/blitzkrieg/

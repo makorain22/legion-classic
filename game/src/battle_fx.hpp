@@ -75,6 +75,8 @@ class BattleFx {
   struct Decal {
     float x = 0, y = 0;
     int frame = 0;
+    int animFrames = 1, animStride = 0;  // a short animation (a man falling), then the last frame stays
+    float animSec = 0.1f;
     uint32_t team = slave::kWhite;
     float age = 0, life = 90;
     float alpha = 1;
