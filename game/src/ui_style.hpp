@@ -1,5 +1,5 @@
 #pragma once
-// Legion Classic - the look of the command interface: olive steel plates
+// Legion Classic - the look of the command interface: steel plates
 // with bevelled edges and rivets, brass highlights and stencilled labels, in
 // the manner of the period RTS games it follows.
 
@@ -7,17 +7,28 @@
 
 namespace legion::ui {
 
-// Palette.
-constexpr ImU32 kPlate = IM_COL32(58, 60, 46, 255);       // steel plate
-constexpr ImU32 kPlateDark = IM_COL32(34, 36, 28, 255);
-constexpr ImU32 kPlateLight = IM_COL32(96, 98, 76, 255);
-constexpr ImU32 kInset = IM_COL32(22, 23, 18, 255);        // recessed wells
-constexpr ImU32 kBrass = IM_COL32(214, 176, 92, 255);
-constexpr ImU32 kBrassDim = IM_COL32(150, 122, 64, 255);
-constexpr ImU32 kStencil = IM_COL32(222, 212, 182, 255);   // label text
-constexpr ImU32 kStencilDim = IM_COL32(140, 134, 114, 255);
+// Palette. Set by setFaction: olive steel for the menus, field grey for the
+// Germans, khaki for the Soviets.
+inline ImU32 kPlate = IM_COL32(58, 60, 46, 255);       // steel plate
+inline ImU32 kPlateDark = IM_COL32(34, 36, 28, 255);
+inline ImU32 kPlateLight = IM_COL32(96, 98, 76, 255);
+inline ImU32 kInset = IM_COL32(22, 23, 18, 255);        // recessed wells
+inline ImU32 kBrass = IM_COL32(214, 176, 92, 255);      // highlight metal
+inline ImU32 kBrassDim = IM_COL32(150, 122, 64, 255);
+inline ImU32 kStencil = IM_COL32(222, 212, 182, 255);   // label text
+inline ImU32 kStencilDim = IM_COL32(140, 134, 114, 255);
 constexpr ImU32 kGood = IM_COL32(124, 214, 96, 255);
 constexpr ImU32 kBad = IM_COL32(226, 92, 70, 255);
+
+enum class Theme { Olive, German, Soviet };
+// Switches the palette: "ger", "rus", anything else = olive.
+void setFaction(const char* faction);
+Theme theme();
+// The side's emblem for decorations - a plain cross for the Germans, a red
+// star for the Soviets, a laurel-less roundel otherwise.
+void emblem(ImDrawList* dl, ImVec2 centre, float size);
+// A painted stencil strip (side number, unit marking) across a plate.
+void stencilStrip(ImDrawList* dl, ImVec2 a, ImVec2 b);
 
 // A raised steel panel (or recessed when `inset`).
 void panel(ImDrawList* dl, ImVec2 a, ImVec2 b, bool inset = false, float rounding = 2.0f);

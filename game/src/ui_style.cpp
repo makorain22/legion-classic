@@ -1,5 +1,8 @@
 #include "ui_style.hpp"
 
+#include <cmath>
+#include <string>
+
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -162,16 +165,113 @@ bool iconTab(const char* id, Picto p, const char* label, ImVec2 size, bool lit, 
   return clicked;
 }
 
+namespace {
+Theme gTheme = Theme::Olive;
+ImVec4 v4(ImU32 c, float mul = 1.0f, float a = 1.0f) {
+  ImVec4 v = ImGui::ColorConvertU32ToFloat4(c);
+  return ImVec4(v.x * mul, v.y * mul, v.z * mul, a);
+}
+}  // namespace
+
+void setFaction(const char* faction) {
+  const std::string f = faction ? faction : "";
+  if (f == "ger") {  // field grey, aluminium fittings
+    gTheme = Theme::German;
+    kPlate = IM_COL32(70, 74, 76, 255);
+    kPlateDark = IM_COL32(38, 41, 43, 255);
+    kPlateLight = IM_COL32(114, 119, 121, 255);
+    kInset = IM_COL32(23, 25, 26, 255);
+    kBrass = IM_COL32(206, 204, 190, 255);
+    kBrassDim = IM_COL32(138, 140, 134, 255);
+    kStencil = IM_COL32(226, 226, 216, 255);
+    kStencilDim = IM_COL32(142, 146, 144, 255);
+  } else if (f == "rus") {  // khaki, brass and red
+    gTheme = Theme::Soviet;
+    kPlate = IM_COL32(114, 106, 70, 255);
+    kPlateDark = IM_COL32(66, 61, 38, 255);
+    kPlateLight = IM_COL32(160, 150, 104, 255);
+    kInset = IM_COL32(36, 32, 20, 255);
+    kBrass = IM_COL32(222, 178, 84, 255);
+    kBrassDim = IM_COL32(168, 92, 60, 255);  // rules and frames in faded red
+    kStencil = IM_COL32(238, 228, 198, 255);
+    kStencilDim = IM_COL32(170, 158, 122, 255);
+  } else {
+    gTheme = Theme::Olive;
+    kPlate = IM_COL32(58, 60, 46, 255);
+    kPlateDark = IM_COL32(34, 36, 28, 255);
+    kPlateLight = IM_COL32(96, 98, 76, 255);
+    kInset = IM_COL32(22, 23, 18, 255);
+    kBrass = IM_COL32(214, 176, 92, 255);
+    kBrassDim = IM_COL32(150, 122, 64, 255);
+    kStencil = IM_COL32(222, 212, 182, 255);
+    kStencilDim = IM_COL32(140, 134, 114, 255);
+  }
+}
+
+Theme theme() { return gTheme; }
+
+void emblem(ImDrawList* dl, ImVec2 c, float s) {
+  auto P = [&](float x, float y) { return ImVec2(c.x + x * s, c.y + y * s); };
+  switch (gTheme) {
+    case Theme::German: {
+      // A plain straight-armed cross: white edges round black arms.
+      const float w = 0.17f, e = 0.08f;
+      for (int pass = 0; pass < 2; ++pass) {
+        const float g = pass == 0 ? w + e : w;
+        const ImU32 col = pass == 0 ? IM_COL32(236, 236, 230, 255) : IM_COL32(16, 16, 16, 255);
+        dl->AddRectFilled(P(-0.5f + (pass ? e : 0), -g), P(0.5f - (pass ? e : 0), g), col);
+        dl->AddRectFilled(P(-g, -0.5f + (pass ? e : 0)), P(g, 0.5f - (pass ? e : 0)), col);
+      }
+      break;
+    }
+    case Theme::Soviet: {
+      // A five-pointed red star with a gold rim.
+      ImVec2 pts[10];
+      for (int i = 0; i < 10; ++i) {
+        const float r = (i % 2 == 0 ? 0.5f : 0.2f) * s;
+        const float a = -1.5707963f + i * 0.6283185f;
+        pts[i] = ImVec2(c.x + std::cos(a) * r, c.y + std::sin(a) * r);
+      }
+      for (int i = 0; i < 10; i += 2) {  // filled as five kites around the centre
+        dl->AddTriangleFilled(c, pts[(i + 9) % 10], pts[i], IM_COL32(196, 30, 26, 255));
+        dl->AddTriangleFilled(c, pts[i], pts[i + 1], IM_COL32(170, 22, 20, 255));
+      }
+      dl->AddPolyline(pts, 10, IM_COL32(232, 190, 90, 255), ImDrawFlags_Closed, std::max(1.0f, s * 0.05f));
+      break;
+    }
+    case Theme::Olive:
+      dl->AddCircle(c, 0.42f * s, kBrass, 20, std::max(1.0f, s * 0.07f));
+      dl->AddCircleFilled(c, 0.16f * s, kBrass, 12);
+      break;
+  }
+}
+
+void stencilStrip(ImDrawList* dl, ImVec2 a, ImVec2 b) {
+  // Diagonal hazard-style stripes, faded, in the side's colours.
+  const ImU32 c1 = gTheme == Theme::Soviet ? IM_COL32(150, 36, 28, 150)
+                   : gTheme == Theme::German ? IM_COL32(20, 20, 20, 120)
+                                             : IM_COL32(30, 30, 22, 120);
+  const ImU32 c2 = gTheme == Theme::German ? IM_COL32(210, 210, 200, 70) : IM_COL32(220, 190, 110, 70);
+  dl->PushClipRect(a, b, true);
+  const float h = b.y - a.y;
+  int i = 0;
+  for (float x = a.x - h; x < b.x + h; x += h * 0.7f, ++i)
+    dl->AddQuadFilled(ImVec2(x, b.y), ImVec2(x + h * 0.35f, b.y), ImVec2(x + h * 0.35f + h, a.y), ImVec2(x + h, a.y),
+                      i % 2 ? c1 : c2);
+  dl->PopClipRect();
+}
+
 void pushTheme() {
-  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.27f, 0.28f, 0.21f, 1));
-  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.38f, 0.37f, 0.26f, 1));
-  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.58f, 0.46f, 0.22f, 1));
-  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.87f, 0.83f, 0.71f, 1));
-  ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.59f, 0.48f, 0.25f, 1));
-  ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.09f, 0.09f, 0.07f, 1));
+  const ImVec4 text = v4(kStencil);
+  ImGui::PushStyleColor(ImGuiCol_Button, v4(kPlate, 1.15f));
+  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, v4(kPlateLight, 1.0f));
+  ImGui::PushStyleColor(ImGuiCol_ButtonActive, v4(kBrassDim, 1.0f));
+  ImGui::PushStyleColor(ImGuiCol_Text, text);
+  ImGui::PushStyleColor(ImGuiCol_Separator, v4(kBrassDim));
+  ImGui::PushStyleColor(ImGuiCol_FrameBg, v4(kInset, 0.85f));
   ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
-  ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, ImVec4(0.08f, 0.08f, 0.06f, 0.6f));
-  ImGui::PushStyleColor(ImGuiCol_ScrollbarGrab, ImVec4(0.45f, 0.40f, 0.26f, 1));
+  ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, v4(kInset, 0.8f, 0.6f));
+  ImGui::PushStyleColor(ImGuiCol_ScrollbarGrab, v4(kPlateLight, 0.9f));
 }
 
 void popTheme() { ImGui::PopStyleColor(9); }

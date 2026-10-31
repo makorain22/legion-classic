@@ -140,6 +140,16 @@ with options: `scale`, `brightness`, `pennant`, `turret` (vehicles), `second`
 turning inside). Change it and import again to try other units: there are
 dozens of tanks, guns and buildings to choose from.
 
+**Lines that join up.** Sandbags, barbed wire and fences are drawn per
+piece from the built-in voxel models, which come in 16 shapes for each:
+`SpriteCatalog::joined[model][mask]`, where the mask says which neighbours
+the piece has (+X 1, +Y 2, −X 4, −Y 8). A lone piece is a short stack or a
+post; a run becomes one continuous low wall or wire fence; corners and
+T-junctions meet cleanly. Fortifications and small structures are baked at a
+finer voxel size (1/24 of a tile) so the pillbox reads as a smooth concrete
+dome rather than blocks. Supply points are drawn as a fenced compound with
+crates in the corners, from the same fence pieces.
+
 **Scale.** Blitzkrieg's map cells are 32×16 pixels, half our tile each way.
 Vehicles render at 72 Blitzkrieg units a tile (Blitzkrieg's own is 64);
 infantry and building sprites keep their pixel size.

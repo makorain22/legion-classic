@@ -129,4 +129,18 @@ wrecks) and more content (MG nests, howitzer emplacements, six village
 buildings, five kinds of map decoration). Buildings per climate come with the
 art pack's winter and desert variants.
 
-Still open: building designs per climate for the built-in voxel art.
+## Playtest backlog (1 Nov 2026, after 0.7.6)
+
+Taken on in 0.7.7: trench garrisons (three men a piece, held until
+evacuated); every unit selectable on its own, the whole unit through its
+card; combined tank-and-infantry units and vehicle units named by role;
+bigger cards with enemy cards (toggle); starting positions on opposite sides;
+grid painting and civilian buildings as props in the editor; sandbag, wire
+and fence lines that join up, a smooth pillbox and hedgehog tank traps;
+fenced supply compounds; three more civilian buildings; bases laid out as
+military posts; computer doctrines per side with raids, regrouping,
+expansion and field works; faction colours for the interface.
+
+Still open: building designs per climate for the built-in voxel art; balance
+between the doctrines (in AI-against-AI games on hard the Soviets now edge
+it); the computer fortifying its expansions as well as its main base.

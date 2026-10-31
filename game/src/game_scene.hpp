@@ -74,6 +74,7 @@ struct SceneOptions {
   bool noBases = false;         // start with armies only, no bases (classic skirmish sandbox)
   bool showMenu = false;        // start at the main menu (normal start-up)
   bool aiBattle = false;        // a skirmish between two computer players
+  int side = -1;                // watch from this side (player number) at the start
   bool flowSelfTest = false;    // checks skirmish, save, load and replay through the real game
   int biome = 0;
 };

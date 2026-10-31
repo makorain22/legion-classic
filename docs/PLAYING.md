@@ -1,4 +1,4 @@
-# Playing Legion Classic (build 0.7.6)
+# Playing Legion Classic (build 0.7.7)
 
 Double-click `LegionClassic.exe`. No installation is needed; keep the `content`
 folder next to the exe.
@@ -31,8 +31,13 @@ players on a random map.
 - **Skirmish.** Pick a map size, a biome (temperate, winter, desert, tropical
   or urban), a seed, the starting supplies and up to four sides. Each side is
   you or the computer (easy, normal or hard), Germany or Russia, on a team of
-  your choice. Every side starts with a base and a small force; villages and
-  towns stand between them.
+  your choice. **Starting positions**: *Opposite sides* (the default: teams
+  face each other across the map, as in Company of Heroes), *Fixed* or
+  *Shuffled*. Every side starts with a base laid out like a military post (a
+  compound with a parade ground, barracks, power, a depot on the nearest
+  supply point, sandbags and MG nests across the front, wire and tank traps
+  beyond) and a small force on its parade ground; villages and towns stand
+  between them.
 - **Play a scenario.** Missions that come with the game (*Kalach Crossing*:
   take a village in the snow, hold it, then destroy the Soviet base) and any
   map you saved in the editor.
@@ -46,14 +51,28 @@ keeps running.
 
 ### The computer player
 
-The computer plays by the same rules you do: it pays for everything, keeps its
-power up, builds an economy (depots, supply trucks), barracks and works,
-defences (bunkers, anti-tank guns, watchtowers), keeps an engineer or two at
-home for repairs, trains a mixed army at a staging point in front of its base,
-sends it to defend when the base is attacked, and launches attack waves that
-grow over time. **Easy** thinks slowly and attacks with small waves; **hard**
-thinks fast, fortifies more and attacks sooner and harder. You can hand any
-side to the computer in the editor's Sides tab, even mid-battle.
+The computer plays by the same rules you do: it pays for everything and only
+gives ordinary orders. Each side fights to **its own doctrine**:
+
+- **Germany** builds fewer, better units, binds them into battle groups of
+  tanks and infantry, fortifies in depth (a trench line, wire and tank traps
+  across the approach, more guns) and sends reinforcements forward as a bound
+  second echelon.
+- **Russia** masses riflemen and T-34s, leans on artillery, attacks with bigger
+  forces and feeds new troops into an attack as they arrive.
+
+Its forces move all the time. The **main force** gathers in front of the base,
+binds into a unit and attacks, often round a flank; when it is badly hurt it
+falls back a few hundred metres, takes cover in buildings and trenches, and
+goes again, rather than running home. **Raiders** (scout cars, half-tracks and
+light tanks) hunt the weakest-defended enemy depots and stragglers. A **home
+guard** mans the base's trenches and bunkers, and damaged vehicles go home for
+repairs. It keeps **expanding**: depots on ever more distant supply points
+with an MG nest beside the far ones, and later a second Construction Yard on
+a quieter part of the map. **Easy** thinks slowly and attacks with small
+forces; **hard** thinks fast, fortifies more and attacks sooner and harder.
+You can hand any side to the computer in the editor's Sides tab, even
+mid-battle.
 
 ### Saving, loading and replays
 
@@ -147,12 +166,18 @@ Soldiers fight as units, as real armies do:
   together forms at the rally point).
 - **Bigger units are bound by hand.** Select the men or fireteams and press
   **Ctrl+B**: 10 or more make a squad, 20 a platoon, 100 a company. Vehicles
-  bind the same way: 5 make an armoured platoon, 15 a company, 50 a battalion.
+  bind the same way: 5 make an armoured platoon, 15 a company, 50 a battalion,
+  named for what they are (reconnaissance, tank destroyer, artillery battery,
+  mechanised...). **Tanks and infantry bound together** make a combined unit:
+  a mechanised platoon, a battle group or an armoured regiment (a vehicle
+  counts as four men towards its size), and it fights harder still.
   **Ctrl+U** disbands the selected unit.
 - **Bigger units hit harder.** Members of a fireteam fire 5 % harder, a squad
   10 %, a platoon 15 %, a company 30 %. Armour gains less (3 %, 6 %, 10 %).
-- **A unit stays together.** Clicking any member selects the whole unit (hold
-  Alt to pick one man), and it moves as one. Men who wander far stay members.
+- **Every man and vehicle is still its own.** Clicking a soldier or box-selecting
+  picks just those, whatever unit they belong to. To take the **whole unit**,
+  click its **card**; double-click the card to centre the view on it. Men who
+  wander far stay members.
   Casualties wear a unit down: a company that falls to 20 men becomes a
   platoon, a platoon at 10 a squad, a squad at 5 a fireteam; a fireteam down to
   one man breaks up.
@@ -160,8 +185,10 @@ Soldiers fight as units, as real armies do:
   your colour (a diamond for the enemy), the branch inside (a cross for
   infantry, an oval for armour, a slash for recon, a dot for artillery...),
   the size above (Ø fireteam, • squad, ••• platoon, | company, || battalion), and
-  a name such as *Fireteam Bravo* or *2nd Platoon*. Hovering a soldier or
-  vehicle shows its type, its unit and its strength.
+  a name such as *Fireteam Bravo* or *2nd Platoon*, its strength and a health
+  bar. Cards overlap neatly when units stand together. Enemy cards show too
+  (turn them off in Settings → Display, *Show enemy unit cards*). Hovering a
+  soldier or vehicle shows its type, its unit and its strength.
 
 ### Holding buildings, bunkers and trenches
 
@@ -175,8 +202,11 @@ Soldiers fight as units, as real armies do:
 - **To come out,** give the men inside any move order: click the building to
   select them, then right-click where they should go.
 - If the building is destroyed, the men inside are thrown out and hurt.
-- **Right-click a trench** with infantry selected to man it: they spread out
-  along the whole trench line, one man to each piece of trench first.
+- **Right-click a trench** with infantry selected to man it: each piece of
+  trench holds **up to three men**. They spread along the whole trench line,
+  drop into it and **stay there**: move orders don't pull them out. Press
+  **Evacuate** (E, or the sidebar button) with them selected to climb out.
+  Men in a trench take 60 % less damage.
 
 ### What you can't see: chips
 
@@ -191,8 +221,8 @@ valuable thing among them. Chips can't be shot; send someone to look.
 
 | | What it does |
 | --- | --- |
-| Trench | Dig a line (click, drag, release). Infantry in a trench take 60 % less damage. Wheeled vehicles can't cross it. |
-| Sandbags | A low wall. Infantry right beside it take 40 % less damage. Blocks everything. |
+| Trench | Dig a line (click, drag, release). Each piece holds three men, who take 60 % less damage and stay until evacuated (E). Wheeled vehicles can't cross it. |
+| Sandbags | A low line of sandbags; pieces join up into a wall. Infantry right beside it take 40 % less damage. Blocks everything. |
 | Barbed wire | Stops infantry; vehicles drive through. |
 | Tank traps | Stop vehicles; infantry walk through. |
 | MG Bunker | A machine-gun pillbox that shreds infantry. |
@@ -253,7 +283,8 @@ These are the defaults:
 
 | Input | Action |
 | --- | --- |
-| Left click | Select a unit: the whole fireteam or platoon it belongs to (Shift: add or remove; Alt: just that one) |
+| Left click | Select a soldier, vehicle or building (Shift: add or remove) |
+| Left click on a unit card | Select the whole unit (double-click: centre on it) |
 | Left drag | Box-select your units |
 | Double-click | Select all units of that type on screen |
 | Left click on a building your men hold | Select the men inside |
@@ -264,6 +295,7 @@ These are the defaults:
 | W A S D, arrow keys, screen edges | Scroll |
 | Ctrl+A, then left click (or F) | Attack-move to that point (Esc or right click cancels) |
 | Ctrl+S (or X) | Stop |
+| E (or Ctrl+E) | Evacuate: the selected men climb out of their trench |
 | Ctrl+D (or G) | Deploy a construction truck |
 | Ctrl+B | Bind the selection into a squad, platoon or company (vehicles: platoon, company, battalion) |
 | Ctrl+U | Disband the selected unit |
@@ -287,7 +319,9 @@ These are the defaults:
 **Settings → Display** sets the frame rate limit (30 to 240, or unlimited;
 144 by default), vsync, whether the mouse is kept inside the window while you
 play (on by default, so edge scrolling always works), edge scrolling, scroll
-speed, the info panel, unit cards and fog chips.
+speed, the info panel, unit cards (and whether enemy cards show) and fog
+chips. The sidebar wears your side's colours: field grey for the Germans,
+khaki for the Soviets.
 
 Screenshots, settings and the log file (`legion.log`) are saved in
 `%APPDATA%\Makorain\LegionClassic\`.
@@ -313,16 +347,16 @@ removes those units again; undoing a delete brings them back where they were.
 | Smooth | Soften bumps and sharp edges |
 | Flatten | Level the ground to the height where the stroke started |
 | Roughen | Add natural unevenness |
-| Paint ground | Grass, dry grass, dirt, mud, sand, rock, snow, dirt road; edges blend naturally |
-| Place props | Click for one tree, bush, rock, palm, snowy pine, dead tree, jungle tree, scrub, debris or sandstone; drag to scatter |
+| Paint ground | Grass, dry grass, dirt, mud, sand, rock, snow, dirt road; edges blend naturally. Tick **Grid** (or press G) to paint whole tiles, a square the brush size wide, for exact edges |
+| Place props | Click for one tree, bush, rock, palm, snowy pine, dead tree, jungle tree, scrub, debris, sandstone, stump, log pile, haystack, crates or fence; drag to scatter. **Civilian buildings** (houses, churches, barns, the railway station, farmhouse, school...) are here too, placed one at a time; they belong to nobody |
 | Erase props | Remove props inside the brush |
 | Water level | Water fills every part of the map below this height |
 
 ### Units tab
 
 - **Place units.** Choose the side, then a unit from the palette. It is
-  listed under headings: infantry, vehicles, base buildings, defences,
-  fortifications, and civilian buildings (which always belong to nobody).
+  listed under headings: infantry, vehicles, base buildings, defences and
+  fortifications (civilian buildings are on the Terrain tab, with the props).
   Pick one heading from the list to see only that kind; tick *Every faction*
   to mix factions. While placing a building, a grid shows the tiles around the
   cursor. Structures go down exactly on the grid,
@@ -429,7 +463,7 @@ start), `--demo` (the two armies attack each other), `--no-bases` (armies only,
 no bases), `--debug` (open the debug panel), `--editor` (start with the editor
 open), `--open path\to\map.lmap` (start on a saved map), `--menu` (the main
 menu; the default when started with no options), `--ai-battle` (watch two
-computer players), `--gallery` (every unit and building lined up, for looking
+computer players; add `--side 1` to watch from the Soviet side), `--gallery` (every unit and building lined up, for looking
 at the art), `--org-demo` (a platoon, an armoured platoon, a held building and
 fog chips), `--export-sprites folder` (write every sprite as a PNG for
 repainting; see [ART_PIPELINE.md](ART_PIPELINE.md)).

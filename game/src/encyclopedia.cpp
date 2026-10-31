@@ -68,11 +68,16 @@ void Encyclopedia::draw() {
   ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
   ImGui::SetNextWindowSize(size, ImGuiCond_Appearing);
   ui::pushTheme();
-  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.13f, 0.14f, 0.11f, 0.98f));
-  ImGui::PushStyleColor(ImGuiCol_TitleBgActive, ImVec4(0.27f, 0.25f, 0.16f, 1));
-  ImGui::PushStyleColor(ImGuiCol_TitleBg, ImVec4(0.20f, 0.19f, 0.13f, 1));
-  ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.45f, 0.36f, 0.17f, 1));
-  ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.36f, 0.32f, 0.20f, 1));
+  auto col = [](ImU32 c, float a = 1.0f) {
+    ImVec4 v = ImGui::ColorConvertU32ToFloat4(c);
+    v.w = a;
+    return v;
+  };
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, col(ui::kPlateDark, 0.98f));
+  ImGui::PushStyleColor(ImGuiCol_TitleBgActive, col(ui::kPlate));
+  ImGui::PushStyleColor(ImGuiCol_TitleBg, col(ui::kPlateDark));
+  ImGui::PushStyleColor(ImGuiCol_Header, col(ui::kBrassDim));
+  ImGui::PushStyleColor(ImGuiCol_HeaderHovered, col(ui::kPlateLight));
   ImGui::PushStyleColor(ImGuiCol_TableRowBgAlt, ImVec4(1, 1, 1, 0.03f));
   if (!ImGui::Begin("Encyclopedia", &open_, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings)) {
     ImGui::End();

@@ -1,4 +1,5 @@
 #include "menus.hpp"
+#include "ui_style.hpp"
 
 #include <imgui.h>
 
@@ -88,6 +89,7 @@ bool Menus::backButton() {
 void Menus::draw() {
   // In the main menu the battle behind is just scenery.
   if (scene_.mode() == Mode::Menu && page_ == Page::None) page_ = Page::Main;
+  if (scene_.mode() == Mode::Menu) ui::setFaction("");  // the menus wear olive
   if (scene_.mode() == Mode::Replay) drawReplayBar();
   switch (page_) {
     case Page::Main: drawMain(); break;
@@ -149,7 +151,7 @@ void Menus::drawMain() {
   if (menuButton("About", w)) page_ = Page::About;
   if (menuButton("Quit", w)) scene_.quit();
   ImGui::Dummy(ImVec2(0, 6));
-  ImGui::TextDisabled("Slave Engine 1.0  -  build 0.7.6");
+  ImGui::TextDisabled("Slave Engine 1.0  -  build 0.7.7");
   ImGui::End();
 }
 

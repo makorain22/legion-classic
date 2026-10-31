@@ -624,9 +624,11 @@ void Sidebar::update(float dt) {
 
 void Sidebar::draw() {
   const ImGuiIO& io = ImGui::GetIO();
+  // The side we command sets the colours: field grey or khaki.
+  ui::setFaction(scene_.players()[scene_.player()].faction.c_str());
   ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - kWidth, 0));
   ImGui::SetNextWindowSize(ImVec2(kWidth, io.DisplaySize.y));
-  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.13f, 0.14f, 0.11f, 1.0f));
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImGui::ColorConvertU32ToFloat4(ui::kPlateDark));
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
   ui::pushTheme();
   ImGui::Begin("##sidebar", nullptr,
@@ -640,6 +642,9 @@ void Sidebar::draw() {
     dl->AddRectFilled(a, ImVec2(a.x + 4, b.y), ui::kPlateDark);
     dl->AddLine(ImVec2(a.x + 4, a.y), ImVec2(a.x + 4, b.y), ui::kBrassDim, 1.0f);
     ui::rivets(dl, ImVec2(a.x + 4, a.y), b, 6);
+    // Painted markings low on the plate: a stencilled stripe and the emblem.
+    ui::stencilStrip(dl, ImVec2(a.x + 12, b.y - 18), ImVec2(b.x - 40, b.y - 8));
+    ui::emblem(dl, ImVec2(b.x - 24, b.y - 13), 18);
   }
   const float width = kWidth - 16;
   const uint8_t me = scene_.player();
@@ -679,9 +684,10 @@ void Sidebar::draw() {
     const uint32_t tc = scene_.teamColor(me);
     const ImVec2 a = ImGui::GetCursorScreenPos();
     dl->AddRectFilled(ImVec2(a.x, a.y + 3), ImVec2(a.x + 10, a.y + 13), tc | 0xFF000000u, 2.0f);
-    ImGui::Dummy(ImVec2(14, 0));
+    ui::emblem(dl, ImVec2(a.x + 23, a.y + 8), 13);
+    ImGui::Dummy(ImVec2(32, 0));
     ImGui::SameLine();
-    ImGui::TextColored(ImVec4(0.87f, 0.83f, 0.71f, 1), "%s", scene_.players()[me].name.c_str());
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(ui::kStencil), "%s", scene_.players()[me].name.c_str());
     ImGui::SameLine();
     ImGui::TextDisabled("(Tab)");
   }

@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.7.7 – Playtest rework: trenches, unit cards, bases, computer doctrines, field works (1 Nov 2026)
+
+From the 0.7.6 playtest.
+
+- **Trenches hold men.** Each piece of trench takes up to three men, who drop
+  into it and stay there (60 % less damage); move orders don't pull them out.
+  **Evacuate** (E or Ctrl+E, or the sidebar button) brings them out. Men in
+  trenches show, can be picked and box-selected.
+- **Every unit is its own.** Clicking or box-selecting picks just those men or
+  vehicles, whatever unit they belong to; **click a unit card** to select the
+  whole unit, double-click it to centre on it.
+- **Combined units.** Tanks and infantry bound together (Ctrl+B) become a
+  mechanised platoon, battle group or armoured regiment, with a bigger fire
+  bonus; vehicles alone are named by role (armoured, reconnaissance, tank
+  destroyer, artillery battery/battalion/regiment, mechanised).
+- **Bigger unit cards** with symbol, name, strength, a health bar and a team
+  stripe, stacked neatly; enemy cards show too (Settings → Display toggle).
+- **Starting positions** for skirmish: opposite sides (default; teams face
+  each other across the map), fixed, or shuffled.
+- **Bases laid out as military posts:** a compound with roads and a parade
+  ground, barracks and power behind, the depot on the nearest supply point,
+  a sandbag line with a gate and MG nests across the front, watchtowers,
+  wire and tank traps beyond.
+- **Computer player rework.** Each side fights to its own doctrine: the
+  Germans build fewer, better units, bind them into battle groups and fortify
+  in depth; the Soviets mass riflemen and T-34s, lean on artillery and stream
+  reinforcements into an attack. The main force attacks (often by a flank),
+  regroups and digs in when hurt instead of running home, then goes again.
+  Fast vehicles raid the weakest enemy depots. A home guard mans the base
+  trenches and bunkers; damaged vehicles go home for repairs. It expands to
+  distant supply points (with MG nests beside them), builds a second yard,
+  and digs trench lines, wire and tank traps across its approach. It binds
+  its forces into units, so its cards mean something.
+- **Fortification art:** sandbags as a low line that joins up into walls;
+  barbed wire as a post-and-wire fence; hedgehog tank traps; a smooth
+  concrete pillbox instead of the blocky bunker (finer voxels for all field
+  works). Supply points are fenced compounds with crates where a depot goes,
+  not circles.
+- **More buildings:** a railway station, a farmhouse and a school, in towns
+  and villages and in the art pack.
+- **Live Scenario Editor:** grid painting (G) for exact terrain edges;
+  civilian buildings are placed from the Props panel and belong to nobody.
+- **Faction colours:** the sidebar and encyclopedia wear field grey for the
+  Germans and khaki for the Soviets, with painted stripes and the side's
+  emblem (a plain cross; a red star). The menus stay olive.
+- Saves are version SIM3; 0.7.6 saves still load. `--side N` watches an
+  `--ai-battle` from another side.
+
 ## 0.7.6 – Blitzkrieg art pack, new interface, encyclopedia, more content (31 Oct 2026)
 
 - **Blitzkrieg art pack (personal use).** `--import-blitzkrieg <Data folder>`

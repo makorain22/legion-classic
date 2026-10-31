@@ -7,7 +7,10 @@ set in an alternate-history 1940s–1950s war, built on its own engine,
 **Status:** Milestones 1–7 of 10 plus two playtest reworks (0.7.5: supply
 points, fireteams to companies with NATO cards, garrisons, fog chips,
 rebindable controls; 0.7.6: the Blitzkrieg art pack importer, a new sidebar,
-the encyclopedia, a clearer Script tab, new defences and buildings). Next:
+the encyclopedia, a clearer Script tab, new defences and buildings; 0.7.7:
+trench garrisons, combined battle groups, military-post bases, a computer
+player with a doctrine per side that raids, regroups and expands, joined
+fortification lines and faction-coloured interfaces). Next:
 Milestone 8, creation tools. See
 [`docs/design/DESIGN.md`](docs/design/DESIGN.md) for the full plan,
 [`docs/PLAYING.md`](docs/PLAYING.md) for how to play and
