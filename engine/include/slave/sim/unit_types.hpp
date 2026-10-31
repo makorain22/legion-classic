@@ -56,6 +56,8 @@ struct UnitTypeDef {
   int deploysTo = -1;
   std::string freeUnitId;    // a refinery comes with a supply truck
   int freeUnit = -1;
+  int32_t repair = 0;        // engineers: hit points restored per tick to friendly machines and works
+  int32_t aiWeight = 1;      // how often the computer picks it (relative), 0 = never
 
   // Structures (footW > 0).
   int32_t footW = 0, footH = 0;  // footprint in tiles

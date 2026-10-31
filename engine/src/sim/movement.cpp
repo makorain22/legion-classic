@@ -76,6 +76,8 @@ void Simulation::stepOrders() {
     const UnitTypeDef& def = types_.get(u.type);
     switch (o.type) {
       case OrderType::Idle:
+      case OrderType::Harvest:  // run by the economy step
+      case OrderType::Repair:
         break;
       case OrderType::Move:
         if (!m.active && !m.request) {
@@ -290,7 +292,16 @@ void Simulation::stepVision() {
     for (int b = 0; b < MAX_PLAYERS; ++b)
       if (team_[static_cast<size_t>(a)] == team_[static_cast<size_t>(b)])
         viewers[static_cast<size_t>(a)][viewerCount[static_cast<size_t>(a)]++] = static_cast<uint8_t>(b);
+  // Areas a scenario has revealed stay visible.
+  for (const RevealedArea& ra : revealed_) {
+    if (ra.area < 0 || ra.area >= static_cast<int32_t>(script_.areas.size())) continue;
+    const ScriptArea& a = script_.areas[static_cast<size_t>(ra.area)];
+    const int r = std::max(a.x1 - a.x0, a.y1 - a.y0) / 2 + 1;
+    for (uint8_t p = 0; p < MAX_PLAYERS; ++p)
+      if (ra.player == ANY_PLAYER || p == ra.player) vision_.stamp(p, (a.x0 + a.x1) / 2, (a.y0 + a.y1) / 2, r);
+  }
   reg_.each<CUnit, CPosition>([&](uint32_t, CUnit& u, CPosition& p) {
+    if (u.owner >= MAX_PLAYERS) return;  // neutral: nobody sees through civilians' eyes
     const size_t o = u.owner % MAX_PLAYERS;
     const int r = types_.get(u.type).sight >> LEPTON_SHIFT;
     for (uint8_t i = 0; i < viewerCount[o]; ++i) vision_.stamp(viewers[o][i], p.x >> LEPTON_SHIFT, p.y >> LEPTON_SHIFT, r);

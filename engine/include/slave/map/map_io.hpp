@@ -34,7 +34,8 @@ struct PlayerSetup {
   uint32_t color = 0xFF2C3AC4;  // RGBA8, little-endian (R in the low byte)
   uint8_t team = 0;             // same team = allies
   bool active = false;
-  bool human = true;            // false = computer (the AI arrives in Milestone 6)
+  bool human = true;            // false = computer player
+  uint8_t difficulty = 1;       // computer: 0 easy, 1 normal, 2 hard
   int32_t startX = -1, startY = -1;  // where this side's camera starts, leptons (-1 = map centre)
   int32_t credits = 5000;            // supplies at the start
 };
@@ -43,16 +44,17 @@ struct MapFile {
   Map map;
   std::vector<UnitPlacement> units;
   std::vector<PlayerSetup> players;  // empty = the game's default two sides
+  std::string scriptJson;            // scenario triggers (see sim/script.hpp), "" = none
 };
 
 bool saveMap(const std::string& path, const Map& map, const std::vector<UnitPlacement>& units, std::string& error);
 bool saveMap(const std::string& path, const Map& map, const std::vector<UnitPlacement>& units,
-             const std::vector<PlayerSetup>& players, std::string& error);
+             const std::vector<PlayerSetup>& players, std::string& error, const std::string& scriptJson = "");
 bool loadMap(const std::string& path, MapFile& out, std::string& error);
 
 // In-memory versions (used by the file functions and by tests).
 std::vector<uint8_t> encodeMap(const Map& map, const std::vector<UnitPlacement>& units,
-                               const std::vector<PlayerSetup>& players = {});
+                               const std::vector<PlayerSetup>& players = {}, const std::string& scriptJson = "");
 bool decodeMap(const std::vector<uint8_t>& bytes, MapFile& out, std::string& error);
 
 }  // namespace slave

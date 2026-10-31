@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "slave/sim/weapons.hpp"
 
 #include <cmath>
@@ -52,6 +53,8 @@ bool WeaponRegistry::loadJson(const nlohmann::json& doc, std::string& error) {
       if (w.contains("splash")) d.splash = tilesToLeptons(w["splash"]);
       d.accuracy = w.value("accuracy", d.accuracy);
       d.muzzle = w.value("muzzle", uint8_t{1});
+      d.burst = std::max(1, w.value("burst", 1));
+      if (w.contains("burstSpread")) d.burstSpread = tilesToLeptons(w["burstSpread"]);
       const std::string wh = w.at("warhead").get<std::string>();
       int found = -1;
       for (size_t i = 0; i < warheads_.size(); ++i)

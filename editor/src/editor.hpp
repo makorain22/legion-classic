@@ -34,6 +34,7 @@ enum class Tool {
   Raise, Lower, Smooth, Flatten, Roughen, Paint, Props, Erase, Oil,  // terrain
   PlaceUnits, SelectUnits,                                     // units
   Artillery, Smite, Heal,                                      // battle ("god") tools
+  Area,                                                        // scenario areas (Script tab)
   Count
 };
 
@@ -108,6 +109,15 @@ class Editor {
   void drawUnitsTab();
   void drawSidesTab();
   void drawBattleTab();
+  void drawScriptTab();  // script_tab.cpp
+  void renderAreas(slave::SpriteRenderer& r);
+  void drawAreaLabels();
+  bool editCondition(slave::Condition& c);
+  bool editAction(slave::Action& a);
+  bool playerCombo(const char* label, uint8_t& p, bool allowAny);
+  bool areaCombo(const char* label, int32_t& area);
+  bool unitCombo(const char* label, int32_t& type, bool allowAny);
+  bool triggerCombo(const char* label, int32_t& trigger);
   void drawInspector();
   void drawUnitPalette();
   void applyUnitBrush(slave::Vec2f c, float dt);
@@ -164,6 +174,11 @@ class Editor {
 
   // Battle tools.
   int strikeRounds_ = 12;
+  // Script tab.
+  int selectedTrigger_ = -1;
+  int selectedArea_ = -1;
+  bool drawingArea_ = false;
+  slave::Vec2i areaStart_, areaEnd_;
   float godAccum_ = 0;
   uint32_t nextTag_ = 1;
   std::unordered_map<uint32_t, std::weak_ptr<PresenceAction>> pendingTags_;
@@ -177,7 +192,11 @@ class Editor {
   bool showNew_ = false, showOpen_ = false, showSaveAs_ = false;
   int newSizeIndex_ = 1;
   int newTerrain_ = 1;
+  // Civilian buildings always belong to nobody, whichever side is chosen.
+  uint8_t placingOwner() const;
   int newSeed_ = 1940;
+  int newBiome_ = 0;
+  bool newTowns_ = true;
   char nameBuf_[96] = "";
   std::vector<std::string> mapFiles_;
   std::string lastError_;

@@ -30,8 +30,14 @@ enum class Layer : uint8_t { Grass = 0, DryGrass, Dirt, Mud, Sand, Rock, Snow, R
 constexpr int LAYER_COUNT = static_cast<int>(Layer::Count);
 const char* layerName(Layer l);
 
-enum class PropKind : uint8_t { Tree = 0, Pine, Bush, Rock, Count };
+// Kinds are stored by number in map files: new kinds go at the end.
+enum class PropKind : uint8_t {
+  Tree = 0, Pine, Bush, Rock,
+  SnowPine, DeadTree, Palm, Scrub, JungleTree, Debris, SandRock,
+  Count
+};
 const char* propKindName(PropKind k);
+const char* propKindId(PropKind k);  // file-name style: "snow_pine"
 
 // A decorative map object (tree, rock). Positions are in leptons.
 struct Prop {
@@ -51,6 +57,12 @@ struct TerrainRules {
   uint16_t maxSlope[3] = {40, 22, 30};  // per Locomotor: foot, wheeled, tracked
   int16_t maxWaterDepth[3] = {12, 0, 4};
 };
+
+// The look and lie of the land: ground colours, trees, water, weather.
+enum class Biome : uint8_t { Temperate = 0, Winter, Desert, Tropical, Urban, Count };
+const char* biomeName(Biome b);
+const char* biomeId(Biome b);
+bool parseBiome(const std::string& s, Biome& out);
 
 class Map {
  public:
@@ -122,6 +134,8 @@ class Map {
     std::fill(blocks_.begin(), blocks_.end(), uint8_t{0});
     ++revision_;
   }
+  std::vector<uint8_t>& blockData() { return blocks_; }
+  void blocksChanged() { ++revision_; }
   // Ground a building could stand on: dry, gently sloped, unoccupied.
   bool buildable(int tx, int ty) const;
 
@@ -146,6 +160,19 @@ class Map {
 
   // Random landscape: gentle hills, a river, dirt roads, fields and woods.
   void generateCountryside(uint64_t seed);
+  void generateTerrain(uint64_t seed, Biome b);
+  // Random landscape in a biome (temperate countryside, snowy steppe, desert,
+  // jungle, ruined town). Sets `biome`.
+  void generate(Biome b, uint64_t seed);
+  Biome biome = Biome::Temperate;
+
+  // Building plots chosen by the generator for villages and towns (neutral
+  // houses the game places when a skirmish starts). Not saved with the map.
+  struct Lot {
+    int tx = 0, ty = 0;  // footprint centre tile
+    uint8_t kind = 0;    // 0 cottage, 1 bombed cottage, 2 town house, 3 church, 4 ruin, 5 adobe
+  };
+  std::vector<Lot> lots;
 
  private:
   int width_ = 0, height_ = 0;

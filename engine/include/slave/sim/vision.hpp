@@ -37,6 +37,11 @@ class Vision {
   uint32_t revision() const { return revision_; }
   int width() const { return w_; }
   int height() const { return h_; }
+  // Explored ground and reveal flags, for save games.
+  std::array<std::vector<uint8_t>, kMaxPlayers>& grids() { return grid_; }
+  std::array<bool, kMaxPlayers>& revealFlags() { return reveal_; }
+  std::array<bool, kMaxPlayers>& activeFlags() { return active_; }
+  void touch() { ++revision_; }
 
  private:
   bool inBounds(int tx, int ty) const { return tx >= 0 && ty >= 0 && tx < w_ && ty < h_; }

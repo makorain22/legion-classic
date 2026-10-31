@@ -149,25 +149,29 @@ void Simulation::stepWeapons() {
         impact(s.weapon, owner, miss, kNullEntity, s.from, reg_.handle(s.shooter));
       }
     } else {
-      // Shells scatter more the farther they fly.
+      // Shells scatter more the farther they fly; salvo rockets scatter more still.
       const uint32_t d = distance(s.at.x - s.from.x, s.at.y - s.from.y);
       const int32_t spread = static_cast<int32_t>(d / 20);
-      Vec2i aim = s.at;
-      if (spread > 0) {
-        aim.x += rng_.range(-spread, spread);
-        aim.y += rng_.range(-spread, spread);
+      for (int32_t b = 0; b < wd.burst; ++b) {
+        Vec2i aim = s.at;
+        const int32_t sp = spread + (wd.burst > 1 ? wd.burstSpread : 0);
+        if (sp > 0) {
+          aim.x += rng_.range(-sp, sp);
+          aim.y += rng_.range(-sp, sp);
+        }
+        const Entity pe = reg_.create();
+        CProjectile pr;
+        pr.from = s.from;
+        pr.to = aim;
+        pr.x = s.from.x;
+        pr.y = s.from.y;
+        pr.total = static_cast<int32_t>(std::max<uint32_t>(1, distance(aim.x - s.from.x, aim.y - s.from.y)));
+        pr.weapon = static_cast<uint16_t>(s.weapon);
+        pr.owner = owner;
+        pr.shooter = reg_.handle(s.shooter);
+        pr.delay = static_cast<uint16_t>(b * 2);  // a ripple, not one bang
+        reg_.add<CProjectile>(pe, pr);
       }
-      const Entity pe = reg_.create();
-      CProjectile pr;
-      pr.from = s.from;
-      pr.to = aim;
-      pr.x = s.from.x;
-      pr.y = s.from.y;
-      pr.total = static_cast<int32_t>(std::max<uint32_t>(1, distance(aim.x - s.from.x, aim.y - s.from.y)));
-      pr.weapon = static_cast<uint16_t>(s.weapon);
-      pr.owner = owner;
-      pr.shooter = reg_.handle(s.shooter);
-      reg_.add<CProjectile>(pe, pr);
     }
   }
 }

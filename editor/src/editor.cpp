@@ -20,7 +20,7 @@ namespace legion {
 
 namespace {
 const char* kToolNames[] = {"Raise", "Lower", "Smooth", "Flatten", "Roughen", "Paint ground", "Place props",
-                            "Erase props", "Oil fields", "Place units", "Select units", "Artillery", "Smite", "Heal"};
+                            "Erase props", "Oil fields", "Place units", "Select units", "Artillery", "Smite", "Heal", "Draw area"};
 const char* kToolTips[] = {
     "Raise the ground into hills.",
     "Lower the ground into valleys and riverbeds.",
@@ -36,6 +36,7 @@ const char* kToolTips[] = {
     "Call down a barrage of 105 mm shells. Hurts every side.",
     "Destroy every unit under the brush, with wrecks and smoke.",
     "Restore every unit under the brush to full health.",
+    "Drag a rectangle on the map to make a named area for triggers.",
 };
 // Swatch colours for the ground layers (approximate, for the panel only).
 const ImVec4 kLayerSwatch[LAYER_COUNT] = {
@@ -83,7 +84,7 @@ void Editor::setActive(bool on) {
 void Editor::setTool(Tool t) {
   if (stroking_) endStroke();
   tool_ = t;
-  tab_ = t <= Tool::Oil ? 0 : t <= Tool::SelectUnits ? 1 : 3;
+  tab_ = t <= Tool::Oil ? 0 : t <= Tool::SelectUnits ? 1 : t == Tool::Area ? 4 : 3;
   tabRequest_ = tab_;
 }
 
@@ -232,6 +233,7 @@ void Editor::endStroke() {
     return;
   }
   history_.end();
+  scene_.terrainEdited();
 }
 
 void Editor::strokeAt(Vec2f c, float dt) {
@@ -246,6 +248,9 @@ void Editor::strokeAt(Vec2f c, float dt) {
     case Tool::Artillery:
     case Tool::Smite:
     case Tool::Heal: applyGodTool(c, dt); break;
+    case Tool::Area:
+      areaEnd_ = {static_cast<int32_t>(c.x) >> LEPTON_SHIFT, static_cast<int32_t>(c.y) >> LEPTON_SHIFT};
+      break;
     default: applyHeightTool(c, dt); break;
   }
 }
@@ -402,6 +407,7 @@ void Editor::undo() {
   if (stroking_ || !history_.canUndo()) return;
   const std::string label = history_.undoLabel();
   applyRegion(history_.undo(scene_.map()));
+  scene_.terrainEdited();
   scene_.showStatus("Undo: " + label, 1.5f);
 }
 
@@ -409,6 +415,7 @@ void Editor::redo() {
   if (stroking_ || !history_.canRedo()) return;
   const std::string label = history_.redoLabel();
   applyRegion(history_.redo(scene_.map()));
+  scene_.terrainEdited();
   scene_.showStatus("Redo: " + label, 1.5f);
 }
 
@@ -426,7 +433,7 @@ std::string Editor::sanitize(const std::string& name) const {
 
 bool Editor::save(const std::string& path) {
   std::string err;
-  if (!saveMap(path, scene_.map(), scene_.exportUnits(), scene_.playerList(), err)) {
+  if (!saveMap(path, scene_.map(), scene_.exportUnits(), scene_.playerList(), err, scene_.scenarioJson())) {
     lastError_ = err;
     scene_.showStatus("Save failed: " + err, 5);
     return false;
@@ -455,9 +462,11 @@ bool Editor::load(const std::string& path) {
 // Drawing
 // ---------------------------------------------------------------------------
 void Editor::renderWorld(SpriteRenderer& r) {
+  if (active_) renderAreas(r);
   if (!active_ || ImGui::GetIO().WantCaptureMouse) return;
   const Vec2f c = scene_.groundAt(scene_.mouse());
   renderUnitGhosts(r, c);
+  if (tool_ == Tool::Area) return;
   if (tool_ == Tool::SelectUnits) return;
   if (tool_ == Tool::PlaceUnits && placeMode_ != PlaceMode::Brush) return;
   const uint32_t col = toolColor(tool_);
@@ -476,6 +485,7 @@ void Editor::renderWorld(SpriteRenderer& r) {
 void Editor::imgui() {
   if (!active_) return;
   drawToolPanel();
+  drawAreaLabels();
   drawNewMapDialog();
   drawOpenDialog();
   drawSaveAsDialog();
@@ -517,8 +527,8 @@ void Editor::drawToolPanel() {
 
   // --- Tabs ---------------------------------------------------------------
   if (ImGui::BeginTabBar("##tabs")) {
-    const char* names[] = {"Terrain", "Units", "Sides", "Battle"};
-    for (int i = 0; i < 4; ++i) {
+    const char* names[] = {"Terrain", "Units", "Sides", "Battle", "Script"};
+    for (int i = 0; i < 5; ++i) {
       const ImGuiTabItemFlags flags = (tabRequest_ == i) ? ImGuiTabItemFlags_SetSelected : 0;
       if (ImGui::BeginTabItem(names[i], nullptr, flags)) {
         if (tab_ != i && tabRequest_ < 0) {
@@ -526,13 +536,15 @@ void Editor::drawToolPanel() {
           tab_ = i;
           if (i == 0 && !isTerrainTool()) tool_ = Tool::Raise;
           if (i == 1 && tool_ != Tool::PlaceUnits && tool_ != Tool::SelectUnits) tool_ = Tool::SelectUnits;
-          if (i == 3 && tool_ < Tool::Artillery) tool_ = Tool::SelectUnits;
+          if (i == 3 && (tool_ < Tool::Artillery || tool_ == Tool::Area)) tool_ = Tool::SelectUnits;
+          if (i == 4 && tool_ != Tool::Area) tool_ = Tool::SelectUnits;
         }
         switch (i) {
           case 0: drawTerrainTab(); break;
           case 1: drawUnitsTab(); break;
           case 2: drawSidesTab(); break;
-          default: drawBattleTab(); break;
+          case 3: drawBattleTab(); break;
+          default: drawScriptTab(); break;
         }
         ImGui::EndTabItem();
       }
@@ -615,13 +627,17 @@ void Editor::drawTerrainTab() {
     m.recomputeInfo();
     scene_.terrain().markWaterDirty();
   }
-  if (ImGui::IsItemDeactivated()) history_.end();
+  if (ImGui::IsItemDeactivated()) {
+    history_.end();
+    scene_.terrainEdited();
+  }
   if (ImGui::Button("Water to screen-centre height")) {
     const Vec2f c = scene_.groundAt({io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f});
     history_.begin("Water level");
     history_.touchWater(m);
     m.setWaterLevel(static_cast<uint16_t>(m.heightAt(c.x, c.y)));
     history_.end();
+    scene_.terrainEdited();
     m.recomputeInfo();
     scene_.terrain().markWaterDirty();
   }
@@ -636,16 +652,25 @@ void Editor::drawNewMapDialog() {
   ImGui::SetNextWindowPos(ImGui::GetIO().DisplaySize * 0.5f, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
   if (!ImGui::BeginPopupModal("New map", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) return;
   ImGui::Combo("Size", &newSizeIndex_, "64 x 64 (skirmish)\0128 x 128\0256 x 256\0512 x 512 (huge)\0001024 x 1024 (experimental)\0");
-  ImGui::Combo("Terrain", &newTerrain_, "Flat grass\0Random countryside\0");
-  if (newTerrain_ == 1) ImGui::InputInt("Seed", &newSeed_);
+  ImGui::Combo("Terrain", &newTerrain_, "Flat grass\0Random landscape\0");
+  if (newTerrain_ == 1) {
+    if (ImGui::BeginCombo("Biome", biomeName(static_cast<Biome>(newBiome_)))) {
+      for (int b = 0; b < static_cast<int>(Biome::Count); ++b)
+        if (ImGui::Selectable(biomeName(static_cast<Biome>(b)), b == newBiome_)) newBiome_ = b;
+      ImGui::EndCombo();
+    }
+    ImGui::InputInt("Seed", &newSeed_);
+    ImGui::Checkbox("Villages and towns", &newTowns_);
+  }
   ImGui::TextDisabled("Unsaved changes to the current map will be lost.");
   if (ImGui::Button("Create", ImVec2(120, 0))) {
     MapFile f;
     const int size = kNewSizes[newSizeIndex_];
     f.map.resize(size, size);
     if (newTerrain_ == 1) {
-      f.map.generateCountryside(static_cast<uint64_t>(newSeed_));
-      f.map.name = "Countryside " + std::to_string(newSeed_);
+      f.map.generate(static_cast<Biome>(newBiome_), static_cast<uint64_t>(newSeed_));
+      f.map.name = std::string(biomeName(static_cast<Biome>(newBiome_))) + " " + std::to_string(newSeed_);
+      if (newTowns_) scene_.addTownBuildings(f);
     } else {
       f.map.name = "New map";
     }

@@ -47,6 +47,11 @@ class Rng {
   bool chance(uint32_t num, uint32_t den) { return below(den) < num; }
 
   uint64_t state() const { return state_; }
+  uint64_t increment() const { return inc_; }
+  void restore(uint64_t state, uint64_t inc) {
+    state_ = state;
+    inc_ = inc;
+  }
 
  private:
   uint64_t state_ = 0;

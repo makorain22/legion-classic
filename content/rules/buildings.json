@@ -1,5 +1,5 @@
 {
-  "_comment": "Structures: buildings, defences and fortifications. footprint in tiles [width, depth]; power: + produced, - used; role: what it provides (yard builds structures, barracks trains infantry, factory builds vehicles, refinery takes oil); buildRadius: tiles around it where its side may build; cover: % less damage for infantry standing in it; coverAround: same for infantry next to it; blocks: which movement types it stops (default all).",
+  "_comment": "Structures: buildings, defences and fortifications. footprint in tiles [width, depth]; power: + produced, - used; role: what it provides (yard builds structures, barracks trains infantry, factory builds vehicles, refinery takes oil); buildRadius: tiles around it where its side may build; cover: % less damage for infantry standing in it; coverAround: same for infantry next to it; blocks: which movement types it stops (default all). Faction 'neutral' structures are civilian buildings: nobody builds them, nobody attacks them unless ordered to, and infantry beside them take cover.",
   "units": [
     {
       "id": "ger_yard",
@@ -528,6 +528,90 @@
       "requires": [
         "rus_yard"
       ]
+    },
+    {
+      "id": "neutral_cottage",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Cottage",
+      "model": "cottage",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 900,
+      "coverAround": 30,
+      "autoTarget": false
+    },
+    {
+      "id": "neutral_cottage_bombed",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Bombed Cottage",
+      "model": "cottage_bombed",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 500,
+      "coverAround": 30,
+      "autoTarget": false
+    },
+    {
+      "id": "neutral_townhouse",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Town House",
+      "model": "townhouse",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 1400,
+      "coverAround": 30,
+      "autoTarget": false
+    },
+    {
+      "id": "neutral_church",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Church",
+      "model": "church",
+      "footprint": [
+        3,
+        3
+      ],
+      "health": 2400,
+      "coverAround": 30,
+      "autoTarget": false
+    },
+    {
+      "id": "neutral_ruin",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Ruined House",
+      "model": "ruin",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 600,
+      "coverAround": 30,
+      "autoTarget": false
+    },
+    {
+      "id": "neutral_adobe",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Mud-brick House",
+      "model": "adobe",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 1000,
+      "coverAround": 30,
+      "autoTarget": false
     }
   ]
 }

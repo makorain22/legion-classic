@@ -46,17 +46,23 @@ Blitzkrieg-like: slow, deadly, combined arms.
   will be expensive (costs arrive with the economy in Milestone 5).
 - Armour has front / side / rear values; a rear hit can kill a tank outright.
 - Units see less far than tanks can shoot; scouts spot for the guns.
-- Unit scale: try smaller units (or a wider default view) in the art
-  milestone so battles read as bigger.
+- Unit scale: true to life (soldier a third of a tile tall, medium tank a
+  little over a tile long) so battles read as big.
+- Milestone 7 roster: AT teams hunt tanks from cover; engineers repair;
+  snipers out-range rifles; tank destroyers out-range tanks but have no
+  turret; heavy tanks need an oil depot and a watchtower; artillery needs a
+  watchtower (spotters) and out-ranges everything.
 
 ## Art direction
 
 Gritty and realistic, in the spirit of Blitzkrieg: painted, blended terrain
 with no visible grid; muted olive, brown and grey palette; soft shadows; fine,
 weathered units with camouflage and grime and no outlines; lasting battle
-damage (craters, scorch marks, wrecks, smoke); summer, autumn and winter
-biomes. Terrain follows this from Milestone 2; units and buildings move to it
-in the art milestone.
+damage (craters, scorch marks, wrecks, smoke). Five biomes: temperate,
+winter, desert, tropical, urban. Since Milestone 7, units and buildings are
+detailed voxel models baked with ambient occlusion, camouflage and grime (see
+`docs/ART_PIPELINE.md`); any sprite can be replaced by a PNG. Germany uses
+only the plain cross, Russia the red star.
 
 ## Core technical rules
 
@@ -91,8 +97,16 @@ in the art milestone.
    structures on the grid, four production lines, sidebar with minimap,
    fortifications (trenches with cover, sandbags, wire, tank traps), stances,
    formations with right-drag fronts, unit scale pass.
-6. AI and scenario scripting (triggers, objectives), saves and replays.
-7. Art pipeline and content: Germany and Russia, 5 biomes.
+6. **AI, scripting, saves and replays** – done: main menu and skirmish setup,
+   a computer player inside the simulation tick (easy / normal / hard),
+   triggers with areas, conditions, actions and objectives (Script tab),
+   full-state saves, command-log replays.
+7. **Art pipeline and content** – done: full German and Soviet rosters (MG and
+   AT teams, engineers that repair, snipers, half-tracks, light / medium /
+   heavy tanks, tank destroyers, howitzer and salvo rockets), detailed voxel
+   models at true scale with camouflage, grime and ambient occlusion, five
+   biomes with their own ground, trees, light and water, neutral villages and
+   towns, PNG export / override pipeline, a bundled scenario.
 8. Creation tools: rules editor, sprite studio, mods.
 9. UK faction, tutorial, campaigns (built with the editor), sound and music.
 10. Release 1.0: balance, performance, documentation, packaging.

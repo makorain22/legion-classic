@@ -16,7 +16,9 @@ namespace {
 void usage() {
   SLV_INFO("Options: --windowed WxH | --fullscreen | --map N | --seed N | --zoom 0.5|1|2 | --spawn N\n"
            "         --offscreen --frames N --screenshot out.png --demo --fixed-dt --no-help --debug\n"
-           "         --dump-atlas atlas.png --editor --open map.lmap --editor-demo --live-demo");
+           "         --dump-atlas atlas.png --editor --open map.lmap --editor-demo --live-demo\n"
+           "         --menu --ai-battle --biome temperate|winter|desert|tropical|urban --gallery\n"
+           "         --export-sprites DIR (write every sprite as PNG for repainting; see docs/ART_PIPELINE.md)");
 }
 }  // namespace
 
@@ -25,6 +27,8 @@ int main(int argc, char** argv) {
   cfg.title = "Legion Classic";
   legion::SceneOptions opt;
   std::string dumpAtlas;
+  // Started with no options (double-click): the main menu.
+  opt.showMenu = argc <= 1;
 
   for (int i = 1; i < argc; ++i) {
     const std::string a = argv[i];
@@ -48,7 +52,16 @@ int main(int argc, char** argv) {
     else if (a == "--live-demo") opt.liveDemo = true;
     else if (a == "--editor-selftest") opt.editorSelfTest = true;
     else if (a == "--economy-demo") opt.economyDemo = true;
+    else if (a == "--gallery") opt.gallery = true;
+    else if (a == "--export-sprites") opt.exportSprites = next();
     else if (a == "--no-bases") opt.noBases = true;
+    else if (a == "--menu") opt.showMenu = true;
+    else if (a == "--ai-battle") opt.aiBattle = true;
+    else if (a == "--flow-selftest") opt.flowSelfTest = true;
+    else if (a == "--biome") {
+      slave::Biome b;
+      if (slave::parseBiome(next(), b)) opt.biome = static_cast<int>(b);
+    }
     else if (a == "--open") opt.loadMap = next();
     else if (a == "--help" || a == "-h") { usage(); return 0; }
     else SLV_WARN("Unknown option: %s", a.c_str());
@@ -57,7 +70,7 @@ int main(int argc, char** argv) {
   slave::App app;
   if (!app.init(cfg)) return 1;
   slave::log::init((app.userDir() + "legion.log").c_str());
-  SLV_INFO("Legion Classic 0.5 (Milestone 5) on Slave Engine 1.0");
+  SLV_INFO("Legion Classic 0.7 (Milestones 6-7) on Slave Engine 1.0");
 
   std::string contentDir = "content/";
   if (const char* base = SDL_GetBasePath()) contentDir = std::string(base) + "content/";
@@ -76,7 +89,7 @@ int main(int argc, char** argv) {
       exitCode = 1;
     } else {
       if (!dumpAtlas.empty()) scene.art().atlas.savePng(dumpAtlas);
-      app.run(scene);
+      if (opt.exportSprites.empty()) app.run(scene);  // exporting sprites: done once the art is built
     }
   }
   app.shutdown();

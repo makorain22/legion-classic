@@ -1,5 +1,70 @@
 # Changelog
 
+## 0.7.0 – Milestones 6 and 7: computer player, scripting, saves and replays; art and content (31 Oct 2026)
+
+**Milestone 6: the computer player, scenario scripting, saves and replays**
+
+- Main menu over a live battle between two computer players; skirmish setup
+  (map size, biome, seed, supplies, up to four sides: human or computer at
+  easy / normal / hard, faction, team); scenario list; load game; replays;
+  in-game menu (Esc / F10: resume, save, load, save replay, restart, main
+  menu, quit).
+- Computer player that plays by the rules, inside the simulation tick (so its
+  games replay exactly): power first, then depots, barracks, works and extra
+  production; defences; supply trucks per depot; a mixed army at a staging
+  point; base defence; growing attack waves that attack buildings directly
+  with units that can hurt them; falls back when worn down. Easy, normal and
+  hard differ in thinking speed, wave size and fortification.
+- Scenario scripting: named areas, triggers (all conditions, then actions,
+  once or repeating), 8 conditions and 17 actions (messages, objectives,
+  victory / defeat, spawns, supplies, reveal, attack-move / move, change
+  owner, kill, switch triggers, hand a side to the computer, camera).
+  Objectives shown on screen. Script tab in the editor, editable mid-battle.
+- Saves: the full simulation state (every component, paths, vision, script
+  progress, the computer players) in compressed `.lsav` files; a loaded game
+  continues bit for bit.
+- Replays: the starting state plus every command with its tick, in `.lrep`
+  files; the last game is kept automatically. Play / pause, 1×–8×, watch any
+  side, reveal the map.
+- Scenario files v2 store the triggers.
+
+**Milestone 7: art pipeline and content**
+
+- Full roster for Germany and Russia: riflemen, MG teams, AT teams
+  (Panzerschreck / anti-tank rifle), engineers, snipers; scout cars,
+  half-tracks, light, medium and heavy tanks, tank destroyers, artillery
+  (105 mm howitzer / rocket truck), supply and construction trucks. New
+  weapons including 37 / 45 / 75 L70 / 85 / 88 / 122 mm guns, heavy MGs,
+  scoped rifles and salvo rockets (`burst`: 8 rockets rippled a tick apart).
+- Engineers repair friendly vehicles and buildings (right-click), and look
+  for damaged ones nearby when idle. The computer keeps engineers at home.
+- New detailed voxel art at true scale (vehicles 1/36 tile per voxel,
+  soldiers 1/56): sloped or slab armour, tracks with road wheels and turning
+  sprockets, return rollers, side skirts, mantlets and muzzle brakes,
+  commanders in hatches, fuel drums, tools, spare track links; German
+  three-tone camouflage and plain Soviet green; mud, dust, chipped paint;
+  plain cross and red star markings; soldiers with helmets, packs, webbing and
+  their weapons (MG and AT teams are two men). The baker adds ambient
+  occlusion and grain, and bakes on all CPU cores; sprites are trimmed.
+- Five biomes for random maps: temperate, winter (snow, snowy pines, frozen
+  river), desert (sand, rock, palms, narrow green rivers), tropical (jungle,
+  broad muddy rivers) and urban (a street grid of town houses, churches,
+  cottages and ruins). Each has its own ground, trees, light and water.
+- Civilian buildings (cottage, bombed cottage, town house, church, ruin,
+  mud-brick house): neutral, blocking, give infantry beside them 30 % cover,
+  attacked only on orders, grey on the minimap. Villages and towns are placed
+  on random maps; the editor places them as neutral.
+- PNG art pipeline: `--export-sprites` writes every sprite as a PNG with its
+  anchor; PNGs in `content/art/` replace generated sprites by name (team
+  colour painted in magenta). See `docs/ART_PIPELINE.md`.
+- Editor: new maps in any biome with or without villages; new props in the
+  palette; civilian buildings always listed.
+- A bundled scenario, *Kalach Crossing* (winter): take a village, hold it
+  against a counter-attack, destroy the Soviet base.
+- `--gallery` lines up every unit and building; `--biome` picks the biome.
+- 66 unit tests (adds saves, replays, triggers, the computer player, the
+  roster, salvo fire, repairs, biomes, neutral buildings, the bundled scenario).
+
 ## 0.5.0 – Milestone 5: Economy, base building and fortifications (31 Oct 2026)
 
 - Economy: supplies from oil. Supply trucks pump oil fields and drive it to an

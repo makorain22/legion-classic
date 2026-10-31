@@ -20,7 +20,7 @@ uint32_t getU32(const uint8_t* p) {
 }  // namespace
 
 std::vector<uint8_t> encodeMap(const Map& map, const std::vector<UnitPlacement>& units,
-                               const std::vector<PlayerSetup>& players) {
+                               const std::vector<PlayerSetup>& players, const std::string& scriptJson) {
   nlohmann::json j;
   j["engine"] = "Slave Engine 1.0";
   j["name"] = map.name;
@@ -29,6 +29,7 @@ std::vector<uint8_t> encodeMap(const Map& map, const std::vector<UnitPlacement>&
   j["width"] = map.width();
   j["height"] = map.height();
   j["waterLevel"] = map.waterLevel();
+  j["biome"] = biomeId(map.biome);
   auto& props = j["props"] = nlohmann::json::array();
   for (const Prop& p : map.props()) props.push_back({static_cast<int>(p.kind), p.variant, p.x, p.y});
   auto& us = j["units"] = nlohmann::json::array();
@@ -38,7 +39,11 @@ std::vector<uint8_t> encodeMap(const Map& map, const std::vector<UnitPlacement>&
   for (const PlayerSetup& p : players)
     ps.push_back({{"name", p.name}, {"faction", p.faction}, {"color", p.color}, {"team", p.team},
                   {"active", p.active}, {"human", p.human}, {"startX", p.startX}, {"startY", p.startY},
-                  {"credits", p.credits}});
+                  {"credits", p.credits}, {"difficulty", p.difficulty}});
+  if (!scriptJson.empty()) {
+    nlohmann::json sj = nlohmann::json::parse(scriptJson, nullptr, false);
+    if (!sj.is_discarded()) j["script"] = std::move(sj);
+  }
   const std::string header = j.dump();
 
   std::vector<uint8_t> raw;
@@ -128,6 +133,7 @@ bool decodeMap(const std::vector<uint8_t>& bytes, MapFile& out, std::string& err
     m.author = j.value("author", "");
     m.description = j.value("description", "");
     m.setWaterLevel(j.value("waterLevel", uint16_t{0}));
+    if (!parseBiome(j.value("biome", std::string("temperate")), m.biome)) m.biome = Biome::Temperate;
     for (const auto& pj : j.value("props", nlohmann::json::array())) {
       const int kind = pj.at(0).get<int>();
       if (kind < 0 || kind >= static_cast<int>(PropKind::Count)) continue;
@@ -158,8 +164,10 @@ bool decodeMap(const std::vector<uint8_t>& bytes, MapFile& out, std::string& err
       p.startX = pj.value("startX", -1);
       p.startY = pj.value("startY", -1);
       p.credits = pj.value("credits", 5000);
+      p.difficulty = static_cast<uint8_t>(std::clamp(pj.value("difficulty", 1), 0, 2));
       out.players.push_back(std::move(p));
     }
+    out.scriptJson = j.contains("script") ? j["script"].dump() : std::string();
     m.recomputeInfo();
   } catch (const nlohmann::json::exception& e) {
     error = std::string("map file is damaged: ") + e.what();
@@ -173,8 +181,8 @@ bool saveMap(const std::string& path, const Map& map, const std::vector<UnitPlac
 }
 
 bool saveMap(const std::string& path, const Map& map, const std::vector<UnitPlacement>& units,
-             const std::vector<PlayerSetup>& players, std::string& error) {
-  const std::vector<uint8_t> bytes = encodeMap(map, units, players);
+             const std::vector<PlayerSetup>& players, std::string& error, const std::string& scriptJson) {
+  const std::vector<uint8_t> bytes = encodeMap(map, units, players, scriptJson);
   // Write to a temporary file first, so a crash never leaves a half-written map.
   const std::string tmp = path + ".tmp";
   {

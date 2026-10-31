@@ -29,6 +29,8 @@ struct Image {
 
   void blit(const Image& src, int dx, int dy);
   bool savePng(const std::string& path) const;
+  // Loads a PNG (any channel count) as RGBA. False if missing or unreadable.
+  bool loadPng(const std::string& path);
 };
 
 }  // namespace slave

@@ -81,6 +81,18 @@ class Pool final : public detail::PoolBase {
     data_.clear();
   }
 
+  // Restores a pool exactly as saved: same entities in the same order, so
+  // iteration (and therefore the simulation) continues identically.
+  void restore(std::vector<uint32_t> dense, std::vector<T> data) {
+    sparse_.clear();
+    dense_ = std::move(dense);
+    data_ = std::move(data);
+    for (size_t i = 0; i < dense_.size(); ++i) {
+      if (dense_[i] >= sparse_.size()) sparse_.resize(static_cast<size_t>(dense_[i]) + 1, kNone);
+      sparse_[dense_[i]] = static_cast<uint32_t>(i);
+    }
+  }
+
   T& get(uint32_t e) { return data_[sparse_[e]]; }
   const T& get(uint32_t e) const { return data_[sparse_[e]]; }
   T* tryGet(uint32_t e) { return has(e) ? &data_[sparse_[e]] : nullptr; }
@@ -126,6 +138,21 @@ class Registry {
     return e.index < generations_.size() && used_[e.index] && generations_[e.index] == e.generation;
   }
   Entity handle(uint32_t index) const { return {index, generations_[index]}; }
+
+  // Raw entity bookkeeping, for save games.
+  struct State {
+    std::vector<uint32_t> generations;
+    std::vector<uint8_t> used;
+    std::vector<uint32_t> freeList;
+    uint64_t alive = 0;
+  };
+  State state() const { return {generations_, used_, freeList_, alive_}; }
+  void restoreState(State s) {
+    generations_ = std::move(s.generations);
+    used_ = std::move(s.used);
+    freeList_ = std::move(s.freeList);
+    alive_ = static_cast<size_t>(s.alive);
+  }
   size_t aliveCount() const { return alive_; }
 
   void clear() {

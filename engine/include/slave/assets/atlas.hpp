@@ -25,6 +25,13 @@ class AtlasBuilder {
   bool build(int size, Image& atlas, std::vector<AtlasFrame>& frames) const;
 
   size_t count() const { return items_.size(); }
+  const Image& image(int i) const { return items_[static_cast<size_t>(i)].image; }
+  int anchorX(int i) const { return items_[static_cast<size_t>(i)].anchorX; }
+  int anchorY(int i) const { return items_[static_cast<size_t>(i)].anchorY; }
+  // Swaps in a different picture for a frame (art overrides), before build().
+  void replace(int i, Image image, int anchorX, int anchorY) {
+    items_[static_cast<size_t>(i)] = {std::move(image), anchorX, anchorY};
+  }
 
  private:
   struct Item {

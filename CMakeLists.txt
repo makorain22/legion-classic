@@ -130,7 +130,8 @@ if(LEGION_BUILD_GAME)
     engine/src/ui/*.cpp)
   add_library(slave STATIC ${SLAVE_GFX_SOURCES})
   target_include_directories(slave PUBLIC engine/include)
-  target_link_libraries(slave PUBLIC slave_core glad imgui stb SDL3::SDL3-static)
+  find_package(Threads REQUIRED)  # sprites are baked on all cores
+  target_link_libraries(slave PUBLIC slave_core glad imgui stb SDL3::SDL3-static Threads::Threads)
   legion_warnings(slave)
 
   # -------------------------------------------------------------------------
@@ -163,6 +164,8 @@ if(LEGION_BUILD_TESTS)
   add_executable(slave_tests ${TEST_SOURCES} editor/src/history.cpp)
   target_include_directories(slave_tests PRIVATE editor/src)
   target_link_libraries(slave_tests PRIVATE slave_core doctest::doctest)
+  # Some tests play whole games with the real rules.
+  target_compile_definitions(slave_tests PRIVATE LEGION_RULES_DIR="${CMAKE_SOURCE_DIR}/content/rules/")
   legion_warnings(slave_tests)
   add_test(NAME slave_tests COMMAND slave_tests)
 endif()

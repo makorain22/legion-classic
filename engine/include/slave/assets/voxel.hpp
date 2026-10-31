@@ -71,6 +71,8 @@ struct BakeOptions {
   int supersample = 1;      // 2-4: render larger and average down for soft edges
   const VoxelModel* shadowModel = nullptr;  // cast the shadow from this model instead (same frame)
   uint8_t shadowAlpha = 96;
+  float ao = 0.0f;     // 0..1: darken faces crowded by neighbouring voxels (crevices, under fenders)
+  float grain = 0.0f;  // 0..1: per-voxel brightness noise (worn paint, cloth, earth)
 };
 
 struct BakedSprite {

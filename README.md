@@ -4,9 +4,12 @@ A 2.5D isometric real-time strategy game in the spirit of the 1990s classics,
 set in an alternate-history 1940s–1950s war, built on its own engine,
 **Slave Engine 1.0**, with a Live Scenario Editor built in.
 
-**Status:** Milestone 5 of 10 (economy, base building and fortifications).
-Next: Milestone 6, the computer player and scenario scripting. See [`docs/design/DESIGN.md`](docs/design/DESIGN.md)
-for the full plan and [`docs/PLAYING.md`](docs/PLAYING.md) for controls.
+**Status:** Milestones 6 and 7 of 10 (computer player, scenario scripting,
+saves and replays; the full German and Soviet rosters in detailed voxel art,
+five biomes, and a PNG art pipeline). Next: Milestone 8, creation tools. See
+[`docs/design/DESIGN.md`](docs/design/DESIGN.md) for the full plan,
+[`docs/PLAYING.md`](docs/PLAYING.md) for how to play and
+[`docs/ART_PIPELINE.md`](docs/ART_PIPELINE.md) for replacing art.
 
 ## Getting a playable build
 
@@ -36,9 +39,9 @@ build/bin/LegionClassic                # run the game
 | `engine/` | Slave Engine: deterministic simulation (`sim/`, `core/`, `ecs/`, `map/`) and presentation (`render/`, `assets/`, `platform/`) |
 | `game/` | Legion Classic itself: scenes, HUD, game rules glue |
 | `editor/` | The built-in map editor (F2): tools, panels, undo history |
-| `content/` | All game data (unit stats, later maps and art). Mods copy this layout |
+| `content/` | All game data: unit and weapon rules, bundled scenarios, sprite overrides. Mods copy this layout |
 | `tests/` | Unit tests (doctest), including the determinism test |
-| `tools/` | Build-time scripts and tools |
+| `tools/` | Build-time scripts and tools (`make_scenarios.cpp` writes the bundled scenarios) |
 | `external/` | Checked-in generated code (OpenGL loader) |
 | `docs/` | Design doc, player notes, engine notes |
 

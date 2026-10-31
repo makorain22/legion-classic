@@ -156,12 +156,13 @@ TEST_CASE("units stop at cliffs instead of driving through") {
 TEST_CASE("scenario sides round-trip with the map") {
   Map m(64, 64);
   std::vector<PlayerSetup> players(3);
-  players[0] = {"Wehrmacht", "ger", 0xFF2C3AC4, 0, true, true, 1000, 2000, 7000};
-  players[1] = {"Red Army", "rus", 0xFFC46034, 1, true, false, -1, -1, 5000};
-  players[2] = {"Partisans", "rus", 0xFF48A042, 1, false, false, 300, 300, 0};
+  players[0] = {"Wehrmacht", "ger", 0xFF2C3AC4, 0, true, true, 1, 1000, 2000, 7000};
+  players[1] = {"Red Army", "rus", 0xFFC46034, 1, true, false, 2, -1, -1, 5000};
+  players[2] = {"Partisans", "rus", 0xFF48A042, 1, false, false, 0, 300, 300, 0};
   MapFile f;
   std::string err;
-  REQUIRE(decodeMap(encodeMap(m, {}, players), f, err));
+  REQUIRE(decodeMap(encodeMap(m, {}, players, R"({"areas":[{"name":"Hill","rect":[1,2,3,4]}]})"), f, err));
+  CHECK(f.scriptJson.find("Hill") != std::string::npos);
   REQUIRE(f.players.size() == 3);
   CHECK(f.players[0].name == "Wehrmacht");
   CHECK(f.players[0].startY == 2000);
@@ -169,6 +170,7 @@ TEST_CASE("scenario sides round-trip with the map") {
   CHECK(f.players[2].credits == 0);
   CHECK(f.players[1].faction == "rus");
   CHECK_FALSE(f.players[1].human);
+  CHECK(f.players[1].difficulty == 2);
   CHECK(f.players[2].team == 1);
   CHECK_FALSE(f.players[2].active);
   CHECK(f.players[2].color == 0xFF48A042u);

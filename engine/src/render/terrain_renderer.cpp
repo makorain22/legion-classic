@@ -55,6 +55,8 @@ uniform sampler2D uMacro;
 uniform vec2 uMapSize;
 uniform float uTexScale;
 uniform sampler2D uFog;
+uniform vec3 uTint;
+uniform float uSat;
 out vec4 fragColor;
 // Fog of war: unexplored ground is black, explored ground out of sight is
 // darkened and drained of colour, visible ground is untouched.
@@ -102,6 +104,8 @@ void main() {
   col = mix(col, col * vec3(1.06, 1.01, 0.86), clamp((hue - 0.55) * 2.0, 0.0, 1.0) * 0.5);
   col = mix(col, col * vec3(0.90, 1.05, 0.92), clamp((0.45 - hue) * 2.0, 0.0, 1.0) * 0.5);
 
+  // The biome's light: cold winter blue, hot desert glare, drained ruins.
+  col = mix(vec3(dot(col, vec3(0.30, 0.59, 0.11))), col, uSat) * uTint;
   col *= vExtra;  // slope lighting
   col = applyFog(col, texture(uFog, vTile / uMapSize).r);
   fragColor = vec4(col, 1.0);
@@ -115,6 +119,9 @@ uniform sampler2D uMacro;
 uniform sampler2D uFog;
 uniform vec2 uMapSize;
 uniform float uTime;
+uniform vec3 uShallow;
+uniform vec3 uDeep;
+uniform float uIce;
 out vec4 fragColor;
 // Fog of war: unexplored ground is black, explored ground out of sight is
 // darkened and drained of colour, visible ground is untouched.
@@ -128,20 +135,40 @@ void main() {
   float r1 = texture(uMacro, vTile * 0.11 + vec2(uTime * 0.010, uTime * 0.006)).b;
   float r2 = texture(uMacro, vTile * 0.19 - vec2(uTime * 0.007, -uTime * 0.009)).b;
   float r = r1 * 0.55 + r2 * 0.45;
-  vec3 shallow = vec3(0.29, 0.32, 0.22);
-  vec3 deep = vec3(0.09, 0.16, 0.17);
-  vec3 col = mix(shallow, deep, smoothstep(3.0, 45.0, d));
-  col += (r - 0.5) * 0.10;
-  col += pow(clamp(r, 0.0, 1.0), 7.0) * 0.35;       // glints
+  vec3 col = mix(uShallow, uDeep, smoothstep(3.0, 45.0, d));
+  col += (r - 0.5) * 0.10 * (1.0 - uIce);
+  col += pow(clamp(r, 0.0, 1.0), 7.0) * 0.35 * (1.0 - uIce);  // glints
+  // Ice: pale, cracked, still.
+  float crack = smoothstep(0.47, 0.5, r1) * (1.0 - smoothstep(0.5, 0.53, r1));
+  col = mix(col, vec3(0.70, 0.76, 0.80) - crack * 0.18 + (r2 - 0.5) * 0.06, uIce * smoothstep(1.0, 12.0, d));
   float shore = 1.0 - smoothstep(0.0, 4.0, d);
   col = mix(col, vec3(0.50, 0.47, 0.38), shore * 0.45 * smoothstep(0.35, 0.65, r));
   float alpha = mix(0.25, 0.92, smoothstep(0.0, 18.0, d));
+  alpha = mix(alpha, 0.96, uIce * smoothstep(0.0, 6.0, d));
   float fog = texture(uFog, vTile / uMapSize).r;
   col = applyFog(col, fog);
   alpha = mix(1.0, alpha, smoothstep(0.0, 0.5, fog));  // the shroud is opaque
   fragColor = vec4(col, alpha);
 }
 )";
+
+// How each biome tints the ground and colours its water.
+struct BiomeLight {
+  float tint[3];
+  float saturation;
+  float shallow[3], deep[3];
+  float ice;
+};
+const BiomeLight& biomeLight(Biome b) {
+  static const BiomeLight k[] = {
+      {{1.00f, 1.00f, 1.00f}, 1.00f, {0.29f, 0.32f, 0.22f}, {0.09f, 0.16f, 0.17f}, 0.0f},  // temperate
+      {{0.98f, 1.01f, 1.07f}, 0.80f, {0.40f, 0.46f, 0.50f}, {0.16f, 0.22f, 0.28f}, 0.85f},  // winter: frozen
+      {{1.07f, 1.00f, 0.88f}, 0.95f, {0.30f, 0.36f, 0.28f}, {0.08f, 0.21f, 0.23f}, 0.0f},  // desert: oasis teal
+      {{0.97f, 1.05f, 0.92f}, 1.12f, {0.26f, 0.30f, 0.18f}, {0.07f, 0.16f, 0.13f}, 0.0f},  // tropical: murky
+      {{0.96f, 0.96f, 0.95f}, 0.72f, {0.25f, 0.27f, 0.24f}, {0.08f, 0.12f, 0.13f}, 0.0f},  // urban
+  };
+  return k[static_cast<int>(b) % static_cast<int>(Biome::Count)];
+}
 
 void setupVao(GLuint vao, GLuint vbo, GLuint ibo) {
   glBindVertexArray(vao);
@@ -449,6 +476,9 @@ void TerrainRenderer::draw(const Camera& cam, float timeSeconds) {
   glUniform2f(terrainShader_.uniform("uMapSize"), static_cast<float>(map_->width()), static_cast<float>(map_->height()));
   glUniform1f(terrainShader_.uniform("uTexScale"), kTexScale);
   glUniform1i(terrainShader_.uniform("uFog"), 4);
+  const BiomeLight& light = biomeLight(map_->biome);
+  glUniform3f(terrainShader_.uniform("uTint"), light.tint[0], light.tint[1], light.tint[2]);
+  glUniform1f(terrainShader_.uniform("uSat"), light.saturation);
   layers_.bind(0);
   splat0_.bind(1);
   splat1_.bind(2);
@@ -471,6 +501,9 @@ void TerrainRenderer::draw(const Camera& cam, float timeSeconds) {
     glUniform1i(waterShader_.uniform("uMacro"), 0);
     glUniform1f(waterShader_.uniform("uTime"), timeSeconds);
     glUniform1i(waterShader_.uniform("uFog"), 1);
+    glUniform3f(waterShader_.uniform("uShallow"), light.shallow[0], light.shallow[1], light.shallow[2]);
+    glUniform3f(waterShader_.uniform("uDeep"), light.deep[0], light.deep[1], light.deep[2]);
+    glUniform1f(waterShader_.uniform("uIce"), light.ice);
     glUniform2f(waterShader_.uniform("uMapSize"), static_cast<float>(map_->width()), static_cast<float>(map_->height()));
     macro_.bind(0);
     fog_.bind(1);

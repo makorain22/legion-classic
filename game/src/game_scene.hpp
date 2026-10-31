@@ -16,11 +16,32 @@
 #include "slave/render/camera.hpp"
 #include "slave/render/sprite_renderer.hpp"
 #include "slave/render/terrain_renderer.hpp"
+#include "slave/sim/savefile.hpp"
 #include "slave/sim/simulation.hpp"
 
 namespace legion {
 
 class Editor;
+class Menus;
+
+// A skirmish as set up in the menu.
+struct SkirmishSetup {
+  int mapSize = 128;
+  uint64_t seed = 1940;
+  int biome = 0;
+  int credits = 5000;
+  struct Side {
+    bool open = false;
+    std::string faction = "ger";
+    bool human = false;
+    int difficulty = 1;  // 0 easy, 1 normal, 2 hard
+    int team = 0;
+    uint32_t color = 0xFF2C3AC4;
+  };
+  std::array<Side, 4> sides;
+};
+
+enum class Mode { Menu, Game, Replay };
 
 struct SceneOptions {
   int mapSize = 128;
@@ -35,8 +56,14 @@ struct SceneOptions {
   bool editorDemo = false;   // scripted editor session, for automated screenshots
   bool liveDemo = false;     // scripted Live Scenario Editor session (units, battle tools)
   bool editorSelfTest = false;  // checks unit placement / undo / redo through the real editor
+  std::string exportSprites;     // write every sprite as a PNG here, then quit
+  bool gallery = false;         // every unit lined up, for screenshots of the art
   bool economyDemo = false;     // scripted base building, for automated screenshots
   bool noBases = false;         // start with armies only, no bases (classic skirmish sandbox)
+  bool showMenu = false;        // start at the main menu (normal start-up)
+  bool aiBattle = false;        // a skirmish between two computer players
+  bool flowSelfTest = false;    // checks skirmish, save, load and replay through the real game
+  int biome = 0;
 };
 
 class GameScene final : public slave::Scene {
@@ -76,7 +103,16 @@ class GameScene final : public slave::Scene {
   void applyPlayers();  // after editing players(): colours, teams
   uint8_t player() const { return player_; }
   void setPlayer(uint8_t p);  // command and watch this side
-  uint32_t teamColor(int p) const { return teamColors_[static_cast<size_t>(p) % slave::MAX_PLAYERS]; }
+  // Civilians (owner >= MAX_PLAYERS) are drawn and listed in grey.
+  uint32_t teamColor(int p) const {
+    return p >= 0 && p < slave::MAX_PLAYERS ? teamColors_[static_cast<size_t>(p)] : slave::rgba8(150, 150, 146);
+  }
+  std::string ownerName(int p) const {
+    return p >= 0 && p < slave::MAX_PLAYERS ? players_[static_cast<size_t>(p)].name : std::string("Civilians");
+  }
+  const std::string& scenariosDir() const { return scenariosDir_; }
+  // Neutral houses on the generator's village and town plots.
+  void addTownBuildings(slave::MapFile& f) const;
 
   // Units.
   std::vector<slave::Entity>& selection() { return selection_; }
@@ -106,6 +142,31 @@ class GameScene final : public slave::Scene {
   const std::string& mapsDir() const { return mapsDir_; }
   const std::string& currentMapPath() const { return currentMapPath_; }
   void setCurrentMapPath(const std::string& p) { currentMapPath_ = p; }
+
+  // --- Game flow (frontend.cpp) ------------------------------------------------
+  Mode mode() const { return mode_; }
+  void startSkirmish(const SkirmishSetup& s);
+  bool startScenario(const std::string& path, std::string& error);  // play a .lmap
+  bool saveGame(const std::string& path, std::string& error);
+  bool loadGame(const std::string& path, std::string& error);
+  bool saveReplay(const std::string& path, std::string& error);
+  bool playReplay(const std::string& path, std::string& error);
+  void toMainMenu();
+  void restart();
+  void quit() { quit_ = true; }
+  void editorOpen(bool on);
+  void terrainEdited() { replayValid_ = false; }  // the editor changed the ground: replays can't follow
+  bool replayValid() const { return replayValid_; }
+  const std::string& savesDir() const { return savesDir_; }
+  const std::string& replaysDir() const { return replaysDir_; }
+  float replayProgress() const;
+  uint32_t replayEndTick() const { return replayEnd_; }
+  bool& revealMap() { return revealMap_; }
+  // The scenario script being edited (the editor's Script tab).
+  slave::ScenarioScript& scenario() { return scenario_; }
+  void scenarioChanged();  // push edits to the running battle
+  std::string scenarioJson() const;
+  const SkirmishSetup& lastSkirmish() const { return lastSkirmish_; }
 
  private:
   struct Marker {
@@ -142,6 +203,8 @@ class GameScene final : public slave::Scene {
   void setupStartingArmies();
   void buildBase(uint8_t player, slave::Vec2i centre);
   void runEconomyDemo();
+  void runGallery();
+  slave::Vec2i galleryAt_{0, 0};
   void updateCameraBounds();
   void drawHud();
   void drawHelp();
@@ -149,6 +212,15 @@ class GameScene final : public slave::Scene {
   void runEditorDemo();
   void runLiveDemo();
   void runEditorSelfTest();
+  void runFlowSelfTest();
+  uint64_t flowHash_ = 0;
+  uint32_t flowTick_ = 0;
+  void startAttract();
+  void beginRecording();
+  void autosaveReplay();
+  std::string metaJson(const std::string& title) const;
+  bool loadFromSave(slave::SaveFile& f, bool replay, std::string& error);
+  void drawObjectives();
   int selfTestFailures_ = 0;
   std::vector<slave::Vec2i> before_;
   slave::Vec2i moveDelta_;
@@ -165,12 +237,32 @@ class GameScene final : public slave::Scene {
   slave::Camera cam_;
   std::unique_ptr<Editor> editor_;
   std::unique_ptr<Sidebar> sidebar_;
+  std::unique_ptr<Menus> menus_;
   friend class Sidebar;
+  friend class Menus;
+  Mode mode_ = Mode::Game;
+  SkirmishSetup lastSkirmish_;
+  std::string lastScenarioPath_;
+  slave::SaveFile replayStart_;
+  bool replayValid_ = false;
+  std::vector<slave::Simulation::LoggedCommand> replayLog_;
+  size_t replayNext_ = 0;
+  uint32_t replayEnd_ = 0;
+  slave::ScenarioScript scenario_;
+  struct Message {
+    std::string text;
+    float age = 0;
+  };
+  std::vector<Message> messages_;
+  float attractTime_ = 0;
+  slave::Vec2f attractFocus_{-1, -1};
+  std::string savesDir_, replaysDir_;
   bool rmbDown_ = false, rmbDragging_ = false;
   slave::Vec2f rmbStart_;
   std::string banner_;
   float bannerTime_ = 0;
   std::array<uint32_t, slave::MAX_PLAYERS> teamColors_{};
+  std::string scenariosDir_;  // built-in missions, in the content folder
   std::array<slave::PlayerSetup, slave::MAX_PLAYERS> players_;
   std::unique_ptr<slave::MapFile> snapshot_;
   bool editorFog_ = false;

@@ -44,6 +44,8 @@ struct WeaponDef {
   uint16_t warhead = 0;
   uint8_t muzzle = 1;        // muzzle-flash size class 0..2 (presentation)
   int vsInfantry = -1;       // a gun's alternative round against infantry (e.g. HE), or -1
+  int32_t burst = 1;         // shells per shot (rocket salvoes), launched a tick apart
+  int32_t burstSpread = 0;   // leptons of extra scatter for each shell of a burst
 };
 
 class WeaponRegistry {

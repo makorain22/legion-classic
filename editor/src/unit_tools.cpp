@@ -195,8 +195,13 @@ void Editor::beginUnitStroke() {
   const Vec2i at{static_cast<int32_t>(g.x), static_cast<int32_t>(g.y)};
   godAccum_ = 1000.0f;  // fire on the first frame
   heal_ = {};
+  if (tool_ == Tool::Area) {
+    drawingArea_ = true;
+    areaStart_ = areaEnd_ = {at.x >> LEPTON_SHIFT, at.y >> LEPTON_SHIFT};
+    return;
+  }
   if (tool_ != Tool::PlaceUnits) return;
-  if (!scene_.players()[placeOwner_].active) {  // placing for a dormant side wakes it up
+  if (scene_.types().get(placeType_).faction != "neutral" && !scene_.players()[placeOwner_].active) {  // placing for a dormant side wakes it up
     scene_.players()[placeOwner_].active = true;
     scene_.applyPlayers();
   }
@@ -212,7 +217,7 @@ void Editor::beginUnitStroke() {
   }
   const int n = placeMode_ == PlaceMode::Block ? blockCount_ : 1;
   for (const Vec2i& p : blockPositions(at, n, spacingFor(def)))
-    if (placeable(placeType_, p)) action->specs.push_back({static_cast<uint16_t>(placeType_), placeOwner_, p, facing, -1});
+    if (placeable(placeType_, p)) action->specs.push_back({static_cast<uint16_t>(placeType_), placingOwner(), p, facing, -1});
   if (action->specs.empty()) {
     scene_.showStatus("Can't place " + def.name + " there", 2);
     return;
@@ -252,7 +257,7 @@ void Editor::applyUnitBrush(Vec2f c, float dt) {
           }
         }
       if (crowded) continue;
-      placing_->specs.push_back({static_cast<uint16_t>(placeType_), placeOwner_, p, angleOfFacing(placeFacing_), -1});
+      placing_->specs.push_back({static_cast<uint16_t>(placeType_), placingOwner(), p, angleOfFacing(placeFacing_), -1});
       placing_->entities.push_back(kNullEntity);
       break;
     }
@@ -261,6 +266,21 @@ void Editor::applyUnitBrush(Vec2f c, float dt) {
 }
 
 void Editor::endUnitStroke() {
+  if (drawingArea_) {
+    drawingArea_ = false;
+    ScenarioScript& s = scene_.scenario();
+    ScriptArea a;
+    a.name = "Area " + std::to_string(s.areas.size() + 1);
+    a.x0 = std::min(areaStart_.x, areaEnd_.x);
+    a.y0 = std::min(areaStart_.y, areaEnd_.y);
+    a.x1 = std::max(areaStart_.x, areaEnd_.x);
+    a.y1 = std::max(areaStart_.y, areaEnd_.y);
+    s.areas.push_back(a);
+    selectedArea_ = static_cast<int>(s.areas.size()) - 1;
+    scene_.scenarioChanged();
+    tool_ = Tool::SelectUnits;
+    return;
+  }
   if (placing_ && !placing_->specs.empty()) {
     char label[96];
     std::snprintf(label, sizeof label, "Brush %zu %s", placing_->specs.size(),
@@ -548,6 +568,10 @@ void Editor::unitIcon(int type, uint8_t owner, float size) {
   }
 }
 
+uint8_t Editor::placingOwner() const {
+  return scene_.types().get(placeType_).faction == "neutral" ? NEUTRAL_OWNER : placeOwner_;
+}
+
 void Editor::drawUnitPalette() {
   const auto& types = scene_.types();
   const std::string& faction = scene_.players()[placeOwner_].faction;
@@ -561,7 +585,7 @@ void Editor::drawUnitPalette() {
   const float icon = 44.0f;
   for (int i = 0; i < static_cast<int>(types.size()); ++i) {
     const UnitTypeDef& d = types.get(i);
-    if (!paletteAllFactions_ && d.faction != faction) continue;
+    if (!paletteAllFactions_ && d.faction != faction && d.faction != "neutral") continue;  // civilians always listed
     if (paletteCategory_ > 0 && static_cast<int>(d.category) != paletteCategory_ - 1) continue;
     ImGui::PushID(i);
     const bool sel = placeType_ == i && tool_ == Tool::PlaceUnits;
@@ -732,7 +756,7 @@ void Editor::drawInspector() {
     const CPosition& p = reg.get<CPosition>(e);
     ImGui::Text("%s", d.name.c_str());
     ImGui::TextDisabled("%s  -  unit #%u", d.id.c_str(), e.index);
-    ImGui::TextColored(toImVec(scene_.teamColor(u.owner)), "%s", scene_.players()[u.owner].name.c_str());
+    ImGui::TextColored(toImVec(scene_.teamColor(u.owner)), "%s", scene_.ownerName(u.owner).c_str());
     ImGui::ProgressBar(static_cast<float>(u.health) / d.maxHealth, ImVec2(-1, 0),
                        (std::to_string(u.health) + " / " + std::to_string(d.maxHealth) + " hp").c_str());
     ImGui::Text("Tile %d, %d   facing %d", p.x >> LEPTON_SHIFT, p.y >> LEPTON_SHIFT, facingOf(reg.get<CFacing>(e).angle));
@@ -744,7 +768,7 @@ void Editor::drawInspector() {
     if (const CCombat* c = reg.tryGet<CCombat>(e)) {
       if (reg.alive(c->target) && reg.has<CUnit>(c->target)) {
         const CUnit& t = reg.get<CUnit>(c->target);
-        ImGui::Text("Target: %s (%s)", scene_.types().get(t.type).name.c_str(), scene_.players()[t.owner].name.c_str());
+        ImGui::Text("Target: %s (%s)", scene_.types().get(t.type).name.c_str(), scene_.ownerName(t.owner).c_str());
       } else {
         ImGui::TextDisabled("No target");
       }

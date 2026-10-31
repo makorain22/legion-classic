@@ -41,6 +41,7 @@ jobs:
           Copy-Item -Recurse build/bin/content $dst/content
           Copy-Item README.md $dst/
           Copy-Item docs/PLAYING.md $dst/
+          Copy-Item docs/ART_PIPELINE.md $dst/
 
       - name: Upload build
         uses: actions/upload-artifact@v7

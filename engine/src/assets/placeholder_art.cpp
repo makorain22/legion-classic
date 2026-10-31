@@ -2,212 +2,26 @@
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
 
+#include <nlohmann/json.hpp>
+
+#include "art_common.hpp"
 #include "slave/assets/voxel.hpp"
 #include "slave/core/log.hpp"
 #include "slave/core/rng.hpp"
 
 namespace slave {
 
+using namespace art;
+
 namespace {
 
-// ---------------------------------------------------------------------------
-// Voxel palette. Faction colours (BASE*, UNIFORM*, HELMET) change per faction;
-// TEAM* entries are recoloured per player by the shader.
-// ---------------------------------------------------------------------------
-enum : uint8_t {
-  TEAM = 1, TEAM_DARK = 2, TEAM_LIGHT = 3,
-  BASE = 4, BASE_DARK = 5, BASE_LIGHT = 6, UNIFORM = 7, UNIFORM_DARK = 8,
-  STEEL_DARK = 10, STEEL = 11, TRACK_A = 12, TRACK_B = 13, RUBBER = 14, SKIN = 15,
-  HELMET = 16, GLASS = 17, LAMP = 18, BOOT = 19,
-  TRUNK = 20, LEAF_DARK = 21, LEAF = 22, LEAF_LIGHT = 23, PINE = 24, PINE_DARK = 25,
-  ROCK = 26, ROCK_DARK = 27, ROCK_LIGHT = 28, BUSH = 29,
-  // Structures.
-  CONCRETE = 30, CONCRETE_DARK = 31, CONCRETE_LIGHT = 32, BRICK = 33, BRICK_DARK = 34,
-  ROOF = 35, ROOF_DARK = 36, ROOF_LIGHT = 37, WOOD = 38, WOOD_DARK = 39, WINDOW = 40, WINDOW_LIT = 41,
-  SANDBAG = 42, SANDBAG_DARK = 43, EARTH = 44, EARTH_DARK = 45, RUST = 46, TANK_PAINT = 47, TANK_PAINT_DARK = 48,
-  CANVAS = 49, CANVAS_DARK = 50, SOOT = 51,
-};
 
-struct FactionLook {
-  const char* id;
-  Rgba base, uniform, helmet;
-  bool sloped;  // Russian armour: sloped plates and round turrets
-};
 
-const FactionLook kFactions[] = {
-    {"ger", {84, 88, 90, 255}, {98, 104, 96, 255}, {78, 84, 80, 255}, false},
-    {"rus", {88, 98, 58, 255}, {126, 112, 76, 255}, {72, 86, 54, 255}, true},
-};
 
-Rgba scale(Rgba c, float k) {
-  auto ch = [&](uint8_t v) { return static_cast<uint8_t>(std::clamp(v * k, 0.0f, 255.0f)); };
-  return {ch(c.r), ch(c.g), ch(c.b), c.a};
-}
 
-VoxelPalette makePalette(const FactionLook& f) {
-  VoxelPalette p;
-  p.setTeam(TEAM, 1.0f);
-  p.setTeam(TEAM_DARK, 0.72f);
-  p.setTeam(TEAM_LIGHT, 1.3f);
-  p.set(BASE, f.base);
-  p.set(BASE_DARK, scale(f.base, 0.78f));
-  p.set(BASE_LIGHT, scale(f.base, 1.22f));
-  p.set(UNIFORM, f.uniform);
-  p.set(UNIFORM_DARK, scale(f.uniform, 0.75f));
-  p.set(HELMET, f.helmet);
-  p.set(STEEL_DARK, {46, 48, 46, 255});
-  p.set(STEEL, {104, 108, 102, 255});
-  p.set(TRACK_A, {36, 34, 32, 255});
-  p.set(TRACK_B, {82, 78, 70, 255});
-  p.set(RUBBER, {30, 30, 30, 255});
-  p.set(SKIN, {214, 168, 128, 255});
-  p.set(GLASS, {126, 156, 168, 255});
-  p.set(LAMP, {236, 214, 140, 255});
-  p.set(BOOT, {40, 32, 24, 255});
-  p.set(TRUNK, {78, 62, 46, 255});
-  p.set(LEAF_DARK, {44, 60, 30, 255});
-  p.set(LEAF, {66, 86, 42, 255});
-  p.set(LEAF_LIGHT, {96, 114, 58, 255});
-  p.set(PINE, {44, 66, 44, 255});
-  p.set(PINE_DARK, {30, 46, 34, 255});
-  p.set(ROCK, {122, 116, 106, 255});
-  p.set(ROCK_DARK, {88, 84, 76, 255});
-  p.set(ROCK_LIGHT, {150, 144, 132, 255});
-  p.set(BUSH, {72, 90, 46, 255});
-  // Structures: German works are grey concrete under dark roofs; Soviet ones
-  // brick and weathered timber under green-grey tin.
-  if (f.sloped) {
-    p.set(CONCRETE, {128, 122, 108, 255});
-    p.set(ROOF, {84, 96, 78, 255});
-    p.set(WOOD, {112, 90, 64, 255});
-    p.set(TANK_PAINT, {96, 104, 70, 255});
-  } else {
-    p.set(CONCRETE, {132, 132, 126, 255});
-    p.set(ROOF, {78, 74, 72, 255});
-    p.set(WOOD, {104, 88, 68, 255});
-    p.set(TANK_PAINT, {116, 116, 110, 255});
-  }
-  p.set(CONCRETE_DARK, scale(p.color[CONCRETE], 0.78f));
-  p.set(CONCRETE_LIGHT, scale(p.color[CONCRETE], 1.14f));
-  p.set(BRICK, {124, 72, 56, 255});
-  p.set(BRICK_DARK, {92, 54, 44, 255});
-  p.set(ROOF_DARK, scale(p.color[ROOF], 0.76f));
-  p.set(ROOF_LIGHT, scale(p.color[ROOF], 1.2f));
-  p.set(WOOD_DARK, scale(p.color[WOOD], 0.72f));
-  p.set(WINDOW, {40, 46, 50, 255});
-  p.set(WINDOW_LIT, {196, 170, 110, 255});
-  p.set(SANDBAG, {150, 134, 100, 255});
-  p.set(SANDBAG_DARK, {118, 104, 76, 255});
-  p.set(EARTH, {104, 86, 62, 255});
-  p.set(EARTH_DARK, {74, 60, 44, 255});
-  p.set(RUST, {120, 74, 46, 255});
-  p.set(TANK_PAINT_DARK, scale(p.color[TANK_PAINT], 0.75f));
-  p.set(CANVAS, {120, 116, 88, 255});
-  p.set(CANVAS_DARK, {94, 90, 68, 255});
-  p.set(SOOT, {48, 46, 44, 255});
-  return p;
-}
-
-// ---------------------------------------------------------------------------
-// Placeholder unit models. All face +X. `f` = animation frame 0..3.
-// Team colour only on markings, so armies are told apart by faction shape
-// and colour first, then by player colour.
-// ---------------------------------------------------------------------------
-VoxelModel makeTank(const FactionLook& look, int f) {
-  VoxelModel m(22, 13, 8);
-  for (int x = 1; x < 17; ++x) {  // tracks, with links that shift when driving
-    const uint8_t c = ((x + f) % 2) ? TRACK_A : TRACK_B;
-    m.box(x, 0, 0, x + 1, 2, 2, c);
-    m.box(x, 11, 0, x + 1, 13, 2, c);
-  }
-  m.box(1, 2, 1, 17, 11, 3, BASE_DARK);  // lower hull
-  m.box(1, 0, 2, 17, 13, 3, BASE);       // fenders over the tracks
-  if (look.sloped) {
-    m.box(2, 1, 3, 14, 12, 4, BASE);       // short deck
-    m.box(14, 1, 2, 18, 12, 3, BASE_DARK); // long sloped glacis
-    m.box(17, 2, 1, 18, 11, 2, BASE_DARK);
-    m.box(2, 3, 3, 5, 10, 4, STEEL_DARK);  // engine grille
-    m.ellipsoid(8.5f, 6.5f, 4.6f, 3.6f, 3.6f, 1.8f, BASE);  // round turret
-    for (int y = 0; y < 13; ++y)
-      for (int x = 0; x < 22; ++x)
-        if (m.get(x, y, 4) == BASE) m.set(x, y, 4, TEAM);    // team band
-    m.box(8, 5, 6, 10, 8, 7, BASE_LIGHT);  // hatch
-    m.box(12, 6, 5, 22, 7, 6, STEEL_DARK); // long gun
-  } else {
-    m.box(2, 1, 3, 16, 12, 4, BASE);       // flat deck
-    m.box(16, 2, 1, 18, 11, 3, BASE_DARK); // upright nose plate
-    m.box(1, 0, 1, 17, 1, 3, BASE_DARK);   // side skirts
-    m.box(1, 12, 1, 17, 13, 3, BASE_DARK);
-    m.box(2, 3, 3, 5, 10, 4, STEEL_DARK);  // engine grille
-    m.box(6, 3, 4, 13, 10, 6, BASE);       // boxy turret
-    m.box(6, 3, 4, 13, 10, 5, TEAM);       // team band around the turret
-    m.box(7, 4, 6, 9, 6, 7, BASE_LIGHT);   // commander's cupola
-    m.box(13, 5, 4, 14, 8, 6, BASE_DARK);  // gun mantlet
-    m.box(14, 6, 5, 21, 7, 6, STEEL_DARK); // gun
-    m.box(20, 6, 5, 22, 7, 6, STEEL);      // muzzle brake
-  }
-  m.set(17, 1, 2, LAMP);
-  m.set(17, 11, 2, LAMP);
-  return m;
-}
-
-VoxelModel makeScoutCar(const FactionLook& look, int f) {
-  VoxelModel m(14, 8, 6);
-  m.box(1, 2, 1, 13, 6, 3, BASE);       // body
-  m.box(1, 1, 2, 13, 7, 3, BASE_DARK);  // mudguards
-  for (int wx : {2, 9})
-    for (int wy : {0, 6}) {
-      m.box(wx, wy, 0, wx + 3, wy + 2, 2, RUBBER);
-      m.set(wx + (f % 3), wy == 0 ? 0 : 7, 1, STEEL);  // turning hub
-    }
-  m.box(3, 2, 3, 7, 6, 4, BASE_DARK);   // cab
-  m.box(3, 2, 4, 7, 6, 5, TEAM);        // roof marking
-  m.box(7, 2, 3, 8, 6, 4, GLASS);       // windscreen
-  if (look.sloped) m.box(8, 2, 3, 12, 6, 4, BASE_DARK);  // long bonnet
-  m.box(4, 3, 5, 5, 5, 6, STEEL_DARK);  // gun mount
-  m.box(5, 4, 5, 10, 5, 6, STEEL_DARK); // machine gun
-  m.set(12, 2, 2, LAMP);
-  m.set(12, 5, 2, LAMP);
-  return m;
-}
-
-VoxelModel makeRifleman(const FactionLook& look, int f) {
-  VoxelModel m(7, 4, 10);
-  const int stride = (f == 1) ? 1 : (f == 3) ? -1 : 0;
-  // Legs: lower legs swing when walking.
-  m.box(2 + stride, 0, 0, 4 + stride, 2, 2, UNIFORM_DARK);
-  m.box(2 - stride, 2, 0, 4 - stride, 4, 2, UNIFORM_DARK);
-  m.box(2 + stride, 0, 0, 4 + stride, 2, 1, BOOT);
-  m.box(2 - stride, 2, 0, 4 - stride, 4, 1, BOOT);
-  m.box(2, 0, 2, 4, 4, 3, UNIFORM_DARK);  // hips
-  m.box(2, 0, 3, 4, 4, 6, TEAM);          // tunic in team colour (readable at 1x)
-  m.box(2, 0, 3, 4, 4, 4, UNIFORM_DARK);  // belt
-  m.box(1, 1, 3, 2, 3, 6, UNIFORM);       // pack
-  m.set(4, 0, 4, SKIN);                   // hands
-  m.set(4, 3, 4, SKIN);
-  m.box(3, 1, 4, 7, 2, 5, STEEL_DARK);    // rifle
-  m.box(2, 1, 6, 4, 3, 8, SKIN);          // head
-  if (look.sloped) {
-    m.box(2, 0, 8, 4, 4, 9, HELMET);      // round helmet
-    m.box(1, 1, 8, 5, 3, 9, HELMET);
-  } else {
-    m.box(1, 0, 8, 5, 4, 9, HELMET);      // flared helmet
-  }
-  m.box(2, 1, 9, 4, 3, 10, HELMET);
-  return m;
-}
-
-void speckle(VoxelModel& m, uint8_t from, uint8_t a, uint8_t b, uint32_t seed, int pa, int pb) {
-  for (int z = 0; z < m.sizeZ(); ++z)
-    for (int y = 0; y < m.sizeY(); ++y)
-      for (int x = 0; x < m.sizeX(); ++x) {
-        if (m.get(x, y, z) != from) continue;
-        const uint32_t h = hash32(static_cast<uint32_t>((z * 97 + y) * 131 + x) ^ seed) % 100;
-        if (h < static_cast<uint32_t>(pa)) m.set(x, y, z, a);
-        else if (h < static_cast<uint32_t>(pa + pb)) m.set(x, y, z, b);
-      }
-}
 
 // ---------------------------------------------------------------------------
 // Trees, bushes and rocks: twice the voxel resolution of units and baked with
@@ -314,137 +128,10 @@ Image makeDiamondOutline(int w, int h) {
   return img;
 }
 
-// A fallen rifleman, lying along +X.
-VoxelModel makeRiflemanDead(const FactionLook& look, int) {
-  VoxelModel m(11, 5, 3);
-  m.box(0, 1, 0, 4, 3, 1, UNIFORM_DARK);  // legs
-  m.box(0, 1, 0, 1, 3, 1, BOOT);
-  m.box(4, 0, 0, 8, 4, 2, TEAM);          // torso
-  m.box(4, 0, 0, 8, 4, 1, UNIFORM_DARK);
-  m.box(8, 1, 0, 10, 3, 2, SKIN);         // head
-  m.box(8, 1, 1, 10, 3, 2, HELMET);
-  m.box(3, 4, 0, 9, 5, 1, STEEL_DARK);    // dropped rifle
-  (void)look;
-  return m;
-}
 
-// Copies voxels with z >= zMin into `top` and the rest into `bottom`.
-void splitAt(const VoxelModel& m, int zMin, VoxelModel& bottom, VoxelModel& top) {
-  bottom = VoxelModel(m.sizeX(), m.sizeY(), m.sizeZ());
-  top = VoxelModel(m.sizeX(), m.sizeY(), m.sizeZ());
-  for (int z = 0; z < m.sizeZ(); ++z)
-    for (int y = 0; y < m.sizeY(); ++y)
-      for (int x = 0; x < m.sizeX(); ++x)
-        if (const uint8_t c = m.get(x, y, z)) (z >= zMin ? top : bottom).set(x, y, z, c);
-}
 
-constexpr float kTwoPi = 6.2831853f;
 
-// Bakes a unit in 16 facings for each faction look. With turretZ > 0, every
-// voxel at or above that height becomes a separate turret sheet that the
-// game rotates on its own; the turret turns around its own centre.
-// Scale of one voxel, in tiles. Vehicles and infantry use different scales so
-// their sizes stay true to life: a soldier stands about two thirds as tall as
-// a medium tank, and a tank is under one tile long, so masses of units read as
-// an army on a big battlefield rather than toys on a board.
-constexpr float kVehicleVoxel = 1.0f / 18.0f;
-constexpr float kInfantryVoxel = 1.0f / 32.0f;
 
-BakeOptions unitBake(float voxelTiles) {
-  BakeOptions o;
-  o.voxelTiles = voxelTiles;
-  o.supersample = 2;  // soft edges, no outlines: the gritty look
-  o.outline = false;
-  o.quantize = false;
-  return o;
-}
-
-void addUnit(AtlasBuilder& ab, SpriteCatalog& cat, const std::string& name,
-             VoxelModel (*make)(const FactionLook&, int), int animFrames, int turretZ,
-             VoxelModel (*makeCorpse)(const FactionLook&, int) = nullptr, float voxelTiles = kVehicleVoxel) {
-  for (const FactionLook& look : kFactions) {
-    const VoxelPalette pal = makePalette(look);
-    UnitArt art;
-    art.body.facings = 16;
-    art.body.animFrames = animFrames;
-    art.body.first = static_cast<int>(ab.count());
-    VoxelModel turretModel;
-    for (int a = 0; a < animFrames; ++a) {
-      const VoxelModel full = make(look, a);
-      VoxelModel body = full;
-      if (turretZ > 0) splitAt(full, turretZ, body, turretModel);
-      for (int f = 0; f < 16; ++f) {
-        BakeOptions o = unitBake(voxelTiles);
-        o.yawRadians = static_cast<float>(f) * kTwoPi / 16.0f;
-        o.pivotX = full.sizeX() / 2.0f;
-        o.pivotY = full.sizeY() / 2.0f;
-        o.shadowModel = &full;
-        BakedSprite s = bakeVoxels(body, pal, o);
-        ab.add(std::move(s.image), s.anchorX, s.anchorY);
-      }
-    }
-    if (turretZ > 0) {
-      // Turret centre: middle of the turret's lowest layer.
-      int x0 = 1000, x1 = -1, y0 = 1000, y1 = -1;
-      for (int y = 0; y < turretModel.sizeY(); ++y)
-        for (int x = 0; x < turretModel.sizeX(); ++x)
-          if (turretModel.get(x, y, turretZ)) {
-            x0 = std::min(x0, x);
-            x1 = std::max(x1, x);
-            y0 = std::min(y0, y);
-            y1 = std::max(y1, y);
-          }
-      const float cx = (x0 + x1 + 1) / 2.0f, cy = (y0 + y1 + 1) / 2.0f;
-      art.hasTurret = true;
-      art.turretOffset = (cx - turretModel.sizeX() / 2.0f) * voxelTiles * LEPTONS_PER_TILE;
-      art.turret.facings = 16;
-      art.turret.animFrames = 1;
-      art.turret.first = static_cast<int>(ab.count());
-      for (int f = 0; f < 16; ++f) {
-        BakeOptions o = unitBake(voxelTiles);
-        o.yawRadians = static_cast<float>(f) * kTwoPi / 16.0f;
-        o.pivotX = cx;
-        o.pivotY = cy;
-        o.shadow = false;
-        BakedSprite s = bakeVoxels(turretModel, pal, o);
-        ab.add(std::move(s.image), s.anchorX, s.anchorY);
-      }
-    }
-    if (makeCorpse) {
-      const VoxelModel dead = makeCorpse(look, 0);
-      art.hasCorpse = true;
-      art.corpse.facings = 16;
-      art.corpse.first = static_cast<int>(ab.count());
-      for (int f = 0; f < 16; ++f) {
-        BakeOptions o = unitBake(voxelTiles);
-        o.yawRadians = static_cast<float>(f) * kTwoPi / 16.0f;
-        o.pivotX = dead.sizeX() / 2.0f;
-        o.pivotY = dead.sizeY() / 2.0f;
-        o.shadowAlpha = 60;
-        BakedSprite s = bakeVoxels(dead, pal, o);
-        ab.add(std::move(s.image), s.anchorX, s.anchorY);
-      }
-    }
-    cat.units[name + "@" + look.id] = art;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Procedural battle effects
-// ---------------------------------------------------------------------------
-float noise2(float x, float y, uint32_t seed) {
-  const int ix = static_cast<int>(std::floor(x)), iy = static_cast<int>(std::floor(y));
-  const float fx = x - ix, fy = y - iy;
-  auto v = [&](int a, int b) { return (hash2(a, b, seed) & 1023) / 1023.0f; };
-  const float sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
-  const float t = v(ix, iy) + (v(ix + 1, iy) - v(ix, iy)) * sx;
-  const float b2 = v(ix, iy + 1) + (v(ix + 1, iy + 1) - v(ix, iy + 1)) * sx;
-  return t + (b2 - t) * sy;
-}
-float fbm2(float x, float y, uint32_t seed) {
-  return noise2(x, y, seed) * 0.55f + noise2(x * 2.1f, y * 2.1f, seed + 7) * 0.3f + noise2(x * 4.3f, y * 4.3f, seed + 13) * 0.15f;
-}
-uint8_t u8(float v) { return static_cast<uint8_t>(std::clamp(v, 0.0f, 255.0f)); }
 
 // One frame of a fireball that blooms, then turns to dark smoke.
 Image makeExplosionFrame(int frame, int frames) {
@@ -561,69 +248,14 @@ void addEffects(AtlasBuilder& ab, EffectArt& fx) {
   fx.scorch = ab.add(makeCrater(84, 17, true), 42, 21);
 }
 
-// ---------------------------------------------------------------------------
-// Supply trucks and construction trucks (vehicle scale, 16 facings)
-// ---------------------------------------------------------------------------
-void wheels(VoxelModel& m, std::initializer_list<int> xs, int width, int f) {
-  for (int wx : xs)
-    for (int wy : {0, width - 2}) {
-      m.box(wx, wy, 0, wx + 3, wy + 2, 3, RUBBER);
-      m.set(wx + 1, wy == 0 ? 0 : width - 1, 1 + (f % 2), STEEL);  // hub, turning
-    }
-}
 
-VoxelModel makeSupplyTruck(const FactionLook& look, int f) {
-  VoxelModel m(20, 9, 9);
-  wheels(m, {2, 7, 14}, 9, f);
-  m.box(1, 1, 2, 19, 8, 3, STEEL_DARK);        // chassis
-  m.box(14, 1, 3, 19, 8, 6, BASE);             // cab
-  m.box(15, 1, 6, 19, 8, 7, BASE_DARK);        // cab roof
-  m.box(18, 2, 4, 19, 7, 6, GLASS);            // windscreen
-  if (look.sloped) m.box(18, 2, 3, 20, 7, 5, BASE_DARK);  // snub bonnet
-  // Oil tank on the back: a rounded drum along the bed.
-  for (int x = 2; x < 14; ++x)
-    for (int y = 1; y < 8; ++y)
-      for (int z = 3; z < 9; ++z) {
-        const float dy = y + 0.5f - 4.5f, dz = z + 0.5f - 5.8f;
-        if (dy * dy / 12.0f + dz * dz / 9.0f <= 1.0f) m.set(x, y, z, BASE_DARK);
-      }
-  m.box(2, 3, 8, 14, 6, 9, TEAM);              // stripe along the top
-  m.box(7, 4, 8, 9, 5, 9, STEEL);              // filler cap
-  m.set(19, 1, 3, LAMP);
-  m.set(19, 7, 3, LAMP);
-  return m;
-}
 
-VoxelModel makeConstructionTruck(const FactionLook& look, int f) {
-  VoxelModel m(24, 11, 12);
-  wheels(m, {2, 7, 12, 18}, 11, f);
-  m.box(1, 1, 2, 23, 10, 3, STEEL_DARK);
-  m.box(18, 1, 3, 23, 10, 7, BASE);            // cab
-  m.box(19, 1, 7, 23, 10, 8, BASE_DARK);
-  m.box(22, 2, 4, 23, 9, 6, GLASS);
-  // Folded workshop: a canvas-covered box with a crane on top.
-  m.box(2, 1, 3, 17, 10, 9, CANVAS);
-  m.box(2, 1, 3, 17, 10, 4, CANVAS_DARK);
-  for (int x = 3; x < 17; x += 4) m.box(x, 1, 4, x + 1, 10, 9, CANVAS_DARK);  // ribs
-  m.box(2, 3, 9, 17, 8, 10, TEAM);
-  m.box(5, 5, 10, 6, 6, 12, STEEL);            // crane mast
-  m.box(5, 5, 11, 16, 6, 12, STEEL_DARK);      // jib folded forward
-  (void)look;
-  m.set(23, 1, 3, LAMP);
-  m.set(23, 9, 3, LAMP);
-  return m;
-}
 
 // ---------------------------------------------------------------------------
 // Structures. One voxel = 1/12 tile, so a footprint of W x H tiles is
 // 12W x 12H voxels. Baked once (they don't turn), supersampled.
 // ---------------------------------------------------------------------------
-constexpr float kStructureVoxel = 1.0f / 12.0f;
 
-// Grime: random darker and lighter voxels over a material.
-void weather(VoxelModel& m, uint8_t from, uint8_t dark, uint8_t light, uint32_t seed, int pd = 18, int pl = 8) {
-  speckle(m, from, dark, light, seed, pd, pl);
-}
 
 // A pitched roof along X over [x0,x1) x [y0,y1), eaves at z.
 void pitchedRoofX(VoxelModel& m, int x0, int y0, int x1, int y1, int z, uint8_t c, uint8_t ridge) {
@@ -641,15 +273,6 @@ void windowsAlongY(VoxelModel& m, int y0, int y1, int x, int z, int step, uint8_
   for (int y = y0; y < y1; y += step) m.box(x, y, z, x + 1, y + 2, z + 2, c);
 }
 
-// A vertical cylinder (tanks, chimneys).
-void cylinder(VoxelModel& m, float cx, float cy, float r, int z0, int z1, uint8_t c) {
-  for (int z = z0; z < z1; ++z)
-    for (int y = static_cast<int>(cy - r - 1); y <= static_cast<int>(cy + r + 1); ++y)
-      for (int x = static_cast<int>(cx - r - 1); x <= static_cast<int>(cx + r + 1); ++x) {
-        const float dx = x + 0.5f - cx, dy = y + 0.5f - cy;
-        if (dx * dx + dy * dy <= r * r) m.set(x, y, z, c);
-      }
-}
 
 void sandbagRow(VoxelModel& m, int x0, int y0, int x1, int y1, int h) {
   m.box(x0, y0, 0, x1, y1, h, SANDBAG);
@@ -1029,18 +652,90 @@ void addEconomyDecals(AtlasBuilder& ab, SpriteCatalog& cat) {
   for (int s = 0; s < 3; ++s) cat.rubble[static_cast<size_t>(s)] = ab.add(makeRubble(s + 2, 70u + s), 32 * (s + 2), 16 * (s + 2));
 }
 
+// --- PNG overrides and export ---------------------------------------------------
+// Team colour travels through PNG files as pure magenta: (v, 0, v) is team
+// colour at brightness v. Inside the engine it is red with alpha kTeamAlpha.
+Image toPngColours(const Image& src) {
+  Image out = src;
+  for (Rgba& c : out.px)
+    if (c.a == kTeamAlpha) c = {c.r, 0, c.r, 255};
+  return out;
+}
+
+Image fromPngColours(const Image& src) {
+  Image out = src;
+  for (Rgba& c : out.px) {
+    if (c.a > 128 && c.g < 16 && c.r > 24 && std::abs(static_cast<int>(c.r) - static_cast<int>(c.b)) < 12)
+      c = {static_cast<uint8_t>((c.r + c.b) / 2), 0, 0, kTeamAlpha};
+    else if (c.a == kTeamAlpha)
+      c.a = kTeamAlpha - 1;
+  }
+  return out;
+}
+
+void applyArtOverrides(AtlasBuilder& ab, const SpriteCatalog& cat, const std::string& dir) {
+  namespace fs = std::filesystem;
+  std::error_code ec;
+  if (!fs::is_directory(dir, ec)) return;
+  // Optional anchors: {"units/tank@ger/body_f00_a0": [x, y], ...}
+  nlohmann::json anchors = nlohmann::json::object();
+  if (std::ifstream in(dir + "/sprites.json"); in) {
+    anchors = nlohmann::json::parse(in, nullptr, false);
+    if (!anchors.is_object()) {
+      SLV_WARN("Art overrides: %s/sprites.json is not valid JSON; using default anchors", dir.c_str());
+      anchors = nlohmann::json::object();
+    }
+  }
+  int replaced = 0;
+  forEachSprite(cat, [&](const std::string& name, int frame) {
+    const std::string path = dir + "/" + name + ".png";
+    if (!fs::exists(path, ec)) return;
+    Image img;
+    if (!img.loadPng(path)) {
+      SLV_WARN("Art overrides: can't read %s", path.c_str());
+      return;
+    }
+    int ax = ab.anchorX(frame), ay = ab.anchorY(frame);
+    if (anchors.contains(name) && anchors[name].is_array() && anchors[name].size() == 2) {
+      ax = anchors[name][0].get<int>();
+      ay = anchors[name][1].get<int>();
+    } else if (img.w != ab.image(frame).w || img.h != ab.image(frame).h) {
+      ax = img.w / 2;  // a new size with no anchor given: stand it on its bottom-centre
+      ay = img.h * 3 / 4;
+    }
+    ab.replace(frame, fromPngColours(img), ax, ay);
+    ++replaced;
+  });
+  if (replaced) SLV_INFO("Art overrides: %d sprites replaced from %s", replaced, dir.c_str());
+}
+
+void exportArt(const AtlasBuilder& ab, const SpriteCatalog& cat, const std::string& dir) {
+  namespace fs = std::filesystem;
+  std::error_code ec;
+  nlohmann::json anchors = nlohmann::json::object();
+  int written = 0;
+  forEachSprite(cat, [&](const std::string& name, int frame) {
+    const std::string path = dir + "/" + name + ".png";
+    fs::create_directories(fs::path(path).parent_path(), ec);
+    if (toPngColours(ab.image(frame)).savePng(path)) ++written;
+    anchors[name] = {ab.anchorX(frame), ab.anchorY(frame)};
+  });
+  std::ofstream(dir + "/sprites.json") << anchors.dump(1) << "\n";
+  SLV_INFO("Exported %d sprites to %s", written, dir.c_str());
+}
+
 }  // namespace
 
-bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error) {
+bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error, const ArtOptions& options) {
   const VoxelPalette pal = makePalette(kFactions[0]);
   AtlasBuilder ab;
 
-  addUnit(ab, cat, "tank", &makeTank, 4, 4);
-  addUnit(ab, cat, "scoutcar", &makeScoutCar, 3, 5);
-  addUnit(ab, cat, "rifleman", &makeRifleman, 4, 0, &makeRiflemanDead, kInfantryVoxel);
+  {
+    BakeQueue q(ab);
+    addUnitModels(q, cat);
+    q.run();
+  }
   addEffects(ab, cat.effects);
-  addUnit(ab, cat, "truck", &makeSupplyTruck, 2, 0);
-  addUnit(ab, cat, "mcv", &makeConstructionTruck, 2, 0);
   addStructure(ab, cat, "yard", &makeYard);
   addStructure(ab, cat, "power", &makePowerStation);
   addStructure(ab, cat, "refinery", &makeRefinery);
@@ -1052,6 +747,12 @@ bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error) {
   addStructure(ab, cat, "sandbags", &makeSandbags);
   addStructure(ab, cat, "wire", &makeWire);
   addStructure(ab, cat, "traps", &makeTankTraps);
+  addStructure(ab, cat, "cottage", &makeCottage);
+  addStructure(ab, cat, "cottage_bombed", &makeCottageBombed);
+  addStructure(ab, cat, "townhouse", &makeTownhouse);
+  addStructure(ab, cat, "church", &makeChurch);
+  addStructure(ab, cat, "ruin", &makeRuin);
+  addStructure(ab, cat, "adobe", &makeAdobe);
   addEconomyDecals(ab, cat);
   {
     // Trenches are ground decals; their "unit art" is the lone foxhole piece.
@@ -1069,7 +770,11 @@ bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error) {
     int variants;
   };
   for (const PropSpec& p : {PropSpec{PropKind::Tree, &makeTree, 5}, PropSpec{PropKind::Pine, &makePine, 3},
-                            PropSpec{PropKind::Bush, &makeBush, 4}, PropSpec{PropKind::Rock, &makeRock, 3}}) {
+                            PropSpec{PropKind::Bush, &makeBush, 4}, PropSpec{PropKind::Rock, &makeRock, 3},
+                            PropSpec{PropKind::SnowPine, &makeSnowPine, 4}, PropSpec{PropKind::DeadTree, &makeDeadTree, 4},
+                            PropSpec{PropKind::Palm, &makePalm, 4}, PropSpec{PropKind::Scrub, &makeScrub, 4},
+                            PropSpec{PropKind::JungleTree, &makeJungleTree, 4}, PropSpec{PropKind::Debris, &makeDebris, 4},
+                            PropSpec{PropKind::SandRock, &makeSandRock, 3}}) {
     for (int v = 0; v < p.variants; ++v) {
       const VoxelModel m = p.make(v);
       BakeOptions o;
@@ -1093,13 +798,16 @@ bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error) {
   cat.selectLarge = ab.add(makeEllipseRing(38, 19), 19, 9);
   cat.moveMarker = ab.add(makeDiamondOutline(32, 16), 16, 8);
 
-  for (int size : {1024, 2048, 4096}) {
+  if (!options.overrideDir.empty()) applyArtOverrides(ab, cat, options.overrideDir);
+  if (!options.exportDir.empty()) exportArt(ab, cat, options.exportDir);
+
+  for (int size : {1024, 2048, 4096, 8192}) {
     if (ab.build(size, cat.atlas, cat.frames)) {
       SLV_INFO("Placeholder art: %zu sprites packed into a %dx%d atlas", ab.count(), size, size);
       return true;
     }
   }
-  error = "placeholder art does not fit in a 4096x4096 atlas";
+  error = "the art does not fit in an 8192x8192 atlas";
   return false;
 }
 

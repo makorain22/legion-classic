@@ -316,4 +316,109 @@ void GameScene::runEconomyDemo() {
   }
 }
 
+// Plays a skirmish through the real game: saves, loads and checks the state
+// matches; saves a replay, plays it back and checks it ends where the game did.
+void GameScene::runFlowSelfTest() {
+  auto check = [&](bool ok, const char* what) {
+    if (!ok) ++selfTestFailures_;
+    SLV_INFO("FLOW SELFTEST %s: %s", ok ? "ok  " : "FAIL", what);
+  };
+  std::string err;
+  if (frame_ == 20) {
+    // Give some orders, as a player would.
+    Command p;
+    p.type = CommandType::Produce;
+    p.player = 0;
+    p.unitType = static_cast<uint16_t>(types_.find("ger_rifleman"));
+    p.amount = 4;
+    sim_->queue(p);
+    speed_ = 4;
+  }
+  if (frame_ == 400) {
+    check(saveGame(savesDir_ + "selftest.lsav", err), "save the game");
+    flowHash_ = sim_->stateHash();
+    flowTick_ = sim_->tickCount();
+    check(saveReplay(replaysDir_ + "selftest.lrep", err), "save the replay");
+  }
+  if (frame_ == 401) {
+    check(loadGame(savesDir_ + "selftest.lsav", err), "load the game");
+    check(sim_->tickCount() == flowTick_ && sim_->stateHash() == flowHash_, "loaded state matches the saved one");
+    check(playReplay(replaysDir_ + "selftest.lrep", err), "start the replay");
+    speed_ = 8;
+  }
+  if (frame_ > 402 && mode_ == Mode::Replay && sim_->tickCount() >= replayEnd_ && flowHash_ != 0) {
+    check(sim_->stateHash() == flowHash_, "the replay ends exactly where the game was saved");
+    SLV_INFO("FLOW SELFTEST %s (%d failures)", selfTestFailures_ ? "FAILED" : "PASSED", selfTestFailures_);
+    flowHash_ = 0;
+    quit_ = true;
+  }
+}
+
+// Every unit of both armies lined up for inspection (--gallery): Germany in
+// the front rows, the Soviet Union behind, each type facing a different way.
+void GameScene::runGallery() {
+  Registry& reg = sim_->registry();
+  const int32_t T = LEPTONS_PER_TILE;
+  if (frame_ == 2) {
+    Command rm;
+    rm.type = CommandType::Remove;
+    for (uint32_t i : reg.pool<CUnit>().entities()) rm.units.push_back(reg.handle(i));
+    sim_->queue(std::move(rm));
+    const Vec2i c = findLand({map_.widthLeptons() / 2, map_.heightLeptons() / 2});
+    galleryAt_ = c;
+    Command team;
+    team.type = CommandType::SetTeam;
+    team.player = 1;
+    team.count = 0;
+    sim_->queue(std::move(team));
+    int row = 0;
+    for (const char* fac : {"ger", "rus"}) {
+      std::vector<int> inf, veh;
+      for (size_t t = 0; t < types_.size(); ++t) {
+        const UnitTypeDef& d = types_.get(static_cast<int>(t));
+        if (d.faction != fac || d.isStructure()) continue;
+        (d.infantry() ? inf : veh).push_back(static_cast<int>(t));
+      }
+      for (const auto* list : {&inf, &veh}) {
+        const float step = list == &inf ? 1.2f : 2.4f;
+        for (size_t i = 0; i < list->size(); ++i) {
+          Command s;
+          s.type = CommandType::Spawn;
+          s.unitType = static_cast<uint16_t>((*list)[i]);
+          s.player = static_cast<uint8_t>(fac[0] == 'g' ? 0 : 1);
+          s.count = 1;
+          s.target = {c.x + static_cast<int32_t>((i - list->size() / 2.0f) * step * T), c.y + (row - 2) * 3 * T};
+          s.facing = angleOfFacing(static_cast<int>((i * 3 + row) % 16));
+          sim_->queue(std::move(s));
+        }
+        ++row;
+      }
+    }
+    // The civilian buildings, in a row behind.
+    int k = 0;
+    for (size_t t = 0; t < types_.size(); ++t) {
+      const UnitTypeDef& d = types_.get(static_cast<int>(t));
+      if (d.faction != "neutral") continue;
+      Command s;
+      s.type = CommandType::Spawn;
+      s.unitType = static_cast<uint16_t>(t);
+      s.player = NEUTRAL_OWNER;
+      s.count = 1;
+      s.target = {c.x + (k - 3) * 4 * T, c.y - 9 * T};
+      sim_->queue(std::move(s));
+      ++k;
+    }
+    centerOn(c);
+  }
+  if (frame_ == 3) {
+    Command hold;
+    hold.type = CommandType::SetStance;
+    hold.stance = Stance::HoldFire;
+    for (uint32_t i : reg.pool<CUnit>().entities()) hold.units.push_back(reg.handle(i));
+    sim_->queue(std::move(hold));
+    revealMap_ = true;
+    centerOn(galleryAt_);
+  }
+}
+
 }  // namespace legion

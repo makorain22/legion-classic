@@ -15,12 +15,15 @@
 #include <utility>
 #include <vector>
 
+#include "slave/core/bytes.hpp"
 #include "slave/core/rng.hpp"
 #include "slave/ecs/registry.hpp"
 #include "slave/map/map.hpp"
 #include "slave/math/vec.hpp"
 #include "slave/sim/components.hpp"
+#include "slave/sim/ai.hpp"
 #include "slave/sim/pathfinder.hpp"
+#include "slave/sim/script.hpp"
 #include "slave/sim/spatial_hash.hpp"
 #include "slave/sim/unit_types.hpp"
 #include "slave/sim/vision.hpp"
@@ -54,6 +57,8 @@ enum class CommandType : uint8_t {
   Harvest,        // supply trucks in `units` go to work (at the oil near `target`, if given)
   SetRally,       // producing structures in `units` send new units to `target`
   SetCredits,     // player's supplies become `amount`
+  SetController,  // player is played by the computer at difficulty `amount` (0..2), or by a human (-1)
+  Repair,         // engineers in `units` mend `targetEntity` (a friendly structure or vehicle)
 };
 
 // Production lines: one per kind of thing a side builds.
@@ -74,6 +79,7 @@ struct PlayerState {
   int32_t powerMade = 0, powerUsed = 0;
   std::array<ProductionQueue, QUEUE_COUNT> queues;
   bool defeated = false;
+  bool won = false;
   bool lowPower() const { return powerUsed > powerMade; }
 };
 
@@ -146,7 +152,11 @@ enum class EventType : uint8_t {
   StructureSold,    // unitType at `at`
   UnitReady,        // owner's production finished a unitType (structure: ready to place)
   CannotBuild,      // owner tried something not allowed (no money, bad spot...)
-  PlayerDefeated,   // owner has nothing left
+  PlayerDefeated,   // owner has nothing left (or a script said so)
+  PlayerWon,        // a script declared owner the winner
+  ScriptMessage,    // `text` for owner (ANY_PLAYER = everyone)
+  ObjectivesChanged,
+  CameraTo,         // move owner's view to `at`
 };
 
 struct SimEvent {
@@ -159,6 +169,7 @@ struct SimEvent {
   Angle facing = 0;       // UnitDied: body facing
   Angle turret = 0;       // UnitDied: turret facing
   bool hit = true;        // Impact: did it hit a unit
+  std::string text;       // ScriptMessage
 };
 
 struct SimStats {
@@ -171,12 +182,21 @@ struct SimStats {
   uint32_t projectiles = 0;
 };
 
+// Commands in binary, for save games and replays.
+void writeCommand(ByteWriter& w, const Command& c);
+Command readCommand(ByteReader& r);
+
 class Simulation {
  public:
   // The simulation owns the map's building layer (Map::block) while it runs.
   Simulation(Map& map, const UnitTypeRegistry& types, const WeaponRegistry& weapons, uint64_t seed);
 
-  void queue(Command cmd) { pending_.push_back(std::move(cmd)); }
+  // Commands from players and the editor. While recording, each one is also
+  // logged with the tick it applies on, which is all a replay needs.
+  void queue(Command cmd) {
+    if (recording_) log_.push_back({tick_, cmd});
+    pending_.push_back(std::move(cmd));
+  }
   void tick();
 
   uint32_t tickCount() const { return tick_; }
@@ -209,6 +229,37 @@ class Simulation {
   uint8_t team(uint8_t player) const { return player < MAX_PLAYERS ? team_[player] : NEUTRAL_OWNER; }
   bool allied(uint8_t a, uint8_t b) const { return a == b || (a < MAX_PLAYERS && b < MAX_PLAYERS && team_[a] == team_[b]); }
   const SimStats& stats() const { return stats_; }
+
+  // --- Scenario script ----------------------------------------------------------
+  // `keepProgress`: an edit during play keeps what has fired so far.
+  void setScript(const ScenarioScript& s, bool keepProgress);
+  const ScenarioScript& script() const { return script_; }
+  const std::vector<Objective>& objectives() const { return objectives_; }
+  bool triggerFired(int i) const { return i >= 0 && i < static_cast<int>(triggerState_.size()) && triggerState_[static_cast<size_t>(i)].fires > 0; }
+  bool triggerEnabled(int i) const { return i >= 0 && i < static_cast<int>(triggerState_.size()) && triggerState_[static_cast<size_t>(i)].enabled; }
+  int countUnits(uint8_t player, int area, int unitType) const;  // area -1 = whole map
+
+  // --- Computer players ---------------------------------------------------------
+  const SkirmishAi& ai() const { return ai_; }
+  // For the AI (and scripts): queue a command without logging it.
+  void queueInternal(Command cmd) { pending_.push_back(std::move(cmd)); }
+
+  // --- Saving and replays -------------------------------------------------------
+  // The whole simulation state (not the terrain, which is saved with the map).
+  // Loading continues exactly where saving stopped: same state hash.
+  void saveState(ByteWriter& w) const;
+  bool loadState(ByteReader& r, std::string& error);
+  struct LoggedCommand {
+    uint32_t tick;
+    Command cmd;
+  };
+  void startRecording() {
+    recording_ = true;
+    log_.clear();
+  }
+  void stopRecording() { recording_ = false; }
+  bool recording() const { return recording_; }
+  const std::vector<LoggedCommand>& commandLog() const { return log_; }
 
   // Deterministic checksum of the whole simulation state. Two runs given the
   // same commands must always produce the same hash.
@@ -249,11 +300,21 @@ class Simulation {
   void stepEconomy();
   void stepProduction(uint8_t player);
   void stepHarvesters();
+  void stepRepairs();
   void completeUnit(uint8_t player, uint16_t type);
   Entity producerFor(uint8_t player, const std::string& role) const;
   Vec2i exitOf(Entity structure) const;
   void applyEconomyCommand(const Command& cmd);
+ public:
+  bool canRepair(Entity engineer, Entity target) const;
+ private:
   void checkDefeat();
+
+  // scripting (script.cpp)
+  void stepScript();
+  bool evaluate(const Condition& c, size_t trigger) const;
+  void perform(const Action& a);
+  std::vector<Entity> unitsIn(uint8_t player, int area, int unitType) const;
 
   // combat (combat.cpp)
   void stepTargeting();
@@ -280,6 +341,25 @@ class Simulation {
   bool coverDirty_ = false;
   std::array<bool, MAX_PLAYERS> playedOnce_{};
   int32_t structureReach_ = 0;  // how far a structure's edge reaches beyond its centre (largest standing)
+
+  struct TriggerState {
+    bool enabled = true;
+    uint32_t fires = 0;
+    uint32_t lastFire = 0;
+  };
+  ScenarioScript script_;
+  std::vector<TriggerState> triggerState_;
+  std::array<bool, MAX_PLAYERS> scriptDefeated_{};
+  struct RevealedArea {
+    uint8_t player;
+    int32_t area;
+  };
+  std::vector<RevealedArea> revealed_;  // areas a script has revealed for good
+  std::vector<Objective> objectives_;
+  SkirmishAi ai_;
+  bool recording_ = false;
+  std::vector<LoggedCommand> log_;
+  friend class SkirmishAi;
   int32_t effectiveDistance(uint32_t d, uint32_t target) const;
   Pathfinder pathfinder_;
   SpatialHash spatial_;

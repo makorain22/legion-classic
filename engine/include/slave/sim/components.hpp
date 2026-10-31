@@ -45,7 +45,7 @@ struct CTurret {
   uint8_t wait = 0;
 };
 
-enum class OrderType : uint8_t { Idle = 0, Move, AttackMove, Attack, Harvest };
+enum class OrderType : uint8_t { Idle = 0, Move, AttackMove, Attack, Harvest, Repair };
 
 struct COrder {
   OrderType type = OrderType::Idle;

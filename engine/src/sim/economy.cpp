@@ -175,10 +175,23 @@ Entity Simulation::producerFor(uint8_t player, const std::string& role) const {
   return first;
 }
 
-// The tile just outside a structure's front (south-east) edge, where its units come out.
+// Where a structure's units come out and trucks unload: the first open tile
+// just outside it, trying the front (south-east) edge from the middle out,
+// then the sides, then the back. Neighbours can't wall a depot off this way.
 Vec2i Simulation::exitOf(Entity structure) const {
   const CStructure& s = reg_.get<CStructure>(structure);
-  return {(s.tx + s.w / 2) * LEPTONS_PER_TILE + 128, (s.ty + s.h) * LEPTONS_PER_TILE + 128};
+  auto open = [&](int x, int y) { return map_.passable(x, y, Locomotor::Wheeled); };
+  auto at = [](int x, int y) { return Vec2i{x * LEPTONS_PER_TILE + 128, y * LEPTONS_PER_TILE + 128}; };
+  const int mid = s.tx + s.w / 2;
+  for (int d = 0; d <= s.w; ++d)  // front row, centre first
+    for (int x : {mid + d, mid - d - 1})
+      if (x >= s.tx - 1 && x <= s.tx + s.w && open(x, s.ty + s.h)) return at(x, s.ty + s.h);
+  for (int y = s.ty + s.h - 1; y >= s.ty; --y)  // the two sides
+    for (int x : {s.tx + s.w, s.tx - 1})
+      if (open(x, y)) return at(x, y);
+  for (int x = s.tx - 1; x <= s.tx + s.w; ++x)  // the back
+    if (open(x, s.ty - 1)) return at(x, s.ty - 1);
+  return at(mid, s.ty + s.h);
 }
 
 // ---------------------------------------------------------------------------
@@ -346,8 +359,91 @@ void Simulation::applyEconomyCommand(const Command& cmd) {
       }
       break;
 
+    case CommandType::Repair:
+      for (Entity e : cmd.units) {
+        if (!reg_.alive(e) || !reg_.has<CUnit>(e) || types_.get(reg_.get<CUnit>(e).type).repair <= 0) continue;
+        if (!canRepair(e, cmd.targetUnit)) continue;
+        setOrderIdle(e);
+        COrder& o = reg_.get<COrder>(e);
+        o.type = OrderType::Repair;
+        o.target = cmd.targetUnit;
+        const CPosition& tp = reg_.get<CPosition>(cmd.targetUnit);
+        o.chasedAt = {tp.x, tp.y};
+        requestPath(e, o.chasedAt);
+      }
+      break;
+
     default:
       break;
+  }
+}
+
+// An engineer can mend a damaged, friendly structure or vehicle (not people).
+bool Simulation::canRepair(Entity engineer, Entity target) const {
+  if (!reg_.alive(target) || !reg_.has<CUnit>(target) || engineer == target) return false;
+  const CUnit& t = reg_.get<CUnit>(target);
+  const UnitTypeDef& td = types_.get(t.type);
+  if (td.infantry() || !td.targetable || t.health <= 0 || t.health >= td.maxHealth) return false;
+  return allied(reg_.get<CUnit>(engineer).owner, t.owner);
+}
+
+// Engineers: walk up to what they were told to mend and patch it up; idle
+// ones look around for anything friendly that is damaged.
+void Simulation::stepRepairs() {
+  auto& units = reg_.pool<CUnit>();
+  auto& orders = reg_.pool<COrder>();
+  auto& pos = reg_.pool<CPosition>();
+  for (uint32_t ei : units.entities()) {
+    const CUnit& u = units.get(ei);
+    const UnitTypeDef& def = types_.get(u.type);
+    if (def.repair <= 0 || u.health <= 0 || !orders.has(ei)) continue;
+    COrder& o = orders.get(ei);
+    const Entity e = reg_.handle(ei);
+    const CPosition& p = pos.get(ei);
+    if (o.type == OrderType::Idle && (tick_ + ei) % 15 == 0) {
+      // Look for the nearest damaged friend in sight.
+      Entity best;
+      uint32_t bestD = static_cast<uint32_t>(def.sight);
+      for (uint32_t oi : units.entities()) {
+        const Entity t = reg_.handle(oi);
+        if (!canRepair(e, t)) continue;
+        const CPosition& tp = pos.get(oi);
+        const uint32_t d = static_cast<uint32_t>(effectiveDistance(distance(tp.x - p.x, tp.y - p.y), oi));
+        if (d < bestD) {
+          bestD = d;
+          best = t;
+        }
+      }
+      if (best.valid()) {
+        o.type = OrderType::Repair;
+        o.target = best;
+        const CPosition& tp = pos.get(best.index);
+        o.chasedAt = {tp.x, tp.y};
+        requestPath(e, o.chasedAt);
+      }
+      continue;
+    }
+    if (o.type != OrderType::Repair) continue;
+    if (!canRepair(e, o.target)) {  // done, gone or captured
+      setOrderIdle(e);
+      continue;
+    }
+    const CPosition& tp = pos.get(o.target.index);
+    const int32_t d = effectiveDistance(distance(tp.x - p.x, tp.y - p.y), o.target.index);
+    CMover& m = reg_.get<CMover>(e);
+    const int32_t reach = types_.get(units.get(o.target.index).type).radius / 2 + 160;
+    if (d <= reach) {
+      m.active = false;
+      m.request = 0;
+      CUnit& t = units.get(o.target.index);
+      t.health = std::min(types_.get(t.type).maxHealth, t.health + def.repair);
+      CFacing& f = reg_.get<CFacing>(e);
+      turnToward(f.angle, atan2Angle(tp.y - p.y, tp.x - p.x), f.turnWait, def.turnTicks);
+    } else if ((!m.active && !m.request) ||
+               ((tick_ + ei) % 30 == 0 && distance(tp.x - o.chasedAt.x, tp.y - o.chasedAt.y) > 512)) {
+      o.chasedAt = {tp.x, tp.y};
+      requestPath(e, o.chasedAt);
+    }
   }
 }
 
@@ -370,6 +466,7 @@ void Simulation::stepEconomy() {
   }
   for (uint8_t p = 0; p < MAX_PLAYERS; ++p) stepProduction(p);
   stepHarvesters();
+  stepRepairs();
   if (tick_ % 15 == 0) checkDefeat();
 }
 
@@ -561,7 +658,7 @@ void Simulation::checkDefeat() {
       ev.owner = p;
       events_.push_back(ev);
     }
-    if (owned[p] > 0) ps.defeated = false;  // the editor can bring a side back
+    if (owned[p] > 0 && !scriptDefeated_[p]) ps.defeated = false;  // the editor can bring a side back
   }
 }
 

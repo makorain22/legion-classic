@@ -95,6 +95,7 @@ void Simulation::tick() {
   spawnLog_.clear();
   pathfinder_.refresh();
 
+  if (ai_.any()) ai_.update(*this);  // the computer players give their orders like anyone else
   std::vector<Command> cmds;
   cmds.swap(pending_);
   for (const Command& c : cmds) applyCommand(c);
@@ -112,6 +113,7 @@ void Simulation::tick() {
   stepOrders();
   lap(stats_.msOrders);
   stepEconomy();
+  stepScript();
   lap(stats_.msEconomy);
   stepMovement();
   lap(stats_.msMove);
@@ -240,7 +242,12 @@ void Simulation::applyCommand(const Command& cmd) {
     case CommandType::Harvest:
     case CommandType::SetRally:
     case CommandType::SetCredits:
+    case CommandType::Repair:
       applyEconomyCommand(cmd);
+      break;
+    case CommandType::SetController:
+      if (cmd.player < MAX_PLAYERS)
+        ai_.setPlayer(cmd.player, cmd.amount >= 0, static_cast<AiDifficulty>(std::clamp(cmd.amount, 0, 2)));
       break;
     case CommandType::SetTeam:
       if (cmd.player < MAX_PLAYERS) team_[cmd.player] = static_cast<uint8_t>(cmd.count);

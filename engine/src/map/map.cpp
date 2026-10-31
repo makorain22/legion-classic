@@ -13,8 +13,15 @@ const char* layerName(Layer l) {
 }
 
 const char* propKindName(PropKind k) {
-  static const char* names[] = {"Oak tree", "Pine tree", "Bush", "Rock"};
+  static const char* names[] = {"Oak tree", "Pine tree", "Bush", "Rock", "Snowy pine", "Dead tree",
+                                "Palm", "Scrub", "Jungle tree", "Debris", "Sandstone"};
   return names[static_cast<int>(k)];
+}
+
+const char* propKindId(PropKind k) {
+  static const char* ids[] = {"tree", "pine", "bush", "rock", "snow_pine", "dead_tree",
+                              "palm", "scrub", "jungle_tree", "debris", "sandstone"};
+  return ids[static_cast<int>(k) % static_cast<int>(PropKind::Count)];
 }
 
 namespace {
@@ -142,6 +149,25 @@ bool Map::passable(int tx, int ty, Locomotor loco) const {
          !(blocks_[static_cast<size_t>(ty) * width_ + tx] & (1u << li));
 }
 
+const char* biomeName(Biome b) {
+  static const char* names[] = {"Temperate", "Winter", "Desert", "Tropical", "Urban"};
+  return names[static_cast<int>(b) % static_cast<int>(Biome::Count)];
+}
+const char* biomeId(Biome b) {
+  static const char* ids[] = {"temperate", "winter", "desert", "tropical", "urban"};
+  return ids[static_cast<int>(b) % static_cast<int>(Biome::Count)];
+}
+bool parseBiome(const std::string& s, Biome& out) {
+  for (int i = 0; i < static_cast<int>(Biome::Count); ++i)
+    if (s == biomeId(static_cast<Biome>(i))) {
+      out = static_cast<Biome>(i);
+      return true;
+    }
+  return false;
+}
+
+void Map::generate(Biome b, uint64_t seed) { generateTerrain(seed, b); }
+
 bool Map::buildable(int tx, int ty) const {
   if (!inBounds(tx, ty)) return false;
   const TileInfo& t = info(tx, ty);
@@ -168,7 +194,13 @@ void Map::addOilField(int cx, int cy, int radius, uint32_t seed) {
 // river with muddy banks, dirt roads that ford it, woods and patchy ground.
 // Heights use integer maths only, so every PC generates the same terrain.
 // ---------------------------------------------------------------------------
-void Map::generateCountryside(uint64_t seed) {
+void Map::generateCountryside(uint64_t seed) { generateTerrain(seed, Biome::Temperate); }
+
+void Map::generateTerrain(uint64_t seed, Biome b) {
+  biome = b;
+  lots.clear();
+  const bool winter = b == Biome::Winter, desert = b == Biome::Desert, tropical = b == Biome::Tropical,
+             urban = b == Biome::Urban;
   Rng rng(seed);
   const uint32_t s = static_cast<uint32_t>(seed);
   const int W = width_, H = height_;
@@ -178,14 +210,22 @@ void Map::generateCountryside(uint64_t seed) {
   for (int cy = 0; cy < cornersY(); ++cy)
     for (int cx = 0; cx < cornersX(); ++cx) {
       const int32_t n = fractal(cx, cy, 48, s);  // 0..1023
-      setCorner(cx, cy, static_cast<uint16_t>(430 + (n - 512) * 150 / 512));
+      // Deserts roll in long dunes; towns sit on flatter ground.
+      const int32_t amp = urban ? 90 : desert ? 170 : tropical ? 130 : 150;
+      int32_t h = 430 + (n - 512) * amp / 512;
+      if (desert) h += (valueNoise(cx * 3, cy, 22, s + 77) - 512) * 30 / 512;  // dune ridges
+      setCorner(cx, cy, static_cast<uint16_t>(h));
     }
   waterLevel_ = 330;
 
   // --- River (west to east) ------------------------------------------------
   const int32_t riverY0 = H * 3 / 10 + static_cast<int32_t>(rng.below(static_cast<uint32_t>(H * 4 / 10)));
   auto riverY = [&](int32_t x) { return riverY0 * 256 + (valueNoise(x, 0, 40, s + 31) - 512) * H * 40 / 1024; };  // x256
-  auto riverHalfWidth = [&](int32_t x) { return 2 * 256 + valueNoise(x, 7, 30, s + 37) * 256 / 512; };    // x256
+  // Desert rivers are narrow; jungle rivers broad and slow.
+  const int32_t riverScale = desert ? 160 : tropical ? 360 : 256;
+  auto riverHalfWidth = [&](int32_t x) {
+    return (2 * 256 + valueNoise(x, 7, 30, s + 37) * 256 / 512) * riverScale / 256;
+  };  // x256
   // --- Two dirt roads (north to south) -----------------------------------
   auto roadX = [&](int road, int32_t y) {
     const int32_t base = (road == 0 ? W * 26 / 100 : W * 72 / 100) * 256;
@@ -242,23 +282,60 @@ void Map::generateCountryside(uint64_t seed) {
       const float tx = (sx + 0.5f) / SPLAT_PER_TILE, ty = (sy + 0.5f) / SPLAT_PER_TILE;
       const int itx = std::min(W - 1, static_cast<int>(tx)), ity = std::min(H - 1, static_cast<int>(ty));
       float w[LAYER_COUNT] = {};
-      w[int(Layer::Grass)] = 1.0f;
-      const float dry = fractal(sx, sy, 40, s + 101) / 1023.0f;
-      w[int(Layer::DryGrass)] = smoothstep(0.58f, 0.72f, dry) * 1.0f;
-      const float dirt = fractal(sx, sy, 18, s + 103) / 1023.0f;
-      w[int(Layer::Dirt)] = smoothstep(0.66f, 0.76f, dirt) * 1.6f;
-
       const float h = heightAt(tx * LEPTONS_PER_TILE, ty * LEPTONS_PER_TILE);
       const float above = h - waterLevel_;
+      const float dry = fractal(sx, sy, 40, s + 101) / 1023.0f;
+      const float dirt = fractal(sx, sy, 18, s + 103) / 1023.0f;
       const float mudNoise = valueNoise(sx, sy, 5, s + 109) / 1023.0f;
-      w[int(Layer::Mud)] = 2.2f * (1.0f - smoothstep(-4.0f, 10.0f + mudNoise * 14.0f, above));
       const float sandNoise = valueNoise(sx, sy, 6, s + 107) / 1023.0f;
-      w[int(Layer::Sand)] = (1.0f - smoothstep(2.0f, 10.0f, std::abs(above - 6.0f))) * smoothstep(0.55f, 0.8f, sandNoise) * 1.4f;
-      w[int(Layer::Rock)] = smoothstep(24.0f, 40.0f, static_cast<float>(info(itx, ity).slope)) * 3.0f;
+      const float slopeK = smoothstep(24.0f, 40.0f, static_cast<float>(info(itx, ity).slope));
+      const float shoreMud = 1.0f - smoothstep(-4.0f, 10.0f + mudNoise * 14.0f, above);
+      if (winter) {
+        // Snow over everything; thawed, trampled patches and frozen mud by the water.
+        w[int(Layer::Snow)] = 1.4f;
+        w[int(Layer::DryGrass)] = smoothstep(0.66f, 0.8f, dry) * 1.3f;
+        w[int(Layer::Dirt)] = smoothstep(0.72f, 0.82f, dirt) * 1.2f;
+        w[int(Layer::Mud)] = shoreMud * 1.6f;
+        w[int(Layer::Rock)] = slopeK * 2.2f;
+      } else if (desert) {
+        // Sand and gravel, scrubby patches, bare rock outcrops.
+        w[int(Layer::Sand)] = 1.5f;
+        w[int(Layer::DryGrass)] = smoothstep(0.62f, 0.78f, dry) * 1.1f;
+        w[int(Layer::Dirt)] = smoothstep(0.6f, 0.74f, dirt) * 1.3f;
+        w[int(Layer::Rock)] = slopeK * 3.0f + smoothstep(0.74f, 0.84f, fractal(sx, sy, 24, s + 111) / 1023.0f) * 2.0f;
+        w[int(Layer::Grass)] = shoreMud * 1.6f;  // an oasis green along the water
+        w[int(Layer::Mud)] = shoreMud * 0.6f;
+      } else if (tropical) {
+        // Lush green, wet red earth, mud everywhere near water.
+        w[int(Layer::Grass)] = 1.2f;
+        w[int(Layer::Dirt)] = smoothstep(0.6f, 0.72f, dirt) * 1.4f;
+        w[int(Layer::Mud)] = shoreMud * 3.0f + smoothstep(0.7f, 0.85f, mudNoise) * 0.8f;
+        w[int(Layer::Rock)] = slopeK * 2.4f;
+      } else if (urban) {
+        // Rubble-strewn earth, weedy lots, little parks.
+        w[int(Layer::Dirt)] = 1.1f;
+        w[int(Layer::Grass)] = smoothstep(0.55f, 0.7f, dry) * 1.4f;
+        w[int(Layer::DryGrass)] = smoothstep(0.45f, 0.6f, dirt) * 0.9f;
+        w[int(Layer::Mud)] = shoreMud * 2.0f;
+        w[int(Layer::Rock)] = slopeK * 3.0f + smoothstep(0.7f, 0.8f, mudNoise) * 0.9f;
+      } else {
+        w[int(Layer::Grass)] = 1.0f;
+        w[int(Layer::DryGrass)] = smoothstep(0.58f, 0.72f, dry) * 1.0f;
+        w[int(Layer::Dirt)] = smoothstep(0.66f, 0.76f, dirt) * 1.6f;
+        w[int(Layer::Mud)] = 2.2f * shoreMud;
+        w[int(Layer::Sand)] = (1.0f - smoothstep(2.0f, 10.0f, std::abs(above - 6.0f))) * smoothstep(0.55f, 0.8f, sandNoise) * 1.4f;
+        w[int(Layer::Rock)] = slopeK * 3.0f;
+      }
 
       for (int r = 0; r < 2; ++r) {
         const float rd = std::abs(tx * 256.0f - roadX(r, static_cast<int32_t>(ty))) / 256.0f;
         w[int(Layer::Road)] = std::max(w[int(Layer::Road)], (1.0f - smoothstep(0.45f, 0.95f, rd)) * 4.0f);
+      }
+      if (urban) {
+        // A grid of streets every 12 tiles.
+        const float gx = std::fmod(tx + 6.0f, 12.0f), gy = std::fmod(ty + 6.0f, 12.0f);
+        const float sd = std::min(std::abs(gx - 6.0f), std::abs(gy - 6.0f));
+        w[int(Layer::Road)] = std::max(w[int(Layer::Road)], (1.0f - smoothstep(0.5f, 1.0f, sd)) * 4.0f);
       }
       float sum = 0;
       for (float v : w) sum += v;
@@ -288,12 +365,43 @@ void Map::generateCountryside(uint64_t seed) {
         continue;
       }
       const int32_t forest = fractal(x + 1000, y + 1000, 28, s + 13);
-      const uint32_t chance = forest > 700 ? 70 : (forest > 620 ? 18 : 1);
-      if (rng.below(100) >= chance) continue;
+      const bool nearWater = t.waterDepth > -40;
+      auto put = [&](PropKind kind, uint32_t variants) {
+        props_.push_back({kind, static_cast<uint8_t>(rng.below(variants)), x * 256 + rng.range(40, 216),
+                          y * 256 + rng.range(40, 216)});
+      };
       const uint32_t pick = rng.below(100);
-      const PropKind kind = pick < 30 ? PropKind::Pine : pick < 48 ? PropKind::Bush : PropKind::Tree;
-      props_.push_back({kind, static_cast<uint8_t>(rng.below(4)), x * 256 + rng.range(40, 216),
-                        y * 256 + rng.range(40, 216)});
+      if (winter) {
+        const uint32_t chance = forest > 690 ? 65 : (forest > 610 ? 16 : 1);
+        if (rng.below(100) >= chance) continue;
+        put(pick < 72 ? PropKind::SnowPine : pick < 88 ? PropKind::DeadTree : PropKind::Rock, pick < 88 ? 4 : 3);
+      } else if (desert) {
+        // Palms crowd the water; scrub and sandstone elsewhere.
+        const uint32_t chance = nearWater ? 26 : (forest > 700 ? 6 : 1);
+        if (rng.below(100) >= chance) continue;
+        if (nearWater) put(pick < 70 ? PropKind::Palm : PropKind::Scrub, 4);
+        else put(pick < 55 ? PropKind::Scrub : pick < 85 ? PropKind::SandRock : PropKind::DeadTree, pick < 55 ? 4 : 3);
+      } else if (tropical) {
+        const uint32_t chance = forest > 640 ? 80 : (forest > 540 ? 30 : 4);
+        if (rng.below(100) >= chance) continue;
+        put(pick < 55 ? PropKind::JungleTree : pick < 75 ? PropKind::Palm : PropKind::Bush, 4);
+      } else if (urban) {
+        // Shattered trees in the parks, debris along the streets.
+        const float gx = static_cast<float>((x + 6) % 12), gy = static_cast<float>((y + 6) % 12);
+        const bool street = std::min(std::abs(gx - 6.0f), std::abs(gy - 6.0f)) < 1.5f;
+        if (street) {
+          if (rng.below(100) < 5) put(PropKind::Debris, 4);
+          continue;
+        }
+        const uint32_t chance = forest > 700 ? 14 : 2;
+        if (rng.below(100) >= chance) continue;
+        put(pick < 40 ? PropKind::Tree : pick < 70 ? PropKind::DeadTree : PropKind::Debris, 4);
+      } else {
+        const uint32_t chance = forest > 700 ? 70 : (forest > 620 ? 18 : 1);
+        if (rng.below(100) >= chance) continue;
+        const PropKind kind = pick < 30 ? PropKind::Pine : pick < 48 ? PropKind::Bush : PropKind::Tree;
+        put(kind, 4);
+      }
     }
 
   // --- Oil fields ------------------------------------------------------------
@@ -323,6 +431,63 @@ void Map::generateCountryside(uint64_t seed) {
     const int tx = p.x >> LEPTON_SHIFT, ty = p.y >> LEPTON_SHIFT;
     return inBounds(tx, ty) && oil(tx, ty) > 0;
   });
+
+  // --- Villages and towns ------------------------------------------------------
+  // Plots for neutral houses, kept clear of the four starting areas (west,
+  // east, north, south), the oil and the water. Towns fill whole street
+  // blocks; elsewhere a few hamlets sit along the roads.
+  if (b == Biome::Tropical) return;
+  const int spots[4][2] = {{W * 17 / 100, H / 2}, {W * 83 / 100, H / 2}, {W / 2, H * 17 / 100}, {W / 2, H * 83 / 100}};
+  auto plotFree = [&](int cx, int cy, int half) {
+    for (const auto& sp : spots)
+      if (std::abs(cx - sp[0]) < 15 && std::abs(cy - sp[1]) < 15) return false;
+    for (int y = cy - half; y <= cy + half; ++y)
+      for (int x = cx - half; x <= cx + half; ++x) {
+        if (!inBounds(x, y) || x < 2 || y < 2 || x >= W - 2 || y >= H - 2) return false;
+        const TileInfo& t = info(x, y);
+        if (t.slope > 18 || t.waterDepth > -12 || oil(x, y) > 0) return false;
+      }
+    for (const Lot& l : lots)
+      if (std::abs(l.tx - cx) < half + 3 && std::abs(l.ty - cy) < half + 3) return false;
+    return true;
+  };
+  auto clearProps = [&](int cx, int cy, int half) {
+    std::erase_if(props_, [&](const Prop& p) {
+      const int tx = p.x >> LEPTON_SHIFT, ty = p.y >> LEPTON_SHIFT;
+      return std::abs(tx - cx) <= half + 1 && std::abs(ty - cy) <= half + 1;
+    });
+  };
+  if (urban) {
+    for (int by = 0; by + 12 <= H; by += 12)
+      for (int bx = 0; bx + 12 <= W; bx += 12) {
+        // Each street block holds up to four buildings.
+        for (int k = 0; k < 4; ++k) {
+          const int cx = bx + 3 + (k % 2) * 6, cy = by + 3 + (k / 2) * 6;
+          if (rng.below(100) < 22 || !plotFree(cx, cy, 1)) continue;
+          const uint32_t pick = rng.below(100);
+          const uint8_t kind = pick < 34 ? 2 : pick < 58 ? 4 : pick < 80 ? 1 : pick < 94 ? 0 : 3;
+          lots.push_back({cx, cy, kind});
+          clearProps(cx, cy, 1);
+        }
+      }
+    return;
+  }
+  const int hamlets = std::max(1, W * H / (128 * 128)) * (desert ? 2 : 3);
+  for (int hIdx = 0; hIdx < hamlets; ++hIdx) {
+    // A hamlet: three to six houses around a point beside a road.
+    const int road = hIdx % 2;
+    const int hy = 6 + static_cast<int>(rng.below(static_cast<uint32_t>(std::max(1, H - 12))));
+    const int hx = (roadX(road, hy) >> 8) + (rng.below(2) ? 4 : -4);
+    const int count = 3 + static_cast<int>(rng.below(4));
+    for (int k = 0; k < count * 3 && k < 24; ++k) {
+      const int cx = hx + static_cast<int>(rng.range(-6, 6)), cy = hy + static_cast<int>(rng.range(-6, 6));
+      if (nearRoad(cx, cy) || !plotFree(cx, cy, 1)) continue;
+      const uint32_t pick = rng.below(100);
+      const uint8_t kind = desert ? 5 : (pick < 60 ? 0 : pick < 85 ? 1 : pick < 95 ? 4 : 3);
+      lots.push_back({cx, cy, kind});
+      clearProps(cx, cy, 1);
+    }
+  }
 }
 
 }  // namespace slave

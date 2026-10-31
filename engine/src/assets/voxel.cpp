@@ -175,7 +175,31 @@ BakedSprite bakeVoxels(const VoxelModel& model, const VoxelPalette& pal, const B
           const float lambert = std::max(0.0f, n.x * kLight.x + n.y * kLight.y + n.z * kLight.z);
           // Three-tone shading, plus a little darkening near the ground.
           const float ground = 0.80f + 0.20f * std::min(1.0f, (z + 0.5f) / 3.0f);
-          const float shade = (0.40f + 0.66f * lambert) * ground;
+          float shade = (0.40f + 0.66f * lambert) * ground;
+          if (opt.ao > 0) {
+            // Ambient occlusion: how many of the 8 cells around the face, one
+            // step out along its normal, are filled.
+            const int nx = static_cast<int>(f.n.x), ny = static_cast<int>(f.n.y), nz = static_cast<int>(f.n.z);
+            const int t1[3] = {nz != 0 ? 1 : 0, nx != 0 ? 1 : 0, ny != 0 ? 1 : 0};
+            const int t2[3] = {ny != 0 ? 1 : 0, nz != 0 ? 1 : 0, nx != 0 ? 1 : 0};
+            float occ = 0;
+            for (int du = -1; du <= 1; ++du)
+              for (int dv = -1; dv <= 1; ++dv) {
+                if (!du && !dv) continue;
+                if (model.get(x + nx + du * t1[0] + dv * t2[0], y + ny + du * t1[1] + dv * t2[1],
+                              z + nz + du * t1[2] + dv * t2[2]))
+                  occ += (du && dv) ? 0.5f : 1.0f;
+              }
+            shade *= 1.0f - opt.ao * occ / 6.0f;
+          }
+          if (opt.grain > 0) {
+            uint32_t hsh = static_cast<uint32_t>(x) * 73856093u ^ static_cast<uint32_t>(y) * 19349663u ^
+                           static_cast<uint32_t>(z) * 83492791u ^ ci * 2654435761u;
+            hsh ^= hsh >> 13;
+            hsh *= 0x5bd1e995u;
+            hsh ^= hsh >> 15;
+            shade *= 1.0f + opt.grain * (static_cast<float>(hsh & 255) / 255.0f - 0.5f);
+          }
           const uint8_t top = f.n.z > 0 ? 1 : 0;
 
           Rgba col;
