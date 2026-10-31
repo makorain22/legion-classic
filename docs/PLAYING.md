@@ -1,10 +1,27 @@
-# Playing Legion Classic (build 0.7.5)
+# Playing Legion Classic (build 0.7.6)
 
 Double-click `LegionClassic.exe`. No installation is needed; keep the `content`
 folder next to the exe.
 
 Windows may show a SmartScreen warning the first time because the game isn't
 code-signed yet: choose **More info → Run anyway**.
+
+## Blitzkrieg art (optional, personal use)
+
+To play with the art of Nival's Blitzkrieg, unzip the art pack you were given
+into `content/art/` (so you have `content/art/blitzkrieg/sprites.json`), or
+make it yourself from the Blitzkrieg data:
+`LegionClassic.exe --import-blitzkrieg <Blitzkrieg>/Versions/Current/Data`.
+Settings → Display switches between it and the built-in art (restart to
+apply). The pack is for non-commercial personal use only – see
+`docs/ART_PIPELINE.md`.
+
+## The encyclopedia
+
+**K** (or F4, or the button on the sidebar, or the main menu) opens the
+encyclopedia: every unit, building and defence of each side with its picture,
+cost, armour, speed, sight, and damage a minute against each kind of armour.
+With the mouse over a build button, K opens that unit's page.
 
 ## What's in this build
 

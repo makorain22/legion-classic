@@ -70,9 +70,10 @@ effects, decals).
 | --- | --- |
 | `units/<model>@<faction>/body_f<00-15>_a<frame>.png` | A unit's hull or body: 16 facings (00 faces east-south-east, then clockwise in steps of 22.5°), animation frames from 0 |
 | `units/<model>@<faction>/turret_f<00-15>.png` | A turret, drawn on top of the hull and turned on its own |
-| `units/<model>@<faction>/corpse_f<00-15>.png` | Fallen infantry |
+| `units/<model>@<faction>/corpse_f<00-15>.png` | Fallen infantry (`corpse_f<nn>_a<frame>` when the fall is animated; the last frame stays) |
+| `icons/<model>@<faction>.png` | Optional picture for the sidebar and encyclopedia |
 | `units/<model>@<faction>/body.png` | A building (one view) |
-| `props/<kind>_<variant>.png` | Trees, rocks and other props: `tree`, `pine`, `bush`, `rock`, `snow_pine`, `dead_tree`, `palm`, `scrub`, `jungle_tree`, `debris`, `sandstone` |
+| `props/<kind>_<variant>.png` | Trees, rocks and other props: `tree`, `pine`, `bush`, `rock`, `snow_pine`, `dead_tree`, `palm`, `scrub`, `jungle_tree`, `debris`, `sandstone`, `stump`, `logs`, `haystack`, `crates`, `fence` |
 | `effects/...`, `decals/...` | Explosions, fire, muzzle flashes, smoke, dust, craters; trench pieces (by which neighbours they join), oil stains, rubble |
 
 `<model>` is the `model` field of the unit in `content/rules/*.json`
@@ -91,6 +92,60 @@ elsewhere in the sprite.
 `sprites.json` maps sprite names to `[x, y]` pixel anchors. Without an entry, a
 replaced sprite of the same size keeps the generated anchor; one of a new size
 stands on its bottom centre (three quarters of the way down).
+
+## The Blitzkrieg art pack
+
+Nival released the source and data of **Blitzkrieg** (2003) for
+non-commercial use (<https://github.com/nival/Blitzkrieg>). Legion Classic can
+read that data and render it into an **art pack** for your own use:
+
+```
+LegionClassic.exe --import-blitzkrieg <path to Blitzkrieg>/Versions/Current/Data
+```
+
+It takes a few seconds and writes `content/art/blitzkrieg/` (about 5,000
+sprites, 25 MB). The next start uses it; Settings → Display can switch back to
+the built-in art (or start with `--no-art-pack`).
+
+**Licence.** The pack is Nival's art. Their licence allows non-commercial use
+only and can be revoked, in which case you must stop using it. Keep it to
+yourself: don't sell it, publish it or bundle it with anything sold. For that
+reason it is never committed to this repository or included in the automatic
+builds; only the importer and the mapping are.
+
+**What it reads** (formats worked out from Nival's source: nested chunks as
+written by `StructureSaver2`):
+
+- `.mod` vehicle and gun models: meshes on a skeleton, textured with `.dds`.
+  They are rendered from our camera in 16 facings, the turret (the
+  `Turret` node and everything on it) separately, with lighting, a cast
+  shadow and a small team-coloured **pennant** so the owner reads at a glance.
+- `.san` infantry sprite animations: 8 directions; the still pose, the walk
+  cycle, the shot and the fall (which ends as the corpse). Two-man teams are
+  composed from two soldiers (the gunner and a rifleman).
+- `.san` building sprite packs with their shadows, fitted to our footprints
+  (Blitzkrieg's houses are bigger than ours), and small objects (sandbags,
+  hedgehogs, wire, trees, haystacks) placed on a tile.
+- `icon.tga` pictures for the sidebar and the encyclopedia.
+
+Summer paint is the default; winter (`w`) and Africa (`a`) paint become
+`model@faction~winter` and `~desert` variants, picked by the map's biome.
+
+**The mapping** – which Blitzkrieg unit plays which of ours – is
+`content/art/blitzkrieg.json`. Each entry names a folder inside the Data
+folder and a kind (`vehicle`, `infantry`, `building`, `objects` or `prop`),
+with options: `scale`, `brightness`, `pennant`, `turret` (vehicles), `second`
+(infantry teams), `state` (buildings: 1 intact, 2 damaged, 3 destroyed),
+`parts` and `turret` (objects: emplacements are sandbags with a gun model
+turning inside). Change it and import again to try other units: there are
+dozens of tanks, guns and buildings to choose from.
+
+**Scale.** Blitzkrieg's map cells are 32×16 pixels, half our tile each way.
+Vehicles render at 72 Blitzkrieg units a tile (Blitzkrieg's own is 64);
+infantry and building sprites keep their pixel size.
+
+No swastikas: only the vehicle crosses are used; flags, aircraft and statues
+are not imported.
 
 ## Adding a new unit
 

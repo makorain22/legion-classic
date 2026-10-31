@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.7.6 – Blitzkrieg art pack, new interface, encyclopedia, more content (31 Oct 2026)
+
+- **Blitzkrieg art pack (personal use).** `--import-blitzkrieg <Data folder>`
+  reads Blitzkrieg's own models, sprites and textures (released by Nival for
+  non-commercial use) and renders an art pack into `content/art/blitzkrieg`:
+  26 units, 18 base and civilian buildings, emplacements, fortifications,
+  trees and decorations, with winter and desert paint for those maps. Vehicles
+  in 16 facings with turrets and a team pennant; infantry with walk, firing
+  and falling animations; two-man teams composed. Not committed or shipped
+  with the builds (licence); the importer and mapping are. Switch it off in
+  Settings → Display.
+- **Sidebar redesign** in the period style: steel plates and rivets, a header
+  for supplies and power, picture tabs, bigger build buttons grouped under
+  headings (Base, Production, Emplacements, Field works, Infantry,
+  Specialists, Recon & transport, Tanks, Support…), plate buttons for orders.
+- **Encyclopedia** (K / F4, sidebar, main menu): every unit and building with
+  picture, numbers and damage a minute against each armour.
+- **Script tab:** a quick-start page with ready-made triggers (briefing,
+  capture an area, victory, reinforcements, counter-attack, defeat); triggers
+  read as WHEN … THEN … sentences, each line opened to edit in place; an
+  objectives page with their numbers.
+- **New content:** MG nests and howitzer emplacements for both sides; barns,
+  sheds, log houses, warehouses, wells and water towers in villages and towns;
+  tree stumps, log piles, haystacks, crates and fences on the map. Unit
+  descriptions.
+- **Art pass:** colour grading per biome and a vignette (Settings →
+  Atmosphere); German voxel paint darker, Soviet uniforms khaki; long tracer
+  streaks; trenches follow slopes; corpses stay ten minutes (and fall when hit),
+  burnt-out wrecks eight.
+- Infantry sprites walk on time with each man out of step, aim at their
+  target and play the shot when they fire.
+
 ## 0.7.5 – Playtest rework: controls, economy, unit organisation, garrisons, fog chips (31 Oct 2026)
 
 From playtest feedback, the changes that are hard to undo come first.

@@ -642,22 +642,41 @@ BakedSprite bakeModel(const Model& m, const Image& tex, const MeshBake& opt) {
 
 namespace {
 // Draws texture area (u0,v0)-(u1,v1) into dst rectangle [dx0,dx1) x [dy0,dy1) (floats, pixels), box-filtered.
-void drawRegion(Image& dst, const Image& tex, float u0, float v0, float u1, float v1, float dx0, float dy0, float dx1, float dy1,
-                float brightness) {
+// Coverage-weighted colour, so pieces that meet mid-pixel add up to a solid
+// pixel instead of leaving a see-through seam.
+struct Accum {
+  int w = 0, h = 0;
+  std::vector<float> r, g, b, a;
+  Accum(int width, int height)
+      : w(width), h(height), r(static_cast<size_t>(width) * height), g(r.size()), b(r.size()), a(r.size()) {}
+  Image resolve(float brightness) const {
+    Image out(w, h);
+    for (size_t i = 0; i < a.size(); ++i) {
+      if (a[i] <= 0.5f) continue;
+      uint8_t alpha = to8(std::min(255.0f, a[i]));
+      if (alpha == kTeamAlpha) alpha = kTeamAlpha - 1;  // that alpha marks team colour
+      out.px[i] = {to8(r[i] / a[i] * brightness), to8(g[i] / a[i] * brightness), to8(b[i] / a[i] * brightness), alpha};
+    }
+    return out;
+  }
+};
+
+// Draws texture area (u0,v0)-(u1,v1) into rectangle [dx0,dx1) x [dy0,dy1) (pixels), supersampled.
+void drawRegion(Accum& dst, const Image& tex, float u0, float v0, float u1, float v1, float dx0, float dy0, float dx1, float dy1) {
   if (tex.w == 0 || dx1 <= dx0 || dy1 <= dy0) return;
   const int ix0 = std::max(0, static_cast<int>(std::floor(dx0))), iy0 = std::max(0, static_cast<int>(std::floor(dy0)));
   const int ix1 = std::min(dst.w, static_cast<int>(std::ceil(dx1))), iy1 = std::min(dst.h, static_cast<int>(std::ceil(dy1)));
   // Source texels per destination pixel.
   const float sx = (u1 - u0) * tex.w / (dx1 - dx0), sy = (v1 - v0) * tex.h / (dy1 - dy0);
-  const int n = std::clamp(static_cast<int>(std::ceil(std::max(std::abs(sx), std::abs(sy)))), 1, 6);
+  const int n = std::clamp(static_cast<int>(std::ceil(std::max(std::abs(sx), std::abs(sy)))), 3, 6);
+  const float wgt = 1.0f / (n * n);
   for (int y = iy0; y < iy1; ++y)
     for (int x = ix0; x < ix1; ++x) {
-      float r = 0, g = 0, b = 0, a = 0, cover = 0;
+      float r = 0, g = 0, b = 0, a = 0;
       for (int j = 0; j < n; ++j)
         for (int i = 0; i < n; ++i) {
           const float px = x + (i + 0.5f) / n, py = y + (j + 0.5f) / n;
           if (px < dx0 || px >= dx1 || py < dy0 || py >= dy1) continue;
-          cover += 1;
           // Texture coordinates carry Direct3D 9's half-texel offset.
           const float tu = (u0 + (px - dx0) / (dx1 - dx0) * (u1 - u0)) * tex.w - 0.5f;
           const float tv = (v0 + (py - dy0) / (dy1 - dy0) * (v1 - v0)) * tex.h - 0.5f;
@@ -668,13 +687,11 @@ void drawRegion(Image& dst, const Image& tex, float u0, float v0, float u1, floa
           b += c.b * c.a;
           a += c.a;
         }
-      if (cover == 0 || a <= 0) continue;
-      uint8_t alpha = to8(a / (n * n));
-      if (alpha == kTeamAlpha) alpha = kTeamAlpha - 1;  // that alpha marks team colour
-      const Rgba src{to8(r / a * brightness), to8(g / a * brightness), to8(b / a * brightness), alpha};
-      Rgba& d = dst.at(x, y);
-      // Pieces sit side by side; where they overlap, keep the more opaque.
-      if (src.a >= d.a) d = src;
+      const size_t k = static_cast<size_t>(y) * dst.w + x;
+      dst.r[k] += r * wgt;
+      dst.g[k] += g * wgt;
+      dst.b[k] += b * wgt;
+      dst.a[k] += a * wgt;
     }
 }
 }  // namespace
@@ -684,8 +701,9 @@ BakedSprite cutSprite(const Image& tex, const SpriteRect& r, float scale, float 
   const float x0 = r.x0 * scale, y0 = r.y0 * scale, x1 = r.x1 * scale, y1 = r.y1 * scale;
   const int ox = static_cast<int>(std::floor(x0)), oy = static_cast<int>(std::floor(y0));
   const int w = std::max(1, static_cast<int>(std::ceil(x1)) - ox), h = std::max(1, static_cast<int>(std::ceil(y1)) - oy);
-  out.image = Image(w, h);
-  drawRegion(out.image, tex, r.u0, r.v0, r.u1, r.v1, x0 - ox, y0 - oy, x1 - ox, y1 - oy, brightness);
+  Accum acc(w, h);
+  drawRegion(acc, tex, r.u0, r.v0, r.u1, r.v1, x0 - ox, y0 - oy, x1 - ox, y1 - oy);
+  out.image = acc.resolve(brightness);
   out.anchorX = -ox;
   out.anchorY = -oy;
   return out;
@@ -705,10 +723,11 @@ BakedSprite composeSquares(const Image& tex, const std::vector<Square>& squares,
     maxY = std::max(maxY, (q.y + q.size) * scale);
   }
   const int ox = static_cast<int>(std::floor(minX)), oy = static_cast<int>(std::floor(minY));
-  out.image = Image(static_cast<int>(std::ceil(maxX)) - ox, static_cast<int>(std::ceil(maxY)) - oy);
+  Accum acc(static_cast<int>(std::ceil(maxX)) - ox, static_cast<int>(std::ceil(maxY)) - oy);
   for (const Square& q : squares)
-    drawRegion(out.image, tex, q.u0, q.v0, q.u1, q.v1, q.x * scale - ox, q.y * scale - oy, (q.x + q.size) * scale - ox,
-               (q.y + q.size) * scale - oy, brightness);
+    drawRegion(acc, tex, q.u0, q.v0, q.u1, q.v1, q.x * scale - ox, q.y * scale - oy, (q.x + q.size) * scale - ox,
+               (q.y + q.size) * scale - oy);
+  out.image = acc.resolve(brightness);
   out.anchorX = -ox;
   out.anchorY = -oy;
   return out;

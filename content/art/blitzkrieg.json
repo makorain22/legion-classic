@@ -58,8 +58,8 @@
     "wire@rus":           {"kind": "objects", "parts": [{"path": "Objects/SimpleObjects/common/summer/wirefence/03", "x": -0.15, "y": 0.15},
                                                         {"path": "Objects/SimpleObjects/common/summer/wirefence/03", "x": 0.15, "y": -0.15}]},
 
-    "mg_nest@ger":        {"kind": "objects", "scale": 0.7, "parts": [{"path": "Objects/SimpleObjects/common/summer/fence_sandbag/03"}], "turret": {"path": "Units/Technics/German/Artillery/7_92_mm_MG34"}},
-    "mg_nest@rus":        {"kind": "objects", "scale": 0.7, "parts": [{"path": "Objects/SimpleObjects/common/summer/fence_sandbag/03"}], "turret": {"path": "Units/Technics/USSR/Artillery/12_7_mm_DShK"}},
+    "mg_nest@ger":        {"kind": "objects", "scale": 0.7, "parts": [{"path": "Objects/SimpleObjects/common/summer/fence_sandbag/03"}], "turret": {"path": "Units/Technics/German/Artillery/7_92_mm_MG34", "scale": 1.8}},
+    "mg_nest@rus":        {"kind": "objects", "scale": 0.7, "parts": [{"path": "Objects/SimpleObjects/common/summer/fence_sandbag/03"}], "turret": {"path": "Units/Technics/USSR/Artillery/12_7_mm_DShK", "scale": 1.6}},
     "atgun@ger":          {"kind": "objects", "scale": 0.9, "parts": [{"path": "Objects/SimpleObjects/common/summer/fence_sandbag/03", "x": -0.25, "y": 0.0}, {"path": "Objects/SimpleObjects/common/summer/fence_sandbag/07", "x": 0.25, "y": 0.1}], "turret": {"path": "Units/Technics/German/Artillery/7_5_cm_PaK40"}},
     "atgun@rus":          {"kind": "objects", "scale": 0.9, "parts": [{"path": "Objects/SimpleObjects/common/summer/fence_sandbag/03", "x": -0.25, "y": 0.0}, {"path": "Objects/SimpleObjects/common/summer/fence_sandbag/07", "x": 0.25, "y": 0.1}], "turret": {"path": "Units/Technics/USSR/Artillery/76_mm_ZIS_3"}},
     "howitzer_pit@ger":   {"kind": "objects", "scale": 1.0, "parts": [{"path": "Objects/SimpleObjects/common/summer/fence_sandbag/03", "x": -0.25, "y": 0.0}, {"path": "Objects/SimpleObjects/common/summer/fence_sandbag/09", "x": 0.25, "y": 0.1}], "turret": {"path": "Units/Technics/German/Artillery/10_5_cm_LeFH18"}},

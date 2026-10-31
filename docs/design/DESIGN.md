@@ -122,15 +122,11 @@ Taken on in 0.7.5 (hard to undo): key layout and rebinding, supply points,
 unit organisation, garrisons, infantry against armour, fog chips, editor
 palette headings, placement grid, the quick fixes.
 
-Still to do (in Milestones 8–10 or a polish pass):
+Taken on in 0.7.6: the Blitzkrieg art pack (personal use), the sidebar
+redesign, the encyclopedia, the Script tab, the art pass (palette, colour
+grading and vignette, long tracers, trenches over slopes, lasting corpses and
+wrecks) and more content (MG nests, howitzer emplacements, six village
+buildings, five kinds of map decoration). Buildings per climate come with the
+art pack's winter and desert variants.
 
-- **Script tab** needs a clearer, more direct interface.
-- **UI redesign** in the spirit of the references: bigger, categorised
-  sidebar buttons, a better-designed frame; an **encyclopedia** of unit stats.
-- **Art pass toward Blitzkrieg:** German units darker; Soviet units green, tan
-  and white; colour grading and atmosphere; buildings with more decoration and
-  different designs per climate; better fortification designs; trenches that
-  follow changing ground heights; longer tracer particles; more lasting
-  corpses and wrecks.
-- **More content:** defences, building types and map decorations.
-
+Still open: building designs per climate for the built-in voxel art.
