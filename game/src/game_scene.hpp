@@ -28,6 +28,7 @@ namespace legion {
 
 class Editor;
 class Menus;
+class Encyclopedia;
 
 // A skirmish as set up in the menu.
 struct SkirmishSetup {
@@ -62,8 +63,11 @@ struct SceneOptions {
   bool liveDemo = false;     // scripted Live Scenario Editor session (units, battle tools)
   bool editorSelfTest = false;  // checks unit placement / undo / redo through the real editor
   std::string exportSprites;     // write every sprite as a PNG here, then quit
-  bool noArtPack = false;        // ignore content/art/blitzkrieg (compare with the built-in art)
+  bool noArtPack = false;
+  int editorTab = -1, editorPage = -1;  // open the editor on this tab / script page at start
+  std::string encyclopedia;      // open the encyclopedia on this unit id at start (screenshots)        // ignore content/art/blitzkrieg (compare with the built-in art)
   bool gallery = false;
+  bool battleDemo = false;       // two forces fighting in the open (screenshots)
   bool orgDemo = false;          // fireteams, platoons, a garrison and fog chips, for screenshots         // every unit lined up, for screenshots of the art
   bool economyDemo = false;     // scripted base building, for automated screenshots
   bool noBases = false;         // start with armies only, no bases (classic skirmish sandbox)
@@ -131,6 +135,7 @@ class GameScene final : public slave::Scene {
   slave::Vec2f unitScreenWorld(uint32_t entityIndex) const;
   const slave::UnitArt& unitArt(int type) const { return unitArt_[static_cast<size_t>(type)]; }
   bool artPack() const { return artPack_; }  // the Blitzkrieg art pack is in use
+  void openEncyclopedia(int type = -1);
   const slave::WeaponRegistry& weapons() const { return weapons_; }
   slave::SpriteRenderer& renderer() { return renderer_; }
   BattleFx& fx() { return fx_; }
@@ -215,6 +220,7 @@ class GameScene final : public slave::Scene {
   void buildBase(uint8_t player, slave::Vec2i centre);
   void runEconomyDemo();
   void runGallery();
+  void runBattleDemo();
   void runOrgDemo();
   slave::Vec2i galleryAt_{0, 0};
   void drawFormationPicker();
@@ -277,6 +283,7 @@ class GameScene final : public slave::Scene {
   std::unique_ptr<Editor> editor_;
   std::unique_ptr<Sidebar> sidebar_;
   std::unique_ptr<Menus> menus_;
+  std::unique_ptr<Encyclopedia> encyclopedia_;
   friend class Sidebar;
   friend class Menus;
   Mode mode_ = Mode::Game;

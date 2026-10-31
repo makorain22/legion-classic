@@ -144,11 +144,12 @@ void Menus::drawMain() {
     scene_.editorOpen(true);
     page_ = Page::None;  // the menu must close, or it keeps every click and key from the editor
   }
+  if (menuButton("Encyclopedia", w)) scene_.openEncyclopedia();
   if (menuButton("Settings", w)) page_ = Page::Settings;
   if (menuButton("About", w)) page_ = Page::About;
   if (menuButton("Quit", w)) scene_.quit();
   ImGui::Dummy(ImVec2(0, 6));
-  ImGui::TextDisabled("Slave Engine 1.0  -  build 0.7.5");
+  ImGui::TextDisabled("Slave Engine 1.0  -  build 0.7.6");
   ImGui::End();
 }
 
@@ -465,6 +466,7 @@ void Menus::drawSettings() {
       changed |= ImGui::Checkbox("Show the game info panel (I)", &st.showInfoPanel);
       changed |= ImGui::Checkbox("Unit cards over fireteams, platoons and companies", &st.showCards);
       changed |= ImGui::Checkbox("Chips for enemy forces detected in the fog", &st.showChips);
+      changed |= ImGui::Checkbox("Atmosphere: period colour grading and a vignette", &st.atmosphere);
       changed |= ImGui::Checkbox("Use the Blitzkrieg art pack when installed (restart to apply)", &st.artPack);
       ImGui::EndTabItem();
     }

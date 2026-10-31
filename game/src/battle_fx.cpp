@@ -15,7 +15,7 @@ constexpr size_t kMaxDecals = 3000;
 constexpr size_t kMaxCorpses = 4000;
 constexpr size_t kMaxWrecks = 1500;
 constexpr float kBurnSeconds = 22.0f;
-constexpr float kWreckSeconds = 180.0f;   // burnt-out hulks stay this long
+constexpr float kWreckSeconds = 480.0f;   // burnt-out hulks stay this long
 constexpr float kCorpseSeconds = 600.0f;  // the dead stay on the field for ten minutes
 
 uint32_t withAlpha(uint32_t rgb, float a) {
@@ -189,7 +189,7 @@ void BattleFx::onEvent(const SimEvent& ev, bool visible, const std::array<uint32
         tr.x1 = t.x;
         tr.y1 = t.y - 5;
         const float px = std::hypot(tr.x1 - m.x, tr.y1 - m.y);
-        tr.life = std::max(0.06f, px / 1500.0f);
+        tr.life = std::max(0.09f, px / 1100.0f);
         tr.alpha0 = 0.95f;
         tr.alpha1 = 0.6f;
         tr.color = rgba8(255, 214, 140);
@@ -441,11 +441,17 @@ void BattleFx::drawParticle(SpriteRenderer& r, const Particle& p, float fogK) co
     }
     case Kind::Tracer: {
       // A short bright streak travelling from the muzzle to the target.
+      // A long glowing streak, about 40 px, fading towards its tail.
       const float y0 = p.y - p.h;
-      for (int k = 0; k < 4; ++k) {
-        const float s = std::clamp(t - k * 0.07f, 0.0f, 1.0f);
+      const float len = std::max(1.0f, std::hypot(p.x1 - p.x, p.y1 - y0));
+      const float tail = std::min(1.0f, 42.0f / len);
+      constexpr int kSteps = 22;
+      for (int k = 0; k < kSteps; ++k) {
+        const float f = static_cast<float>(k) / (kSteps - 1);  // 0 tail .. 1 head
+        const float s = std::clamp(t * (1.0f + tail) - tail * (1.0f - f), 0.0f, 1.0f);
+        if (s <= 0.0f) continue;
         const float x = p.x + (p.x1 - p.x) * s, y = y0 + (p.y1 - y0) * s;
-        r.spriteScaled(p.frame, x, y, k == 0 ? 0.9f : 0.6f, withAlpha(color, alpha * (1.0f - k * 0.22f)));
+        r.spriteScaled(p.frame, x, y, 0.35f + 0.5f * f, withAlpha(color, alpha * (0.15f + 0.85f * f * f)));
       }
       break;
     }

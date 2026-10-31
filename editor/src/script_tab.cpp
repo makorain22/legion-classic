@@ -295,32 +295,223 @@ bool Editor::editAction(Action& a) {
   return ch;
 }
 
-void Editor::drawScriptTab() {
-  ScenarioScript& s = scene_.scenario();
-  bool changed = false;
-  ImGui::TextWrapped("Turn a battle into a mission: name areas of the map, then add triggers. "
-                     "When all of a trigger's conditions hold, its actions run.");
+// --- Plain-English summaries --------------------------------------------------
+namespace {
+std::string sideName(GameScene& scene, uint8_t p) {
+  return p == ANY_PLAYER ? std::string("everyone") : scene.players()[p % MAX_PLAYERS].name;
+}
+}  // namespace
 
-  // --- Areas ------------------------------------------------------------------
-  ImGui::SeparatorText("Areas");
+std::string Editor::describeCondition(const Condition& c) const {
+  auto& sc = const_cast<GameScene&>(scene_);
+  const ScenarioScript& s = scene_.scenario();
+  auto area = [&](int i) {
+    return i >= 0 && i < static_cast<int>(s.areas.size()) ? "'" + s.areas[static_cast<size_t>(i)].name + "'" : std::string("(no area)");
+  };
+  auto units = [&](int t, bool plural = true) {
+    return t >= 0 && t < static_cast<int>(scene_.types().size()) ? scene_.types().get(t).name + (plural ? "s" : "")
+                                                                 : std::string(plural ? "units" : "unit");
+  };
+  switch (c.type) {
+    case CondType::Always: return "at the start";
+    case CondType::Timer: return std::to_string(c.value) + " seconds have passed";
+    case CondType::UnitsInArea:
+      return sideName(sc, c.player) + " has " + std::to_string(std::max(1, c.value)) + " or more " + units(c.unitType) + " in " + area(c.area);
+    case CondType::NoUnitsInArea: return sideName(sc, c.player) + " has no " + units(c.unitType) + " left in " + area(c.area);
+    case CondType::UnitCount:
+      return sideName(sc, c.player) + " is down to " + std::to_string(c.value) + " " + units(c.unitType) + " or fewer";
+    case CondType::PlayerDefeated: return sideName(sc, c.player) + " is defeated";
+    case CondType::Supplies: return sideName(sc, c.player) + " has $" + std::to_string(c.value) + " or more";
+    case CondType::TriggerFired:
+      return "trigger " + (c.trigger >= 0 && c.trigger < static_cast<int>(s.triggers.size())
+                               ? "'" + s.triggers[static_cast<size_t>(c.trigger)].name + "'" : std::string("(none)")) + " has fired";
+    default: return condName(c.type);
+  }
+}
+
+std::string Editor::describeAction(const Action& a) const {
+  auto& sc = const_cast<GameScene&>(scene_);
+  const ScenarioScript& s = scene_.scenario();
+  auto area = [&](int i) {
+    return i >= 0 && i < static_cast<int>(s.areas.size()) ? "'" + s.areas[static_cast<size_t>(i)].name + "'" : std::string("(no area)");
+  };
+  auto units = [&](int t) {
+    return t >= 0 && t < static_cast<int>(scene_.types().size()) ? scene_.types().get(t).name + "s" : std::string("units");
+  };
+  auto trig = [&](int t) {
+    return t >= 0 && t < static_cast<int>(s.triggers.size()) ? "'" + s.triggers[static_cast<size_t>(t)].name + "'" : std::string("(none)");
+  };
+  switch (a.type) {
+    case ActionType::Message: return "tell " + sideName(sc, a.player) + ": \"" + a.text + "\"";
+    case ActionType::AddObjective: return std::string(a.value == 1 ? "give an optional objective" : "give the objective") + " \"" + a.text + "\" to " + sideName(sc, a.player);
+    case ActionType::CompleteObjective: return "mark objective " + std::to_string(a.value + 1) + " done";
+    case ActionType::FailObjective: return "mark objective " + std::to_string(a.value + 1) + " failed";
+    case ActionType::Victory: return sideName(sc, a.player) + " wins the battle";
+    case ActionType::Defeat: return sideName(sc, a.player) + " loses the battle";
+    case ActionType::SpawnUnits: return "bring in " + std::to_string(a.value) + " " + units(a.unitType) + " for " + sideName(sc, a.player) + " at " + area(a.area);
+    case ActionType::GiveSupplies: return "give " + sideName(sc, a.player) + " $" + std::to_string(a.value);
+    case ActionType::RevealArea: return "show " + area(a.area) + " to " + sideName(sc, a.player);
+    case ActionType::AttackMove: return sideName(sc, a.player) + "'s " + units(a.unitType) + " in " + area(a.area) + " attack towards " + area(a.area2);
+    case ActionType::MoveUnits: return sideName(sc, a.player) + "'s " + units(a.unitType) + " in " + area(a.area) + " move to " + area(a.area2);
+    case ActionType::ChangeOwner: return sideName(sc, a.player) + "'s " + units(a.unitType) + " in " + area(a.area) + " go over to " + sideName(sc, a.player2);
+    case ActionType::KillUnits: return "destroy " + sideName(sc, a.player) + "'s " + units(a.unitType) + " in " + area(a.area);
+    case ActionType::EnableTrigger: return "switch on trigger " + trig(a.trigger);
+    case ActionType::DisableTrigger: return "switch off trigger " + trig(a.trigger);
+    case ActionType::SetComputer: return sideName(sc, a.player) + " is played by " + (a.value < 0 ? std::string("a human") : "the computer");
+    case ActionType::CameraTo: return "move " + sideName(sc, a.player) + "'s view to " + area(a.area);
+    default: return actionName(a.type);
+  }
+}
+
+// Ready-made triggers for the usual mission pieces.
+void Editor::addTemplate(int which) {
+  ScenarioScript& s = scene_.scenario();
+  const uint8_t me = 0, enemy = 1;
+  int area = selectedArea_ >= 0 && selectedArea_ < static_cast<int>(s.areas.size()) ? selectedArea_ : (s.areas.empty() ? -1 : 0);
+  // How many objectives exist already (they are numbered in order).
+  int objectives = 0;
+  for (const Trigger& t : s.triggers)
+    for (const Action& x : t.actions) objectives += x.type == ActionType::AddObjective;
+  Trigger t;
+  Action a;
+  Condition c;
+  switch (which) {
+    case 0: {  // briefing
+      t.name = "Briefing";
+      a.type = ActionType::Message;
+      a.player = ANY_PLAYER;
+      a.text = "Hold the line until reinforcements arrive.";
+      t.actions.push_back(a);
+      Action o;
+      o.type = ActionType::AddObjective;
+      o.player = me;
+      o.text = "Destroy the enemy";
+      t.actions.push_back(o);
+      t.conditions.push_back(c);
+      break;
+    }
+    case 1: {  // capture an area
+      t.name = "Capture " + (area >= 0 ? s.areas[static_cast<size_t>(area)].name : std::string("the objective"));
+      c.type = CondType::UnitsInArea;
+      c.player = me;
+      c.area = area;
+      c.value = 3;
+      t.conditions.push_back(c);
+      Condition c2;
+      c2.type = CondType::NoUnitsInArea;
+      c2.player = enemy;
+      c2.area = area;
+      t.conditions.push_back(c2);
+      Trigger brief;
+      brief.name = t.name + " (objective)";
+      Action o;
+      o.type = ActionType::AddObjective;
+      o.player = me;
+      o.text = t.name;
+      brief.actions.push_back(o);
+      brief.conditions.push_back({});
+      s.triggers.push_back(brief);
+      a.type = ActionType::CompleteObjective;
+      a.value = objectives;
+      t.actions.push_back(a);
+      Action m;
+      m.type = ActionType::Message;
+      m.player = me;
+      m.text = "The area is ours.";
+      t.actions.push_back(m);
+      break;
+    }
+    case 2: {  // destroy the enemy -> victory
+      t.name = "Victory when the enemy is beaten";
+      c.type = CondType::PlayerDefeated;
+      c.player = enemy;
+      t.conditions.push_back(c);
+      a.type = ActionType::Victory;
+      a.player = me;
+      t.actions.push_back(a);
+      break;
+    }
+    case 3: {  // reinforcements on a timer
+      t.name = "Reinforcements";
+      c.type = CondType::Timer;
+      c.value = 120;
+      t.conditions.push_back(c);
+      a.type = ActionType::SpawnUnits;
+      a.player = me;
+      a.unitType = scene_.types().find(scene_.players()[me].faction + "_medium_tank");
+      a.value = 3;
+      a.area = area;
+      t.actions.push_back(a);
+      Action m;
+      m.type = ActionType::Message;
+      m.player = me;
+      m.text = "Reinforcements have arrived.";
+      t.actions.push_back(m);
+      break;
+    }
+    case 4: {  // enemy counter-attack
+      t.name = "Enemy counter-attack";
+      c.type = CondType::Timer;
+      c.value = 300;
+      t.conditions.push_back(c);
+      a.type = ActionType::AttackMove;
+      a.player = enemy;
+      a.area = area;
+      a.area2 = s.areas.size() > 1 ? 1 : area;
+      t.actions.push_back(a);
+      break;
+    }
+    default: {  // lose when everything is gone
+      t.name = "Defeat when our force is gone";
+      c.type = CondType::UnitCount;
+      c.player = me;
+      c.value = 0;
+      t.conditions.push_back(c);
+      a.type = ActionType::Defeat;
+      a.player = me;
+      t.actions.push_back(a);
+      break;
+    }
+  }
+  s.triggers.push_back(std::move(t));
+  selectedTrigger_ = static_cast<int>(s.triggers.size()) - 1;
+  editingCond_ = editingAction_ = -1;
+  scriptPage_ = 2;
+}
+
+void Editor::drawAreaPage(bool& changed) {
+  ScenarioScript& s = scene_.scenario();
+  ImGui::TextWrapped("Areas are named rectangles of the map that triggers watch and act on: an objective, a "
+                     "landing zone, the route of an attack.");
   const bool drawing = tool_ == Tool::Area;
   if (drawing) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.62f, 0.50f, 0.22f, 1));
-  if (ImGui::Button(drawing ? "Drag on the map..." : "Draw a new area")) tool_ = drawing ? Tool::SelectUnits : Tool::Area;
+  if (ImGui::Button(drawing ? "Drag a rectangle on the map... (click to stop)" : "+ Draw a new area", ImVec2(-1, 0)))
+    tool_ = drawing ? Tool::SelectUnits : Tool::Area;
   if (drawing) ImGui::PopStyleColor();
-  if (ImGui::BeginListBox("##areas", ImVec2(-1, std::min(5, std::max(2, static_cast<int>(s.areas.size()))) * 20.0f + 6))) {
+  if (ImGui::BeginListBox("##areas", ImVec2(-1, std::min(8, std::max(3, static_cast<int>(s.areas.size()))) * 20.0f + 6))) {
     for (int i = 0; i < static_cast<int>(s.areas.size()); ++i) {
       const ScriptArea& a = s.areas[static_cast<size_t>(i)];
       char label[128];
-      std::snprintf(label, sizeof label, "%s  (%dx%d)##a%d", a.name.c_str(), a.x1 - a.x0 + 1, a.y1 - a.y0 + 1, i);
-      if (ImGui::Selectable(label, selectedArea_ == i)) selectedArea_ = i;
-      if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) scene_.centerOn({(a.x0 + a.x1) * 128, (a.y0 + a.y1) * 128});
+      std::snprintf(label, sizeof label, "%s  (%d x %d tiles)##a%d", a.name.c_str(), a.x1 - a.x0 + 1, a.y1 - a.y0 + 1, i);
+      if (ImGui::Selectable(label, selectedArea_ == i)) {
+        selectedArea_ = i;
+        scene_.centerOn({(a.x0 + a.x1) * 128, (a.y0 + a.y1) * 128});
+      }
     }
+    if (s.areas.empty()) ImGui::TextDisabled("No areas yet.");
     ImGui::EndListBox();
   }
   if (selectedArea_ >= 0 && selectedArea_ < static_cast<int>(s.areas.size())) {
     ScriptArea& a = s.areas[static_cast<size_t>(selectedArea_)];
     ImGui::SetNextItemWidth(-60);
     changed |= ImGui::InputText("Name", &a.name);
+    // Which triggers use it.
+    int uses = 0;
+    for (const Trigger& t : s.triggers) {
+      for (const Condition& c : t.conditions) uses += c.area == selectedArea_;
+      for (const Action& x : t.actions) uses += (x.area == selectedArea_) + (x.area2 == selectedArea_);
+    }
+    ImGui::TextDisabled(uses ? "Used %d times by triggers." : "Not used by any trigger yet.", uses);
     if (ImGui::Button("Delete area")) {
       // Conditions and actions pointing past it shift down.
       const int gone = selectedArea_;
@@ -335,13 +526,12 @@ void Editor::drawScriptTab() {
       selectedArea_ = -1;
       changed = true;
     }
-    ImGui::SameLine();
-    ImGui::TextDisabled("double-click a name to look at it");
   }
+}
 
-  // --- Triggers -----------------------------------------------------------------
-  ImGui::SeparatorText("Triggers");
-  if (ImGui::Button("Add trigger")) {
+void Editor::drawTriggerPage(bool& changed) {
+  ScenarioScript& s = scene_.scenario();
+  if (ImGui::Button("+ Blank trigger")) {
     Trigger t;
     t.name = "Trigger " + std::to_string(s.triggers.size() + 1);
     t.conditions.push_back({});
@@ -351,6 +541,7 @@ void Editor::drawScriptTab() {
     t.actions.push_back(a);
     s.triggers.push_back(std::move(t));
     selectedTrigger_ = static_cast<int>(s.triggers.size()) - 1;
+    editingCond_ = editingAction_ = -1;
     changed = true;
   }
   if (selectedTrigger_ >= 0 && selectedTrigger_ < static_cast<int>(s.triggers.size())) {
@@ -373,67 +564,185 @@ void Editor::drawScriptTab() {
       changed = true;
     }
   }
-  if (ImGui::BeginListBox("##triggers", ImVec2(-1, std::min(7, std::max(2, static_cast<int>(s.triggers.size()))) * 20.0f + 6))) {
+  if (ImGui::BeginListBox("##triggers", ImVec2(-1, std::min(6, std::max(3, static_cast<int>(s.triggers.size()))) * 20.0f + 6))) {
     for (int i = 0; i < static_cast<int>(s.triggers.size()); ++i) {
       const Trigger& t = s.triggers[static_cast<size_t>(i)];
       const bool fired = scene_.sim().triggerFired(i);
       char label[160];
-      std::snprintf(label, sizeof label, "%d. %s%s%s##t%d", i + 1, t.name.c_str(), t.repeat ? "  (repeats)" : "",
-                    fired ? "  - fired" : "", i);
+      std::snprintf(label, sizeof label, "%d. %s%s%s%s##t%d", i + 1, t.name.c_str(), t.repeat ? "  (repeats)" : "",
+                    !t.enabled ? "  (off)" : "", fired ? "  - fired" : "", i);
       ImGui::PushStyleColor(ImGuiCol_Text, !t.enabled ? ImVec4(0.5f, 0.5f, 0.5f, 1) : fired ? ImVec4(0.6f, 0.9f, 0.55f, 1)
                                                                                           : ImGui::GetStyleColorVec4(ImGuiCol_Text));
-      if (ImGui::Selectable(label, selectedTrigger_ == i)) selectedTrigger_ = i;
+      if (ImGui::Selectable(label, selectedTrigger_ == i)) {
+        selectedTrigger_ = i;
+        editingCond_ = editingAction_ = -1;
+      }
       ImGui::PopStyleColor();
     }
+    if (s.triggers.empty()) ImGui::TextDisabled("No triggers yet: try the Quick start page.");
     ImGui::EndListBox();
   }
-  if (selectedTrigger_ >= 0 && selectedTrigger_ < static_cast<int>(s.triggers.size())) {
-    Trigger& t = s.triggers[static_cast<size_t>(selectedTrigger_)];
-    ImGui::SetNextItemWidth(-60);
-    changed |= ImGui::InputText("Name", &t.name);
-    changed |= ImGui::Checkbox("On", &t.enabled);
-    ImGui::SameLine();
-    changed |= ImGui::Checkbox("Repeats", &t.repeat);
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Fire every time the conditions hold (at most once a second), not just once.");
+  if (selectedTrigger_ < 0 || selectedTrigger_ >= static_cast<int>(s.triggers.size())) return;
+  Trigger& t = s.triggers[static_cast<size_t>(selectedTrigger_)];
+  ImGui::SetNextItemWidth(-60);
+  changed |= ImGui::InputText("Name", &t.name);
+  changed |= ImGui::Checkbox("Switched on", &t.enabled);
+  if (ImGui::IsItemHovered()) ImGui::SetTooltip("A switched-off trigger waits until another trigger switches it on.");
+  ImGui::SameLine();
+  changed |= ImGui::Checkbox("Repeats", &t.repeat);
+  if (ImGui::IsItemHovered()) ImGui::SetTooltip("Fire every time the conditions hold (at most once a second), not just once.");
 
-    ImGui::TextColored(kGold, "When all of these hold:");
-    for (size_t i = 0; i < t.conditions.size(); ++i) {
-      ImGui::PushID(static_cast<int>(i));
-      changed |= editCondition(t.conditions[i]);
-      ImGui::SameLine();
-      if (ImGui::SmallButton("x")) {
-        t.conditions.erase(t.conditions.begin() + static_cast<long>(i));
-        changed = true;
-        ImGui::PopID();
-        break;
-      }
-      ImGui::PopID();
-    }
-    if (ImGui::SmallButton("+ condition")) {
-      t.conditions.push_back({});
+  // One framed line per condition and action: the sentence, and its settings when opened.
+  auto line = [&](bool when, int i, const std::string& text, bool editing) -> int {  // 1 edit, 2 remove
+    int result = 0;
+    ImGui::PushID((when ? 0 : 1000) + i);
+    const ImVec2 p0 = ImGui::GetCursorScreenPos();
+    const float w = ImGui::GetContentRegionAvail().x, x0 = ImGui::GetCursorPosX();
+    ImGui::Dummy(ImVec2(4, 0));
+    ImGui::SameLine();
+    ImGui::TextColored(when ? ImVec4(0.55f, 0.75f, 0.95f, 1) : ImVec4(0.95f, 0.75f, 0.4f, 1), i == 0 ? (when ? "WHEN" : "THEN") : (when ? " AND" : " AND"));
+    ImGui::SameLine();
+    ImGui::PushTextWrapPos(x0 + w - 74);
+    ImGui::TextUnformatted(text.c_str());
+    ImGui::PopTextWrapPos();
+    ImGui::SameLine(x0 + w - 66);
+    if (ImGui::SmallButton(editing ? "done" : "edit")) result = 1;
+    ImGui::SameLine();
+    if (ImGui::SmallButton("x")) result = 2;
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Remove this line");
+    const ImVec2 p1(p0.x + w, ImGui::GetItemRectMax().y + 3);
+    ImGui::GetWindowDrawList()->AddRect(p0, p1, editing ? IM_COL32(214, 176, 92, 200) : IM_COL32(90, 90, 70, 160), 3.0f);
+    ImGui::Dummy(ImVec2(0, 2));
+    ImGui::PopID();
+    return result;
+  };
+
+  ImGui::Dummy(ImVec2(0, 4));
+  for (int i = 0; i < static_cast<int>(t.conditions.size()); ++i) {
+    const int r = line(true, i, describeCondition(t.conditions[static_cast<size_t>(i)]), editingCond_ == i);
+    if (r == 1) editingCond_ = editingCond_ == i ? -1 : i;
+    if (r == 2) {
+      t.conditions.erase(t.conditions.begin() + i);
+      editingCond_ = -1;
       changed = true;
+      break;
     }
-    ImGui::TextColored(kGold, "Do this:");
-    for (size_t i = 0; i < t.actions.size(); ++i) {
-      ImGui::PushID(1000 + static_cast<int>(i));
-      changed |= editAction(t.actions[i]);
-      ImGui::SameLine();
-      if (ImGui::SmallButton("x")) {
-        t.actions.erase(t.actions.begin() + static_cast<long>(i));
-        changed = true;
-        ImGui::PopID();
-        break;
-      }
+    if (editingCond_ == i) {
+      ImGui::PushID(i);
+      ImGui::Indent(14);
+      changed |= editCondition(t.conditions[static_cast<size_t>(i)]);
+      ImGui::Unindent(14);
       ImGui::PopID();
+      ImGui::Dummy(ImVec2(0, 4));
     }
-    if (ImGui::SmallButton("+ action")) {
-      t.actions.push_back({});
+  }
+  if (ImGui::Button("+ condition")) ImGui::OpenPopup("##addcond");
+  if (ImGui::BeginPopup("##addcond")) {
+    for (int i = 0; i < static_cast<int>(CondType::Count); ++i)
+      if (ImGui::Selectable(condName(static_cast<CondType>(i)))) {
+        Condition c;
+        c.type = static_cast<CondType>(i);
+        if (c.type == CondType::Timer) c.value = 60;
+        if (c.type == CondType::UnitsInArea) c.value = 1;
+        if (!s.areas.empty()) c.area = selectedArea_ >= 0 ? selectedArea_ : 0;
+        t.conditions.push_back(c);
+        editingCond_ = static_cast<int>(t.conditions.size()) - 1;
+        changed = true;
+      }
+    ImGui::EndPopup();
+  }
+  ImGui::Dummy(ImVec2(0, 4));
+  for (int i = 0; i < static_cast<int>(t.actions.size()); ++i) {
+    const int r = line(false, i, describeAction(t.actions[static_cast<size_t>(i)]), editingAction_ == i);
+    if (r == 1) editingAction_ = editingAction_ == i ? -1 : i;
+    if (r == 2) {
+      t.actions.erase(t.actions.begin() + i);
+      editingAction_ = -1;
       changed = true;
+      break;
     }
+    if (editingAction_ == i) {
+      ImGui::PushID(1000 + i);
+      ImGui::Indent(14);
+      changed |= editAction(t.actions[static_cast<size_t>(i)]);
+      ImGui::Unindent(14);
+      ImGui::PopID();
+      ImGui::Dummy(ImVec2(0, 4));
+    }
+  }
+  if (ImGui::Button("+ action")) ImGui::OpenPopup("##addaction");
+  if (ImGui::BeginPopup("##addaction")) {
+    for (int i = 0; i < static_cast<int>(ActionType::Count); ++i)
+      if (ImGui::Selectable(actionName(static_cast<ActionType>(i)))) {
+        Action a;
+        a.type = static_cast<ActionType>(i);
+        if (!s.areas.empty()) a.area = selectedArea_ >= 0 ? selectedArea_ : 0;
+        if (a.type == ActionType::SpawnUnits) a.value = 1;
+        t.actions.push_back(a);
+        editingAction_ = static_cast<int>(t.actions.size()) - 1;
+        changed = true;
+      }
+    ImGui::EndPopup();
+  }
+}
+
+void Editor::drawScriptTab() {
+  ScenarioScript& s = scene_.scenario();
+  bool changed = false;
+  const char* pages[4] = {"Quick start", "Areas", "Triggers", "Objectives"};
+  const float pw = (ImGui::GetContentRegionAvail().x - 12) / 4.0f;
+  for (int i = 0; i < 4; ++i) {
+    if (i) ImGui::SameLine(0, 4);
+    const bool on = scriptPage_ == i;
+    ImGui::PushStyleColor(ImGuiCol_Button, on ? ImVec4(0.55f, 0.45f, 0.22f, 1) : ImVec4(0.22f, 0.22f, 0.18f, 1));
+    if (ImGui::Button(pages[i], ImVec2(pw, 0))) scriptPage_ = i;
+    ImGui::PopStyleColor();
+  }
+  ImGui::Separator();
+  if (scriptPage_ == 0) {
+    ImGui::TextWrapped("A mission is a battle with rules. Three steps:");
+    ImGui::TextColored(kGold, "1.");
+    ImGui::SameLine();
+    ImGui::TextWrapped("Name the places that matter: Areas page, then drag on the map.");
+    ImGui::TextColored(kGold, "2.");
+    ImGui::SameLine();
+    ImGui::TextWrapped("Add triggers: WHEN something happens, THEN do something. Start from a ready-made one below "
+                       "and change it on the Triggers page.");
+    ImGui::TextColored(kGold, "3.");
+    ImGui::SameLine();
+    ImGui::TextWrapped("Test: Battle tab > Snapshot, play, then Restore.");
+    ImGui::SeparatorText("Ready-made triggers");
+    const char* names[6] = {"Briefing and main objective", "Capture an area (uses the selected area)",
+                            "Victory when the enemy is beaten", "Reinforcements after 2 minutes",
+                            "Enemy counter-attack after 5 minutes", "Defeat when our force is gone"};
+    for (int i = 0; i < 6; ++i)
+      if (ImGui::Button(names[i], ImVec2(-1, 0))) {
+        addTemplate(i);
+        changed = true;
+      }
+    ImGui::TextDisabled("Side 1 is 'us', side 2 the enemy; change them in each line.");
+  } else if (scriptPage_ == 1) {
+    drawAreaPage(changed);
+  } else if (scriptPage_ == 2) {
+    drawTriggerPage(changed);
+  } else {
+    ImGui::TextWrapped("Objectives appear in the order their 'add objective' actions run. "
+                       "'Mark objective N done' refers to these numbers.");
+    int k = 0;
+    for (int ti = 0; ti < static_cast<int>(s.triggers.size()); ++ti)
+      for (const Action& x : s.triggers[static_cast<size_t>(ti)].actions)
+        if (x.type == ActionType::AddObjective) {
+          ++k;
+          ImGui::TextColored(kGold, "%d.", k);
+          ImGui::SameLine();
+          ImGui::TextWrapped("%s%s  (trigger '%s')", x.text.c_str(), x.value == 1 ? " [optional]" : "",
+                             s.triggers[static_cast<size_t>(ti)].name.c_str());
+        }
+    if (k == 0) ImGui::TextDisabled("No objectives yet.");
   }
   if (changed) scene_.scenarioChanged();
   ImGui::Dummy(ImVec2(0, 4));
-  ImGui::TextDisabled("Saved with the map. Test it with Battle > Snapshot / Restore.");
+  ImGui::TextDisabled("Saved with the map.");
 }
 
 }  // namespace legion

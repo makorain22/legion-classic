@@ -49,6 +49,12 @@ class Editor {
 
   bool active() const { return active_; }
   void setActive(bool on);
+  // Opens a tab (0 terrain .. 4 script); for the script tab, `page` picks its page (screenshots).
+  void showTab(int tab, int page = -1) {
+    tab_ = tabRequest_ = tab;
+    if (page >= 0) scriptPage_ = page;
+    if (page == 2) selectedTrigger_ = 0;
+  }
 
   // Returns true when the editor used the event (so the game ignores it).
   bool onEvent(const SDL_Event& e, bool uiWantsMouse, bool uiWantsKeyboard);
@@ -176,6 +182,13 @@ class Editor {
   int strikeRounds_ = 12;
   // Script tab.
   int selectedTrigger_ = -1;
+  int editingCond_ = -1, editingAction_ = -1;  // Script tab: the line opened for editing
+  int scriptPage_ = 0;                          // Script tab: 0 quick start, 1 areas, 2 triggers, 3 objectives
+  std::string describeCondition(const slave::Condition& c) const;
+  std::string describeAction(const slave::Action& a) const;
+  void addTemplate(int which);
+  void drawTriggerPage(bool& changed);
+  void drawAreaPage(bool& changed);
   int selectedArea_ = -1;
   bool drawingArea_ = false;
   slave::Vec2i areaStart_, areaEnd_;

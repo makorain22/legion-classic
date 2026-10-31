@@ -24,7 +24,7 @@ class GameScene;
 
 class Sidebar {
  public:
-  static constexpr float kWidth = 236.0f;
+  static constexpr float kWidth = 276.0f;
 
   explicit Sidebar(GameScene& scene);
 
@@ -35,7 +35,8 @@ class Sidebar {
   void renderWorld(slave::SpriteRenderer& r);  // placement ghost
 
   bool busy() const { return placeType_ >= 0 || sellMode_; }
-  int placingType() const { return placeType_; }  // mouse belongs to the sidebar mode
+  int placingType() const { return placeType_; }
+  int hoveredType() const { return hoveredType_; }  // mouse belongs to the sidebar mode
   void cancel();
   slave::Formation formation() const { return formation_; }
   void startPlacing(int type);
@@ -54,6 +55,7 @@ class Sidebar {
 
   GameScene& scene_;
   int tab_ = 0;
+  int hoveredType_ = -1;  // cameo under the mouse (for the encyclopedia)
   int placeType_ = -1;
   bool dragging_ = false;  // fortification line being dragged
   slave::Vec2i dragFrom_;

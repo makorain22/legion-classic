@@ -14,7 +14,7 @@ enum class InputAction : uint8_t {
   ScrollUp, ScrollDown, ScrollLeft, ScrollRight,
   AttackMove, Stop, Deploy, SelectAll, BindGroup, UnbindGroup,
   Pause, SpeedUp, SpeedDown, CentreSelection, NextSide, Menu,
-  Help, Editor, Debug, Screenshot, ToggleInfo,
+  Help, Editor, Debug, Screenshot, ToggleInfo, Encyclopedia,
   Count
 };
 constexpr int ACTION_COUNT = static_cast<int>(InputAction::Count);
@@ -40,6 +40,7 @@ struct Settings {
   bool showInfoPanel = false;  // the top-left game info box
   bool showCards = true;       // NATO cards over bound units
   bool showChips = true;       // chips for enemies detected in the fog
+  bool atmosphere = true;      // colour grading and a vignette over the battlefield
   bool artPack = true;         // use content/art/blitzkrieg when present (takes effect on restart)
   // Two bindings per action.
   std::array<std::array<KeyCombo, 2>, ACTION_COUNT> keys{};

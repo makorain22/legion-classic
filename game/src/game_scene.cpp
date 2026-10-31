@@ -1,5 +1,7 @@
 #include "game_scene.hpp"
 
+#include "encyclopedia.hpp"
+
 #include <glad/gl.h>
 #include <imgui.h>
 
@@ -115,6 +117,7 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
   editor_ = std::make_unique<Editor>(*this);
   sidebar_ = std::make_unique<Sidebar>(*this);
   menus_ = std::make_unique<Menus>(*this);
+  encyclopedia_ = std::make_unique<Encyclopedia>(*this);
 
   cam_.setViewport(app_.pixelWidth(), app_.pixelHeight());
   if (opt_.zoom >= 2.0f) cam_.zoomStep(+1, {0, 0}), cam_.zoomStep(+1, {0, 0});
@@ -148,8 +151,17 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
   }
   if (!opt_.showMenu) menus_->close();
   if (opt_.startInEditor) editor_->setActive(true);
+  if (opt_.editorTab >= 0) editor_->showTab(opt_.editorTab, opt_.editorPage);
+  if (!opt_.encyclopedia.empty()) encyclopedia_->open(types_.find(opt_.encyclopedia));
   SLV_INFO("Map %dx%d, %zu props, %zu units", map_.width(), map_.height(), map_.props().size(), sim_->unitCount());
   return true;
+}
+
+void GameScene::openEncyclopedia(int type) {
+  // With nothing pointed at, open on the first selected unit.
+  if (type < 0 && !selection_.empty() && sim_->registry().alive(selection_.front()))
+    type = sim_->registry().get<CUnit>(selection_.front()).type;
+  encyclopedia_->open(type);
 }
 
 // Each unit type's sprites: the art for this map's biome when there is any
@@ -917,7 +929,8 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
       const bool ctrl = (e.key.mod & SDL_KMOD_CTRL) != 0;
       const Settings& K = settings_;
       if (K.pressed(InputAction::Menu, e.key)) {
-        if (k == SDLK_ESCAPE && formationPicker_) formationPicker_ = false;
+        if (k == SDLK_ESCAPE && encyclopedia_->isOpen()) encyclopedia_->close();
+        else if (k == SDLK_ESCAPE && formationPicker_) formationPicker_ = false;
         else if (k == SDLK_ESCAPE && attackMoveMode_) attackMoveMode_ = false;
         else if (k == SDLK_ESCAPE && !selection_.empty()) selection_.clear();
         else menus_->openInGameMenu();
@@ -926,6 +939,9 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
         attackMoveMode_ = !selection_.empty();
       } else if (K.pressed(InputAction::Help, e.key)) {
         showHelp_ = !showHelp_;
+      } else if (K.pressed(InputAction::Encyclopedia, e.key)) {
+        if (encyclopedia_->isOpen()) encyclopedia_->close();
+        else openEncyclopedia(sidebar_->hoveredType() >= 0 ? sidebar_->hoveredType() : -1);
       } else if (K.pressed(InputAction::Editor, e.key)) {
         editor_->setActive(!editor_->active());
       } else if (K.pressed(InputAction::Debug, e.key)) {
@@ -1180,6 +1196,7 @@ void GameScene::onUpdate(float dt, float alpha) {
   if (opt_.editorSelfTest) runEditorSelfTest();
   if (opt_.economyDemo) runEconomyDemo();
   if (opt_.gallery) runGallery();
+  if (opt_.battleDemo) runBattleDemo();
   if (opt_.orgDemo) runOrgDemo();
   if (opt_.flowSelfTest) runFlowSelfTest();
   editor_->update(dt);
@@ -1214,6 +1231,19 @@ void GameScene::onRender() {
   pruneSelection();
 
   terrain_.draw(cam_, time_);
+  {
+    // Colour grade per biome: worn, slightly faded colours like period film.
+    static const float kGrade[5][4] = {
+        {1.03f, 1.00f, 0.93f, 0.86f},  // temperate
+        {0.97f, 1.00f, 1.05f, 0.82f},  // winter
+        {1.05f, 1.00f, 0.90f, 0.90f},  // desert
+        {1.00f, 1.03f, 0.95f, 0.94f},  // tropical
+        {0.98f, 0.98f, 0.97f, 0.74f},  // urban
+    };
+    const float* g = kGrade[static_cast<int>(map_.biome) % 5];
+    if (settings_.atmosphere) renderer_.setGrade(g[0], g[1], g[2], g[3]);
+    else renderer_.setGrade(1, 1, 1, 1);
+  }
   renderer_.beginWorld(cam_);
 
   const RectF view = cam_.visibleWorld(120);
@@ -1336,9 +1366,17 @@ void GameScene::drawGroundLayer(const RectF& view) {
     };
     const int mask = (isTrench(st.tx + 1, st.ty) ? 1 : 0) | (isTrench(st.tx, st.ty + 1) ? 2 : 0) |
                      (isTrench(st.tx - 1, st.ty) ? 4 : 0) | (isTrench(st.tx, st.ty - 1) ? 8 : 0);
-    const Vec2f s = groundToScreenWorld(st.tx * 256.0f + 128, st.ty * 256.0f + 128);
+    const float cx = st.tx * 256.0f + 128, cy = st.ty * 256.0f + 128;
+    const Vec2f s = groundToScreenWorld(cx, cy);
     const uint32_t tint = fogTint(st.tx, st.ty, 1.0f);
-    if (tint) renderer_.sprite(art_.trench[static_cast<size_t>(mask)], s.x, s.y, kWhite, tint);
+    // Draped over the ground, so trenches follow slopes instead of floating.
+    const float h0 = static_cast<float>(map_.heightAt(cx, cy));
+    if (tint)
+      renderer_.spriteDraped(art_.trench[static_cast<size_t>(mask)], s.x, s.y, tint, 8, [&](float dx, float dy) {
+        // Screen offset back to ground (on the flat), then the height there.
+        const float lx = cx + (dx / 32.0f + dy / 16.0f) * 128.0f, ly = cy + (dy / 16.0f - dx / 32.0f) * 128.0f;
+        return (static_cast<float>(map_.heightAt(lx, ly)) - h0) * kPxPerUnit;
+      });
   }
 }
 
@@ -1521,15 +1559,28 @@ void GameScene::updateCursor() {
 void GameScene::onImGui() {
   if (mode_ == Mode::Menu) {
     menus_->draw();
+    encyclopedia_->draw();
     return;
   }
   showCards_ = settings_.showCards;
   showChips_ = settings_.showChips;
+  if (settings_.atmosphere) {
+    // A soft dark vignette round the battlefield.
+    ImDrawList* bg = ImGui::GetBackgroundDrawList();
+    const ImGuiIO& io = ImGui::GetIO();
+    const float w = io.DisplaySize.x - Sidebar::kWidth, h = io.DisplaySize.y, e = std::min(w, h) * 0.22f;
+    const ImU32 dark = IM_COL32(8, 7, 4, 120), clear = IM_COL32(8, 7, 4, 0);
+    bg->AddRectFilledMultiColor(ImVec2(0, 0), ImVec2(w, e), dark, dark, clear, clear);
+    bg->AddRectFilledMultiColor(ImVec2(0, h - e), ImVec2(w, h), clear, clear, dark, dark);
+    bg->AddRectFilledMultiColor(ImVec2(0, 0), ImVec2(e, h), dark, clear, clear, dark);
+    bg->AddRectFilledMultiColor(ImVec2(w - e, 0), ImVec2(w, h), clear, dark, dark, clear);
+  }
   drawWorldOverlays();
   drawHud();
   if (mode_ == Mode::Game) sidebar_->draw();
   if (mode_ == Mode::Game) editor_->imgui();
   drawObjectives();
+  encyclopedia_->draw();
   menus_->draw();
   if (bannerTime_ > 0 && !banner_.empty()) {
     const ImGuiIO& io = ImGui::GetIO();
@@ -1624,7 +1675,7 @@ void GameScene::drawHud() {
   if (settings_.showInfoPanel) {
     ImGui::TextColored(ImVec4(0.92f, 0.78f, 0.36f, 1), "LEGION CLASSIC");
     ImGui::SameLine();
-    ImGui::TextDisabled("Slave Engine 1.0  |  build 0.7.5");
+    ImGui::TextDisabled("Slave Engine 1.0  |  build 0.7.6");
     ImGui::Text("Map: %s (%dx%d)", map_.name.c_str(), map_.width(), map_.height());
     ImGui::Text("Commanding:");
     ImGui::SameLine();

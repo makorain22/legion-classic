@@ -161,7 +161,7 @@ struct BiomeLight {
 };
 const BiomeLight& biomeLight(Biome b) {
   static const BiomeLight k[] = {
-      {{1.00f, 1.00f, 1.00f}, 1.00f, {0.29f, 0.32f, 0.22f}, {0.09f, 0.16f, 0.17f}, 0.0f},  // temperate
+      {{1.03f, 1.00f, 0.92f}, 0.88f, {0.29f, 0.32f, 0.22f}, {0.09f, 0.16f, 0.17f}, 0.0f},  // temperate: warm, worn
       {{0.98f, 1.01f, 1.07f}, 0.80f, {0.40f, 0.46f, 0.50f}, {0.16f, 0.22f, 0.28f}, 0.85f},  // winter: frozen
       {{1.07f, 1.00f, 0.88f}, 0.95f, {0.30f, 0.36f, 0.28f}, {0.08f, 0.21f, 0.23f}, 0.0f},  // desert: oasis teal
       {{0.97f, 1.05f, 0.92f}, 1.12f, {0.26f, 0.30f, 0.18f}, {0.07f, 0.16f, 0.13f}, 0.0f},  // tropical: murky

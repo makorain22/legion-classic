@@ -5,6 +5,7 @@
 // unit quad, drawn with GPU instancing straight from the texture atlas. Team
 // colours are applied in the shader, so one sprite sheet serves all players.
 
+#include <cmath>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -57,12 +58,31 @@ class SpriteRenderer {
 
   // Starts a pass in world space (through the camera) or plain screen space.
   void beginWorld(const Camera& cam);
+  // Colour grade for the world pass: tint and saturation (1 = untouched).
+  void setGrade(float r, float g, float b, float saturation) { grade_[0] = r; grade_[1] = g; grade_[2] = b; grade_[3] = saturation; }
   void beginScreen(int viewportW, int viewportH);
 
   // Queues a sprite whose anchor sits at (x, y). Drawn in queue order.
   void sprite(int frameIndex, float x, float y, uint32_t team = kWhite, uint32_t tint = kWhite);
   // Same, scaled around the anchor (smoke puffs, flashes). Not pixel-snapped.
   void spriteScaled(int frameIndex, float x, float y, float scale, uint32_t tint = kWhite);
+  // A ground decal draped over uneven ground: drawn as a grid of pieces, each
+  // raised by lift(dx, dy) pixels, where (dx, dy) is the piece's offset from
+  // the anchor in screen pixels.
+  template <class Lift>
+  void spriteDraped(int frameIndex, float x, float y, uint32_t tint, int grid, Lift&& lift) {
+    const AtlasFrame& f = frames_[static_cast<size_t>(frameIndex)];
+    const float x0 = std::floor(x + 0.5f) - f.anchorX, y0 = std::floor(y + 0.5f) - f.anchorY;
+    const float cw = static_cast<float>(f.w) / grid, ch = static_cast<float>(f.h) / grid;
+    const float du = (f.u1 - f.u0) / grid, dv = (f.v1 - f.v0) / grid;
+    for (int j = 0; j < grid; ++j)
+      for (int i = 0; i < grid; ++i) {
+        const float px = x0 + i * cw, py = y0 + j * ch;
+        const float up = lift(px + cw * 0.5f - x, py + ch * 0.5f - y);
+        queue_.push_back({px, py - up, cw + 0.02f, ch + 0.6f, f.u0 + i * du, f.v0 + j * dv, f.u0 + (i + 1) * du,
+                          f.v0 + (j + 1) * dv, tint, kWhite});
+      }
+  }
   // Switches between normal and additive blending (fire, flashes). Flushes.
   void setAdditive(bool on);
   // Solid rectangle (uses the atlas' white block).
@@ -92,6 +112,7 @@ class SpriteRenderer {
   int whiteFrame_ = 0;
   bool additive_ = false;
   size_t drawCalls_ = 0, spritesDrawn_ = 0;
+  float grade_[4] = {1, 1, 1, 1};
 };
 
 }  // namespace slave

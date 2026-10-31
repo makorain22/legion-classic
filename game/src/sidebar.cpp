@@ -1,4 +1,5 @@
 #include "sidebar.hpp"
+#include "ui_style.hpp"
 
 #include <imgui.h>
 
@@ -387,20 +388,19 @@ void Sidebar::drawProduction(float width) {
   const uint8_t me = scene_.player();
   const PlayerState& ps = sim.playerState(me);
   const std::string& faction = scene_.players()[me].faction;
-  // Tabs.
+  // Tabs: big plates with a pictogram each.
   const float tw = (width - 6) / 4.0f;
+  const ui::Picto pictos[4] = {ui::Picto::Building, ui::Picto::Defence, ui::Picto::Infantry, ui::Picto::Vehicle};
   for (int i = 0; i < 4; ++i) {
     if (i) ImGui::SameLine(0, 2);
-    const bool sel = tab_ == i;
     // Flash a tab whose structure is ready to place.
     const bool ready = (i == 0 && ps.queues[0].ready) || (i == 1 && ps.queues[1].ready);
-    ImGui::PushStyleColor(ImGuiCol_Button, sel ? ImVec4(0.55f, 0.45f, 0.22f, 1) : ready ? ImVec4(0.30f, 0.45f, 0.20f, 1)
-                                                                                    : ImVec4(0.20f, 0.20f, 0.17f, 1));
-    if (ImGui::Button(kTabNames[i], ImVec2(tw, 0))) tab_ = i;
-    ImGui::PopStyleColor();
+    if (ui::iconTab(kTabNames[i], pictos[i], kTabNames[i], ImVec2(tw, 50), tab_ == i, ready && tab_ != i)) tab_ = i;
   }
-  // Which types belong on this tab.
+  ImGui::Dummy(ImVec2(0, 2));
+  // Which types belong on this tab, under their group headings.
   std::vector<int> items;
+  std::vector<std::string> groups;
   const auto& types = scene_.types();
   for (int t = 0; t < static_cast<int>(types.size()); ++t) {
     const UnitTypeDef& d = types.get(t);
@@ -408,105 +408,132 @@ void Sidebar::drawProduction(float width) {
     const int tab = d.category == UnitCategory::Building ? 0
                     : (d.category == UnitCategory::Defense || d.category == UnitCategory::Fortification) ? 1
                     : d.category == UnitCategory::Infantry ? 2 : 3;
-    if (tab == tab_) items.push_back(t);
+    if (tab != tab_) continue;
+    items.push_back(t);
+    if (std::find(groups.begin(), groups.end(), d.group) == groups.end()) groups.push_back(d.group);
   }
-  const float cw = (width - 4) * 0.5f, ch = 62.0f;
+  const float cw = (width - 4) * 0.5f, ch = 84.0f;
   ImDrawList* dl = ImGui::GetWindowDrawList();
   const SpriteRenderer& r = scene_.renderer();
-  ImGui::BeginChild("##cameos", ImVec2(width, std::min(ImGui::GetContentRegionAvail().y - 150, (ch + 4) * 4.5f)), false);
-  for (size_t i = 0; i < items.size(); ++i) {
-    const int t = items[i];
-    const UnitTypeDef& d = types.get(t);
-    const ProductionQueue& q = ps.queues[static_cast<size_t>(queueFor(d.category))];
-    const int queued = static_cast<int>(std::count(q.items.begin(), q.items.end(), t));
-    const bool front = !q.items.empty() && q.items.front() == t;
-    const bool isFort = d.category == UnitCategory::Fortification;
-    const bool available = sim.canProduce(me, t);
-    // Another structure in this line is being built or waits: this one can't start.
-    const bool lineBusy = d.isStructure() && !isFort && !q.items.empty() && !front;
+  ui::panel(dl, ImGui::GetCursorScreenPos(),
+            ImVec2(ImGui::GetCursorScreenPos().x + width, ImGui::GetCursorScreenPos().y +
+                                                              std::max(60.0f, ImGui::GetContentRegionAvail().y - 168)),
+            true);
+  ImGui::BeginChild("##cameos", ImVec2(width, std::max(60.0f, ImGui::GetContentRegionAvail().y - 168)), false);
+  dl = ImGui::GetWindowDrawList();
+  hoveredType_ = -1;
+  for (const std::string& group : groups) {
+    if (!group.empty()) {
+      ui::sectionTitle(dl, ImGui::GetCursorScreenPos(), width - 2, group.c_str());
+      ImGui::Dummy(ImVec2(width - 2, ImGui::GetTextLineHeight() + 6));
+    }
+    int column = 0;
+    for (const int t : items) {
+      const UnitTypeDef& d = types.get(t);
+      if (d.group != group) continue;
+      const ProductionQueue& q = ps.queues[static_cast<size_t>(queueFor(d.category))];
+      const int queued = static_cast<int>(std::count(q.items.begin(), q.items.end(), t));
+      const bool front = !q.items.empty() && q.items.front() == t;
+      const bool isFort = d.category == UnitCategory::Fortification;
+      const bool available = sim.canProduce(me, t);
+      // Another structure in this line is being built or waits: this one can't start.
+      const bool lineBusy = d.isStructure() && !isFort && !q.items.empty() && !front;
 
-    if (i % 2) ImGui::SameLine(0, 4);
-    ImGui::PushID(t);
-    const ImVec2 p0 = ImGui::GetCursorScreenPos();
-    ImGui::InvisibleButton("##cameo", ImVec2(cw, ch), ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
-    const bool hovered = ImGui::IsItemHovered();
-    const ImVec2 p1(p0.x + cw, p0.y + ch);
-    dl->AddRectFilled(p0, p1, hovered && available ? IM_COL32(58, 56, 44, 255) : IM_COL32(36, 36, 30, 255), 2.0f);
-    drawIcon(dl, r, scene_.unitArt(t), ImVec2(p0.x + 2, p0.y + 2), ImVec2(cw - 4, ch - 18),
-             available && !lineBusy ? IM_COL32_WHITE : IM_COL32(110, 110, 110, 200));
-    // Name and price.
-    dl->AddText(ImVec2(p0.x + 4, p1.y - 15), available ? IM_COL32(220, 210, 180, 255) : IM_COL32(120, 116, 104, 255),
-                d.name.c_str());
-    char cost[16];
-    std::snprintf(cost, sizeof cost, "$%d", d.cost);
-    dl->AddText(ImVec2(p1.x - ImGui::CalcTextSize(cost).x - 4, p0.y + 3), IM_COL32(236, 200, 96, 255), cost);
-    // Progress: a dark veil that lifts as the work proceeds.
-    if (front && !q.ready) {
-      const float frac = std::clamp(static_cast<float>(q.progress) / std::max(1, d.buildTime), 0.0f, 1.0f);
-      dl->AddRectFilled(p0, ImVec2(p1.x, p0.y + (ch - 16) * (1.0f - frac)), IM_COL32(0, 0, 0, 140));
-      dl->AddRectFilled(ImVec2(p0.x, p1.y - 17), ImVec2(p0.x + cw * frac, p1.y - 15), IM_COL32(236, 200, 96, 255));
-    }
-    if (front && q.ready) {
-      const bool blink = static_cast<int>(ImGui::GetTime() * 3) % 2;
-      dl->AddRect(p0, p1, blink ? IM_COL32(120, 236, 96, 255) : IM_COL32(60, 120, 50, 255), 2.0f, 0, 2.0f);
-      dl->AddText(ImVec2(p0.x + 4, p0.y + 3), IM_COL32(150, 255, 120, 255), "READY");
-    }
-    if (queued > 1 || (queued == 1 && !d.isStructure())) {
-      char n[16];
-      std::snprintf(n, sizeof n, "%d", queued);
-      dl->AddText(ImVec2(p0.x + 4, p0.y + 3), IM_COL32(255, 255, 255, 255), n);
-    }
-    if (placeType_ == t) dl->AddRect(p0, p1, IM_COL32(236, 200, 96, 255), 2.0f, 0, 2.0f);
+      if (column++ % 2) ImGui::SameLine(0, 4);
+      ImGui::PushID(t);
+      const ImVec2 p0 = ImGui::GetCursorScreenPos();
+      ImGui::InvisibleButton("##cameo", ImVec2(cw - 2, ch), ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
+      const bool hovered = ImGui::IsItemHovered();
+      if (hovered) hoveredType_ = t;
+      const ImVec2 p1(p0.x + cw - 2, p0.y + ch);
+      ui::panel(dl, p0, p1, false);
+      dl->AddRectFilled(ImVec2(p0.x + 3, p0.y + 3), ImVec2(p1.x - 3, p1.y - 3),
+                        hovered && available ? IM_COL32(52, 52, 40, 255) : IM_COL32(28, 29, 23, 255), 1.0f);
+      drawIcon(dl, r, scene_.unitArt(t), ImVec2(p0.x + 4, p0.y + 4), ImVec2(cw - 10, ch - 20),
+               available && !lineBusy ? IM_COL32_WHITE : IM_COL32(100, 100, 96, 190));
+      // Name strip and price tag.
+      dl->AddRectFilled(ImVec2(p0.x + 3, p1.y - 18), ImVec2(p1.x - 3, p1.y - 3), IM_COL32(16, 16, 12, 200));
+      dl->AddText(ImVec2(p0.x + 6, p1.y - 17), available ? ui::kStencil : ui::kStencilDim, d.name.c_str());
+      char cost[16];
+      std::snprintf(cost, sizeof cost, "$%d", d.cost);
+      const float cwid = ImGui::CalcTextSize(cost).x;
+      dl->AddRectFilled(ImVec2(p1.x - cwid - 9, p0.y + 3), ImVec2(p1.x - 3, p0.y + 18), IM_COL32(16, 16, 12, 190), 2.0f);
+      dl->AddText(ImVec2(p1.x - cwid - 6, p0.y + 3), ui::kBrass, cost);
+      // Progress: a dark veil that lifts as the work proceeds.
+      if (front && !q.ready) {
+        const float frac = std::clamp(static_cast<float>(q.progress) / std::max(1, d.buildTime), 0.0f, 1.0f);
+        dl->AddRectFilled(ImVec2(p0.x + 3, p0.y + 3), ImVec2(p1.x - 3, p0.y + 3 + (ch - 22) * (1.0f - frac)), IM_COL32(0, 0, 0, 150));
+        dl->AddRectFilled(ImVec2(p0.x + 3, p1.y - 20), ImVec2(p0.x + 3 + (cw - 8) * frac, p1.y - 18), ui::kBrass);
+      }
+      if (front && q.ready) {
+        const bool blink = static_cast<int>(ImGui::GetTime() * 3) % 2;
+        dl->AddRect(p0, p1, blink ? ui::kGood : IM_COL32(60, 120, 50, 255), 2.0f, 0, 2.0f);
+        dl->AddText(ImVec2(p0.x + 6, p0.y + 4), ui::kGood, "READY");
+      }
+      if (queued > 1 || (queued == 1 && !d.isStructure())) {
+        char n[16];
+        std::snprintf(n, sizeof n, "%d", queued);
+        dl->AddRectFilled(ImVec2(p0.x + 3, p0.y + 3), ImVec2(p0.x + 10 + ImGui::CalcTextSize(n).x, p0.y + 18), IM_COL32(120, 30, 20, 220), 2.0f);
+        dl->AddText(ImVec2(p0.x + 6, p0.y + 3), IM_COL32(255, 255, 255, 255), n);
+      }
+      if (placeType_ == t) dl->AddRect(p0, p1, ui::kBrass, 2.0f, 0, 2.0f);
 
-    // Clicks.
-    if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && available) {
-      if (isFort) {
-        startPlacing(t);
-      } else if (front && q.ready) {
-        startPlacing(t);
-      } else if (!lineBusy) {
+      // Clicks.
+      if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && available) {
+        if (isFort) {
+          startPlacing(t);
+        } else if (front && q.ready) {
+          startPlacing(t);
+        } else if (!lineBusy) {
+          Command c;
+          c.type = CommandType::Produce;
+          c.player = me;
+          c.unitType = static_cast<uint16_t>(t);
+          c.amount = ImGui::GetIO().KeyShift ? 5 : 1;
+          sim.queue(std::move(c));
+        }
+      }
+      if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && queued > 0) {
         Command c;
         c.type = CommandType::Produce;
         c.player = me;
         c.unitType = static_cast<uint16_t>(t);
-        c.amount = ImGui::GetIO().KeyShift ? 5 : 1;
+        c.amount = ImGui::GetIO().KeyShift ? -5 : -1;
         sim.queue(std::move(c));
+        if (placeType_ == t) cancel();
       }
-    }
-    if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && queued > 0) {
-      Command c;
-      c.type = CommandType::Produce;
-      c.player = me;
-      c.unitType = static_cast<uint16_t>(t);
-      c.amount = ImGui::GetIO().KeyShift ? -5 : -1;
-      sim.queue(std::move(c));
-      if (placeType_ == t) cancel();
-    }
-    if (hovered) {
-      ImGui::BeginTooltip();
-      ImGui::Text("%s  -  $%d", d.name.c_str(), d.cost);
-      if (d.isStructure() && d.power) ImGui::Text(d.power > 0 ? "Power +%d" : "Power %d", d.power);
-      if (!d.isStructure()) ImGui::Text("%d hp, %s", d.maxHealth, d.infantry() ? "infantry" : "vehicle");
-      for (int w : d.weapons) ImGui::BulletText("%s", scene_.weapons().get(w).name.c_str());
-      if (d.cover) ImGui::Text("Infantry inside take %d%% less damage", d.cover);
-      if (d.coverAround) ImGui::Text("Infantry beside it take %d%% less damage", d.coverAround);
-      if (!available) {
-        ImGui::TextColored(ImVec4(1, 0.5f, 0.4f, 1), "Needs:");
-        if (!sim.canProduce(me, t)) {
+      if (hovered) {
+        ImGui::BeginTooltip();
+        ImGui::Text("%s  -  $%d", d.name.c_str(), d.cost);
+        if (!d.description.empty()) {
+          ImGui::PushTextWrapPos(280);
+          ImGui::TextDisabled("%s", d.description.c_str());
+          ImGui::PopTextWrapPos();
+        }
+        if (d.isStructure() && d.power) ImGui::Text(d.power > 0 ? "Power +%d" : "Power %d", d.power);
+        if (!d.isStructure()) ImGui::Text("%d hp, %s", d.maxHealth, d.infantry() ? "infantry" : "vehicle");
+        for (int w : d.weapons) ImGui::BulletText("%s", scene_.weapons().get(w).name.c_str());
+        if (d.cover) ImGui::Text("Infantry inside take %d%% less damage", d.cover);
+        if (d.coverAround) ImGui::Text("Infantry beside it take %d%% less damage", d.coverAround);
+        if (d.garrison) ImGui::Text("Holds %d infantry", d.garrison);
+        if (!available) {
+          ImGui::TextColored(ImVec4(1, 0.5f, 0.4f, 1), "Needs:");
           for (int need : d.prereqs) ImGui::BulletText("%s", types.get(need).name.c_str());
           if (d.builtAt == "barracks") ImGui::BulletText("a Barracks");
           if (d.builtAt == "factory") ImGui::BulletText("a Tank Works");
           if (d.builtAt == "yard") ImGui::BulletText("a Construction Yard");
         }
+        ImGui::TextDisabled(isFort ? "Click, then drag a line on the map. Right-click cancels."
+                                   : d.isStructure() ? "Click to build; click again when ready to place it."
+                                                     : "Click to train (Shift: 5). Right-click to cancel.");
+        ImGui::TextDisabled("K: this unit in the encyclopedia");
+        ImGui::EndTooltip();
       }
-      ImGui::TextDisabled(isFort ? "Click, then drag a line on the map. Right-click cancels."
-                                 : d.isStructure() ? "Click to build; click again when ready to place it."
-                                                   : "Click to train (Shift: 5). Right-click to cancel.");
-      ImGui::EndTooltip();
+      ImGui::PopID();
     }
-    ImGui::PopID();
+    ImGui::Dummy(ImVec2(0, 2));
   }
-  if (items.empty()) ImGui::TextDisabled("Nothing to build here.");
+  if (items.empty()) ImGui::TextDisabled("  Nothing to build here.");
   ImGui::EndChild();
 }
 
@@ -527,59 +554,56 @@ void Sidebar::drawOrders(float width) {
     if (d.deploysTo >= 0) deployers.push_back(e);
     if (reg.has<CProducer>(e)) producers.push_back(e);
   }
-  ImGui::SeparatorText(sel.empty() ? "Orders" : (std::to_string(sel.size()) + " selected").c_str());
-  const float bw = (width - 8) / 3.0f;
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  ImGui::Dummy(ImVec2(0, 2));
+  const std::string title = sel.empty() ? std::string("ORDERS") : "ORDERS - " + std::to_string(sel.size()) + " selected";
+  ui::sectionTitle(dl, ImGui::GetCursorScreenPos(), width, title.c_str());
+  ImGui::Dummy(ImVec2(width, ImGui::GetTextLineHeight() + 6));
+  const float bw = (width - 8) / 3.0f, bh = 24;
   // Stance.
-  if (!movers.empty() || !sel.empty()) {
-    int common = -1;
-    for (Entity e : sel) {
-      const int s = static_cast<int>(reg.get<CUnit>(e).stance);
-      common = common == -1 ? s : (common == s ? s : -2);
+  int common = -1;
+  for (Entity e : sel) {
+    const int s = static_cast<int>(reg.get<CUnit>(e).stance);
+    common = common == -1 ? s : (common == s ? s : -2);
+  }
+  for (int s = 0; s < 3; ++s) {
+    if (s) ImGui::SameLine(0, 4);
+    if (ui::plateButton(kStanceNames[s], kStanceNames[s], ImVec2(bw, bh), common == s, false, !sel.empty())) {
+      Command c;
+      c.type = CommandType::SetStance;
+      c.units = sel;
+      c.stance = static_cast<Stance>(s);
+      sim.queue(std::move(c));
     }
-    for (int s = 0; s < 3; ++s) {
-      if (s) ImGui::SameLine(0, 4);
-      ImGui::PushStyleColor(ImGuiCol_Button, common == s ? ImVec4(0.55f, 0.45f, 0.22f, 1) : ImVec4(0.20f, 0.20f, 0.17f, 1));
-      ImGui::BeginDisabled(sel.empty());
-      if (ImGui::Button(kStanceNames[s], ImVec2(bw, 0))) {
-        Command c;
-        c.type = CommandType::SetStance;
-        c.units = sel;
-        c.stance = static_cast<Stance>(s);
-        sim.queue(std::move(c));
-      }
-      ImGui::EndDisabled();
-      ImGui::PopStyleColor();
-      if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", kStanceTips[s]);
-    }
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", kStanceTips[s]);
   }
   // Formation used by the next move order.
   const float fw = (width - 16) / 5.0f;
   for (int f = 0; f < 5; ++f) {
     if (f) ImGui::SameLine(0, 4);
-    const bool on = static_cast<int>(formation_) == f;
-    ImGui::PushStyleColor(ImGuiCol_Button, on ? ImVec4(0.55f, 0.45f, 0.22f, 1) : ImVec4(0.20f, 0.20f, 0.17f, 1));
-    if (ImGui::Button(kFormationNames[f], ImVec2(fw, 0))) formation_ = static_cast<Formation>(f);
-    ImGui::PopStyleColor();
+    if (ui::plateButton(kFormationNames[f], kFormationNames[f], ImVec2(fw, bh), static_cast<int>(formation_) == f))
+      formation_ = static_cast<Formation>(f);
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", kFormationTips[f]);
   }
   // Special orders.
-  if (!deployers.empty()) {
-    if (ImGui::Button("Deploy (D)", ImVec2(bw * 1.5f, 0))) {
-      Command c;
-      c.type = CommandType::Deploy;
-      c.units = deployers;
-      sim.queue(std::move(c));
-    }
-    ImGui::SameLine(0, 4);
+  if (ui::plateButton("deploy", "Deploy", ImVec2(bw, bh), false, false, !deployers.empty())) {
+    Command c;
+    c.type = CommandType::Deploy;
+    c.units = deployers;
+    sim.queue(std::move(c));
   }
-  if (!producers.empty()) ImGui::TextDisabled("Right-click: rally point");
-  ImGui::PushStyleColor(ImGuiCol_Button, sellMode_ ? ImVec4(0.6f, 0.3f, 0.2f, 1) : ImVec4(0.20f, 0.20f, 0.17f, 1));
-  if (ImGui::Button(sellMode_ ? "Selling... (Esc)" : "Sell", ImVec2(bw, 0))) {
+  if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+    ImGui::SetTooltip("Unfold a construction truck into a Construction Yard (Ctrl+D).");
+  ImGui::SameLine(0, 4);
+  if (ui::plateButton("sell", sellMode_ ? "Selling" : "Sell", ImVec2(bw, bh), sellMode_)) {
     sellMode_ = !sellMode_;
     placeType_ = -1;
   }
-  ImGui::PopStyleColor();
-  if (ImGui::IsItemHovered()) ImGui::SetTooltip("Click your structures to sell them for half their cost.");
+  if (ImGui::IsItemHovered()) ImGui::SetTooltip("Click your structures to sell them for half their cost. Esc stops.");
+  ImGui::SameLine(0, 4);
+  if (ui::plateButton("book", "Encyclopedia", ImVec2(bw, bh))) scene_.openEncyclopedia(hoveredType_ >= 0 ? hoveredType_ : -1);
+  if (ImGui::IsItemHovered()) ImGui::SetTooltip("Every unit and building, with its weapons and numbers (K).");
+  if (!producers.empty()) ImGui::TextDisabled("Right-click the map: rally point");
 }
 
 void Sidebar::update(float dt) {
@@ -598,50 +622,69 @@ void Sidebar::draw() {
   const ImGuiIO& io = ImGui::GetIO();
   ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - kWidth, 0));
   ImGui::SetNextWindowSize(ImVec2(kWidth, io.DisplaySize.y));
-  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.11f, 0.11f, 0.09f, 0.97f));
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6, 6));
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.13f, 0.14f, 0.11f, 1.0f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
+  ui::pushTheme();
   ImGui::Begin("##sidebar", nullptr,
                ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
                    ImGuiWindowFlags_NoBringToFrontOnFocus);
-  const float width = kWidth - 12;
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  {
+    // The frame: one steel plate, a thick dark edge towards the battlefield.
+    const ImVec2 a = ImGui::GetWindowPos(), b(a.x + kWidth, a.y + io.DisplaySize.y);
+    ui::panel(dl, a, b);
+    dl->AddRectFilled(a, ImVec2(a.x + 4, b.y), ui::kPlateDark);
+    dl->AddLine(ImVec2(a.x + 4, a.y), ImVec2(a.x + 4, b.y), ui::kBrassDim, 1.0f);
+    ui::rivets(dl, ImVec2(a.x + 4, a.y), b, 6);
+  }
+  const float width = kWidth - 16;
   const uint8_t me = scene_.player();
   const PlayerState& ps = scene_.sim().playerState(me);
-  // Supplies and power.
-  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.93f, 0.78f, 0.38f, 1));
-  ImGui::Text("$ %d", ps.credits);
-  ImGui::PopStyleColor();
-  if (ImGui::IsItemHovered())
-    ImGui::SetTooltip("Supplies. Income: %d a minute (Supply Depots on supply points, plus the Construction Yard).",
-                      ps.incomePerMinute);
-  ImGui::SameLine();
-  ImGui::TextDisabled("+%d", ps.incomePerMinute);
-  ImGui::SameLine(width * 0.56f);
-  const ImVec4 pc = ps.lowPower() ? ImVec4(1, 0.4f, 0.3f, 1) : ImVec4(0.6f, 0.85f, 0.5f, 1);
-  ImGui::TextColored(pc, "Pwr %d/%d", ps.powerUsed, ps.powerMade);
-  if (ImGui::IsItemHovered())
-    ImGui::SetTooltip("Used / made. Short of power, everything takes twice as long to build.");
-  // Power bar.
+  // Header plate: supplies, income and power.
   {
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    const ImVec2 p0 = ImGui::GetCursorScreenPos();
+    const ImVec2 a = ImGui::GetCursorScreenPos(), b(a.x + width, a.y + 40);
+    ui::panel(dl, a, b, true);
+    char buf[48];
+    std::snprintf(buf, sizeof buf, "$ %d", ps.credits);
+    dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 1.35f, ImVec2(a.x + 8, a.y + 3), ui::kBrass, buf);
+    std::snprintf(buf, sizeof buf, "+%d / min", ps.incomePerMinute);
+    dl->AddText(ImVec2(a.x + 8, a.y + 23), ui::kStencilDim, buf);
+    std::snprintf(buf, sizeof buf, "Power %d / %d", ps.powerUsed, ps.powerMade);
+    const float pw = ImGui::CalcTextSize(buf).x;
+    dl->AddText(ImVec2(b.x - pw - 8, a.y + 5), ps.lowPower() ? ui::kBad : ui::kGood, buf);
+    // Power gauge.
     const float made = static_cast<float>(std::max(1, ps.powerMade)), used = static_cast<float>(ps.powerUsed);
-    const float scale = width / std::max(made, used) ;
-    dl->AddRectFilled(p0, ImVec2(p0.x + width, p0.y + 4), IM_COL32(30, 30, 26, 255));
-    dl->AddRectFilled(p0, ImVec2(p0.x + made * scale, p0.y + 4), IM_COL32(90, 150, 70, 255));
-    dl->AddRectFilled(ImVec2(p0.x, p0.y + 4), ImVec2(p0.x + used * scale, p0.y + 7),
+    const float gw = width * 0.44f, gx = b.x - gw - 8, k = gw / std::max(made, used);
+    dl->AddRectFilled(ImVec2(gx, a.y + 25), ImVec2(gx + gw, a.y + 33), IM_COL32(12, 12, 10, 255));
+    dl->AddRectFilled(ImVec2(gx, a.y + 25), ImVec2(gx + made * k, a.y + 29), IM_COL32(90, 150, 70, 255));
+    dl->AddRectFilled(ImVec2(gx, a.y + 29), ImVec2(gx + used * k, a.y + 33),
                       ps.lowPower() ? IM_COL32(230, 80, 60, 255) : IM_COL32(220, 190, 90, 255));
-    ImGui::Dummy(ImVec2(width, 9));
+    ImGui::InvisibleButton("##economy", ImVec2(width, 40));
+    if (ImGui::IsItemHovered())
+      ImGui::SetTooltip("Supplies, and income a minute (Supply Depots on supply points, plus the Construction Yard).\n"
+                        "Power used / made: short of power, everything takes twice as long to build.");
+  }
+  ImGui::Dummy(ImVec2(0, 2));
+  {
+    const ImVec2 a = ImGui::GetCursorScreenPos();
+    ui::panel(dl, ImVec2(a.x - 2, a.y - 2), ImVec2(a.x + width + 2, a.y + width * 0.5f + 2), true);
   }
   drawMinimap(width);
   ImGui::Dummy(ImVec2(0, 2));
-  ImGui::TextColored(ImVec4(scene_.teamColor(me) % 256 / 255.0f, ((scene_.teamColor(me) >> 8) & 255) / 255.0f,
-                            ((scene_.teamColor(me) >> 16) & 255) / 255.0f, 1),
-                     "%s", scene_.players()[me].name.c_str());
-  ImGui::SameLine();
-  ImGui::TextDisabled("(Tab)");
+  {
+    const uint32_t tc = scene_.teamColor(me);
+    const ImVec2 a = ImGui::GetCursorScreenPos();
+    dl->AddRectFilled(ImVec2(a.x, a.y + 3), ImVec2(a.x + 10, a.y + 13), tc | 0xFF000000u, 2.0f);
+    ImGui::Dummy(ImVec2(14, 0));
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0.87f, 0.83f, 0.71f, 1), "%s", scene_.players()[me].name.c_str());
+    ImGui::SameLine();
+    ImGui::TextDisabled("(Tab)");
+  }
   drawProduction(width);
   drawOrders(width);
   ImGui::End();
+  ui::popTheme();
   ImGui::PopStyleVar();
   ImGui::PopStyleColor();
 }

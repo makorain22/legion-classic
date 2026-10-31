@@ -34,6 +34,7 @@ in vec2 vUV;
 in vec4 vTint;
 in vec4 vTeam;
 uniform sampler2D uAtlas;
+uniform vec4 uGrade;  // colour grade: rgb tint, a = saturation
 out vec4 fragColor;
 void main() {
   vec4 c = texture(uAtlas, vUV);
@@ -44,7 +45,9 @@ void main() {
     vec3 col = b <= 1.0 ? vTeam.rgb * b : mix(vTeam.rgb, vec3(1.0), clamp(b - 1.0, 0.0, 1.0));
     c = vec4(col, 1.0);
   }
-  fragColor = c * vTint;
+  c *= vTint;
+  c.rgb = mix(vec3(dot(c.rgb, vec3(0.30, 0.59, 0.11))), c.rgb, uGrade.a) * uGrade.rgb;
+  fragColor = c;
 }
 )";
 }  // namespace
@@ -128,6 +131,7 @@ void SpriteRenderer::beginWorld(const Camera& cam) {
   glUniform2f(shader_.uniform("uViewport"), static_cast<float>(cam.viewportW()), static_cast<float>(cam.viewportH()));
   glUniform1f(shader_.uniform("uZoom"), cam.zoom());
   glUniform1i(shader_.uniform("uAtlas"), 0);
+  glUniform4f(shader_.uniform("uGrade"), grade_[0], grade_[1], grade_[2], grade_[3]);
   atlas_.bind(0);
 }
 
@@ -139,6 +143,7 @@ void SpriteRenderer::beginScreen(int viewportW, int viewportH) {
   glUniform2f(shader_.uniform("uViewport"), static_cast<float>(viewportW), static_cast<float>(viewportH));
   glUniform1f(shader_.uniform("uZoom"), 1.0f);
   glUniform1i(shader_.uniform("uAtlas"), 0);
+  glUniform4f(shader_.uniform("uGrade"), 1, 1, 1, 1);  // the interface is never graded
   atlas_.bind(0);
 }
 

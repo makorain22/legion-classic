@@ -81,10 +81,16 @@ int main(int argc, char** argv) {
     else if (a == "--editor-selftest") opt.editorSelfTest = true;
     else if (a == "--economy-demo") opt.economyDemo = true;
     else if (a == "--gallery") opt.gallery = true;
+    else if (a == "--battle-demo") opt.battleDemo = true;
     else if (a == "--org-demo") opt.orgDemo = true;
     else if (a == "--export-sprites") opt.exportSprites = next();
     else if (a == "--import-blitzkrieg") importDir = next();
     else if (a == "--no-art-pack") opt.noArtPack = true;
+    else if (a == "--encyclopedia") opt.encyclopedia = next();
+    else if (a == "--editor-tab") {
+      opt.startInEditor = true;
+      std::sscanf(next(), "%d.%d", &opt.editorTab, &opt.editorPage);
+    }
     else if (a == "--no-bases") opt.noBases = true;
     else if (a == "--menu") opt.showMenu = true;
     else if (a == "--ai-battle") opt.aiBattle = true;
@@ -107,7 +113,7 @@ int main(int argc, char** argv) {
   slave::App app;
   if (!app.init(cfg)) return 1;
   slave::log::init((app.userDir() + "legion.log").c_str());
-  SLV_INFO("Legion Classic 0.7.5 on Slave Engine 1.0");
+  SLV_INFO("Legion Classic 0.7.6 on Slave Engine 1.0");
 
   std::string contentDir = "content/";
   if (const char* base = SDL_GetBasePath()) contentDir = std::string(base) + "content/";

@@ -421,6 +421,47 @@ void GameScene::runGallery() {
   }
 }
 
+// Two forces meeting head-on in open country, for screenshots of the fighting (--battle-demo).
+void GameScene::runBattleDemo() {
+  Registry& reg = sim_->registry();
+  const int32_t T = LEPTONS_PER_TILE;
+  if (frame_ == 2) {
+    Command rm;
+    rm.type = CommandType::Remove;
+    for (uint32_t i : reg.pool<CUnit>().entities()) rm.units.push_back(reg.handle(i));
+    sim_->queue(std::move(rm));
+    const Vec2i c = findLand({map_.widthLeptons() / 2, map_.heightLeptons() / 2});
+    galleryAt_ = c;
+    auto line = [&](const char* id, uint8_t owner, Vec2i at, int n, int gap, int facing) {
+      Command sp;
+      sp.type = CommandType::SpawnList;
+      const int t = types_.find(id);
+      if (t < 0) return;
+      for (int i = 0; i < n; ++i)
+        sp.spawns.push_back({static_cast<uint16_t>(t), owner, {at.x + (i - n / 2) * gap / 2, at.y + (i - n / 2) * gap}, angleOfFacing(facing), -1});
+      sim_->queue(std::move(sp));
+    };
+    line("ger_rifleman", 0, {c.x - 5 * T, c.y}, 15, T / 2, 0);
+    line("ger_mg_team", 0, {c.x - 6 * T, c.y + T}, 2, T * 2, 0);
+    line("ger_medium_tank", 0, {c.x - 8 * T, c.y - T}, 3, T * 2, 0);
+    line("rus_rifleman", 1, {c.x + 5 * T, c.y}, 18, T / 2, 8);
+    line("rus_mg_team", 1, {c.x + 6 * T, c.y - T}, 2, T * 2, 8);
+    line("rus_medium_tank", 1, {c.x + 8 * T, c.y + T}, 3, T * 2, 8);
+    centerOn(c);
+  }
+  if (frame_ == 4) {
+    revealMap_ = true;
+    Command g, r;
+    g.type = r.type = CommandType::AttackMove;
+    for (uint32_t i : reg.pool<CUnit>().entities()) (reg.pool<CUnit>().get(i).owner == 0 ? g : r).units.push_back(reg.handle(i));
+    g.target = {galleryAt_.x + 6 * T, galleryAt_.y};
+    r.target = {galleryAt_.x - 6 * T, galleryAt_.y};
+    sim_->queue(std::move(g));
+    sim_->queue(std::move(r));
+    centerOn(galleryAt_);
+  }
+}
+
 // Unit organisation, garrisons and fog chips on show (--org-demo).
 void GameScene::runOrgDemo() {
   Registry& reg = sim_->registry();

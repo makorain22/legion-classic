@@ -119,6 +119,8 @@ bool loadTga(const std::string& path, Image& out) {
     }
   }
   pixels.resize(static_cast<size_t>(w) * h);
+  for (Rgba& c : pixels)
+    if (c.a == kTeamAlpha) c.a = kTeamAlpha - 1;  // that alpha marks team colour
   out = Image(w, h);
   const bool top = desc & 0x20;
   for (int y = 0; y < h; ++y)
