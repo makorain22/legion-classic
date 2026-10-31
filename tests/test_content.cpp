@@ -171,7 +171,7 @@ TEST_CASE("each biome has its own ground, trees and settlements") {
   CHECK(maps.at(Biome::Tropical).lots.empty());
   CHECK(maps.at(Biome::Urban).lots.size() > maps.at(Biome::Temperate).lots.size() * 4);
   CHECK(!maps.at(Biome::Temperate).lots.empty());
-  for (const Map::Lot& l : maps.at(Biome::Desert).lots) CHECK(l.kind == 5);  // mud-brick houses
+  for (const Map::Lot& l : maps.at(Biome::Desert).lots) CHECK((l.kind == 5 || l.kind == 10));  // mud-brick houses and wells
 
   // Same seed, same land.
   Map again(128, 128);

@@ -61,6 +61,8 @@ struct UnitTypeDef {
   int32_t income = 0;        // supplies per minute it earns (a depot on a supply point; a yard's trickle)
   int32_t repair = 0;        // engineers: hit points restored per tick to friendly machines and works
   int32_t aiWeight = 1;      // how often the computer picks it (relative), 0 = never
+  std::string group;         // heading it is listed under in the sidebar ("Tanks", "Support"...)
+  std::string description;   // a line or two for the encyclopedia
 
   // Structures (footW > 0).
   int32_t footW = 0, footH = 0;  // footprint in tiles

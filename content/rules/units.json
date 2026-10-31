@@ -22,7 +22,9 @@
       "builtAt": "barracks",
       "requires": [],
       "aiWeight": 5,
-      "nato": "infantry"
+      "nato": "infantry",
+      "group": "Infantry",
+      "description": "The backbone of the army. Cheap, quick to train and best in numbers: five men form a fireteam on their own."
     },
     {
       "id": "ger_mg_team",
@@ -45,7 +47,9 @@
       "builtAt": "barracks",
       "requires": [],
       "aiWeight": 2,
-      "nato": "mg"
+      "nato": "mg",
+      "group": "Infantry",
+      "description": "A machine gun and its loader. Pins down and cuts through infantry in the open; helpless against armour."
     },
     {
       "id": "ger_at_team",
@@ -68,7 +72,9 @@
       "builtAt": "barracks",
       "requires": [],
       "aiWeight": 2,
-      "nato": "antitank"
+      "nato": "antitank",
+      "group": "Infantry",
+      "description": "Two men with a Panzerschreck rocket launcher. Deadly to tanks from the side and rear at short range."
     },
     {
       "id": "ger_engineer",
@@ -90,7 +96,9 @@
       "repair": 1,
       "aiWeight": 0,
       "weapons": [],
-      "nato": "engineer"
+      "nato": "engineer",
+      "group": "Specialists",
+      "description": "Builds field works, repairs vehicles and buildings, and clears the way. Unarmed: keep him out of the fight."
     },
     {
       "id": "ger_sniper",
@@ -115,7 +123,9 @@
         "ger_tower"
       ],
       "aiWeight": 1,
-      "nato": "sniper"
+      "nato": "sniper",
+      "group": "Specialists",
+      "description": "Picks off infantry from long range and sees far. Fragile, slow to fire, and no use against vehicles."
     },
     {
       "id": "ger_scout_car",
@@ -141,7 +151,9 @@
       "builtAt": "factory",
       "requires": [],
       "aiWeight": 1,
-      "nato": "recon"
+      "nato": "recon",
+      "group": "Recon & transport",
+      "description": "A fast four-wheeled armoured car with a machine gun. Finds the enemy; does not stand and fight tanks."
     },
     {
       "id": "ger_halftrack",
@@ -167,7 +179,9 @@
         "turnTicks": 1
       },
       "aiWeight": 2,
-      "nato": "mech"
+      "nato": "mech",
+      "group": "Recon & transport",
+      "description": "An armoured half-track with a machine gun, quick across country. Escorts infantry and chases scouts."
     },
     {
       "id": "ger_light_tank",
@@ -194,7 +208,9 @@
         "turnTicks": 1
       },
       "aiWeight": 2,
-      "nato": "armour"
+      "nato": "armour",
+      "group": "Tanks",
+      "description": "A light, fast tank with a small gun. Good against infantry, cars and other light tanks."
     },
     {
       "id": "ger_medium_tank",
@@ -223,7 +239,9 @@
         "ger_depot"
       ],
       "aiWeight": 5,
-      "nato": "armour"
+      "nato": "armour",
+      "group": "Tanks",
+      "description": "The workhorse: a long 75 mm gun, decent armour and a fair turn of speed."
     },
     {
       "id": "ger_mcv",
@@ -246,7 +264,9 @@
       ],
       "deploysTo": "ger_yard",
       "aiWeight": 0,
-      "nato": "hq"
+      "nato": "hq",
+      "group": "Engineering",
+      "description": "Unfolds into a Construction Yard where it is deployed. The heart of a base: guard it."
     },
     {
       "id": "ger_tank_destroyer",
@@ -271,7 +291,9 @@
         "ger_depot"
       ],
       "aiWeight": 2,
-      "nato": "antitank_armour"
+      "nato": "antitank_armour",
+      "group": "Support",
+      "description": "A turretless tank hunter with a very long 75 mm gun. Strike from ambush; its flanks are weak."
     },
     {
       "id": "ger_artillery",
@@ -296,7 +318,9 @@
         "ger_tower"
       ],
       "aiWeight": 1,
-      "nato": "artillery"
+      "nato": "artillery",
+      "group": "Support",
+      "description": "A self-propelled 105 mm howitzer. Shells infantry, guns and buildings from far out of sight."
     },
     {
       "id": "ger_heavy_tank",
@@ -326,7 +350,9 @@
         "turnTicks": 3
       },
       "aiWeight": 2,
-      "nato": "armour"
+      "nato": "armour",
+      "group": "Tanks",
+      "description": "The 88 mm gun and thick armour outclass any single opponent. Slow, thirsty and very expensive."
     },
     {
       "id": "rus_rifleman",
@@ -349,7 +375,9 @@
       "builtAt": "barracks",
       "requires": [],
       "aiWeight": 5,
-      "nato": "infantry"
+      "nato": "infantry",
+      "group": "Infantry",
+      "description": "The backbone of the army. Cheaper than his German counterpart and trained in great numbers."
     },
     {
       "id": "rus_mg_team",
@@ -372,7 +400,9 @@
       "builtAt": "barracks",
       "requires": [],
       "aiWeight": 2,
-      "nato": "mg"
+      "nato": "mg",
+      "group": "Infantry",
+      "description": "A Maxim gun on its wheeled carriage. Pins down and cuts through infantry in the open."
     },
     {
       "id": "rus_at_team",
@@ -395,7 +425,9 @@
       "builtAt": "barracks",
       "requires": [],
       "aiWeight": 2,
-      "nato": "antitank"
+      "nato": "antitank",
+      "group": "Infantry",
+      "description": "A long anti-tank rifle and its crew. Punches through thin armour; needs flank shots against heavy tanks."
     },
     {
       "id": "rus_engineer",
@@ -417,7 +449,9 @@
       "repair": 1,
       "aiWeight": 0,
       "weapons": [],
-      "nato": "engineer"
+      "nato": "engineer",
+      "group": "Specialists",
+      "description": "Builds field works, repairs vehicles and buildings, and clears the way. Unarmed."
     },
     {
       "id": "rus_sniper",
@@ -442,7 +476,9 @@
         "rus_tower"
       ],
       "aiWeight": 1,
-      "nato": "sniper"
+      "nato": "sniper",
+      "group": "Specialists",
+      "description": "Picks off infantry from long range and sees far. Fragile and slow to fire."
     },
     {
       "id": "rus_scout_car",
@@ -468,7 +504,9 @@
       "builtAt": "factory",
       "requires": [],
       "aiWeight": 1,
-      "nato": "recon"
+      "nato": "recon",
+      "group": "Recon & transport",
+      "description": "A small, fast armoured car. Finds the enemy; does not stand and fight tanks."
     },
     {
       "id": "rus_halftrack",
@@ -494,7 +532,9 @@
         "turnTicks": 1
       },
       "aiWeight": 2,
-      "nato": "mech"
+      "nato": "mech",
+      "group": "Recon & transport",
+      "description": "A half-track lorry with a machine gun, quick across country."
     },
     {
       "id": "rus_light_tank",
@@ -521,7 +561,9 @@
         "turnTicks": 1
       },
       "aiWeight": 2,
-      "nato": "armour"
+      "nato": "armour",
+      "group": "Tanks",
+      "description": "A light, nimble tank with a 45 mm gun. Good against infantry and light vehicles."
     },
     {
       "id": "rus_medium_tank",
@@ -550,7 +592,9 @@
         "rus_depot"
       ],
       "aiWeight": 5,
-      "nato": "armour"
+      "nato": "armour",
+      "group": "Tanks",
+      "description": "Sloped armour, wide tracks and a 76 mm gun: fast, tough and cheap to build."
     },
     {
       "id": "rus_mcv",
@@ -573,7 +617,9 @@
       ],
       "deploysTo": "rus_yard",
       "aiWeight": 0,
-      "nato": "hq"
+      "nato": "hq",
+      "group": "Engineering",
+      "description": "Unfolds into a Construction Yard where it is deployed. The heart of a base: guard it."
     },
     {
       "id": "rus_tank_destroyer",
@@ -598,7 +644,9 @@
         "rus_depot"
       ],
       "aiWeight": 2,
-      "nato": "antitank_armour"
+      "nato": "antitank_armour",
+      "group": "Support",
+      "description": "A turretless 85 mm gun on a medium tank hull. Kills tanks from ambush."
     },
     {
       "id": "rus_artillery",
@@ -623,7 +671,9 @@
         "rus_tower"
       ],
       "aiWeight": 1,
-      "nato": "artillery"
+      "nato": "artillery",
+      "group": "Support",
+      "description": "A rocket truck that drenches an area in a salvo of rockets, then must reload for a long time."
     },
     {
       "id": "rus_heavy_tank",
@@ -653,7 +703,9 @@
         "turnTicks": 4
       },
       "aiWeight": 2,
-      "nato": "armour"
+      "nato": "armour",
+      "group": "Tanks",
+      "description": "A breakthrough tank: a 122 mm gun that wrecks bunkers and tanks alike, under heavy armour."
     }
   ]
 }

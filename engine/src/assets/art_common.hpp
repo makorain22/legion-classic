@@ -192,12 +192,23 @@ VoxelModel makeScrub(int v);
 VoxelModel makeJungleTree(int v);
 VoxelModel makeDebris(int v);
 VoxelModel makeSandRock(int v);
+VoxelModel makeStump(int v);
+VoxelModel makeLogs(int v);
+VoxelModel makeHaystack(int v);
+VoxelModel makeCrates(int v);
+VoxelModel makeFence(int v);
 VoxelModel makeCottage(const FactionLook&);
 VoxelModel makeCottageBombed(const FactionLook&);
 VoxelModel makeTownhouse(const FactionLook&);
 VoxelModel makeChurch(const FactionLook&);
 VoxelModel makeRuin(const FactionLook&);
 VoxelModel makeAdobe(const FactionLook&);
+VoxelModel makeBarn(const FactionLook&);
+VoxelModel makeShed(const FactionLook&);
+VoxelModel makeIzba(const FactionLook&);
+VoxelModel makeWarehouse(const FactionLook&);
+VoxelModel makeWell(const FactionLook&);
+VoxelModel makeWaterTower(const FactionLook&);
 
 // The detailed vehicles and soldiers (unit_models.cpp).
 void addUnitModels(BakeQueue& q, SpriteCatalog& cat);

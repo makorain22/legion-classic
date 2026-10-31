@@ -1,9 +1,10 @@
 // Slave Engine - makes an art pack from Blitzkrieg's data (see art_pack.hpp).
 //
-// Scale: Blitzkrieg draws a map cell 32x16 pixels for 45.25 world units; our
-// tile is 64x32 pixels, so one of our tiles is 90.5 Blitzkrieg units and its
-// sprites keep their own pixel size. Buildings, which are larger in
-// Blitzkrieg than our rules make them, are scaled to fit their footprint.
+// Scale: Blitzkrieg's map is a grid of 32-unit cells, each drawn 32x16
+// pixels; our tile is two cells each way. Vehicles are rendered at 72 units
+// a tile (a touch smaller than Blitzkrieg's 64, so columns of tanks don't
+// crowd our tighter unit spacing); infantry and building sprites keep their
+// own pixel size, and buildings are fitted to our smaller footprints.
 
 #include <algorithm>
 #include <atomic>
@@ -28,7 +29,7 @@ namespace {
 namespace fs = std::filesystem;
 using nlohmann::json;
 
-constexpr float kUnitsPerTile = 90.51f;  // Blitzkrieg world units per tile of ours
+constexpr float kUnitsPerTile = 72.0f;  // Blitzkrieg model units per tile of ours
 constexpr float kTwoPi = 6.2831853f;
 
 // Biome skins: Blitzkrieg keeps summer, winter ("w") and Africa ("a") paint.
@@ -136,6 +137,7 @@ struct UnitOut {
   std::vector<Frame> frames;
   Image icon;
   std::string note;
+  bool prop = false;  // a single sprite named by its key ("props/tree_0"), not a unit
 };
 
 // Alpha-blends sprites onto one canvas; each is placed with its anchor at (dx, dy) from the shared anchor.
@@ -173,6 +175,12 @@ BakedSprite composite(const std::vector<Layer>& layers) {
       }
   }
   return out;
+}
+
+// Blitzkrieg's shadow sprites are masks the game drew half-transparent.
+void soften(BakedSprite& s, float k = 0.45f) {
+  for (Rgba& c : s.image.px)
+    if (c.a) c = {0, 0, 0, static_cast<uint8_t>(std::min(253.0f, c.a * k))};
 }
 
 // Trims empty borders (keeps the anchor in place).
@@ -437,6 +445,7 @@ bool bakeBuilding(const std::string& dir, const std::string& suffix, const json&
   std::vector<Layer> layers;
   if (hasShadow && !shadow.empty()) {
     s = bk::composeSquares(stex, shadow[0], scale, 1.0f);
+    soften(s);
     layers.push_back({&s, 0, 0});
   }
   layers.push_back({&b, 0, 0});
@@ -450,6 +459,74 @@ bool bakeBuilding(const std::string& dir, const std::string& suffix, const json&
   trim(c);
   out.frames.push_back({"body", std::move(c)});
   out.meta = {{"facings", 1}, {"frames", 1}};
+  return true;
+}
+
+// Small objects (sandbags, hedgehogs, wire) placed together on one tile:
+// "parts": [{"path": ..., "x": 0.2, "y": -0.1}, ...], offsets in tiles.
+bool bakeObjects(const std::string& dataDir, const std::string& suffix, const json& spec, UnitOut& out) {
+  const float scale = spec.value("scale", 1.0f), brightness = spec.value("brightness", 1.0f);
+  std::vector<BakedSprite> pieces;
+  std::vector<std::array<float, 3>> where;  // screen x, y, depth
+  for (const json& p : spec["parts"]) {
+    if (!p.is_object() || !p.contains("path")) continue;
+    const std::string dir = resolve(dataDir, p.value("path", ""));
+    std::string stem = "1" + suffix;
+    if (!exists(dir, stem + ".san")) stem = "1";
+    if (!suffix.empty() && stem == "1") return false;  // no paint for this biome
+    std::vector<std::vector<bk::Square>> body, shadow;
+    Image tex, stex;
+    if (!bk::loadSpritePack(resolve(dir, stem + ".san"), body) || !loadTexture(dir, stem, tex)) {
+      out.note = "no sprites in " + p.value("path", "");
+      return false;
+    }
+    const int idx = std::clamp(p.value("sprite", 0), 0, static_cast<int>(body.size()) - 1);
+    BakedSprite b = bk::composeSquares(tex, body[static_cast<size_t>(idx)], scale, brightness);
+    if (bk::loadSpritePack(resolve(dir, stem + "s.san"), shadow) && loadTexture(dir, stem + "s", stex) && !shadow.empty()) {
+      BakedSprite sh = bk::composeSquares(stex, shadow[std::min(static_cast<size_t>(idx), shadow.size() - 1)], scale, 1.0f);
+      soften(sh);
+      b = composite({{&sh, 0, 0}, {&b, 0, 0}});
+    }
+    const float x = p.value("x", 0.0f), y = p.value("y", 0.0f);
+    pieces.push_back(std::move(b));
+    where.push_back({(x - y) * 32 * scale, (x + y) * 16 * scale, x + y});
+  }
+  if (pieces.empty()) return false;
+  std::vector<size_t> order(pieces.size());
+  for (size_t i = 0; i < order.size(); ++i) order[i] = i;
+  std::sort(order.begin(), order.end(), [&](size_t a, size_t b) { return where[a][2] < where[b][2]; });
+  std::vector<Layer> layers;
+  for (size_t i : order) layers.push_back({&pieces[i], where[i][0], where[i][1]});
+  BakedSprite c = composite(layers);
+  trim(c);
+  out.frames.push_back({"body", std::move(c)});
+  out.meta = {{"facings", 1}, {"frames", 1}};
+  // A gun turning in the emplacement: a Blitzkrieg gun model in 16 facings.
+  if (spec.contains("turret") && spec["turret"].is_object()) {
+    const json& t = spec["turret"];
+    const std::string dir = resolve(dataDir, t.value("path", ""));
+    bk::Model m;
+    Image tex;
+    if (!bk::loadModel(resolve(dir, "1.mod"), m)) {
+      out.note = "no gun model in " + t.value("path", "");
+      return false;
+    }
+    if (!loadTexture(dir, "1" + suffix, tex)) loadTexture(dir, "1", tex);
+    float mn[3], mx[3];
+    bk::modelBounds(m, {}, mn, mx);
+    for (int f = 0; f < 16; ++f) {
+      bk::MeshBake o;
+      o.yaw = f * kTwoPi / 16;
+      o.tilesPerUnit = t.value("scale", 1.0f) / kUnitsPerTile;
+      o.pivotX = (mn[0] + mx[0]) / 2 + t.value("pivot", 0.0f);
+      o.pivotY = (mn[1] + mx[1]) / 2;
+      o.shadowAlpha = 70;
+      BakedSprite g = bk::bakeModel(m, tex, o);
+      trim(g);
+      out.frames.push_back({"turret_f" + two(f), std::move(g)});
+    }
+    out.meta["turret"] = {{"facings", 16}, {"offset", 0}};
+  }
   return true;
 }
 
@@ -478,9 +555,11 @@ bool importBlitzkrieg(const BlitzkriegImport& job, std::string& error, std::stri
   };
   std::vector<Task> tasks;
   for (const auto& [key, spec] : mapping["units"].items()) {
-    if (!spec.is_object() || !spec.contains("path")) continue;
-    for (const Skin& skin : kSkins)
+    if (!spec.is_object() || (!spec.contains("path") && !spec.contains("parts"))) continue;
+    for (const Skin& skin : kSkins) {
+      if (spec.value("kind", "") == "prop" && skin.biome[0]) continue;  // props are per biome already
       tasks.push_back({key, spec.value("kind", "vehicle"), spec.value("path", ""), spec.value("second", ""), spec, &skin});
+    }
   }
 
   std::vector<UnitOut> results(tasks.size());
@@ -498,6 +577,14 @@ bool importBlitzkrieg(const BlitzkriegImport& job, std::string& error, std::stri
         made[i] = bakeVehicle(dir, suffix, t.spec, o);
       } else if (t.kind == "infantry") {
         made[i] = bakeInfantry(dir, second, suffix, t.spec, o);
+      } else if (t.kind == "prop") {
+        // Trees, bushes, palms: one sprite with its shadow.
+        json one = {{"scale", t.spec.value("scale", 0.75f)}, {"parts", json::array({json{{"path", t.path}}})}};
+        made[i] = bakeObjects(job.dataDir, suffix, one, o);
+        o.prop = true;
+        o.key = t.key;
+      } else if (t.kind == "objects" && t.spec.contains("parts") && t.spec["parts"].is_array()) {
+        made[i] = bakeObjects(job.dataDir, suffix, t.spec, o);
       } else if (t.kind == "building") {
         const std::string model = t.key.substr(0, t.key.find('@'));
         auto it = job.footprints.find(model);
@@ -505,7 +592,7 @@ bool importBlitzkrieg(const BlitzkriegImport& job, std::string& error, std::stri
       } else {
         o.note = "unknown kind '" + t.kind + "'";
       }
-      if (made[i] && !t.skin->biome[0]) loadTga(resolve(dir, "icon.tga"), o.icon);
+      if (made[i] && !t.skin->biome[0] && !t.path.empty()) loadTga(resolve(dir, "icon.tga"), o.icon);
     }
   };
   {
@@ -527,6 +614,14 @@ bool importBlitzkrieg(const BlitzkriegImport& job, std::string& error, std::stri
       continue;
     }
     ++unitsMade;
+    if (o.prop) {
+      if (!o.frames.empty()) {
+        sprites[o.key] = {o.frames[0].s.anchorX, o.frames[0].s.anchorY};
+        files.push_back({job.outDir + "/" + o.key + ".png", &o.frames[0].s.image});
+      }
+      report += o.key + ": from " + tasks[i].path + "\n";
+      continue;
+    }
     units[o.key] = o.meta;
     for (const Frame& f : o.frames) {
       const std::string name = "units/" + o.key + "/" + f.name;
@@ -534,7 +629,7 @@ bool importBlitzkrieg(const BlitzkriegImport& job, std::string& error, std::stri
       files.push_back({job.outDir + "/" + name + ".png", &f.s.image});
     }
     if (o.icon.w > 0) files.push_back({job.outDir + "/icons/" + o.key + ".png", &o.icon});
-    report += o.key + ": " + std::to_string(o.frames.size()) + " sprites from " + tasks[i].path + "\n";
+    report += o.key + ": " + std::to_string(o.frames.size()) + " sprites from " + (tasks[i].path.empty() ? std::string("objects") : tasks[i].path) + "\n";
   }
   if (unitsMade == 0) {
     error = "nothing could be imported - check the paths in " + job.mappingFile;

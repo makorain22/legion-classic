@@ -14,13 +14,15 @@ const char* layerName(Layer l) {
 
 const char* propKindName(PropKind k) {
   static const char* names[] = {"Oak tree", "Pine tree", "Bush", "Rock", "Snowy pine", "Dead tree",
-                                "Palm", "Scrub", "Jungle tree", "Debris", "Sandstone"};
+                                "Palm", "Scrub", "Jungle tree", "Debris", "Sandstone",
+                                "Tree stump", "Log pile", "Haystack", "Crates and barrels", "Fence"};
   return names[static_cast<int>(k)];
 }
 
 const char* propKindId(PropKind k) {
   static const char* ids[] = {"tree", "pine", "bush", "rock", "snow_pine", "dead_tree",
-                              "palm", "scrub", "jungle_tree", "debris", "sandstone"};
+                              "palm", "scrub", "jungle_tree", "debris", "sandstone",
+                              "stump", "logs", "haystack", "crates", "fence"};
   return ids[static_cast<int>(k) % static_cast<int>(PropKind::Count)];
 }
 
@@ -374,6 +376,10 @@ void Map::generateTerrain(uint64_t seed, Biome b) {
       if (winter) {
         const uint32_t chance = forest > 690 ? 65 : (forest > 610 ? 16 : 1);
         if (rng.below(100) >= chance) continue;
+        if (chance <= 16 && rng.below(100) < 12) {  // felled timber at the forest's edge
+          put(rng.below(2) ? PropKind::Logs : PropKind::Stump, 3);
+          continue;
+        }
         put(pick < 72 ? PropKind::SnowPine : pick < 88 ? PropKind::DeadTree : PropKind::Rock, pick < 88 ? 4 : 3);
       } else if (desert) {
         // Palms crowd the water; scrub and sandstone elsewhere.
@@ -390,7 +396,9 @@ void Map::generateTerrain(uint64_t seed, Biome b) {
         const float gx = static_cast<float>((x + 6) % 12), gy = static_cast<float>((y + 6) % 12);
         const bool street = std::min(std::abs(gx - 6.0f), std::abs(gy - 6.0f)) < 1.5f;
         if (street) {
-          if (rng.below(100) < 5) put(PropKind::Debris, 4);
+          const uint32_t r = rng.below(100);
+          if (r < 5) put(PropKind::Debris, 4);
+          else if (r < 7) put(PropKind::Crates, 4);
           continue;
         }
         const uint32_t chance = forest > 700 ? 14 : 2;
@@ -398,7 +406,15 @@ void Map::generateTerrain(uint64_t seed, Biome b) {
         put(pick < 40 ? PropKind::Tree : pick < 70 ? PropKind::DeadTree : PropKind::Debris, 4);
       } else {
         const uint32_t chance = forest > 700 ? 70 : (forest > 620 ? 18 : 1);
+        if (rng.below(1000) < 4 && forest < 560) {  // haystacks out in the fields
+          put(PropKind::Haystack, 3);
+          continue;
+        }
         if (rng.below(100) >= chance) continue;
+        if (chance == 18 && pick < 8) {  // woodcutting at the forest's edge
+          put(pick < 4 ? PropKind::Stump : PropKind::Logs, 3);
+          continue;
+        }
         const PropKind kind = pick < 30 ? PropKind::Pine : pick < 48 ? PropKind::Bush : PropKind::Tree;
         put(kind, 4);
       }
@@ -470,9 +486,10 @@ void Map::generateTerrain(uint64_t seed, Biome b) {
           const int cx = bx + 3 + (k % 2) * 6, cy = by + 3 + (k / 2) * 6;
           if (rng.below(100) < 22 || !plotFree(cx, cy, 1)) continue;
           const uint32_t pick = rng.below(100);
-          const uint8_t kind = pick < 34 ? 2 : pick < 58 ? 4 : pick < 80 ? 1 : pick < 94 ? 0 : 3;
+          uint8_t kind = pick < 32 ? 2 : pick < 54 ? 4 : pick < 74 ? 1 : pick < 86 ? 0 : pick < 92 ? 9 : pick < 95 ? 11 : 3;
+          if (kind == 9 && !plotFree(cx, cy, 2)) kind = 2;  // a warehouse needs more room
           lots.push_back({cx, cy, kind});
-          clearProps(cx, cy, 1);
+          clearProps(cx, cy, kind == 9 ? 2 : 1);
         }
       }
     return;
@@ -488,7 +505,10 @@ void Map::generateTerrain(uint64_t seed, Biome b) {
       const int cx = hx + static_cast<int>(rng.range(-6, 6)), cy = hy + static_cast<int>(rng.range(-6, 6));
       if (nearRoad(cx, cy) || !plotFree(cx, cy, 1)) continue;
       const uint32_t pick = rng.below(100);
-      const uint8_t kind = desert ? 5 : (pick < 60 ? 0 : pick < 85 ? 1 : pick < 95 ? 4 : 3);
+      uint8_t kind = 0;
+      if (desert) kind = pick < 85 ? 5 : 10;
+      else if (winter) kind = pick < 45 ? 8 : pick < 60 ? 6 : pick < 72 ? 7 : pick < 82 ? 1 : pick < 90 ? 10 : pick < 96 ? 4 : 3;
+      else kind = pick < 42 ? 0 : pick < 58 ? 1 : pick < 70 ? 6 : pick < 79 ? 7 : pick < 85 ? 10 : pick < 89 ? 11 : pick < 95 ? 4 : 3;
       lots.push_back({cx, cy, kind});
       clearProps(cx, cy, 1);
     }

@@ -392,7 +392,7 @@ void Menus::drawReplayBar() {
   if (ImGui::Button(scene_.paused() ? "Play" : "Pause")) scene_.setPaused(!scene_.paused());
   for (float s : {1.0f, 2.0f, 4.0f, 8.0f}) {
     ImGui::SameLine();
-    char b[8];
+    char b[24];
     std::snprintf(b, sizeof b, "x%g", s);
     if (ImGui::Button(b)) scene_.setSpeed(s);
   }

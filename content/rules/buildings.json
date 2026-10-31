@@ -18,7 +18,9 @@
       "sight": 7,
       "cost": 3000,
       "category": "building",
-      "income": 120
+      "income": 120,
+      "group": "Base",
+      "description": "Builds every other structure, and only near itself and your other buildings. Earns a trickle of supplies."
     },
     {
       "id": "ger_power",
@@ -39,7 +41,9 @@
       "builtAt": "yard",
       "requires": [
         "ger_yard"
-      ]
+      ],
+      "group": "Base",
+      "description": "Powers the base. Short of power, everything takes twice as long to build."
     },
     {
       "id": "ger_depot",
@@ -61,7 +65,9 @@
       "requires": [
         "ger_power"
       ],
-      "income": 600
+      "income": 600,
+      "group": "Base",
+      "description": "Must stand on a supply point. Earns supplies every minute it stands."
     },
     {
       "id": "ger_barracks",
@@ -82,7 +88,9 @@
       "builtAt": "yard",
       "requires": [
         "ger_power"
-      ]
+      ],
+      "group": "Production",
+      "description": "Trains infantry."
     },
     {
       "id": "ger_factory",
@@ -103,7 +111,9 @@
       "builtAt": "yard",
       "requires": [
         "ger_depot"
-      ]
+      ],
+      "group": "Production",
+      "description": "Builds vehicles and tanks."
     },
     {
       "id": "ger_tower",
@@ -124,7 +134,9 @@
       "requires": [
         "ger_barracks"
       ],
-      "garrison": 1
+      "garrison": 1,
+      "group": "Emplacements",
+      "description": "A wooden watchtower: one man inside sees far over the countryside."
     },
     {
       "id": "ger_bunker",
@@ -151,7 +163,9 @@
       "requires": [
         "ger_barracks"
       ],
-      "garrison": 4
+      "garrison": 4,
+      "group": "Emplacements",
+      "description": "A concrete machine-gun bunker. Holds infantry, who fire from it well protected."
     },
     {
       "id": "ger_atgun",
@@ -177,7 +191,9 @@
       "builtAt": "yard",
       "requires": [
         "ger_factory"
-      ]
+      ],
+      "group": "Emplacements",
+      "description": "A dug-in anti-tank gun behind sandbags. Covers an approach for armour."
     },
     {
       "id": "ger_sandbags",
@@ -197,7 +213,9 @@
       "builtAt": "yard",
       "requires": [
         "ger_yard"
-      ]
+      ],
+      "group": "Field works",
+      "description": "Infantry beside sandbags take less damage."
     },
     {
       "id": "ger_trench",
@@ -221,7 +239,9 @@
       "builtAt": "yard",
       "requires": [
         "ger_barracks"
-      ]
+      ],
+      "group": "Field works",
+      "description": "Infantry in a trench take much less damage."
     },
     {
       "id": "ger_wire",
@@ -243,7 +263,9 @@
       "builtAt": "yard",
       "requires": [
         "ger_yard"
-      ]
+      ],
+      "group": "Field works",
+      "description": "Slows infantry to a crawl."
     },
     {
       "id": "ger_traps",
@@ -266,7 +288,9 @@
       "builtAt": "yard",
       "requires": [
         "ger_yard"
-      ]
+      ],
+      "group": "Field works",
+      "description": "Stops vehicles; infantry walk through."
     },
     {
       "id": "rus_yard",
@@ -285,7 +309,9 @@
       "sight": 7,
       "cost": 3000,
       "category": "building",
-      "income": 120
+      "income": 120,
+      "group": "Base",
+      "description": "Builds every other structure, and only near itself and your other buildings. Earns a trickle of supplies."
     },
     {
       "id": "rus_power",
@@ -306,7 +332,9 @@
       "builtAt": "yard",
       "requires": [
         "rus_yard"
-      ]
+      ],
+      "group": "Base",
+      "description": "Powers the base. Short of power, everything takes twice as long to build."
     },
     {
       "id": "rus_depot",
@@ -328,7 +356,9 @@
       "requires": [
         "rus_power"
       ],
-      "income": 600
+      "income": 600,
+      "group": "Base",
+      "description": "Must stand on a supply point. Earns supplies every minute it stands."
     },
     {
       "id": "rus_barracks",
@@ -349,7 +379,9 @@
       "builtAt": "yard",
       "requires": [
         "rus_power"
-      ]
+      ],
+      "group": "Production",
+      "description": "Trains infantry."
     },
     {
       "id": "rus_factory",
@@ -370,7 +402,9 @@
       "builtAt": "yard",
       "requires": [
         "rus_depot"
-      ]
+      ],
+      "group": "Production",
+      "description": "Builds vehicles and tanks."
     },
     {
       "id": "rus_tower",
@@ -391,7 +425,9 @@
       "requires": [
         "rus_barracks"
       ],
-      "garrison": 1
+      "garrison": 1,
+      "group": "Emplacements",
+      "description": "A wooden watchtower: one man inside sees far over the countryside."
     },
     {
       "id": "rus_bunker",
@@ -418,7 +454,9 @@
       "requires": [
         "rus_barracks"
       ],
-      "garrison": 4
+      "garrison": 4,
+      "group": "Emplacements",
+      "description": "A concrete machine-gun bunker. Holds infantry, who fire from it well protected."
     },
     {
       "id": "rus_atgun",
@@ -444,7 +482,9 @@
       "builtAt": "yard",
       "requires": [
         "rus_factory"
-      ]
+      ],
+      "group": "Emplacements",
+      "description": "A dug-in anti-tank gun behind sandbags. Covers an approach for armour."
     },
     {
       "id": "rus_sandbags",
@@ -464,7 +504,9 @@
       "builtAt": "yard",
       "requires": [
         "rus_yard"
-      ]
+      ],
+      "group": "Field works",
+      "description": "Infantry beside sandbags take less damage."
     },
     {
       "id": "rus_trench",
@@ -488,7 +530,9 @@
       "builtAt": "yard",
       "requires": [
         "rus_barracks"
-      ]
+      ],
+      "group": "Field works",
+      "description": "Infantry in a trench take much less damage."
     },
     {
       "id": "rus_wire",
@@ -510,7 +554,9 @@
       "builtAt": "yard",
       "requires": [
         "rus_yard"
-      ]
+      ],
+      "group": "Field works",
+      "description": "Slows infantry to a crawl."
     },
     {
       "id": "rus_traps",
@@ -533,7 +579,9 @@
       "builtAt": "yard",
       "requires": [
         "rus_yard"
-      ]
+      ],
+      "group": "Field works",
+      "description": "Stops vehicles; infantry walk through."
     },
     {
       "id": "neutral_cottage",
@@ -548,7 +596,8 @@
       "health": 900,
       "coverAround": 30,
       "autoTarget": false,
-      "garrison": 10
+      "garrison": 10,
+      "description": "A farmhouse. Infantry can occupy it and fight from the windows."
     },
     {
       "id": "neutral_cottage_bombed",
@@ -563,7 +612,8 @@
       "health": 500,
       "coverAround": 30,
       "autoTarget": false,
-      "garrison": 6
+      "garrison": 6,
+      "description": "What is left of a farmhouse. Still gives some shelter."
     },
     {
       "id": "neutral_townhouse",
@@ -578,7 +628,8 @@
       "health": 1400,
       "coverAround": 30,
       "autoTarget": false,
-      "garrison": 20
+      "garrison": 20,
+      "description": "A two-storey town house: room for a platoon at the windows."
     },
     {
       "id": "neutral_church",
@@ -593,7 +644,8 @@
       "health": 2400,
       "coverAround": 30,
       "autoTarget": false,
-      "garrison": 30
+      "garrison": 30,
+      "description": "The church: the strongest building in a village and room for many men."
     },
     {
       "id": "neutral_ruin",
@@ -608,7 +660,8 @@
       "health": 600,
       "coverAround": 30,
       "autoTarget": false,
-      "garrison": 8
+      "garrison": 8,
+      "description": "A ruin. Some shelter for a few men."
     },
     {
       "id": "neutral_adobe",
@@ -623,7 +676,220 @@
       "health": 1000,
       "coverAround": 30,
       "autoTarget": false,
-      "garrison": 10
+      "garrison": 10,
+      "description": "A mud-brick house of the south."
+    },
+    {
+      "id": "ger_mg_nest",
+      "faction": "ger",
+      "armor": "structure",
+      "name": "MG Nest",
+      "model": "mg_nest",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 450,
+      "cost": 250,
+      "buildTime": 5,
+      "sight": 7,
+      "category": "defense",
+      "weapons": [
+        "mg_nest"
+      ],
+      "turret": {
+        "turnTicks": 1
+      },
+      "builtAt": "yard",
+      "requires": [
+        "ger_barracks"
+      ],
+      "group": "Emplacements",
+      "description": "A machine gun behind a ring of sandbags. Cheap, quick to raise, and murderous to infantry.",
+      "nato": "mg"
+    },
+    {
+      "id": "ger_howitzer_pit",
+      "faction": "ger",
+      "armor": "structure",
+      "name": "Howitzer Emplacement",
+      "model": "howitzer_pit",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 700,
+      "cost": 1500,
+      "buildTime": 16,
+      "sight": 8,
+      "category": "defense",
+      "weapons": [
+        "howitzer_150"
+      ],
+      "turret": {
+        "turnTicks": 4
+      },
+      "builtAt": "yard",
+      "requires": [
+        "ger_factory"
+      ],
+      "group": "Emplacements",
+      "description": "A field howitzer dug in behind sandbags. Shells anything that comes within its long reach.",
+      "nato": "artillery"
+    },
+    {
+      "id": "rus_mg_nest",
+      "faction": "rus",
+      "armor": "structure",
+      "name": "MG Nest",
+      "model": "mg_nest",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 450,
+      "cost": 250,
+      "buildTime": 5,
+      "sight": 7,
+      "category": "defense",
+      "weapons": [
+        "mg_nest"
+      ],
+      "turret": {
+        "turnTicks": 1
+      },
+      "builtAt": "yard",
+      "requires": [
+        "rus_barracks"
+      ],
+      "group": "Emplacements",
+      "description": "A machine gun behind a ring of sandbags. Cheap, quick to raise, and murderous to infantry.",
+      "nato": "mg"
+    },
+    {
+      "id": "rus_howitzer_pit",
+      "faction": "rus",
+      "armor": "structure",
+      "name": "Gun-Howitzer Emplacement",
+      "model": "howitzer_pit",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 700,
+      "cost": 1500,
+      "buildTime": 16,
+      "sight": 8,
+      "category": "defense",
+      "weapons": [
+        "howitzer_122"
+      ],
+      "turret": {
+        "turnTicks": 4
+      },
+      "builtAt": "yard",
+      "requires": [
+        "rus_factory"
+      ],
+      "group": "Emplacements",
+      "description": "A field howitzer dug in behind sandbags. Shells anything that comes within its long reach.",
+      "nato": "artillery"
+    },
+    {
+      "id": "neutral_barn",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Barn",
+      "model": "barn",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 800,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 10,
+      "description": "A big timber barn. Room for a squad."
+    },
+    {
+      "id": "neutral_shed",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Shed",
+      "model": "shed",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 300,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 5,
+      "description": "A small shed: shelter for a fireteam."
+    },
+    {
+      "id": "neutral_izba",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Log House",
+      "model": "izba",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 700,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 8,
+      "description": "A log house of the Russian countryside."
+    },
+    {
+      "id": "neutral_warehouse",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Warehouse",
+      "model": "warehouse",
+      "footprint": [
+        3,
+        2
+      ],
+      "health": 1500,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 30,
+      "description": "A brick warehouse with room for many men."
+    },
+    {
+      "id": "neutral_well",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Well",
+      "model": "well",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 200,
+      "coverAround": 30,
+      "autoTarget": false,
+      "description": "A village well."
+    },
+    {
+      "id": "neutral_water_tower",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Water Tower",
+      "model": "water_tower",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 400,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 1,
+      "description": "A railway water tower: a lookout for one man.",
+      "sight": 12
     }
   ]
 }

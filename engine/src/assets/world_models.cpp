@@ -377,4 +377,195 @@ VoxelModel makeAdobe(const FactionLook&) {
   return m;
 }
 
+// A timber barn: plank walls, big doors, a steep shingled roof.
+VoxelModel makeBarn(const FactionLook&) {
+  VoxelModel m(24, 24, 24);
+  m.box(3, 4, 0, 21, 20, 10, WOOD);
+  for (int x = 3; x < 21; x += 2) m.box(x, 4, 0, x + 1, 20, 10, WOOD_DARK);  // plank seams
+  m.box(4, 5, 0, 20, 19, 10, WOOD);
+  m.box(9, 19, 0, 15, 20, 8, WOOD_DARK);  // doors
+  m.box(11, 19, 0, 13, 20, 8, DEAD_WOOD);
+  const int half = 9;
+  for (int i = 0; i <= half; ++i)
+    m.box(2, 3 + i, 10 + i, 22, 21 - i, 11 + i, (i % 2) ? ROOF_DARK : ROOF);
+  for (int i = 0; i + 1 < half; ++i) {
+    m.box(3, 4 + i + 1, 10 + i, 4, 20 - i - 1, 11 + i, WOOD);
+    m.box(20, 4 + i + 1, 10 + i, 21, 20 - i - 1, 11 + i, WOOD);
+  }
+  m.box(1, 20, 0, 4, 23, 2, DRY_GRASS);  // a hay pile
+  weather(m, WOOD, WOOD_DARK, DEAD_WOOD, 71, 14, 6);
+  return m;
+}
+
+// A small lean-to shed.
+VoxelModel makeShed(const FactionLook&) {
+  VoxelModel m(12, 12, 12);
+  m.box(2, 3, 0, 10, 9, 6, WOOD);
+  for (int x = 2; x < 10; x += 2) m.box(x, 3, 0, x + 1, 4, 6, WOOD_DARK);
+  m.box(5, 8, 0, 7, 9, 5, WOOD_DARK);
+  for (int y = 2; y < 10; ++y) m.box(1, y, 6 + (9 - y) / 3, 11, y + 1, 7 + (9 - y) / 3, ROOF_DARK);
+  m.box(8, 9, 0, 11, 11, 1, DEAD_WOOD);  // logs stacked outside
+  weather(m, WOOD, WOOD_DARK, DEAD_WOOD, 72, 12, 6);
+  return m;
+}
+
+// A Russian log house: round logs, white carved window frames, plank roof.
+VoxelModel makeIzba(const FactionLook&) {
+  VoxelModel m(24, 24, 20);
+  for (int z = 0; z < 9; ++z) m.box(4, 5, z, 20, 19, z + 1, z % 2 ? WOOD_DARK : WOOD);
+  m.box(5, 6, 0, 19, 18, 9, WOOD);
+  for (int x = 6; x < 18; x += 4) {
+    m.box(x, 18, 3, x + 2, 19, 6, WINDOW);
+    m.box(x - 1, 18, 2, x + 3, 19, 3, PLASTER);   // carved sill
+    m.box(x - 1, 18, 6, x + 3, 19, 7, PLASTER);   // and lintel
+  }
+  m.box(19, 10, 0, 20, 12, 6, WOOD_DARK);  // door at the side
+  const int half = 8;
+  for (int i = 0; i <= half; ++i) m.box(3, 4 + i, 9 + i, 21, 20 - i, 10 + i, (i % 2) ? DEAD_WOOD : WOOD_DARK);
+  for (int i = 0; i + 1 < half; ++i) {
+    m.box(4, 5 + i + 1, 9 + i, 5, 19 - i - 1, 10 + i, WOOD);
+    m.box(19, 5 + i + 1, 9 + i, 20, 19 - i - 1, 10 + i, WOOD);
+  }
+  m.box(7, 8, 14, 9, 10, 19, BRICK);  // stove chimney
+  for (int x = 1; x < 23; x += 3) m.box(x, 22, 0, x + 1, 23, 3, DEAD_WOOD);  // wattle fence posts
+  m.box(1, 22, 1, 23, 23, 2, DEAD_WOOD);
+  weather(m, WOOD, WOOD_DARK, DEAD_WOOD, 73, 14, 6);
+  return m;
+}
+
+// A brick warehouse: long, low, loading doors along the front.
+VoxelModel makeWarehouse(const FactionLook&) {
+  VoxelModel m(36, 24, 22);
+  m.box(2, 3, 0, 34, 21, 12, BRICK);
+  m.box(2, 3, 0, 34, 21, 1, CONCRETE_DARK);
+  for (int x = 5; x < 32; x += 7) {
+    m.box(x, 20, 0, x + 4, 21, 8, WOOD_DARK);  // loading doors
+    m.box(x - 1, 20, 8, x + 5, 21, 9, CONCRETE);
+    m.box(x, 3, 7, x + 3, 4, 10, WINDOW);      // high windows at the back
+  }
+  for (int y = 6; y < 19; y += 5) {
+    m.box(2, y, 7, 3, y + 2, 10, WINDOW);
+    m.box(33, y, 7, 34, y + 2, 10, WINDOW);
+  }
+  for (int i = 0; i <= 5; ++i) m.box(1, 2 + i * 2, 12 + i, 35, 22 - i * 2, 13 + i, (i % 2) ? ROOF_DARK : ROOF);
+  m.box(27, 7, 16, 30, 10, 20, BRICK_DARK);  // chimney
+  m.box(4, 21, 0, 10, 24, 2, WOOD);           // crates on the ramp
+  m.box(5, 21, 2, 8, 23, 3, WOOD_DARK);
+  grimeWalls(m, 74);
+  return m;
+}
+
+// A village well: a stone ring under a little roof on two posts.
+VoxelModel makeWell(const FactionLook&) {
+  VoxelModel m(12, 12, 12);
+  for (int y = 0; y < 12; ++y)
+    for (int x = 0; x < 12; ++x) {
+      const float d = std::hypot(x + 0.5f - 6, y + 0.5f - 6);
+      if (d < 3.6f && d > 2.2f)
+        for (int z = 0; z < 3; ++z) m.set(x, y, z, (x + y + z) % 3 ? ROCK : ROCK_DARK);
+      else if (d <= 2.2f) m.set(x, y, 0, WINDOW);  // dark water
+    }
+  m.box(2, 5, 0, 3, 7, 8, WOOD_DARK);
+  m.box(9, 5, 0, 10, 7, 8, WOOD_DARK);
+  m.box(2, 6, 6, 10, 7, 7, DEAD_WOOD);  // windlass
+  for (int i = 0; i < 3; ++i) m.box(1, 3 + i, 8 + i, 11, 10 - i, 9 + i, ROOF_DARK);
+  return m;
+}
+
+// A railway water tower: a timber tank on a brick tower.
+VoxelModel makeWaterTower(const FactionLook&) {
+  VoxelModel m(12, 12, 40);
+  m.box(3, 3, 0, 9, 9, 22, BRICK);
+  for (int z = 4; z < 20; z += 6) m.box(5, 8, z, 7, 9, z + 3, WINDOW);
+  m.box(5, 8, 0, 7, 9, 4, WOOD_DARK);
+  for (int y = 0; y < 12; ++y)
+    for (int x = 0; x < 12; ++x)
+      if (std::hypot(x + 0.5f - 6, y + 0.5f - 6) < 5.8f)
+        for (int z = 22; z < 32; ++z) m.set(x, y, z, (z % 3 == 0) ? STEEL_DARK : WOOD_DARK);
+  for (int i = 0; i < 4; ++i)
+    for (int y = 0; y < 12; ++y)
+      for (int x = 0; x < 12; ++x)
+        if (std::hypot(x + 0.5f - 6, y + 0.5f - 6) < 5.8f - i * 1.4f) m.set(x, y, 32 + i, ROOF_DARK);
+  weather(m, BRICK, BRICK_DARK, SOOT, 75, 14, 5);
+  return m;
+}
+
+// --- Small decorations -------------------------------------------------------
+// (prop voxels are 1/32 tile)
+VoxelModel makeStump(int v) {
+  VoxelModel m(16, 16, 10);
+  const float r = 2.6f + (v % 3) * 0.5f;
+  for (int y = 0; y < 16; ++y)
+    for (int x = 0; x < 16; ++x) {
+      const float d = std::hypot(x + 0.5f - 8, y + 0.5f - 8);
+      if (d < r) {
+        const int h = 3 + v % 2 + (d < r - 1 ? 1 : 0);
+        for (int z = 0; z < h; ++z) m.set(x, y, z, z == h - 1 && d < r - 0.8f ? DEAD_WOOD : TRUNK);
+      }
+    }
+  for (int i = 0; i < 4; ++i) {  // roots
+    const float a = i * 1.57f + v;
+    for (int k = 0; k < 4; ++k) m.set(8 + static_cast<int>(std::cos(a) * (r + k)), 8 + static_cast<int>(std::sin(a) * (r + k)), 0, TRUNK);
+  }
+  return m;
+}
+
+VoxelModel makeLogs(int v) {
+  VoxelModel m(28, 16, 10);
+  const int n = 3 + v % 2;
+  for (int i = 0; i < n; ++i) {
+    const float cy = 5.0f + i * 3.0f - (i >= 3 ? 7.5f : 0), cz = i >= 3 ? 4.6f : 1.6f;
+    for (int x = 3 + (i % 2); x < 24 - (i % 2); ++x)
+      for (int y = 0; y < 16; ++y)
+        for (int z = 0; z < 10; ++z)
+          if (std::hypot(y + 0.5f - cy, z + 0.5f - cz) < 1.6f) m.set(x, y, z, (x == 3 + (i % 2) || x == 23 - (i % 2)) ? DEAD_WOOD : TRUNK);
+  }
+  return m;
+}
+
+VoxelModel makeHaystack(int v) {
+  VoxelModel m(20, 20, 20);
+  const float r = 6.5f + v, h = 12.0f + v * 2;
+  for (int z = 0; z < 20; ++z)
+    for (int y = 0; y < 20; ++y)
+      for (int x = 0; x < 20; ++x) {
+        const float k = z / h;
+        if (k > 1) continue;
+        const float rr = r * std::sqrt(std::max(0.0f, 1.0f - k * k * k));
+        if (std::hypot(x + 0.5f - 10, y + 0.5f - 10) < rr)
+          m.set(x, y, z, (hash32(static_cast<uint32_t>((z * 20 + y) * 20 + x + v)) % 5) ? DRY_GRASS : DRY_DARK);
+      }
+  m.box(9, 9, static_cast<int>(h) - 1, 11, 11, static_cast<int>(h) + 2, DEAD_WOOD);  // the pole
+  return m;
+}
+
+VoxelModel makeCrates(int v) {
+  VoxelModel m(20, 20, 12);
+  auto crate = [&](int x, int y, int z, int s) {
+    m.box(x, y, z, x + s, y + s, z + s, WOOD);
+    m.box(x, y, z + s - 1, x + s, y + s, z + s, WOOD_DARK);
+    m.box(x, y, z, x + 1, y + s, z + s, WOOD_DARK);
+  };
+  auto barrel = [&](int cx, int cy, uint8_t c) {
+    for (int y = cy - 2; y <= cy + 2; ++y)
+      for (int x = cx - 2; x <= cx + 2; ++x)
+        if (std::hypot(x + 0.5f - cx - 0.5f, y + 0.5f - cy - 0.5f) < 2.4f)
+          for (int z = 0; z < 7; ++z) m.set(x, y, z, (z == 2 || z == 5) ? static_cast<uint8_t>(STEEL_DARK) : c);
+  };
+  crate(3, 3, 0, 6);
+  if (v % 2) crate(4, 4, 6, 4);
+  crate(10, 2, 0, 5);
+  barrel(14, 13, v % 3 ? RUST : TANK_PAINT_DARK);
+  if (v >= 2) barrel(8, 14, RUST);
+  return m;
+}
+
+VoxelModel makeFence(int v) {
+  VoxelModel m(32, 8, 10);
+  for (int x = 1; x < 31; x += 5) m.box(x, 3, 0, x + 1, 4, 7 + (x % 2), DEAD_WOOD);  // posts
+  for (int z : {2, 5}) m.box(0, 3, z, 32, 4, z + 1, WOOD);                          // rails
+  if (v == 1) m.box(14, 3, 0, 19, 4, 7, 0);                                       // a gap
+  return m;
+}
+
 }  // namespace slave::art

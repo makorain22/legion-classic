@@ -488,6 +488,59 @@ VoxelModel makeAtGun(const FactionLook& look) {
   return m;
 }
 
+// An MG nest: a ring of sandbags round a shallow scrape, a gap at the back.
+VoxelModel makeMgNest(const FactionLook&) {
+  VoxelModel m(12, 12, 6);
+  for (int y = 0; y < 12; ++y)
+    for (int x = 0; x < 12; ++x) {
+      const float dx = x + 0.5f - 6, dy = y + 0.5f - 6, d = std::sqrt(dx * dx + dy * dy);
+      if (d < 5.8f) m.set(x, y, 0, d < 3.6f ? EARTH_DARK : EARTH);
+      if (d >= 3.6f && d < 5.8f && !(dx < -2.5f && std::abs(dy) < 1.5f)) {
+        const int h = 2 + ((x * 5 + y * 3) % 4 == 0);
+        for (int z = 1; z <= h; ++z) m.set(x, y, z, ((x + y + z) % 3) ? SANDBAG : SANDBAG_DARK);
+      }
+    }
+  m.box(1, 8, 1, 3, 10, 2, WOOD);  // ammunition box
+  return m;
+}
+
+// The machine gun on its tripod.
+VoxelModel makeMgNestGun(const FactionLook&) {
+  VoxelModel m(12, 12, 6);
+  m.box(5, 5, 1, 6, 7, 3, STEEL_DARK);   // tripod and gunner's back
+  m.box(5, 5, 3, 8, 7, 4, STEEL_DARK);   // receiver
+  m.box(8, 6, 3, 11, 7, 4, STEEL);       // barrel
+  m.box(4, 5, 1, 5, 7, 4, UNIFORM);      // the gunner, hunched behind
+  m.box(4, 5, 4, 5, 7, 5, HELMET);
+  return m;
+}
+
+// A howitzer emplacement: a wide sandbag ring, shell cases and crates.
+VoxelModel makeHowitzerPit(const FactionLook& look) {
+  VoxelModel m = makeAtGunPit(look);
+  m.box(3, 15, 1, 6, 18, 3, WOOD);       // ammunition crates
+  m.box(4, 16, 3, 6, 18, 4, WOOD_DARK);
+  m.box(18, 4, 1, 20, 6, 2, RUST);       // spent cases
+  m.box(17, 6, 1, 19, 7, 2, RUST);
+  return m;
+}
+
+// The howitzer: split trail behind, shield, a short thick barrel raised high.
+VoxelModel makeHowitzer(const FactionLook& look) {
+  VoxelModel m(24, 24, 12);
+  m.box(10, 9, 1, 14, 15, 3, TANK_PAINT_DARK);  // carriage and axle
+  m.box(9, 7, 1, 11, 9, 4, RUBBER);             // wheels
+  m.box(9, 15, 1, 11, 17, 4, RUBBER);
+  for (int i = 0; i < 7; ++i) {                 // split trail, opened wide
+    m.set(9 - i, 10 - i / 2, 1, TANK_PAINT_DARK);
+    m.set(9 - i, 14 + i / 2, 1, TANK_PAINT_DARK);
+  }
+  m.box(13, 8, 2, 14, 16, look.sloped ? 7 : 6, TANK_PAINT);  // shield
+  for (int i = 0; i < 9; ++i) m.box(12 + i, 11, 4 + i / 2, 13 + i, 13, 6 + i / 2, i > 6 ? STEEL : STEEL_DARK);  // barrel, elevated
+  m.box(10, 10, 3, 13, 14, 4, TEAM);
+  return m;
+}
+
 // A low, lumpy wall of bags filling the tile, so neighbouring pieces join up.
 VoxelModel makeSandbags(const FactionLook&) {
   VoxelModel m(12, 12, 4);
@@ -676,7 +729,7 @@ Image fromPngColours(const Image& src) {
   return out;
 }
 
-void applyArtOverrides(AtlasBuilder& ab, const SpriteCatalog& cat, const std::string& dir) {
+void applyArtOverrides(AtlasBuilder& ab, const SpriteCatalog& cat, const std::string& dir, bool skipUnits = false) {
   namespace fs = std::filesystem;
   std::error_code ec;
   if (!fs::is_directory(dir, ec)) return;
@@ -691,6 +744,7 @@ void applyArtOverrides(AtlasBuilder& ab, const SpriteCatalog& cat, const std::st
   }
   int replaced = 0;
   forEachSprite(cat, [&](const std::string& name, int frame) {
+    if (skipUnits && (name.rfind("units/", 0) == 0 || name.rfind("icons/", 0) == 0)) return;  // loaded already
     const std::string path = dir + "/" + name + ".png";
     if (!fs::exists(path, ec)) return;
     Image img;
@@ -854,6 +908,14 @@ bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error, const ArtOption
   addStructure(ab, cat, "church", &makeChurch);
   addStructure(ab, cat, "ruin", &makeRuin);
   addStructure(ab, cat, "adobe", &makeAdobe);
+  addStructure(ab, cat, "mg_nest", &makeMgNest, &makeMgNestGun);
+  addStructure(ab, cat, "howitzer_pit", &makeHowitzerPit, &makeHowitzer);
+  addStructure(ab, cat, "barn", &makeBarn);
+  addStructure(ab, cat, "shed", &makeShed);
+  addStructure(ab, cat, "izba", &makeIzba);
+  addStructure(ab, cat, "warehouse", &makeWarehouse);
+  addStructure(ab, cat, "well", &makeWell);
+  addStructure(ab, cat, "water_tower", &makeWaterTower);
   addEconomyDecals(ab, cat);
   {
     // Trenches are ground decals; their "unit art" is the lone foxhole piece.
@@ -876,7 +938,9 @@ bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error, const ArtOption
                             PropSpec{PropKind::SnowPine, &makeSnowPine, 4}, PropSpec{PropKind::DeadTree, &makeDeadTree, 4},
                             PropSpec{PropKind::Palm, &makePalm, 4}, PropSpec{PropKind::Scrub, &makeScrub, 4},
                             PropSpec{PropKind::JungleTree, &makeJungleTree, 4}, PropSpec{PropKind::Debris, &makeDebris, 4},
-                            PropSpec{PropKind::SandRock, &makeSandRock, 3}}) {
+                            PropSpec{PropKind::SandRock, &makeSandRock, 3}, PropSpec{PropKind::Stump, &makeStump, 3},
+                            PropSpec{PropKind::Logs, &makeLogs, 3}, PropSpec{PropKind::Haystack, &makeHaystack, 3},
+                            PropSpec{PropKind::Crates, &makeCrates, 4}, PropSpec{PropKind::Fence, &makeFence, 3}}) {
     for (int v = 0; v < p.variants; ++v) {
       const VoxelModel m = p.make(v);
       BakeOptions o;
@@ -900,6 +964,7 @@ bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error, const ArtOption
   cat.selectLarge = ab.add(makeEllipseRing(38, 19), 19, 9);
   cat.moveMarker = ab.add(makeDiamondOutline(32, 16), 16, 8);
 
+  for (const std::string& dir : options.packDirs) applyArtOverrides(ab, cat, dir, true);  // props, effects
   if (!options.overrideDir.empty()) applyArtOverrides(ab, cat, options.overrideDir);
   if (!options.exportDir.empty()) exportArt(ab, cat, options.exportDir);
 

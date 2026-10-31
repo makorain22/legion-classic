@@ -36,6 +36,7 @@ const char* layerName(Layer l);
 enum class PropKind : uint8_t {
   Tree = 0, Pine, Bush, Rock,
   SnowPine, DeadTree, Palm, Scrub, JungleTree, Debris, SandRock,
+  Stump, Logs, Haystack, Crates, Fence,
   Count
 };
 const char* propKindName(PropKind k);
@@ -176,7 +177,8 @@ class Map {
   // houses the game places when a skirmish starts). Not saved with the map.
   struct Lot {
     int tx = 0, ty = 0;  // footprint centre tile
-    uint8_t kind = 0;    // 0 cottage, 1 bombed cottage, 2 town house, 3 church, 4 ruin, 5 adobe
+    uint8_t kind = 0;    // 0 cottage, 1 bombed cottage, 2 town house, 3 church, 4 ruin, 5 adobe,
+                         // 6 barn, 7 shed, 8 log house, 9 warehouse, 10 well, 11 water tower
   };
   std::vector<Lot> lots;
 

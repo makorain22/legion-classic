@@ -337,6 +337,41 @@
       "muzzle": 2,
       "burst": 8,
       "burstSpread": 2.0
+    },
+    {
+      "id": "mg_nest",
+      "name": "Emplaced machine gun",
+      "warhead": "bullet",
+      "damage": 9,
+      "range": 7.0,
+      "cooldown": 4,
+      "projectile": "instant",
+      "accuracy": 55,
+      "muzzle": 0
+    },
+    {
+      "id": "howitzer_150",
+      "name": "150 mm howitzer",
+      "warhead": "he",
+      "damage": 220,
+      "range": 22.0,
+      "cooldown": 120,
+      "projectile": "shell",
+      "speed": 120,
+      "splash": 1.5,
+      "muzzle": 2
+    },
+    {
+      "id": "howitzer_122",
+      "name": "122 mm gun-howitzer",
+      "warhead": "he",
+      "damage": 200,
+      "range": 21.0,
+      "cooldown": 110,
+      "projectile": "shell",
+      "speed": 125,
+      "splash": 1.4,
+      "muzzle": 2
     }
   ]
 }
