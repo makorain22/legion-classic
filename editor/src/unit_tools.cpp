@@ -583,22 +583,22 @@ void Editor::drawUnitPalette() {
   ImGui::SameLine();
   ImGui::SetNextItemWidth(-1);
   ImGui::Combo("##cat", &paletteCategory_, [](void*, int i) {
-    static const char* names[] = {"Everything", "Infantry", "Vehicles", "Base buildings", "Defences", "Fortifications",
-                                  "Civilian buildings"};
+    static const char* names[] = {"Everything", "Infantry", "Vehicles", "Base buildings", "Defences", "Fortifications"};
     return names[i];
-  }, nullptr, 7);
+  }, nullptr, 6);
   const float icon = 44.0f;
   static const char* kSections[] = {"Infantry", "Vehicles", "Base buildings", "Defences", "Fortifications", "Civilian buildings"};
   // Listed by kind under headings: soldiers, vehicles, the base, defences,
-  // fortifications, then the civilian houses (which belong to nobody).
+  // fortifications. Civilian houses belong to nobody: they are scenery, placed
+  // with the props on the Terrain tab.
   auto sectionOf = [](const UnitTypeDef& d) { return d.faction == "neutral" ? 5 : static_cast<int>(d.category); };
-  for (int sec = 0; sec < 6; ++sec) {
+  for (int sec = 0; sec < 5; ++sec) {
   if (paletteCategory_ > 0 && sec != paletteCategory_ - 1) continue;
   bool header = false;
   for (int i = 0; i < static_cast<int>(types.size()); ++i) {
     const UnitTypeDef& d = types.get(i);
     if (sectionOf(d) != sec) continue;
-    if (!paletteAllFactions_ && d.faction != faction && d.faction != "neutral") continue;  // civilians always listed
+    if (!paletteAllFactions_ && d.faction != faction) continue;
     if (!header) {
       ImGui::SeparatorText(kSections[sec]);
       header = true;

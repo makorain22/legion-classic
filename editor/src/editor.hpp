@@ -151,6 +151,7 @@ class Editor {
   float radius_ = 4.0f;     // tiles
   float strength_ = 40.0f;  // 1..100
   bool softEdge_ = true;
+  bool gridPaint_ = false;  // paint whole tiles in a square, snapped to the grid
   slave::Layer paintLayer_ = slave::Layer::Dirt;
   slave::PropKind propKind_ = slave::PropKind::Tree;
   float propDensity_ = 20.0f;  // props per second while dragging

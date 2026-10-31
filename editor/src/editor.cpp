@@ -163,6 +163,10 @@ bool Editor::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
         else save(scene_.currentMapPath());
         return true;
       }
+      if (e.key.key == SDLK_G && tool_ == Tool::Paint) {
+        gridPaint_ = !gridPaint_;
+        return true;
+      }
       if (e.key.key == SDLK_LEFTBRACKET) {
         radius_ = std::max(1.0f, radius_ - 1.0f);
         return true;
@@ -301,8 +305,37 @@ void Editor::applyHeightTool(Vec2f c, float dt) {
   afterTerrainEdit(x0 - 1, y0 - 1, x1, y1, true, false);
 }
 
+// The square of whole tiles the grid brush covers (inclusive).
+static void gridSquare(Vec2f c, float radius, int& x0, int& y0, int& x1, int& y1) {
+  const int n = std::max(1, static_cast<int>(std::lround(radius)));
+  const int tx = static_cast<int>(std::floor(c.x / LEPTONS_PER_TILE)), ty = static_cast<int>(std::floor(c.y / LEPTONS_PER_TILE));
+  x0 = tx - (n - 1) / 2;
+  y0 = ty - (n - 1) / 2;
+  x1 = x0 + n - 1;
+  y1 = y0 + n - 1;
+}
+
 void Editor::applyPaint(Vec2f c, float dt) {
   Map& m = scene_.map();
+  if (gridPaint_) {
+    // Whole tiles, fully: crisp edges along the grid.
+    int x0, y0, x1, y1;
+    gridSquare(c, radius_, x0, y0, x1, y1);
+    x0 = std::max(0, x0);
+    y0 = std::max(0, y0);
+    x1 = std::min(m.width() - 1, x1);
+    y1 = std::min(m.height() - 1, y1);
+    if (x0 > x1 || y0 > y1) return;
+    history_.touchTerrain(m, x0, y0, x1, y1);
+    const int amount = std::max(1, static_cast<int>(strength_ / 100.0f * 2600.0f * dt));
+    for (int ty = y0; ty <= y1; ++ty)
+      for (int tx = x0; tx <= x1; ++tx)
+        for (int j = 0; j < SPLAT_PER_TILE; ++j)
+          for (int i = 0; i < SPLAT_PER_TILE; ++i) m.paint(tx * SPLAT_PER_TILE + i, ty * SPLAT_PER_TILE + j, paintLayer_, amount);
+    afterTerrainEdit(x0, y0, x1, y1, false, true);
+    scene_.terrain().markSplatDirty(x0 * SPLAT_PER_TILE, y0 * SPLAT_PER_TILE, (x1 + 1) * SPLAT_PER_TILE - 1, (y1 + 1) * SPLAT_PER_TILE - 1);
+    return;
+  }
   const float sx = c.x / LEPTONS_PER_TILE * SPLAT_PER_TILE, sy = c.y / LEPTONS_PER_TILE * SPLAT_PER_TILE;
   const float r = radius_ * SPLAT_PER_TILE;
   const int x0 = std::max(0, static_cast<int>(std::floor(sx - r)));
@@ -471,6 +504,22 @@ void Editor::renderWorld(SpriteRenderer& r) {
   if (tool_ == Tool::SelectUnits) return;
   if (tool_ == Tool::PlaceUnits && placeMode_ != PlaceMode::Brush) return;
   const uint32_t col = toolColor(tool_);
+  if (tool_ == Tool::Paint && gridPaint_) {
+    // The tiles the grid brush will paint, outlined.
+    int x0, y0, x1, y1;
+    gridSquare(c, radius_, x0, y0, x1, y1);
+    auto edge = [&](float ax, float ay, float bx, float by) {
+      const int steps = std::max(2, static_cast<int>(std::hypot(bx - ax, by - ay) / 40.0f));
+      for (int i = 0; i <= steps; ++i) {
+        const float t = static_cast<float>(i) / steps;
+        const Vec2f p = scene_.groundToScreenWorld(ax + (bx - ax) * t, ay + (by - ay) * t);
+        r.rect(std::floor(p.x), std::floor(p.y), 2, 1, col);
+      }
+    };
+    for (int x = x0; x <= x1 + 1; ++x) edge(x * 256.0f, y0 * 256.0f, x * 256.0f, (y1 + 1) * 256.0f);
+    for (int y = y0; y <= y1 + 1; ++y) edge(x0 * 256.0f, y * 256.0f, (x1 + 1) * 256.0f, y * 256.0f);
+    return;
+  }
   const float rl = radius_ * LEPTONS_PER_TILE;
   const int n = std::clamp(static_cast<int>(radius_ * 14), 32, 220);
   for (int i = 0; i < n; ++i) {
@@ -597,6 +646,8 @@ void Editor::drawTerrainTab() {
   ImGui::TextDisabled("[ ] resize");
 
   if (tool_ == Tool::Paint) {
+    ImGui::Checkbox("Grid: whole tiles, size x size square", &gridPaint_);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Paints whole tiles snapped to the grid, for roads, fields and exact edges (G).");
     ImGui::SeparatorText("Ground");
     for (int i = 0; i < LAYER_COUNT; ++i) {
       ImGui::ColorButton("##sw", kLayerSwatch[i], ImGuiColorEditFlags_NoTooltip, ImVec2(18, 18));
@@ -612,6 +663,25 @@ void Editor::drawTerrainTab() {
         propKind_ = static_cast<PropKind>(i);
     ImGui::SetNextItemWidth(-60);
     ImGui::SliderFloat("Density", &propDensity_, 1.0f, 80.0f, "%.0f");
+  }
+  if (tool_ == Tool::Props || (tool_ == Tool::PlaceUnits && placeType_ >= 0 && scene_.types().get(placeType_).faction == "neutral")) {
+    // Civilian buildings are scenery too: they belong to nobody.
+    ImGui::SeparatorText("Civilian buildings");
+    const auto& types = scene_.types();
+    for (int i = 0; i < static_cast<int>(types.size()); ++i) {
+      const UnitTypeDef& d = types.get(i);
+      if (d.faction != "neutral") continue;
+      const bool on = tool_ == Tool::PlaceUnits && placeType_ == i;
+      if (ImGui::RadioButton((d.name + "##civ" + d.id).c_str(), on)) {
+        placeType_ = i;
+        placeMode_ = PlaceMode::Single;
+        tool_ = Tool::PlaceUnits;
+      }
+      if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("%d x %d tiles%s", d.footW, d.footH,
+                          d.garrison ? (", holds " + std::to_string(d.garrison) + " infantry").c_str() : "");
+    }
+    if (tool_ == Tool::PlaceUnits) ImGui::TextDisabled("Click to place; , and . turn it. Pick a tool above to stop.");
   }
 
   // --- Water ----------------------------------------------------------------

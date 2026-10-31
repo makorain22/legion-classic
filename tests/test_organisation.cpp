@@ -209,3 +209,95 @@ TEST_CASE("a supply depot earns only on a supply point") {
   CHECK(sim.playerState(0).credits >= R.types.get(depot).income - 20);  // about a minute's worth
   CHECK(sim.playerState(0).incomePerMinute == R.types.get(depot).income);
 }
+
+TEST_CASE("men dig into a trench line, three to a piece, and stay until evacuated") {
+  Rules R;
+  Map map(64, 64, 301);
+  Simulation sim(map, R.types, R.weapons, 5);
+  Command c;
+  c.type = CommandType::SpawnList;
+  for (int i = 0; i < 3; ++i) c.spawns.push_back({R.t("ger_trench"), 0, {(20 + i) * T + T / 2, 20 * T + T / 2}, 0, -1});
+  sim.queue(c);
+  sim.tick();
+  std::vector<Entity> pieces;
+  for (const auto& r : sim.spawnLog()) pieces.push_back(r.entity);
+  REQUIRE(pieces.size() == 3);
+  CHECK(sim.isTrench(pieces[0]));
+  std::vector<Entity> men = spawnMany(sim, R.t("ger_rifleman"), 0, {26 * T, 24 * T}, 8);
+  Command occ;
+  occ.type = CommandType::Occupy;
+  occ.player = 0;
+  occ.units = men;
+  occ.targetUnit = pieces[0];
+  sim.queue(occ);
+  for (int i = 0; i < 15 * 25; ++i) sim.tick();
+  int dug = 0;
+  for (Entity m : men) dug += sim.inTrench(m);
+  CHECK(dug == 8);
+  for (Entity p : pieces) CHECK(sim.registry().get<CGarrison>(p).occupants.size() <= 3);
+  // Inside the trench a man stands on its piece, not walled up in it.
+  const CPosition& mp = sim.registry().get<CPosition>(men[0]);
+  CHECK(mp.x / T >= 19);
+  CHECK(mp.x / T <= 22);
+
+  // A move order does not pull them out.
+  Command mv;
+  mv.type = CommandType::Move;
+  mv.player = 0;
+  mv.units = men;
+  mv.target = {40 * T, 40 * T};
+  sim.queue(mv);
+  for (int i = 0; i < 30; ++i) sim.tick();
+  dug = 0;
+  for (Entity m : men) dug += sim.inTrench(m);
+  CHECK(dug == 8);
+
+  // Dug in, they take only the trench's share of the damage.
+  auto& units = sim.registry().pool<CUnit>();
+  const int32_t hp = units.get(men[1].index).health;
+  sim.debugDamage(men[1], 5000);
+  CHECK(hp - units.get(men[1].index).health == 20);  // 60% cover: 50 -> 20
+
+  Command ev;
+  ev.type = CommandType::Unload;
+  ev.player = 0;
+  ev.units = men;
+  sim.queue(ev);
+  sim.tick();
+  for (Entity m : men) CHECK_FALSE(sim.inTrench(m));
+}
+
+TEST_CASE("tanks and infantry bind into a battle group; vehicles alone bind by role") {
+  Rules R;
+  Map map(64, 64, 302);
+  Simulation sim(map, R.types, R.weapons, 6);
+  std::vector<Entity> tanks = spawnMany(sim, R.t("ger_medium_tank"), 0, {20 * T, 20 * T}, 3, 200);
+  std::vector<Entity> men = spawnMany(sim, R.t("ger_mg_team"), 0, {20 * T, 24 * T}, 8);
+  std::vector<Entity> all = tanks;
+  all.insert(all.end(), men.begin(), men.end());
+  Command b;
+  b.type = CommandType::BindGroup;
+  b.player = 0;
+  b.units = all;
+  sim.queue(b);
+  sim.tick();
+  const CGroup* g = sim.groupOf(tanks[0]);
+  REQUIRE(g);
+  CHECK(g->combined);
+  CHECK(g->echelon == Echelon::Platoon);  // 3 tanks + 8 men = strength 5
+  CHECK(sim.groupOf(men[0]) == g);
+  CHECK(sim.groupBonus(tanks[0]) > 0);
+
+  // Five tanks and five scout cars: an armoured platoon and a reconnaissance platoon.
+  std::vector<Entity> more = spawnMany(sim, R.t("ger_medium_tank"), 0, {40 * T, 20 * T}, 5, 200);
+  std::vector<Entity> cars = spawnMany(sim, R.t("ger_scout_car"), 0, {40 * T, 30 * T}, 5, 200);
+  std::vector<Entity> mix = more;
+  mix.insert(mix.end(), cars.begin(), cars.end());
+  b.units = mix;
+  sim.queue(b);
+  sim.tick();
+  REQUIRE(sim.groupOf(more[0]));
+  REQUIRE(sim.groupOf(cars[0]));
+  CHECK(sim.groupOf(more[0]) != sim.groupOf(cars[0]));
+  CHECK_FALSE(sim.groupOf(cars[0])->combined);
+}

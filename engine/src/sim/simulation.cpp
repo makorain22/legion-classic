@@ -147,10 +147,29 @@ void Simulation::setOrderIdle(Entity e) {
 }
 
 void Simulation::applyCommand(const Command& cmd) {
-  // Men inside a building come out to go anywhere.
-  if (cmd.type == CommandType::Move || cmd.type == CommandType::AttackMove || cmd.type == CommandType::Repair)
-    for (Entity e : cmd.units)
+  // Men inside a building come out to go anywhere; men in a trench stay
+  // dug in until told to evacuate.
+  std::vector<Entity> movers;
+  const std::vector<Entity>* units = &cmd.units;
+  if (cmd.type == CommandType::Move || cmd.type == CommandType::AttackMove || cmd.type == CommandType::Repair) {
+    for (Entity e : cmd.units) {
+      if (inTrench(e)) continue;
       if (reg_.alive(e) && reg_.has<CGarrisoned>(e)) leaveBuilding(e);
+      movers.push_back(e);
+    }
+    if (movers.size() != cmd.units.size()) units = &movers;
+  }
+  if (units != &cmd.units) {
+    Command c = cmd;
+    c.units = movers;
+    if (c.units.empty()) return;
+    applyCommandBody(c);
+    return;
+  }
+  applyCommandBody(cmd);
+}
+
+void Simulation::applyCommandBody(const Command& cmd) {
   switch (cmd.type) {
     case CommandType::Move:
       orderMove(cmd.units, cmd.target, OrderType::Move, cmd);

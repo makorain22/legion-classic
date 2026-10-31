@@ -124,7 +124,7 @@ void Simulation::saveState(ByteWriter& w) const {
     w.podVector(g.entities());
     for (const CGroup& c : g.data()) {
       w.u8(c.owner);
-      w.u8(c.vehicles ? 1 : 0);
+      w.u8(c.combined ? 2 : c.vehicles ? 1 : 0);
       w.u8(static_cast<uint8_t>(c.echelon));
       w.u16(c.number);
       w.podVector(c.members);
@@ -241,7 +241,9 @@ bool Simulation::loadState(ByteReader& r, std::string& error) {
     std::vector<CGroup> groups(ents.size());
     for (CGroup& c : groups) {
       c.owner = r.u8();
-      c.vehicles = r.u8() != 0;
+      const uint8_t kind = r.u8();
+      c.vehicles = kind != 0;
+      c.combined = kind == 2;
       c.echelon = static_cast<Echelon>(r.u8());
       c.number = r.u16();
       c.members = r.podVector<Entity>();

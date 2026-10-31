@@ -14,7 +14,7 @@ enum class InputAction : uint8_t {
   ScrollUp, ScrollDown, ScrollLeft, ScrollRight,
   AttackMove, Stop, Deploy, SelectAll, BindGroup, UnbindGroup,
   Pause, SpeedUp, SpeedDown, CentreSelection, NextSide, Menu,
-  Help, Editor, Debug, Screenshot, ToggleInfo, Encyclopedia,
+  Help, Editor, Debug, Screenshot, ToggleInfo, Encyclopedia, Evacuate,
   Count
 };
 constexpr int ACTION_COUNT = static_cast<int>(InputAction::Count);
@@ -39,6 +39,7 @@ struct Settings {
   float scrollSpeed = 1.0f;
   bool showInfoPanel = false;  // the top-left game info box
   bool showCards = true;       // NATO cards over bound units
+  bool showEnemyCards = true;  // cards over the other sides' units too (when seen)
   bool showChips = true;       // chips for enemies detected in the fog
   bool atmosphere = true;      // colour grading and a vignette over the battlefield
   bool artPack = true;         // use content/art/blitzkrieg when present (takes effect on restart)

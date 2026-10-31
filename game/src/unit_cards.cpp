@@ -39,11 +39,34 @@ ImU32 darker(uint32_t rgba, float k, float alpha) {
 
 std::string GameScene::groupName(const CGroup& g) const {
   const int n = g.number;
+  if (g.combined) {
+    // Infantry and armour together.
+    switch (g.echelon) {
+      case Echelon::Platoon: return ordinal(n) + " Mechanised Platoon";
+      case Echelon::Company: return ordinal(n) + " Battle Group";
+      case Echelon::Battalion: return ordinal(n) + " Armoured Regiment";
+      default: return ordinal(n) + " Battle Group";
+    }
+  }
+  if (g.vehicles) {
+    // Named for what they are: tanks, reconnaissance, guns...
+    const std::string role = groupSymbol(g);
+    const char* kind = role == "recon" ? "Reconnaissance" : role == "artillery" ? "Artillery"
+                       : role == "antitank_armour" ? "Tank Destroyer" : role == "mech" ? "Mechanised"
+                       : role == "hq" ? "Engineer" : "Armoured";
+    const bool guns = role == "artillery";
+    switch (g.echelon) {
+      case Echelon::Platoon: return ordinal(n) + " " + kind + (guns ? " Battery" : " Platoon");
+      case Echelon::Company: return ordinal(n) + " " + kind + (guns ? " Battalion" : " Company");
+      case Echelon::Battalion: return ordinal(n) + " " + kind + (guns ? " Regiment" : " Battalion");
+      default: return ordinal(n) + " " + kind + " Detachment";
+    }
+  }
   switch (g.echelon) {
     case Echelon::Fireteam: return std::string("Fireteam ") + kPhonetic[(n - 1) % 26] + (n > 26 ? " " + std::to_string((n - 1) / 26 + 1) : "");
     case Echelon::Squad: return ordinal(n) + " Squad";
-    case Echelon::Platoon: return ordinal(n) + (g.vehicles ? " Armoured Platoon" : " Platoon");
-    case Echelon::Company: return ordinal(n) + (g.vehicles ? " Armoured Company" : " Company");
+    case Echelon::Platoon: return ordinal(n) + " Platoon";
+    case Echelon::Company: return ordinal(n) + " Company";
     case Echelon::Battalion: return ordinal(n) + " Battalion";
     default: return "Detachment";
   }
@@ -122,6 +145,7 @@ void GameScene::drawNatoSymbol(ImDrawList* dl, ImVec2 c, float scale, const std:
 
 // The symbol for a group: its most common kind of unit.
 std::string GameScene::groupSymbol(const CGroup& g) const {
+  if (g.combined) return "mech";  // infantry and armour: the mechanised symbol
   std::map<std::string, int> count;
   Registry& reg = sim_->registry();
   for (Entity m : g.members)
@@ -197,7 +221,7 @@ void GameScene::drawWorldOverlays() {
   // --- Garrison badges -----------------------------------------------------------
   for (uint32_t b : reg.pool<CGarrison>().entities()) {
     const CGarrison& g = reg.pool<CGarrison>().get(b);
-    if (g.occupants.empty() || !reg.alive(g.occupants.front())) continue;
+    if (g.occupants.empty() || !reg.alive(g.occupants.front()) || sim_->isTrench(reg.handle(b))) continue;
     const uint8_t owner = reg.get<CUnit>(g.occupants.front()).owner;
     const CPosition& p = reg.pool<CPosition>().get(b);
     if (fog && !sim_->allied(owner, player_) && !sim_->vision().visible(player_, p.x >> LEPTON_SHIFT, p.y >> LEPTON_SHIFT)) continue;
@@ -213,42 +237,78 @@ void GameScene::drawWorldOverlays() {
   }
 
   // --- Unit cards over bound units -------------------------------------------------------
+  // A card: the NATO symbol on a small plate with the unit's name, strength
+  // and health. Clicking it selects the whole unit.
+  cardHits_.clear();
   if (showCards_) {
     for (uint32_t gi : reg.pool<CGroup>().entities()) {
       const CGroup& g = reg.pool<CGroup>().get(gi);
       const bool mine = sim_->allied(g.owner, player_);
-      float sx = 0, sy = 0;
-      int n = 0;
+      if (!mine && !settings_.showEnemyCards) continue;
+      float sx = 0, sy = 0, minY = 1e9f;
+      int n = 0, hp = 0, hpMax = 0;
       bool selected = false;
       for (Entity m : g.members) {
-        if (!reg.alive(m) || reg.has<CGarrisoned>(m)) continue;
+        if (!reg.alive(m) || (reg.has<CGarrisoned>(m) && !sim_->inTrench(m))) continue;
         const CPosition& p = reg.get<CPosition>(m);
         if (fog && !mine && !sim_->vision().visible(player_, p.x >> LEPTON_SHIFT, p.y >> LEPTON_SHIFT)) continue;
         const Vec2f s = unitScreenWorld(m.index);
         sx += s.x;
         sy += s.y;
+        minY = std::min(minY, s.y);
         ++n;
+        const CUnit& cu = reg.get<CUnit>(m);
+        hp += std::max(0, cu.health);
+        hpMax += types_.get(cu.type).maxHealth;
         selected = selected || std::find(selection_.begin(), selection_.end(), m) != selection_.end();
       }
       if (n == 0) continue;
-      if (!mine && g.echelon == Echelon::Fireteam) continue;  // enemy fireteams would bury the map in cards
-      const ImVec2 c0 = toScreen({sx / n, sy / n});
-      const ImVec2 c(c0.x, c0.y - (g.vehicles ? 34 : 26) * zoom - 12);
+      const ImVec2 top = toScreen({sx / n, minY});
+      const ImVec2 c(top.x, top.y - (g.vehicles ? 40 : 30) * zoom - 16);
       if (!onScreen(c)) continue;
-      const bool big = g.echelon != Echelon::Fireteam || selected;
-      const float scale = (g.echelon >= Echelon::Company ? 1.15f : g.echelon >= Echelon::Platoon ? 1.0f : 0.8f) *
-                          std::clamp(zoom, 0.7f, 1.3f);
-      const float alpha = selected ? 1.0f : 0.8f;
-      drawNatoSymbol(dl, c, scale, groupSymbol(g), g.echelon, teamColor(g.owner), alpha, !mine);
-      if (big) {
-        const std::string name = groupName(g);
-        char extra[24];
-        std::snprintf(extra, sizeof extra, "  %zu", g.members.size());
-        const ImVec2 at(c.x + 15 * scale + 4, c.y - ImGui::GetFontSize() * 0.5f);
-        dl->AddText(ImVec2(at.x + 1, at.y + 1), IM_COL32(0, 0, 0, static_cast<int>(200 * alpha)), (name + extra).c_str());
-        dl->AddText(at, selected ? IM_COL32(255, 236, 160, 255) : IM_COL32(232, 226, 205, static_cast<int>(230 * alpha)),
-                    (name + extra).c_str());
+      const float scale = (g.echelon >= Echelon::Company ? 1.45f : g.echelon >= Echelon::Platoon ? 1.3f
+                           : g.echelon == Echelon::Squad ? 1.15f : 1.0f) * std::clamp(zoom, 0.8f, 1.4f);
+      const float alpha = selected ? 1.0f : 0.88f;
+      const std::string name = groupName(g);
+      char strength[24];
+      std::snprintf(strength, sizeof strength, "%zu", g.members.size());
+      const float fs = ImGui::GetFontSize();
+      const float tw = std::max(ImGui::CalcTextSize(name.c_str()).x, ImGui::CalcTextSize(strength).x + 30);
+      const float symW = 30 * scale, h = std::max(22 * scale, fs * 2 + 6);
+      ImVec2 a(c.x - (symW + tw + 14) * 0.5f, c.y - h * 0.5f), b(a.x + symW + tw + 14, a.y + h);
+      // Cards of units standing close together stack instead of overlapping.
+      for (int tries = 0; tries < 6; ++tries) {
+        bool clash = false;
+        for (const CardHit& o : cardHits_)
+          if (a.x < o.x1 && b.x > o.x0 && a.y < o.y1 + 2 && b.y > o.y0 - 2) {
+            const float up = b.y - (o.y0 - 3);
+            a.y -= up;
+            b.y -= up;
+            clash = true;
+            break;
+          }
+        if (!clash) break;
       }
+      const float cy = (a.y + b.y) * 0.5f;
+      // Plate.
+      const uint32_t tc = teamColor(g.owner);
+      dl->AddRectFilled(ImVec2(a.x + 2, a.y + 2), ImVec2(b.x + 2, b.y + 2), IM_COL32(0, 0, 0, static_cast<int>(110 * alpha)), 3);
+      dl->AddRectFilled(a, b, IM_COL32(24, 25, 20, static_cast<int>(215 * alpha)), 3);
+      dl->AddRectFilled(a, ImVec2(a.x + 4, b.y), darker(tc, 1.0f, alpha), 3, ImDrawFlags_RoundCornersLeft);
+      dl->AddRect(a, b, selected ? IM_COL32(236, 200, 96, 255) : IM_COL32(150, 140, 110, static_cast<int>(200 * alpha)), 3, 0,
+                  selected ? 2.0f : 1.0f);
+      drawNatoSymbol(dl, ImVec2(a.x + 8 + symW * 0.5f, cy), scale * 0.95f, groupSymbol(g), g.echelon, tc, alpha, !mine);
+      const float tx = a.x + symW + 12;
+      dl->AddText(ImVec2(tx, a.y + 2), selected ? IM_COL32(255, 236, 160, 255) : IM_COL32(232, 226, 205, static_cast<int>(240 * alpha)),
+                  name.c_str());
+      dl->AddText(ImVec2(tx, a.y + 3 + fs), IM_COL32(180, 172, 150, static_cast<int>(230 * alpha)), strength);
+      // Health of the whole unit.
+      const float frac = hpMax > 0 ? static_cast<float>(hp) / hpMax : 0;
+      const float bx = tx + ImGui::CalcTextSize(strength).x + 6, bw = b.x - bx - 6, by = a.y + 3 + fs + fs * 0.35f;
+      dl->AddRectFilled(ImVec2(bx, by), ImVec2(bx + bw, by + 4), IM_COL32(10, 10, 8, 230));
+      dl->AddRectFilled(ImVec2(bx, by), ImVec2(bx + bw * frac, by + 4),
+                        frac > 0.6f ? IM_COL32(110, 200, 90, 255) : frac > 0.3f ? IM_COL32(230, 190, 70, 255) : IM_COL32(220, 80, 60, 255));
+      cardHits_.push_back({a.x, a.y, b.x, b.y, reg.handle(gi)});
     }
   }
 

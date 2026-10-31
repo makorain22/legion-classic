@@ -36,6 +36,7 @@ struct SkirmishSetup {
   uint64_t seed = 1940;
   int biome = 0;
   int credits = 5000;
+  int startLayout = 0;  // 0 teams on opposite sides (west / east), 1 fixed (W, E, N, S), 2 shuffled
   struct Side {
     bool open = false;
     std::string faction = "ger";
@@ -136,6 +137,8 @@ class GameScene final : public slave::Scene {
   const slave::UnitArt& unitArt(int type) const { return unitArt_[static_cast<size_t>(type)]; }
   bool artPack() const { return artPack_; }  // the Blitzkrieg art pack is in use
   void openEncyclopedia(int type = -1);
+  void evacuateSelection();
+  bool selectionCanEvacuate() const;
   const slave::WeaponRegistry& weapons() const { return weapons_; }
   slave::SpriteRenderer& renderer() { return renderer_; }
   BattleFx& fx() { return fx_; }
@@ -316,6 +319,13 @@ class GameScene final : public slave::Scene {
   std::vector<slave::UnitArt> unitArt_;  // by unit type index
   bool artPack_ = false;
   bool pickUnitArt(std::string& error);
+  struct CardHit {
+    float x0, y0, x1, y1;
+    slave::Entity group;
+  };
+  std::vector<CardHit> cardHits_;  // unit cards drawn last frame, for clicks
+  slave::Entity lastCard_;
+  slave::Entity cardAt(slave::Vec2f screenPx) const;
   std::vector<bool> trenchTypes_;         // drawn as ground decals that join up
   BattleFx fx_;
 

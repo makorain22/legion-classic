@@ -3,6 +3,7 @@
 #include <imgui.h>
 
 #include <algorithm>
+#include <array>
 #include <ctime>
 #include <filesystem>
 #include <nlohmann/json.hpp>
@@ -122,29 +123,67 @@ void GameScene::startSkirmish(const SkirmishSetup& s) {
     f.players[static_cast<size_t>(i)].team = static_cast<uint8_t>(i);
   }
   (void)slot;
+  // Where each side starts.
+  const int W = f.map.width(), H = f.map.height();
+  std::array<Vec2i, 4> starts{};  // tiles
+  {
+    const Vec2i fixed[4] = {{W * 17 / 100, H / 2}, {W * 83 / 100, H / 2}, {W / 2, H * 17 / 100}, {W / 2, H * 83 / 100}};
+    for (int i = 0; i < 4; ++i) starts[static_cast<size_t>(i)] = fixed[i];
+    // Teams: at most two, each gathered on its own side.
+    std::vector<int> teams;
+    for (int i = 0; i < 4; ++i)
+      if (s.sides[static_cast<size_t>(i)].open &&
+          std::find(teams.begin(), teams.end(), s.sides[static_cast<size_t>(i)].team) == teams.end())
+        teams.push_back(s.sides[static_cast<size_t>(i)].team);
+    if (s.startLayout == 0 && teams.size() == 2) {
+      for (int k = 0; k < 2; ++k) {
+        std::vector<int> members;
+        for (int i = 0; i < 4; ++i)
+          if (s.sides[static_cast<size_t>(i)].open && s.sides[static_cast<size_t>(i)].team == teams[static_cast<size_t>(k)]) members.push_back(i);
+        const int x = k == 0 ? W * 15 / 100 : W * 85 / 100;
+        for (size_t m = 0; m < members.size(); ++m)
+          starts[static_cast<size_t>(members[m])] = {x, members.size() == 1 ? H / 2 : H * (m == 0 ? 30 : 70) / 100};
+      }
+    } else if (s.startLayout == 2) {
+      std::array<int, 4> order{0, 1, 2, 3};
+      uint32_t h = static_cast<uint32_t>(s.seed * 2654435761u);
+      for (int i = 3; i > 0; --i) {
+        h = h * 1664525u + 1013904223u;
+        std::swap(order[static_cast<size_t>(i)], order[h % static_cast<uint32_t>(i + 1)]);
+      }
+      for (int i = 0; i < 4; ++i) starts[static_cast<size_t>(i)] = fixed[order[static_cast<size_t>(i)]];
+    }
+    // Keep villages out of the bases.
+    std::erase_if(f.map.lots, [&](const Map::Lot& l) {
+      for (int i = 0; i < 4; ++i)
+        if (s.sides[static_cast<size_t>(i)].open && std::abs(l.tx - starts[static_cast<size_t>(i)].x) < 16 &&
+            std::abs(l.ty - starts[static_cast<size_t>(i)].y) < 16)
+          return true;
+      return false;
+    });
+  }
   addTownBuildings(f);
   mode_ = Mode::Game;
   revealMap_ = false;
   paused_ = false;
   speed_ = 1.0f;
   replaceWorld(std::move(f));
-  // Bases: west and east, then north and south.
+  // Bases where the sides start.
   const int32_t T = LEPTONS_PER_TILE;
-  const int W = map_.width(), H = map_.height();
-  const Vec2i spots[4] = {{W * 17 / 100 * T, H / 2 * T}, {W * 83 / 100 * T, H / 2 * T},
-                          {W / 2 * T, H * 17 / 100 * T}, {W / 2 * T, H * 83 / 100 * T}};
   for (uint8_t i = 0; i < 4; ++i) {
     if (!players_[i].active) continue;
-    const Vec2i at = findLand(spots[i]);
+    const Vec2i spot{starts[i].x * T, starts[i].y * T};
+    const Vec2i at = findLand(spot);
     buildBase(i, at);
     players_[i].startX = at.x;
     players_[i].startY = at.y;
-    // A small starting force in front of the base.
+    // A small starting force on the parade ground inside the gate.
     const std::string f = players_[i].faction;
-    const Vec2i front{at.x + (spots[i].x < W * T / 2 ? 9 : spots[i].x > W * T / 2 ? -9 : 0) * T,
-                      at.y + (spots[i].y < H * T / 2 ? 9 : spots[i].y > H * T / 2 ? -9 : 0) * T};
-    spawnAt(f + "_rifleman", i, front, 8);
-    spawnAt(f + "_medium_tank", i, {front.x, front.y + 3 * T}, 2);
+    const int32_t dx = map_.widthLeptons() / 2 - at.x, dy = map_.heightLeptons() / 2 - at.y;
+    const int fx = std::abs(dx) >= std::abs(dy) ? (dx >= 0 ? 1 : -1) : 0, fy = fx == 0 ? (dy >= 0 ? 1 : -1) : 0;
+    const Vec2i front{at.x + fx * 7 * T + (-fy) * 4 * T, at.y + fy * 7 * T + fx * 4 * T};
+    spawnAt(f + "_rifleman", i, front, 10);
+    spawnAt(f + "_medium_tank", i, {front.x - fy * 3 * T + fx * T, front.y + fx * 3 * T + fy * T}, 2);
   }
   sim_->tick();
   centerOn({players_[player_].startX, players_[player_].startY});

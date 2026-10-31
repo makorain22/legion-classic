@@ -241,7 +241,8 @@
         "ger_barracks"
       ],
       "group": "Field works",
-      "description": "Infantry in a trench take much less damage."
+      "description": "A dug-in trench piece. Up to three men take cover in it, fire from it and stay until told to evacuate (E).",
+      "garrison": 3
     },
     {
       "id": "ger_wire",
@@ -532,7 +533,8 @@
         "rus_barracks"
       ],
       "group": "Field works",
-      "description": "Infantry in a trench take much less damage."
+      "description": "A dug-in trench piece. Up to three men take cover in it, fire from it and stay until told to evacuate (E).",
+      "garrison": 3
     },
     {
       "id": "rus_wire",

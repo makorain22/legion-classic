@@ -180,6 +180,12 @@ void Menus::drawSkirmish() {
   ImGui::SetNextItemWidth(120);
   ImGui::InputInt("Supplies", &setup_.credits, 1000, 5000);
   setup_.credits = std::clamp(setup_.credits, 0, 100000);
+  ImGui::SetNextItemWidth(320);
+  ImGui::Combo("Starting positions", &setup_.startLayout,
+               "Teams on opposite sides (west against east)\0Fixed: west, east, north, south\0Shuffled\0");
+  if (ImGui::IsItemHovered())
+    ImGui::SetTooltip("Teams on opposite sides: each team's bases stand together on its own side of the map,\n"
+                      "facing the other across it.");
 
   ImGui::SeparatorText("Sides");
   static const char* who[] = {"Closed", "Human", "Computer: easy", "Computer: normal", "Computer: hard"};
@@ -465,6 +471,7 @@ void Menus::drawSettings() {
       changed |= ImGui::SliderFloat("Scroll speed", &st.scrollSpeed, 0.3f, 3.0f, "%.1fx");
       changed |= ImGui::Checkbox("Show the game info panel (I)", &st.showInfoPanel);
       changed |= ImGui::Checkbox("Unit cards over fireteams, platoons and companies", &st.showCards);
+      changed |= ImGui::Checkbox("Unit cards over the other sides' units too", &st.showEnemyCards);
       changed |= ImGui::Checkbox("Chips for enemy forces detected in the fog", &st.showChips);
       changed |= ImGui::Checkbox("Atmosphere: period colour grading and a vignette", &st.atmosphere);
       changed |= ImGui::Checkbox("Use the Blitzkrieg art pack when installed (restart to apply)", &st.artPack);

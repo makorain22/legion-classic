@@ -54,7 +54,8 @@ struct CGroupMember {
 // A group entity: a bound fighting unit. It has no position; its members do.
 struct CGroup {
   uint8_t owner = 0;
-  bool vehicles = false;      // an armoured unit (else infantry)
+  bool vehicles = false;      // an armoured unit (else infantry); also set for combined arms
+  bool combined = false;      // vehicles and infantry together (a battle group)
   Echelon echelon = Echelon::Fireteam;
   uint16_t number = 1;        // 1st, 2nd... per side and echelon, for its name
   std::vector<Entity> members;

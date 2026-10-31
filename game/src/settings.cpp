@@ -10,7 +10,8 @@ const char* actionLabel(InputAction a) {
                                 "Attack-move", "Stop", "Deploy", "Select all units", "Bind selection into a unit",
                                 "Unbind unit", "Pause", "Game speed up", "Game speed down", "Centre on selection",
                                 "Command next side", "Menu", "Controls panel", "Scenario editor", "Debug panel",
-                                "Screenshot", "Game info panel", "Encyclopedia"};
+                                "Screenshot", "Game info panel", "Encyclopedia",
+                                "Evacuate (leave trenches and buildings)"};
   return names[static_cast<int>(a)];
 }
 
@@ -53,6 +54,7 @@ void Settings::resetKeys() {
   set(InputAction::Screenshot, {SDLK_F12, 0});
   set(InputAction::ToggleInfo, {SDLK_I, 0});
   set(InputAction::Encyclopedia, {SDLK_K, 0}, {SDLK_F4, 0});
+  set(InputAction::Evacuate, {SDLK_E, 0}, {SDLK_E, kModCtrl});
 }
 
 bool Settings::pressed(InputAction a, const SDL_KeyboardEvent& e) const {
@@ -86,6 +88,7 @@ bool Settings::load(const std::string& path) {
   showCards = j.value("showCards", showCards);
   showChips = j.value("showChips", showChips);
   artPack = j.value("artPack", artPack);
+  showEnemyCards = j.value("showEnemyCards", showEnemyCards);
   atmosphere = j.value("atmosphere", atmosphere);
   if (j.contains("keys") && j["keys"].is_object()) {
     for (int a = 0; a < ACTION_COUNT; ++a) {
@@ -110,6 +113,7 @@ bool Settings::save(const std::string& path) const {
   j["showCards"] = showCards;
   j["showChips"] = showChips;
   j["artPack"] = artPack;
+  j["showEnemyCards"] = showEnemyCards;
   j["atmosphere"] = atmosphere;
   auto& ks = j["keys"] = nlohmann::json::object();
   for (int a = 0; a < ACTION_COUNT; ++a) {

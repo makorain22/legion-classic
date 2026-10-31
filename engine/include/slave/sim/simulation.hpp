@@ -321,6 +321,12 @@ class Simulation {
   int32_t groupBonus(Entity shooter) const;  // extra firepower, percent
   static int32_t echelonSize(bool vehicles, Echelon e);
   bool canGarrison(Entity unit, Entity building) const;
+  // A trench piece: men inside stay visible, fire out, and leave only when
+  // told to evacuate (not when ordered to move).
+  bool isTrench(Entity structure) const;
+  int32_t groupStrength(const std::vector<Entity>& members, bool combined) const;
+  void applyCommandBody(const Command& cmd);
+  bool inTrench(Entity unit) const;
   int garrisonLevel(Entity building) const;  // 0 empty, 1..3 how fortified it looks
   std::vector<Vec2i> trenchLine(Entity piece) const;
   int supplyPointFor(int type, Vec2i origin) const;  // a free supply point a depot there would stand on, or -1

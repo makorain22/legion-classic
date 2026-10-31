@@ -157,6 +157,27 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
   return true;
 }
 
+// Men in the selection (or in the selected buildings and trenches) come out.
+void GameScene::evacuateSelection() {
+  pruneSelection();
+  if (selection_.empty()) return;
+  Command c;
+  c.type = CommandType::Unload;
+  c.player = player_;
+  c.units = selection_;
+  queueOrder(std::move(c));
+}
+
+bool GameScene::selectionCanEvacuate() const {
+  Registry& reg = sim_->registry();
+  for (Entity e : selection_) {
+    if (!reg.alive(e)) continue;
+    if (reg.has<CGarrisoned>(e)) return true;
+    if (const CGarrison* g = reg.pool<CGarrison>().tryGet(e.index); g && !g->occupants.empty()) return true;
+  }
+  return false;
+}
+
 void GameScene::openEncyclopedia(int type) {
   // With nothing pointed at, open on the first selected unit.
   if (type < 0 && !selection_.empty() && sim_->registry().alive(selection_.front()))
@@ -359,33 +380,71 @@ void GameScene::spawnAt(const std::string& typeId, uint8_t player, Vec2i at, int
 
 // A starting base: construction yard, power, an oil depot (with its truck)
 // and barracks, laid out around `centre`, facing the enemy.
+// A starting base laid out like a military post: headquarters in the middle
+// of a beaten-earth yard, barracks and workshops in rows behind it, a road
+// to the gate, a sandbagged front with MG nests and watchtowers at the
+// corners, wire and tank traps beyond, all facing the enemy.
 void GameScene::buildBase(uint8_t player, Vec2i centre) {
   const int32_t T = LEPTONS_PER_TILE;
   const std::string f = players_[player].faction;
-  const int dir = centre.x < map_.widthLeptons() / 2 ? 1 : -1;  // +1: enemy to the east
+  // Forward: towards the middle of the map, along the nearer axis.
+  const int32_t dx = map_.widthLeptons() / 2 - centre.x, dy = map_.heightLeptons() / 2 - centre.y;
+  const int fx = std::abs(dx) >= std::abs(dy) ? (dx >= 0 ? 1 : -1) : 0;
+  const int fy = fx == 0 ? (dy >= 0 ? 1 : -1) : 0;
+  const int sx = -fy, sy = fx;  // to the side
+  auto at = [&](int fwd, int side) { return Vec2i{centre.x + (fwd * fx + side * sx) * T, centre.y + (fwd * fy + side * sy) * T}; };
   // Placed one at a time, each on the nearest clear ground to its planned spot.
-  auto add = [&](const std::string& id, int dx, int dy) {
+  auto add = [&](const std::string& id, int fwd, int side, int search = 6) {
     const int t = types_.find(f + "_" + id);
     if (t < 0) return;
-    const Vec2i want{centre.x + dx * dir * T, centre.y + dy * T};
-    for (int r = 0; r <= 6; ++r)
+    const Vec2i want = at(fwd, side);
+    for (int r = 0; r <= search; ++r)
       for (int oy = -r; oy <= r; ++oy)
         for (int ox = -r; ox <= r; ++ox) {
           if (std::max(std::abs(ox), std::abs(oy)) != r) continue;
-          const Vec2i at{want.x + ox * T, want.y + oy * T};
-          if (!sim_->canPlace(t, sim_->footprintOrigin(t, at))) continue;
+          const Vec2i p{want.x + ox * T, want.y + oy * T};
+          if (!sim_->canPlace(t, sim_->footprintOrigin(t, p))) continue;
           Command c;
           c.type = CommandType::SpawnList;
-          c.spawns.push_back({static_cast<uint16_t>(t), player, at, 0, -1});
+          c.spawns.push_back({static_cast<uint16_t>(t), player, p, angleOfFacing(fx > 0 ? 0 : fx < 0 ? 8 : fy > 0 ? 4 : 12), -1});
           sim_->queue(std::move(c));
           sim_->tick();
           return;
         }
   };
-  add("yard", 0, 0);
-  add("power", -4, -4);
-  add("power", -4, 4);
-  add("barracks", 5, 3);
+  // Ground: a beaten-earth compound and a road from the gate to headquarters.
+  auto paintTile = [&](Vec2i l, Layer layer, int amount) {
+    const int tx = l.x / T, ty = l.y / T;
+    if (!map_.inBounds(tx, ty)) return;
+    for (int j = 0; j < SPLAT_PER_TILE; ++j)
+      for (int i = 0; i < SPLAT_PER_TILE; ++i) map_.paint(tx * SPLAT_PER_TILE + i, ty * SPLAT_PER_TILE + j, layer, amount);
+  };
+  for (int fwd = -8; fwd <= 10; ++fwd)
+    for (int side = -9; side <= 9; ++side) {
+      const int edge = std::max(std::abs(side) - 7, std::max(-fwd - 6, fwd - 8));
+      paintTile(at(fwd, side), Layer::Dirt, edge <= 0 ? 150 : edge == 1 ? 80 : 30);
+    }
+  for (int fwd = -1; fwd <= 16; ++fwd) {
+    paintTile(at(fwd, 0), Layer::Road, 255);
+    paintTile(at(fwd, 1), Layer::Road, 200);
+  }
+  for (int side = -7; side <= 7; ++side) paintTile(at(3, side), Layer::Road, 180);  // the cross street
+  {
+    const Vec2i a = at(-10, -11), b = at(18, 11);
+    terrain_.markSplatDirty(std::min(a.x, b.x) / T * SPLAT_PER_TILE, std::min(a.y, b.y) / T * SPLAT_PER_TILE,
+                            std::max(a.x, b.x) / T * SPLAT_PER_TILE + 1, std::max(a.y, b.y) / T * SPLAT_PER_TILE + 1);
+  }
+  // Clear the woods off the compound.
+  {
+    const Vec2i a = at(-9, -10), b = at(16, 10);
+    const int32_t x0 = std::min(a.x, b.x), x1 = std::max(a.x, b.x), y0 = std::min(a.y, b.y), y1 = std::max(a.y, b.y);
+    std::erase_if(map_.props(), [&](const Prop& p) { return p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1; });
+  }
+  // Buildings in rows.
+  add("yard", 0, -3);
+  add("barracks", 5, -5);
+  add("power", -5, -6);
+  add("power", -5, -3);
   // A supply depot on the nearest supply point.
   if (!map_.supplyPoints.empty()) {
     Vec2i best = map_.supplyPoints.front();
@@ -395,8 +454,9 @@ void GameScene::buildBase(uint8_t player, Vec2i centre) {
     const int t = types_.find(f + "_depot");
     if (t >= 0) {
       const UnitTypeDef& d = types_.get(t);
-      for (int oy = -d.footH; oy <= 1; ++oy)
-        for (int ox = -d.footW; ox <= 1; ++ox) {
+      bool placed = false;
+      for (int oy = -d.footH; oy <= 1 && !placed; ++oy)
+        for (int ox = -d.footW; ox <= 1 && !placed; ++ox) {
           const Vec2i o{best.x + ox, best.y + oy};
           if (!sim_->canPlace(t, o)) continue;
           Command c;
@@ -404,10 +464,22 @@ void GameScene::buildBase(uint8_t player, Vec2i centre) {
           c.spawns.push_back({static_cast<uint16_t>(t), player, {o.x * T + d.footW * 128, o.y * T + d.footH * 128}, 0, -1});
           sim_->queue(std::move(c));
           sim_->tick();
-          return;
+          placed = true;
         }
     }
   }
+  // The front: sandbags with a gate on the road, MG nests either side of
+  // it, watchtowers at the corners, wire and tank traps beyond.
+  for (int side = -8; side <= 8; ++side)
+    if (std::abs(side) > 2) add("sandbags", 11, side, 0);
+  add("mg_nest", 11, -2, 1);
+  add("mg_nest", 11, 3, 1);
+  add("tower", 10, -9, 1);
+  add("tower", 10, 9, 1);
+  add("tower", -8, -9, 1);
+  for (int side = -9; side <= 9; side += 1)
+    if (std::abs(side) > 3 && side % 4 != 0) add("wire", 13, side, 0);
+  for (int side : {-6, -5, 5, 6}) add("traps", 15, side, 0);
 }
 
 // Selecting one man of a bound unit selects the whole unit (Alt: just him).
@@ -425,6 +497,16 @@ void GameScene::expandToGroups() {
     }
   }
   selection_ = std::move(out);
+}
+
+Entity GameScene::cardAt(Vec2f screenPx) const {
+  const float ps = app_.pixelScale();
+  const float x = screenPx.x / ps, y = screenPx.y / ps;
+  for (auto it = cardHits_.rbegin(); it != cardHits_.rend(); ++it)
+    if (x >= it->x0 && x <= it->x1 && y >= it->y0 && y <= it->y1 && sim_->registry().alive(it->group) &&
+        sim_->registry().has<CGroup>(it->group) && selectableOwner(sim_->registry().get<CGroup>(it->group).owner))
+      return it->group;
+  return kNullEntity;
 }
 
 void GameScene::bindSelection() {
@@ -530,7 +612,7 @@ Entity GameScene::pickUnit(Vec2f screenPx, bool ownOnly) const {
   Entity best;
   int64_t bestDepth = INT64_MIN;
   for (uint32_t e : reg.pool<CUnit>().entities()) {
-    if (reg.pool<CGarrisoned>().has(e)) continue;  // inside a building: picked through it
+    if (reg.pool<CGarrisoned>().has(e) && !sim_->inTrench(reg.handle(e))) continue;  // inside a building: picked through it
     const CUnit& u = reg.pool<CUnit>().get(e);
     if (ownOnly && !selectableOwner(u.owner)) continue;
     if (u.owner != player_) {
@@ -575,11 +657,10 @@ void GameScene::selectInBox(Vec2f a, Vec2f b, bool add) {
     if (types_.get(reg.pool<CUnit>().get(e).type).isStructure() && !editor_->selectsAnyOwner()) continue;
     const Vec2f s = cam_.worldToScreen(unitScreenWorld(e));
     if (!box.contains({s.x, s.y - 6})) continue;
-    if (reg.pool<CGarrisoned>().has(e)) continue;
+    if (reg.pool<CGarrisoned>().has(e) && !sim_->inTrench(reg.handle(e))) continue;
     const Entity h = reg.handle(e);
     if (std::find(selection_.begin(), selection_.end(), h) == selection_.end()) selection_.push_back(h);
   }
-  expandToGroups();
 }
 
 void GameScene::selectSameTypeOnScreen(Entity like) {
@@ -893,6 +974,17 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
         const bool add = (SDL_GetModState() & SDL_KMOD_SHIFT) != 0;
         if (dragging_) {
           selectInBox(dragStart_, mouse_, add);
+        } else if (const Entity card = cardAt(mouse_); card.valid()) {
+          // A unit card: the whole bound unit (double-click: and look at it).
+          const uint64_t now = SDL_GetTicks();
+          if (!add) selection_.clear();
+          for (Entity m : sim_->registry().get<CGroup>(card).members)
+            if (sim_->registry().alive(m) && std::find(selection_.begin(), selection_.end(), m) == selection_.end())
+              selection_.push_back(m);
+          if (card == lastCard_ && now - lastClickMs_ < 350 && !selection_.empty())
+            centerOn({sim_->registry().get<CPosition>(selection_.front()).x, sim_->registry().get<CPosition>(selection_.front()).y});
+          lastCard_ = card;
+          lastClickMs_ = now;
         } else {
           const Entity hit = pickUnit(mouse_, true);
           const uint64_t now = SDL_GetTicks();
@@ -903,7 +995,6 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
             auto it = std::find(selection_.begin(), selection_.end(), hit);
             if (it == selection_.end()) selection_.push_back(hit);
             else if (add) selection_.erase(it);
-            expandToGroups();
           } else if (const Entity house = garrisonUnder(mouse_); house.valid()) {
             // A building our men hold: select the men inside.
             if (!add) selection_.clear();
@@ -982,6 +1073,8 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
         c.type = CommandType::Deploy;
         c.units = selection_;
         sim_->queue(std::move(c));
+      } else if (K.pressed(InputAction::Evacuate, e.key)) {
+        evacuateSelection();
       } else if (K.pressed(InputAction::BindGroup, e.key)) {
         bindSelection();
       } else if (K.pressed(InputAction::UnbindGroup, e.key)) {
@@ -1429,7 +1522,7 @@ void GameScene::drawUnits(const RectF& view) {
   for (size_t i = 0; i < units.size(); ++i) {
     const uint32_t e = units.entities()[i];
     const CUnit& u = units.data()[i];
-    if (reg.pool<CGarrisoned>().has(e)) continue;  // inside a building
+    if (reg.pool<CGarrisoned>().has(e) && !sim_->inTrench(reg.handle(e))) continue;  // inside a building (men in trenches show)
     const CPosition& p = reg.pool<CPosition>().get(e);
     const UnitTypeDef& def = types_.get(u.type);
     uint32_t tint = kWhite;
@@ -1493,7 +1586,7 @@ void GameScene::drawUnits(const RectF& view) {
   for (uint32_t b : reg.pool<CGarrison>().entities()) {
     const Entity bh = reg.handle(b);
     const int level = sim_->garrisonLevel(bh);
-    if (level == 0 || !reg.has<CStructure>(bh)) continue;
+    if (level == 0 || !reg.has<CStructure>(bh) || sim_->isTrench(bh)) continue;
     const CGarrison& g = reg.get<CGarrison>(bh);
     const uint8_t owner = reg.get<CUnit>(g.occupants.front()).owner;
     if (fog && !sim_->allied(owner, player_) && terrain_.fogAt(reg.get<CStructure>(bh).tx, reg.get<CStructure>(bh).ty) < 128) continue;

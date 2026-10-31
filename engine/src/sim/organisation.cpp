@@ -15,6 +15,7 @@ constexpr int32_t kVehicleSize[6] = {0, 1 << 30, 1 << 30, 5, 15, 50};
 // Extra firepower (percent) of a bound unit's members.
 constexpr int32_t kInfantryBonus[6] = {0, 5, 10, 15, 30, 30};
 constexpr int32_t kVehicleBonus[6] = {0, 0, 0, 3, 6, 10};
+constexpr int32_t kCombinedBonus[6] = {0, 0, 0, 8, 12, 15};  // combined arms fight best together
 
 constexpr int32_t kBindRadius = 3 * 256;  // a fireteam forms from men this close together
 constexpr uint32_t kAutoBindTicks = 15;
@@ -50,7 +51,7 @@ const CGroup* Simulation::groupOf(Entity unit) const {
 int32_t Simulation::groupBonus(Entity shooter) const {
   const CGroup* g = groupOf(shooter);
   if (!g) return 0;
-  return (g->vehicles ? kVehicleBonus : kInfantryBonus)[static_cast<int>(g->echelon)];
+  return (g->combined ? kCombinedBonus : g->vehicles ? kVehicleBonus : kInfantryBonus)[static_cast<int>(g->echelon)];
 }
 
 int32_t Simulation::echelonSize(bool vehicles, Echelon e) {
@@ -91,33 +92,61 @@ void Simulation::disband(Entity group) {
   reg_.destroy(group);
 }
 
+// How big a battle group counts: a vehicle each, and a vehicle for every four men.
+int32_t Simulation::groupStrength(const std::vector<Entity>& members, bool combined) const {
+  if (!combined) return static_cast<int32_t>(members.size());
+  int32_t veh = 0, men = 0;
+  for (Entity m : members)
+    if (reg_.alive(m) && reg_.has<CUnit>(m)) (types_.get(reg_.get<CUnit>(m).type).infantry() ? men : veh) += 1;
+  return veh + (men + 3) / 4;
+}
+
 void Simulation::bindUnits(const std::vector<Entity>& units, uint8_t owner) {
-  for (int kind = 0; kind < 2; ++kind) {
-    const bool vehicles = kind == 1;
-    std::vector<Entity> picked;
-    for (Entity e : units) {
-      if (!reg_.alive(e) || !reg_.has<CUnit>(e)) continue;
-      const CUnit& u = reg_.get<CUnit>(e);
-      const UnitTypeDef& d = types_.get(u.type);
-      if (u.owner != owner || d.isStructure() || d.speed <= 0 || d.infantry() == vehicles) continue;
-      if (std::find(picked.begin(), picked.end(), e) == picked.end()) picked.push_back(e);
-    }
-    const Echelon e = naturalEchelon(vehicles, static_cast<int32_t>(picked.size()));
-    if (e == Echelon::None) continue;
+  std::vector<Entity> men, machines;
+  for (Entity e : units) {
+    if (!reg_.alive(e) || !reg_.has<CUnit>(e)) continue;
+    const CUnit& u = reg_.get<CUnit>(e);
+    const UnitTypeDef& d = types_.get(u.type);
+    if (u.owner != owner || d.isStructure() || d.speed <= 0) continue;
+    auto& list = d.infantry() ? men : machines;
+    if (std::find(list.begin(), list.end(), e) == list.end()) list.push_back(e);
+  }
+  auto bind = [&](std::vector<Entity> picked, bool vehicles, bool combined) {
+    const Echelon e = naturalEchelon(vehicles, groupStrength(picked, combined));
+    if (e == Echelon::None) return false;
     // Whatever groups these came from are absorbed into the new one.
     std::vector<Entity> old;
     for (Entity m : picked)
       if (const CGroupMember* gm = reg_.pool<CGroupMember>().tryGet(m.index))
         if (std::find(old.begin(), old.end(), gm->group) == old.end()) old.push_back(gm->group);
-    for (Entity g : old) {
-      // Members of an old group that were not picked stay together if enough are left.
-      CGroup* og = reg_.pool<CGroup>().tryGet(g.index);
-      if (!og) continue;
-      std::erase_if(og->members, [&](Entity m) { return std::find(picked.begin(), picked.end(), m) != picked.end(); });
-    }
+    for (Entity g : old)
+      if (CGroup* og = reg_.pool<CGroup>().tryGet(g.index))
+        std::erase_if(og->members, [&](Entity m) { return std::find(picked.begin(), picked.end(), m) != picked.end(); });
     std::sort(picked.begin(), picked.end(), [](Entity a, Entity b) { return a.index < b.index; });
-    makeGroup(picked, owner, vehicles, e);
-    for (Entity g : old) refreshGroup(g);
+    const Entity g = makeGroup(picked, owner, vehicles, e);
+    reg_.get<CGroup>(g).combined = combined;
+    for (Entity og : old) refreshGroup(og);
+    return true;
+  };
+  // Infantry and vehicles together: one combined-arms battle group.
+  if (!men.empty() && !machines.empty()) {
+    std::vector<Entity> all = men;
+    all.insert(all.end(), machines.begin(), machines.end());
+    if (bind(all, true, true)) return;
+  }
+  if (!men.empty()) bind(men, false, false);
+  // Vehicles alone: one card per role (tanks, reconnaissance, artillery...).
+  std::vector<std::string> roles;
+  for (Entity e : machines) {
+    const std::string& r = types_.get(reg_.get<CUnit>(e).type).nato;
+    if (std::find(roles.begin(), roles.end(), r) == roles.end()) roles.push_back(r);
+  }
+  std::sort(roles.begin(), roles.end());
+  for (const std::string& r : roles) {
+    std::vector<Entity> picked;
+    for (Entity e : machines)
+      if (types_.get(reg_.get<CUnit>(e).type).nato == r) picked.push_back(e);
+    bind(picked, true, false);
   }
 }
 
@@ -131,11 +160,11 @@ void Simulation::refreshGroup(Entity group) {
     return !reg_.alive(m) || !reg_.has<CGroupMember>(m) || reg_.get<CGroupMember>(m).group != group ||
            reg_.get<CUnit>(m).health <= 0;
   });
-  const int32_t n = static_cast<int32_t>(g->members.size());
-  if (n <= 1) {
+  if (g->members.size() <= 1) {
     disband(group);
     return;
   }
+  const int32_t n = groupStrength(g->members, g->combined);
   // A company stays a company until it is down to a platoon's strength, and so on.
   while (g->echelon != Echelon::None) {
     const Echelon below = lower(g->vehicles, g->echelon);
@@ -216,6 +245,22 @@ bool Simulation::canGarrison(Entity unit, Entity building) const {
   return static_cast<int32_t>(inside) < bd.garrison;
 }
 
+bool Simulation::isTrench(Entity b) const {
+  if (!reg_.alive(b) || !reg_.has<CUnit>(b) || !reg_.has<CStructure>(b)) return false;
+  const UnitTypeDef& d = types_.get(reg_.get<CUnit>(b).type);
+  return d.category == UnitCategory::Fortification && d.cover > 0 && d.garrison > 0;
+}
+
+bool Simulation::inTrench(Entity u) const {
+  const CGarrisoned* g = reg_.alive(u) ? reg_.pool<CGarrisoned>().tryGet(u.index) : nullptr;
+  return g && isTrench(g->building);
+}
+
+namespace {
+// Where the men of a trench piece crouch, from its centre (leptons).
+constexpr int32_t kTrenchSlots[3][2] = {{-64, -40}, {56, 8}, {-16, 68}};
+}  // namespace
+
 int Simulation::garrisonLevel(Entity building) const {
   if (!reg_.alive(building) || !reg_.has<CUnit>(building)) return 0;
   const CGarrison* g = reg_.pool<CGarrison>().tryGet(building.index);
@@ -232,8 +277,13 @@ void Simulation::enterBuilding(Entity u, Entity b) {
   reg_.add<CGarrisoned>(u, {b});
   setOrderIdle(u);
   const CPosition& bp = reg_.get<CPosition>(b);
-  reg_.get<CPosition>(u) = {bp.x, bp.y};
-  reg_.get<CPrevPosition>(u) = {bp.x, bp.y};
+  Vec2i at{bp.x, bp.y};
+  if (isTrench(b)) {
+    const size_t slot = (reg_.get<CGarrison>(b).occupants.size() - 1) % 3;
+    at = {bp.x + kTrenchSlots[slot][0], bp.y + kTrenchSlots[slot][1]};
+  }
+  reg_.get<CPosition>(u) = {at.x, at.y};
+  reg_.get<CPrevPosition>(u) = {at.x, at.y};
   CMover& m = reg_.get<CMover>(u);
   m.active = false;
   m.request = 0;
@@ -246,7 +296,8 @@ void Simulation::leaveBuilding(Entity u) {
   Vec2i out = reg_.get<CPosition>(u).x ? Vec2i{reg_.get<CPosition>(u).x, reg_.get<CPosition>(u).y} : Vec2i{0, 0};
   if (reg_.alive(b)) {
     if (CGarrison* g = reg_.pool<CGarrison>().tryGet(b.index)) std::erase(g->occupants, u);
-    out = exitOf(b);
+    // Out of a trench a man simply climbs out where he is.
+    if (!(reg_.has<CStructure>(b) && types_.get(reg_.get<CUnit>(b).type).category == UnitCategory::Fortification)) out = exitOf(b);
   }
   reg_.get<CPosition>(u) = {out.x, out.y};
   reg_.get<CPrevPosition>(u) = {out.x, out.y};
@@ -288,25 +339,46 @@ void Simulation::applyOccupy(const Command& cmd) {
         reg_.get<CUnit>(e).owner == cmd.player)
       men.push_back(e);
   if (men.empty()) return;
-  if (td.cover > 0 && td.category == UnitCategory::Fortification) {
-    // Man the trench line: one man to a piece, nearest pieces first.
+  if (isTrench(target)) {
+    // Man the trench line: up to three men a piece, nearest pieces first.
     std::vector<Vec2i> tiles = trenchLine(target);
     const CStructure& s = reg_.get<CStructure>(target);
     std::sort(tiles.begin(), tiles.end(), [&](Vec2i a, Vec2i b) {
       const int da = std::abs(a.x - s.tx) + std::abs(a.y - s.ty), db = std::abs(b.x - s.tx) + std::abs(b.y - s.ty);
       return da != db ? da < db : (a.y != b.y ? a.y < b.y : a.x < b.x);
     });
-    for (size_t i = 0; i < men.size() && !tiles.empty(); ++i) {
-      const Vec2i t = tiles[i % tiles.size()];
-      // Several men to a piece once every piece is manned, spread within it.
-      const int32_t jx = static_cast<int32_t>((i / tiles.size()) % 3) * 70 - 70;
-      const int32_t jy = static_cast<int32_t>((i / tiles.size()) / 3 % 3) * 70 - 70;
-      leaveBuilding(men[i]);
-      setOrderIdle(men[i]);
-      COrder& o = reg_.get<COrder>(men[i]);
-      o.type = OrderType::Move;
-      o.goal = {t.x * 256 + 128 + jx, t.y * 256 + 128 + jy};
-      requestPath(men[i], o.goal);
+    // Places taken already: men inside and men on their way.
+    std::vector<int32_t> taken(tiles.size(), 0);
+    std::vector<Entity> pieces(tiles.size());
+    for (size_t i = 0; i < tiles.size(); ++i) {
+      pieces[i] = reg_.handle(tileStructure_[static_cast<size_t>(tiles[i].y) * map_.width() + tiles[i].x]);
+      if (const CGarrison* g = reg_.pool<CGarrison>().tryGet(pieces[i].index)) taken[i] += static_cast<int32_t>(g->occupants.size());
+    }
+    for (uint32_t e : reg_.pool<COrder>().entities()) {
+      const COrder& o = reg_.pool<COrder>().get(e);
+      if (o.type != OrderType::Occupy) continue;
+      if (std::find(men.begin(), men.end(), reg_.handle(e)) != men.end()) continue;
+      for (size_t i = 0; i < pieces.size(); ++i)
+        if (o.target == pieces[i]) ++taken[i];
+    }
+    const int32_t cap = td.garrison;
+    for (Entity e : men) {
+      if (reg_.has<CGarrisoned>(e) && isTrench(reg_.get<CGarrisoned>(e).building)) continue;  // already in
+      size_t pick = tiles.size();
+      for (size_t i = 0; i < tiles.size(); ++i)
+        if (taken[i] < cap) {
+          pick = i;
+          break;
+        }
+      if (pick == tiles.size()) break;  // the line is full
+      ++taken[pick];
+      leaveBuilding(e);
+      setOrderIdle(e);
+      COrder& o = reg_.get<COrder>(e);
+      o.type = OrderType::Occupy;
+      o.target = pieces[pick];
+      o.chasedAt = {tiles[pick].x * 256 + 128, tiles[pick].y * 256 + 128};
+      requestPath(e, o.chasedAt);
     }
     return;
   }
@@ -350,15 +422,16 @@ void Simulation::stepGarrisons() {
       continue;
     }
     const CPosition& p = pos.get(e);
-    // Close enough when standing next to the footprint.
+    // Close enough when standing next to the footprint (on it, for a trench).
     const CStructure& st = reg_.get<CStructure>(o.target);
     const int32_t gx = std::max({0, st.tx * 256 - p.x, p.x - (st.tx + st.w) * 256});
     const int32_t gy = std::max({0, st.ty * 256 - p.y, p.y - (st.ty + st.h) * 256});
-    if (std::max(gx, gy) <= 320) {
+    const bool trench = isTrench(o.target);
+    if (std::max(gx, gy) <= (trench ? 96 : 320)) {
       arrivals.push_back({u, o.target});
     } else {
       const CMover& m = reg_.get<CMover>(u);
-      if (!m.active && !m.request && (tick_ + e) % 30 == 0) requestPath(u, exitOf(o.target));
+      if (!m.active && !m.request && (tick_ + e) % 30 == 0) requestPath(u, trench ? o.chasedAt : exitOf(o.target));
     }
   }
   for (auto [u, b] : arrivals) enterBuilding(u, b);
@@ -371,11 +444,20 @@ void Simulation::stepGarrisons() {
   for (uint32_t u : reg_.pool<CGarrisoned>().entities()) {
     const Entity b = reg_.pool<CGarrisoned>().get(u).building;
     if (!reg_.alive(b) || reg_.pool<CUnit>().get(b.index).health <= 0) evict.push_back(reg_.handle(u));
-    else {
+    else if (!isTrench(b)) {
       // Stay put inside.
       const CPosition& bp = pos.get(b.index);
       pos.get(u) = {bp.x, bp.y};
     }
+  }
+  // Men in a trench keep to its firing places, closing up when one leaves.
+  for (uint32_t b : reg_.pool<CGarrison>().entities()) {
+    const Entity bh = reg_.handle(b);
+    if (!isTrench(bh)) continue;
+    const CPosition& bp = pos.get(b);
+    const auto& occ = reg_.pool<CGarrison>().get(b).occupants;
+    for (size_t i = 0; i < occ.size(); ++i)
+      if (reg_.alive(occ[i])) pos.get(occ[i].index) = {bp.x + kTrenchSlots[i % 3][0], bp.y + kTrenchSlots[i % 3][1]};
   }
   for (Entity u : evict) {
     leaveBuilding(u);
@@ -389,6 +471,7 @@ void Simulation::stepGarrisons() {
 int32_t Simulation::shelterPercent(uint32_t victim) const {
   const CGarrisoned* g = reg_.pool<CGarrisoned>().tryGet(victim);
   if (!g) return 100;
+  if (isTrench(g->building)) return 100 - types_.get(reg_.get<CUnit>(g->building).type).cover;  // dug in
   const int level = garrisonLevel(g->building);
   return level >= 3 ? 40 : level == 2 ? 45 : 50;
 }

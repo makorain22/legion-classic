@@ -595,13 +595,17 @@ void Sidebar::drawOrders(float width) {
   if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
     ImGui::SetTooltip("Unfold a construction truck into a Construction Yard (Ctrl+D).");
   ImGui::SameLine(0, 4);
+  if (ui::plateButton("evacuate", "Evacuate", ImVec2(bw, bh), false, false, scene_.selectionCanEvacuate()))
+    scene_.evacuateSelection();
+  if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+    ImGui::SetTooltip("Men in trenches stay dug in until evacuated; men in buildings come out too (E).");
   if (ui::plateButton("sell", sellMode_ ? "Selling" : "Sell", ImVec2(bw, bh), sellMode_)) {
     sellMode_ = !sellMode_;
     placeType_ = -1;
   }
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Click your structures to sell them for half their cost. Esc stops.");
   ImGui::SameLine(0, 4);
-  if (ui::plateButton("book", "Encyclopedia", ImVec2(bw, bh))) scene_.openEncyclopedia(hoveredType_ >= 0 ? hoveredType_ : -1);
+  if (ui::plateButton("book", "Encyclopedia", ImVec2(bw * 2 + 4, bh))) scene_.openEncyclopedia(hoveredType_ >= 0 ? hoveredType_ : -1);
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Every unit and building, with its weapons and numbers (K).");
   if (!producers.empty()) ImGui::TextDisabled("Right-click the map: rally point");
 }
