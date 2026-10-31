@@ -486,10 +486,11 @@ void Map::generateTerrain(uint64_t seed, Biome b) {
           const int cx = bx + 3 + (k % 2) * 6, cy = by + 3 + (k / 2) * 6;
           if (rng.below(100) < 22 || !plotFree(cx, cy, 1)) continue;
           const uint32_t pick = rng.below(100);
-          uint8_t kind = pick < 32 ? 2 : pick < 54 ? 4 : pick < 74 ? 1 : pick < 86 ? 0 : pick < 92 ? 9 : pick < 95 ? 11 : 3;
-          if (kind == 9 && !plotFree(cx, cy, 2)) kind = 2;  // a warehouse needs more room
+          uint8_t kind = pick < 30 ? 2 : pick < 50 ? 4 : pick < 68 ? 1 : pick < 78 ? 0 : pick < 84 ? 9 : pick < 87 ? 11
+                         : pick < 93 ? 14 : pick < 96 ? 12 : 3;
+          if ((kind == 9 || kind == 12 || kind == 14) && !plotFree(cx, cy, 2)) kind = 2;  // the big ones need more room
           lots.push_back({cx, cy, kind});
-          clearProps(cx, cy, kind == 9 ? 2 : 1);
+          clearProps(cx, cy, (kind == 9 || kind == 12 || kind == 14) ? 2 : 1);
         }
       }
     return;
@@ -508,7 +509,9 @@ void Map::generateTerrain(uint64_t seed, Biome b) {
       uint8_t kind = 0;
       if (desert) kind = pick < 85 ? 5 : 10;
       else if (winter) kind = pick < 45 ? 8 : pick < 60 ? 6 : pick < 72 ? 7 : pick < 82 ? 1 : pick < 90 ? 10 : pick < 96 ? 4 : 3;
-      else kind = pick < 42 ? 0 : pick < 58 ? 1 : pick < 70 ? 6 : pick < 79 ? 7 : pick < 85 ? 10 : pick < 89 ? 11 : pick < 95 ? 4 : 3;
+      else kind = pick < 36 ? 0 : pick < 50 ? 1 : pick < 61 ? 6 : pick < 69 ? 7 : pick < 75 ? 10 : pick < 79 ? 11
+                  : pick < 87 ? 13 : pick < 94 ? 4 : 3;
+      if (kind == 13 && !plotFree(cx, cy, 2)) kind = 0;
       lots.push_back({cx, cy, kind});
       clearProps(cx, cy, 1);
     }

@@ -178,7 +178,8 @@ class Map {
   struct Lot {
     int tx = 0, ty = 0;  // footprint centre tile
     uint8_t kind = 0;    // 0 cottage, 1 bombed cottage, 2 town house, 3 church, 4 ruin, 5 adobe,
-                         // 6 barn, 7 shed, 8 log house, 9 warehouse, 10 well, 11 water tower
+                         // 6 barn, 7 shed, 8 log house, 9 warehouse, 10 well, 11 water tower,
+                         // 12 railway station, 13 farmhouse, 14 school
   };
   std::vector<Lot> lots;
 

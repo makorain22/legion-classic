@@ -568,4 +568,216 @@ VoxelModel makeFence(int v) {
   return m;
 }
 
+// --- Field works, at twice the structure resolution (24 voxels a tile) -----
+// Joined pieces: `mask` says which neighbours a piece runs to (+X 1, +Y 2,
+// -X 4, -Y 8); a lone piece is a short row across the tile.
+namespace {
+// The segments of a joined piece: from the centre to each linked edge.
+template <class Seg>
+void forArms(int mask, Seg&& seg) {
+  constexpr float c = 12.0f;
+  if (mask == 0) {
+    seg(c - 7, c, c + 7, c);
+    return;
+  }
+  if (mask & 1) seg(c, c, 24.5f, c);
+  if (mask & 4) seg(-0.5f, c, c, c);
+  if (mask & 2) seg(c, c, c, 24.5f);
+  if (mask & 8) seg(c, -0.5f, c, c);
+}
+}  // namespace
+
+// Sandbags: two courses of plump bags laid like brickwork along each arm.
+VoxelModel makeSandbagLine(int mask) {
+  VoxelModel m(24, 24, 8);
+  auto bag = [&](float cx, float cy, float cz, bool alongX, uint32_t seed) {
+    const float hx = alongX ? 2.4f : 1.9f, hy = alongX ? 1.9f : 2.4f, hz = 1.35f;
+    const float tone = hashf(seed, 7);
+    const uint8_t col = tone < 0.55f ? SANDBAG : tone < 0.85f ? SANDBAG_DARK : DRY_GRASS;
+    for (int z = static_cast<int>(cz - hz - 1); z <= static_cast<int>(cz + hz + 1); ++z)
+      for (int y = static_cast<int>(cy - hy - 1); y <= static_cast<int>(cy + hy + 1); ++y)
+        for (int x = static_cast<int>(cx - hx - 1); x <= static_cast<int>(cx + hx + 1); ++x) {
+          const float dx = (x + 0.5f - cx) / hx, dy = (y + 0.5f - cy) / hy, dz = (z + 0.5f - cz) / hz;
+          // A squashed, rounded box: flat underneath, pillowy on top.
+          if (std::pow(std::abs(dx), 2.6f) + std::pow(std::abs(dy), 2.6f) + dz * dz * (dz > 0 ? 1.0f : 0.4f) <= 1.0f)
+            m.set(x, y, z, (std::abs(dx) > 0.82f || std::abs(dy) > 0.82f) && dz < 0.3f ? static_cast<uint8_t>(SANDBAG_DARK) : col);
+        }
+  };
+  uint32_t seed = 101u + static_cast<uint32_t>(mask) * 31u;
+  forArms(mask, [&](float x0, float y0, float x1, float y1) {
+    const float dx = x1 - x0, dy = y1 - y0, len = std::max(std::abs(dx), std::abs(dy));
+    const float ux = dx / len, uy = dy / len;
+    const bool alongX = std::abs(dx) > std::abs(dy);
+    for (int course = 0; course < 2; ++course)
+      for (float t = course ? 2.4f : 0.0f; t <= len + 0.01f; t += 4.8f)
+        bag(x0 + ux * t, y0 + uy * t, 1.3f + course * 2.4f, alongX, ++seed);
+  });
+  bag(12, 12, 1.3f, true, 999);  // the corner bag
+  return m;
+}
+
+// Barbed wire: stakes and a loose concertina coil along each arm.
+VoxelModel makeWireLine(int mask) {
+  VoxelModel m(24, 24, 12);
+  forArms(mask, [&](float x0, float y0, float x1, float y1) {
+    const float len = std::hypot(x1 - x0, y1 - y0);
+    const float ux = (x1 - x0) / len, uy = (y1 - y0) / len, px = -uy, py = ux;
+    // Screw pickets at each end.
+    for (float t : {0.0f, len}) {
+      const float sx = x0 + ux * std::min(t, len - 1.0f), sy = y0 + uy * std::min(t, len - 1.0f);
+      bar3(m, sx, sy, 0, sx, sy, 8.5f, 0.45f, WOOD_DARK);
+    }
+    // Coil: a helix of thin wire, radius 3 voxels.
+    const int steps = static_cast<int>(len * 9);
+    for (int i = 0; i <= steps; ++i) {
+      const float t = static_cast<float>(i) / steps * len;
+      const float a = t * 1.6f;
+      const float r = 3.0f;
+      const float x = x0 + ux * t + px * std::cos(a) * r * 0.9f, y = y0 + uy * t + py * std::cos(a) * r * 0.9f;
+      const float z = 3.6f + std::sin(a) * r;
+      if (z < 0) continue;
+      m.set(static_cast<int>(x), static_cast<int>(y), static_cast<int>(z), (i / 3) % 2 ? STEEL : RUST);
+    }
+    // A straight top strand between the pickets.
+    for (float t = 0; t <= len; t += 0.4f) m.set(static_cast<int>(x0 + ux * t), static_cast<int>(y0 + uy * t), 7, STEEL_DARK);
+  });
+  return m;
+}
+
+// Czech hedgehogs: three girders welded crosswise, three of them on a tile.
+VoxelModel makeHedgehogs(int v) {
+  VoxelModel m(24, 24, 12);
+  auto hog = [&](float cx, float cy, float a) {
+    const float L = 5.2f;
+    for (int k = 0; k < 3; ++k) {
+      // Three girders along the cube's body diagonals, giving the six-armed star.
+      const float dirs[3][3] = {{1, 0.15f, 0.9f}, {-0.4f, 1, 0.85f}, {0.55f, -0.75f, 1}};
+      const float dx = dirs[k][0], dy = dirs[k][1], dz = dirs[k][2];
+      const float n = std::sqrt(dx * dx + dy * dy + dz * dz);
+      const float ca = std::cos(a), sa = std::sin(a);
+      const float rx = (ca * dx - sa * dy) / n, ry = (sa * dx + ca * dy) / n, rz = dz / n;
+      bar3(m, cx - rx * L, cy - ry * L, 5.0f - rz * L, cx + rx * L, cy + ry * L, 5.0f + rz * L, 0.7f, k == 1 ? RUST : STEEL_DARK);
+    }
+  };
+  hog(7, 7, 0.3f + v);
+  hog(17, 9, 1.4f + v);
+  hog(11, 17, 2.2f + v);
+  return m;
+}
+
+// A concrete pillbox: a smooth low dome on a banked earth mound, firing
+// slits all round and a sunken entrance at the back.
+VoxelModel makePillbox(const FactionLook& look) {
+  VoxelModel m(48, 48, 22);
+  const float cx = 24, cy = 24;
+  for (int y = 0; y < 48; ++y)
+    for (int x = 0; x < 48; ++x) {
+      const float d = std::hypot(x + 0.5f - cx, y + 0.5f - cy);
+      // Earth berm, sloping away.
+      const float berm = std::clamp((23.5f - d) * 0.75f, 0.0f, 8.0f);
+      for (int z = 0; z < static_cast<int>(berm); ++z) m.set(x, y, z, z == static_cast<int>(berm) - 1 ? EARTH : EARTH_DARK);
+      // Dome: a flattened hemisphere of concrete.
+      if (d < 15.5f) {
+        const float k = d / 15.5f;
+        const float top = 6.0f + 12.5f * std::sqrt(std::max(0.0f, 1.0f - k * k * k));
+        for (int z = 5; z < static_cast<int>(top); ++z) m.set(x, y, z, look.sloped ? CONCRETE_DARK : CONCRETE);
+      }
+    }
+  weather(m, EARTH, EARTH_DARK, SANDBAG_DARK, 61, 26, 10);
+  weather(m, CONCRETE, CONCRETE_DARK, CONCRETE_LIGHT, 62, 22, 12);
+  // Firing slits: dark wedges cut into the dome, with a concrete lip above.
+  for (int s = 0; s < 6; ++s) {
+    const float a = s * 1.0472f + 0.4f;
+    for (int w = -2; w <= 2; ++w) {
+      const float aa = a + w * 0.06f;
+      for (float r = 11.0f; r < 16.5f; r += 0.5f) {
+        const int x = static_cast<int>(cx + std::cos(aa) * r), y = static_cast<int>(cy + std::sin(aa) * r);
+        for (int z = 10; z < 12; ++z) m.set(x, y, z, WINDOW);
+        m.set(x, y, 12, CONCRETE_DARK);
+      }
+    }
+  }
+  // Entrance: a sunken passage behind, lined with timber.
+  for (int x = 20; x < 28; ++x)
+    for (int y = 37; y < 48; ++y)
+      for (int z = 0; z < 9; ++z) m.set(x, y, z, 0);
+  for (int y = 37; y < 48; ++y) {
+    m.box(19, y, 0, 20, y + 1, 6, WOOD_DARK);
+    m.box(28, y, 0, 29, y + 1, 6, WOOD_DARK);
+  }
+  m.box(21, 36, 5, 27, 38, 9, WINDOW);  // the doorway
+  m.box(22, 22, 18, 26, 26, 19, TEAM);  // a painted roof marking
+  return m;
+}
+
+// The pillbox's machine gun, in a small rotating cupola on the dome.
+VoxelModel makePillboxGun(const FactionLook&) {
+  VoxelModel m(48, 48, 23);
+  for (int y = 0; y < 48; ++y)
+    for (int x = 0; x < 48; ++x) {
+      const float d = std::hypot(x + 0.5f - 24, y + 0.5f - 24);
+      if (d < 4.2f)
+        for (int z = 18; z < 21 + (d < 2.5f ? 1 : 0); ++z) m.set(x, y, z, z > 20 ? STEEL : STEEL_DARK);
+    }
+  m.box(27, 23, 19, 33, 25, 20, STEEL_DARK);  // barrel
+  return m;
+}
+
+// A post-and-rail fence (supply compounds), joined like the field works.
+VoxelModel makeFenceLine(int mask) {
+  VoxelModel m(24, 24, 14);
+  forArms(mask, [&](float x0, float y0, float x1, float y1) {
+    const float len = std::hypot(x1 - x0, y1 - y0);
+    const float ux = (x1 - x0) / len, uy = (y1 - y0) / len;
+    for (float t = 0; t <= len + 0.01f; t += 6.0f) {
+      const float px = x0 + ux * std::min(t, len - 0.6f), py = y0 + uy * std::min(t, len - 0.6f);
+      bar3(m, px, py, 0, px, py, 8.5f, 0.85f, WOOD_DARK);
+    }
+    for (float z : {3.5f, 7.0f}) bar3(m, x0, y0, z, x1, y1, z, 0.8f, z > 5 ? WOOD : DEAD_WOOD);
+  });
+  bar3(m, 12, 12, 0, 12, 12, 9.0f, 1.0f, WOOD_DARK);  // the corner post
+  return m;
+}
+
+// A railway station: a brick hall, a canopy over the platform, a clock.
+VoxelModel makeStation(const FactionLook&) {
+  VoxelModel m(48, 24, 26);
+  houseWalls(m, 6, 4, 42, 16, 12, BRICK, CONCRETE_DARK, 2);
+  for (int i = 0; i <= 7; ++i) m.box(5, 3 + i, 12 + i, 43, 17 - i, 13 + i, (i % 2) ? ROOF_DARK : ROOF);
+  m.box(20, 3, 12, 28, 4, 20, BRICK);       // the gable over the entrance
+  m.box(23, 2, 15, 25, 3, 17, PLASTER);     // its clock
+  m.box(2, 16, 0, 46, 23, 2, CONCRETE);     // platform
+  for (int x = 4; x < 46; x += 6) m.box(x, 20, 2, x + 1, 21, 9, STEEL_DARK);  // canopy posts
+  m.box(2, 16, 9, 46, 23, 10, ROOF_DARK);   // canopy
+  m.box(30, 11, 20, 33, 14, 24, BRICK_DARK);
+  grimeWalls(m, 81);
+  return m;
+}
+
+// A long farmhouse: dwelling at one end, stable and hayloft at the other.
+VoxelModel makeFarmhouse(const FactionLook&) {
+  VoxelModel m(36, 24, 22);
+  houseWalls(m, 3, 5, 18, 19, 9, PLASTER, PLASTER_DARK);
+  m.box(18, 5, 0, 33, 19, 9, WOOD);
+  for (int x = 18; x < 33; x += 2) m.box(x, 18, 0, x + 1, 19, 9, WOOD_DARK);
+  m.box(23, 18, 0, 28, 19, 7, WOOD_DARK);  // stable doors
+  tiledRoof(m, 3, 5, 33, 19, 9);
+  chimney(m, 8, 7, 12, 18);
+  m.box(26, 19, 0, 30, 23, 2, DRY_GRASS);  // straw in the yard
+  grimeWalls(m, 82);
+  return m;
+}
+
+// A two-storey schoolhouse with a little bell turret.
+VoxelModel makeSchool(const FactionLook&) {
+  VoxelModel m(36, 24, 30);
+  houseWalls(m, 3, 4, 33, 20, 16, PLASTER, BRICK, 2);
+  tiledRoof(m, 3, 4, 33, 20, 16);
+  m.box(16, 10, 23, 20, 14, 27, WOOD);       // bell turret
+  m.box(15, 9, 27, 21, 15, 28, ROOF_DARK);
+  m.box(16, 20, 0, 20, 23, 1, CONCRETE);     // steps
+  grimeWalls(m, 83);
+  return m;
+}
+
 }  // namespace slave::art

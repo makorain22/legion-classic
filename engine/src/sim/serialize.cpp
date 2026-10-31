@@ -11,7 +11,8 @@
 namespace slave {
 
 namespace {
-constexpr uint32_t kStateMagic = 0x53494D32;  // "SIM2": groups, garrisons, supply income
+constexpr uint32_t kStateMagic = 0x53494D33;  // "SIM3": AI doctrine state (phases, raiders, guard)
+constexpr uint32_t kStateMagicV2 = 0x53494D32;  // "SIM2": groups, garrisons, supply income
 
 template <class T>
 void savePool(ByteWriter& w, Registry& reg) {
@@ -200,7 +201,9 @@ void Simulation::saveState(ByteWriter& w) const {
 }
 
 bool Simulation::loadState(ByteReader& r, std::string& error) {
-  if (r.u32() != kStateMagic) {
+  const uint32_t magic = r.u32();
+  const int version = magic == kStateMagic ? 3 : magic == kStateMagicV2 ? 2 : 0;
+  if (version == 0) {
     error = "not a saved game state";
     return false;
   }
@@ -327,7 +330,7 @@ bool Simulation::loadState(ByteReader& r, std::string& error) {
     objectives_.push_back(std::move(o));
   }
   revealed_ = r.podVector<RevealedArea>();
-  if (!ai_.load(r) || !r.ok()) {
+  if (!ai_.load(r, version) || !r.ok()) {
     error = "saved state is damaged";
     return false;
   }

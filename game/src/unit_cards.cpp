@@ -207,15 +207,16 @@ void GameScene::drawWorldOverlays() {
     if (fog && terrain_.fogAt(sp.x, sp.y) == 0) continue;
     const ImVec2 c = toScreen(groundToScreenWorld(sp.x * 256.0f + 128, sp.y * 256.0f + 128));
     if (!onScreen(c)) continue;
+    // The compound itself is drawn with the scenery; a label shows only
+    // while a depot is being placed.
     const Entity depot = sim_->depotOn(static_cast<int>(i));
-    const uint32_t col = depot.valid() ? teamColor(reg.get<CUnit>(depot).owner) : rgba8(214, 196, 120);
-    const float r = 13 * zoom;
-    dl->AddEllipse(c, ImVec2(r * 1.6f, r * 0.8f), imcol(col, 0.85f), 0, 0, 2.0f);
-    if (!depot.valid()) {
-      const char* label = "SUPPLY";
-      const ImVec2 ts = ImGui::CalcTextSize(label);
-      dl->AddText(ImVec2(c.x - ts.x / 2, c.y - ts.y / 2), imcol(col, 0.95f), label);
-    }
+    const int placing = sidebar_->placingType();
+    if (depot.valid() || placing < 0 || types_.get(placing).role != "depot") continue;
+    const uint32_t col = rgba8(214, 196, 120);
+    const char* label = "SUPPLY POINT";
+    const ImVec2 ts = ImGui::CalcTextSize(label);
+    dl->AddRectFilled(ImVec2(c.x - ts.x / 2 - 4, c.y - ts.y / 2 - 2), ImVec2(c.x + ts.x / 2 + 4, c.y + ts.y / 2 + 2), IM_COL32(20, 20, 16, 180), 3);
+    dl->AddText(ImVec2(c.x - ts.x / 2, c.y - ts.y / 2), imcol(col, 0.95f), label);
   }
 
   // --- Garrison badges -----------------------------------------------------------

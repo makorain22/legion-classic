@@ -13,22 +13,53 @@ namespace slave {
 namespace {
 struct Tuning {
   uint32_t thinkTicks;   // how often it thinks
-  int waveSize;          // first attack wave
-  int waveGrowth;        // added per wave
+  int waveSize;          // strength of the first attack (a man counts 1, a vehicle 4)
+  int waveGrowth;        // added per attack
   uint32_t waveTimeout;  // ticks: attack with what it has after this long
   int bunkers, atGuns, towers;
   int refineries, barracks, factories;
-  int trucksPerRefinery;
   int32_t reserve;       // supplies kept back from army production
   int engineers;         // kept at home to repair
+  int guard;             // men in the home guard
+  int maxYards;          // construction yards it will run
+  int trenchPieces;      // trench line across the approach
 };
 const Tuning kTuning[3] = {
-    {45, 18, 6, 15 * 360, 1, 0, 0, 1, 1, 1, 1, 1500, 0},  // easy
-    {20, 30, 9, 15 * 240, 2, 1, 1, 2, 1, 1, 2, 600, 1},  // normal
-    {10, 42, 12, 15 * 180, 3, 2, 1, 3, 2, 2, 2, 300, 2},  // hard
+    {45, 24, 6, 15 * 360, 1, 0, 0, 2, 1, 1, 1500, 0, 5, 1, 0},   // easy
+    {20, 36, 9, 15 * 240, 2, 1, 1, 3, 1, 1, 600, 1, 8, 2, 5},    // normal
+    {10, 48, 12, 15 * 180, 3, 2, 2, 5, 2, 2, 300, 2, 12, 3, 9},  // hard
 };
 
+// How each side fights.
+struct Doctrine {
+  int infantryShare;  // percent of army orders that are infantry
+  int waveScale;      // percent: attack size
+  bool stream;        // reinforcements join an attack under way
+  int fortify;        // 0..3: how much it digs in
+  int raidSize;       // vehicles in a raiding party
+  int regroupLoss;    // percent of the launch strength left when it falls back
+};
+Doctrine doctrineFor(const std::string& faction) {
+  if (faction == "rus") return {65, 120, true, 1, 4, 30};  // mass, momentum, artillery
+  return {50, 130, false, 3, 4, 30};  // quality, combined arms, fortification
+}
+// Preferences within the roster, on top of each unit's aiWeight.
+int modelWeight(const std::string& faction, const std::string& model) {
+  if (faction == "rus") {
+    if (model == "rifleman") return 3;
+    if (model == "tank") return 3;  // T-34s in numbers
+    if (model == "artillery") return 2;
+    if (model == "heavy_tank" || model == "tank_destroyer") return 1;
+    return 1;
+  }
+  if (model == "tank" || model == "heavy_tank" || model == "tank_destroyer") return 2;
+  if (model == "mg_team" || model == "at_team" || model == "halftrack") return 2;
+  return 1;
+}
+bool fast(const std::string& model) { return model == "scoutcar" || model == "halftrack" || model == "light_tank"; }
+
 int32_t dist(Vec2i a, Vec2i b) { return static_cast<int32_t>(distance(a.x - b.x, a.y - b.y)); }
+constexpr int32_t T = LEPTONS_PER_TILE;
 }  // namespace
 
 void SkirmishAi::setPlayer(uint8_t p, bool enabled, AiDifficulty d) {
@@ -77,75 +108,52 @@ void SkirmishAi::think(Simulation& sim, uint8_t p) {
   ai.base = base;
   // Which way is the enemy? Toward the average of enemy structures (or units).
   int64_t ex = 0, ey = 0, n = 0;
-  for (uint32_t e : reg.pool<CUnit>().entities()) {
-    const CUnit& u = reg.pool<CUnit>().get(e);
-    if (sim.allied(u.owner, p) || u.owner >= MAX_PLAYERS) continue;
-    const CPosition& c = reg.pool<CPosition>().get(e);
-    ex += c.x;
-    ey += c.y;
-    ++n;
-  }
+  for (int pass = 0; pass < 2 && n == 0; ++pass)
+    for (uint32_t e : reg.pool<CUnit>().entities()) {
+      const CUnit& u = reg.pool<CUnit>().get(e);
+      if (sim.allied(u.owner, p) || u.owner >= MAX_PLAYERS) continue;
+      if (pass == 0 && !sim.types_.get(u.type).isStructure()) continue;
+      const CPosition& c = reg.pool<CPosition>().get(e);
+      ex += c.x;
+      ey += c.y;
+      ++n;
+    }
   if (n) {
     const int32_t dx = static_cast<int32_t>(ex / n - base.x), dy = static_cast<int32_t>(ey / n - base.y);
     const uint32_t len = std::max<uint32_t>(1, distance(dx, dy));
     ai.toward = {static_cast<int32_t>(static_cast<int64_t>(dx) * 256 / len), static_cast<int32_t>(static_cast<int64_t>(dy) * 256 / len)};
   }
-  ai.staging = {base.x + ai.toward.x * 9, base.y + ai.toward.y * 9};
+  ai.staging = {base.x + ai.toward.x * 8, base.y + ai.toward.y * 8};  // behind the field works
   ai.staging.x = std::clamp(ai.staging.x, 512, sim.map_.widthLeptons() - 512);
   ai.staging.y = std::clamp(ai.staging.y, 512, sim.map_.heightLeptons() - 512);
-  manageEconomy(sim, p);
-  manageArmy(sim, p);
+  const bool saving = manageEconomy(sim, p);
+  if (sim.tick_ >= ai.lastFortify + 15 * 20) {
+    ai.lastFortify = sim.tick_;
+    fortify(sim, p);
+  }
+  manageArmy(sim, p, saving);
 }
 
-// Finds a spot for a structure near the base (or toward the enemy, for
-// defences), leaving a lane around it so the base never walls itself in, and
-// keeping off oil.
-bool SkirmishAi::placeStructure(Simulation& sim, uint8_t p, int type, bool defensive) {
-  const AiPlayer& ai = players_[p];
+// Finds a spot for a structure near `want`, inside build range, leaving a lane
+// around it so the base never walls itself in.
+bool SkirmishAi::placeNear(Simulation& sim, uint8_t p, int type, Vec2i want, int radius) {
   const UnitTypeDef& d = sim.types_.get(type);
   const Map& m = sim.map_;
-  const Vec2i want = defensive ? Vec2i{ai.base.x + ai.toward.x * 8, ai.base.y + ai.toward.y * 8} : ai.base;
-  if (d.role == "depot") {
-    // Supply depots go on the nearest free supply point.
-    std::vector<std::pair<int32_t, Vec2i>> sites;
-    for (const Vec2i& sp : m.supplyPoints) sites.push_back({dist({sp.x * 256 + 128, sp.y * 256 + 128}, ai.base), sp});
-    std::sort(sites.begin(), sites.end(), [](const auto& a, const auto& b) {
-      return a.first != b.first ? a.first < b.first : (a.second.y != b.second.y ? a.second.y < b.second.y : a.second.x < b.second.x);
-    });
-    for (const auto& [score, sp] : sites) {
-      if (score > 70 * LEPTONS_PER_TILE) break;
-      for (int oy = -d.footH; oy <= 1; ++oy)
-        for (int ox = -d.footW; ox <= 1; ++ox) {
-          const Vec2i o{sp.x + ox, sp.y + oy};
-          if (!sim.canPlace(type, o)) continue;
-          Command c;
-          c.type = CommandType::PlaceBuilding;
-          c.player = p;
-          c.unitType = static_cast<uint16_t>(type);
-          c.target = {o.x * 256 + d.footW * 128, o.y * 256 + d.footH * 128};
-          sim.queueInternal(std::move(c));
-          return true;
-        }
-    }
-    return false;
-  }
   Vec2i best{-1, -1};
   int32_t bestScore = INT32_MAX;
   const int cx = want.x >> LEPTON_SHIFT, cy = want.y >> LEPTON_SHIFT;
-  for (int r = 0; r <= 16; ++r) {
+  for (int r = 0; r <= radius; ++r) {
     for (int oy = -r; oy <= r; ++oy)
       for (int ox = -r; ox <= r; ++ox) {
         if (std::max(std::abs(ox), std::abs(oy)) != r) continue;
         const Vec2i o{cx + ox - d.footW / 2, cy + oy - d.footH / 2};
         if (!sim.canPlace(type, o) || !sim.inBuildRange(p, type, o)) continue;
-        // A one-tile lane all round, and no oil underneath.
         bool clear = true;
         for (int y = o.y - 1; y <= o.y + d.footH && clear; ++y)
           for (int x = o.x - 1; x <= o.x + d.footW && clear; ++x) {
             if (!m.inBounds(x, y)) continue;
             const bool inside = x >= o.x && y >= o.y && x < o.x + d.footW && y < o.y + d.footH;
             if ((m.block(x, y) & Map::kOccupied) && !inside) clear = false;
-            if (inside && m.oil(x, y)) clear = false;
           }
         if (!clear) continue;
         const Vec2i c{o.x * 256 + d.footW * 128, o.y * 256 + d.footH * 128};
@@ -155,7 +163,7 @@ bool SkirmishAi::placeStructure(Simulation& sim, uint8_t p, int type, bool defen
           best = c;
         }
       }
-    if (best.x >= 0 && r >= 3) break;  // good enough: nearest ring with a spot
+    if (best.x >= 0 && r >= 2) break;  // good enough: nearest ring with a spot
   }
   if (best.x < 0) return false;
   Command c;
@@ -167,7 +175,67 @@ bool SkirmishAi::placeStructure(Simulation& sim, uint8_t p, int type, bool defen
   return true;
 }
 
-void SkirmishAi::manageEconomy(Simulation& sim, uint8_t p) {
+bool SkirmishAi::placeStructure(Simulation& sim, uint8_t p, int type, bool defensive) {
+  const AiPlayer& ai = players_[p];
+  const UnitTypeDef& d = sim.types_.get(type);
+  const Map& m = sim.map_;
+  if (d.role == "depot") {
+    // Supply depots: the nearest free supply point, reaching further as the
+    // game goes on - from any of our yards.
+    std::vector<Vec2i> yards;
+    for (uint32_t e : sim.reg_.pool<CStructure>().entities()) {
+      const CUnit& u = sim.reg_.pool<CUnit>().get(e);
+      if (u.owner == p && sim.types_.get(u.type).role == "yard")
+        yards.push_back({sim.reg_.pool<CPosition>().get(e).x, sim.reg_.pool<CPosition>().get(e).y});
+    }
+    if (yards.empty()) yards.push_back(ai.base);
+    const int32_t reach = std::min<int32_t>(30 * T + static_cast<int32_t>(sim.tick_ / 90) * T, 400 * T);
+    std::vector<std::pair<int32_t, Vec2i>> sites;
+    for (const Vec2i& sp : m.supplyPoints) {
+      int32_t best = INT32_MAX;
+      for (const Vec2i& y : yards) best = std::min(best, dist({sp.x * 256 + 128, sp.y * 256 + 128}, y));
+      sites.push_back({best, sp});
+    }
+    std::sort(sites.begin(), sites.end(), [](const auto& a, const auto& b) {
+      return a.first != b.first ? a.first < b.first : (a.second.y != b.second.y ? a.second.y < b.second.y : a.second.x < b.second.x);
+    });
+    for (const auto& [score, sp] : sites) {
+      if (score > reach) break;
+      // Centred in the compound first.
+      for (int ring = 0; ring <= 2; ++ring)
+        for (int oy = -d.footH; oy <= 1; ++oy)
+          for (int ox = -d.footW; ox <= 1; ++ox) {
+            if (std::max(std::abs(ox + d.footW / 2), std::abs(oy + d.footH / 2)) != ring) continue;
+            const Vec2i o{sp.x + ox, sp.y + oy};
+            if (!sim.canPlace(type, o)) continue;
+            Command c;
+            c.type = CommandType::PlaceBuilding;
+            c.player = p;
+            c.unitType = static_cast<uint16_t>(type);
+            c.target = {o.x * 256 + d.footW * 128, o.y * 256 + d.footH * 128};
+            sim.queueInternal(std::move(c));
+            return true;
+          }
+    }
+    return false;
+  }
+  // Production and power in rows behind the headquarters; defences out front.
+  const Vec2i side{-ai.toward.y, ai.toward.x};
+  Vec2i want = ai.base;
+  if (defensive) {
+    // Spread along the front: left, right, centre in turn.
+    const int slot = static_cast<int>(sim.tick_ / 300 % 3) - 1;
+    want = {ai.base.x + ai.toward.x * 10 + side.x * slot * 6, ai.base.y + ai.toward.y * 10 + side.y * slot * 6};
+  } else if (d.role == "power") {
+    want = {ai.base.x - ai.toward.x * 6 - side.x * 4, ai.base.y - ai.toward.y * 6 - side.y * 4};
+  } else if (d.role == "barracks" || d.role == "factory") {
+    want = {ai.base.x + ai.toward.x * 4 + side.x * (d.role == "factory" ? 6 : -6),
+            ai.base.y + ai.toward.y * 4 + side.y * (d.role == "factory" ? 6 : -6)};
+  }
+  return placeNear(sim, p, type, want, 16);
+}
+
+bool SkirmishAi::manageEconomy(Simulation& sim, uint8_t p) {
   AiPlayer& ai = players_[p];
   const Tuning& tune = kTuning[static_cast<int>(ai.difficulty)];
   Registry& reg = sim.reg_;
@@ -176,9 +244,9 @@ void SkirmishAi::manageEconomy(Simulation& sim, uint8_t p) {
 
   // What do we have?
   std::string faction;
-  int roleCount[6] = {};  // yard, power, refinery, barracks, factory, other
-  int bunkers = 0, atGuns = 0, towers = 0, trucks = 0, mcvs = 0;
-  std::vector<Entity> idleTrucks, mcvList;
+  int roleCount[6] = {};  // yard, power, depot, barracks, factory, other
+  int bunkers = 0, atGuns = 0, towers = 0, nests = 0, guns = 0;
+  std::vector<Entity> mcvList;
   for (uint32_t e : reg.pool<CUnit>().entities()) {
     const CUnit& u = reg.pool<CUnit>().get(e);
     if (u.owner != p) continue;
@@ -190,11 +258,9 @@ void SkirmishAi::manageEconomy(Simulation& sim, uint8_t p) {
       if (d.model == "bunker") ++bunkers;
       if (d.model == "atgun") ++atGuns;
       if (d.model == "tower") ++towers;
-    } else if (d.capacity > 0) {
-      ++trucks;
-      if (reg.pool<COrder>().get(e).type == OrderType::Idle) idleTrucks.push_back(reg.handle(e));
+      if (d.model == "mg_nest") ++nests;
+      if (d.model == "howitzer_pit") ++guns;
     } else if (d.deploysTo >= 0) {
-      ++mcvs;
       mcvList.push_back(reg.handle(e));
     }
   }
@@ -214,27 +280,39 @@ void SkirmishAi::manageEconomy(Simulation& sim, uint8_t p) {
     return true;
   };
 
-  // Put idle trucks back to work.
-  if (!idleTrucks.empty()) {
-    Command c;
-    c.type = CommandType::Harvest;
-    c.player = p;
-    c.units = idleTrucks;
-    c.target = {-1, -1};
-    sim.queueInternal(std::move(c));
-  }
-  // No yard: unfold a construction truck, or build one.
-  if (roleCount[0] == 0) {
-    if (!mcvList.empty()) {
+  // Construction trucks: unfold where we have no yard, or drive out to a new
+  // site and unfold there.
+  if (!mcvList.empty()) {
+    if (roleCount[0] == 0 || ai.expandTo.x < 0) {
       Command c;
       c.type = CommandType::Deploy;
       c.player = p;
       c.units = mcvList;
       sim.queueInternal(std::move(c));
-    } else if (roleCount[4] > 0 && ps.queues[static_cast<size_t>(Queue::Vehicles)].items.empty()) {
-      produce(typeOf("mcv"));
+    } else {
+      for (Entity m : mcvList) {
+        const CPosition& mp = reg.get<CPosition>(m);
+        if (dist({mp.x, mp.y}, ai.expandTo) < 4 * T) {
+          Command c;
+          c.type = CommandType::Deploy;
+          c.player = p;
+          c.units = {m};
+          sim.queueInternal(std::move(c));
+          ai.expandTo = {-1, -1};
+        } else if (reg.get<COrder>(m).type == OrderType::Idle) {
+          Command c;
+          c.type = CommandType::Move;
+          c.player = p;
+          c.units = {m};
+          c.target = ai.expandTo;
+          sim.queueInternal(std::move(c));
+        }
+      }
     }
-    return;
+  }
+  if (roleCount[0] == 0) {
+    if (mcvList.empty() && roleCount[4] > 0 && ps.queues[static_cast<size_t>(Queue::Vehicles)].items.empty()) produce(typeOf("mcv"));
+    return true;
   }
 
   // Place anything that is ready.
@@ -242,7 +320,30 @@ void SkirmishAi::manageEconomy(Simulation& sim, uint8_t p) {
     const ProductionQueue& pq = ps.queues[static_cast<size_t>(q)];
     if (pq.ready && !pq.items.empty()) {
       const int t = pq.items.front();
-      if (!placeStructure(sim, p, t, q == Queue::Defenses)) {
+      bool placed = false;
+      if (q == Queue::Defenses && types.get(t).model == "mg_nest") {
+        // MG nests guard our far-flung depots first.
+        for (uint32_t e : reg.pool<CStructure>().entities()) {
+          const CUnit& u = reg.pool<CUnit>().get(e);
+          if (u.owner != p || types.get(u.type).role != "depot") continue;
+          const CPosition& c = reg.pool<CPosition>().get(e);
+          if (dist({c.x, c.y}, ai.base) < 22 * T) continue;
+          bool guarded = false;
+          for (uint32_t o : reg.pool<CStructure>().entities()) {
+            const CUnit& ou = reg.pool<CUnit>().get(o);
+            if (ou.owner != p || !types.get(ou.type).weapons.size()) continue;
+            const CPosition& oc = reg.pool<CPosition>().get(o);
+            if (dist({oc.x, oc.y}, {c.x, c.y}) < 7 * T) guarded = true;
+          }
+          if (guarded) continue;
+          const Vec2i want{c.x + ai.toward.x * 4, c.y + ai.toward.y * 4};
+          if (placeNear(sim, p, t, want, 6)) {
+            placed = true;
+            break;
+          }
+        }
+      }
+      if (!placed && !placeStructure(sim, p, t, q == Queue::Defenses)) {
         // Nowhere to put it: give it up so the line isn't blocked forever.
         Command c;
         c.type = CommandType::Produce;
@@ -254,8 +355,10 @@ void SkirmishAi::manageEconomy(Simulation& sim, uint8_t p) {
     }
   }
 
-  // Next structure: power first whenever we run short, then the build order.
+  // Next structure: power first whenever we run short, then the build order;
+  // more depots as the game goes on.
   const ProductionQueue& bq = ps.queues[static_cast<size_t>(Queue::Buildings)];
+  const int minutes = static_cast<int>(sim.tick_ / (TICKS_PER_SECOND * 60));
   if (bq.items.empty()) {
     const int powerType = typeOf("power");
     const int margin = ps.powerMade - ps.powerUsed;
@@ -264,32 +367,110 @@ void SkirmishAi::manageEconomy(Simulation& sim, uint8_t p) {
     else if (roleCount[2] < 1) pick = typeOf("refinery");
     else if (roleCount[3] < 1) pick = typeOf("barracks");
     else if (roleCount[4] < 1) pick = typeOf("factory");
-    else if (roleCount[2] < tune.refineries + 1 && ps.credits > 1200) pick = typeOf("refinery");
+    else if (roleCount[2] < std::min(tune.refineries + minutes / 3, 10)) pick = typeOf("refinery");
     else if (roleCount[3] < tune.barracks && ps.credits > 1200) pick = typeOf("barracks");
     else if (roleCount[4] < tune.factories && ps.credits > 2500) pick = typeOf("factory");
     if (pick >= 0) produce(pick);
   }
-  const ProductionQueue& dq = ps.queues[static_cast<size_t>(Queue::Defenses)];
-  if (dq.items.empty() && ps.credits > 900) {
-    if (bunkers < tune.bunkers) produce(typeOf("bunker"));
-    else if (atGuns < tune.atGuns) produce(typeOf("atgun"));
-    else if (towers < tune.towers) produce(typeOf("tower"));
+  // A second (and third) yard further out, once the base is up.
+  const int mcvType = typeOf("mcv");
+  const auto& vItems = ps.queues[static_cast<size_t>(Queue::Vehicles)].items;
+  const bool mcvQueued = std::find(vItems.begin(), vItems.end(), mcvType) != vItems.end();
+  if (roleCount[0] < tune.maxYards && roleCount[4] > 0 && roleCount[2] >= 3 && mcvList.empty() && !mcvQueued && minutes >= 6) {
+    // Somewhere with free supply points, away from our base, not toward the enemy.
+    Vec2i best{-1, -1};
+    int32_t bestScore = INT32_MIN;
+    for (const Vec2i& sp : sim.map_.supplyPoints) {
+      const Vec2i c{sp.x * 256 + 128, sp.y * 256 + 128};
+      bool taken = false;
+      for (size_t i = 0; i < sim.map_.supplyPoints.size(); ++i)
+        if (sim.map_.supplyPoints[i] == sp && sim.depotOn(static_cast<int>(i)).valid()) taken = true;
+      const int32_t d = dist(c, ai.base);
+      if (taken || d < 28 * T || d > 70 * T) continue;
+      // Ahead is risky: score sideways and rearward sites higher.
+      const int64_t ahead = (static_cast<int64_t>(c.x - ai.base.x) * ai.toward.x + static_cast<int64_t>(c.y - ai.base.y) * ai.toward.y) / 256;
+      const int32_t score = -static_cast<int32_t>(ahead) - d / 4;
+      if (score > bestScore) {
+        bestScore = score;
+        best = c;
+      }
+    }
+    if (best.x >= 0 && produce(mcvType)) ai.expandTo = {best.x - ai.toward.x * 3, best.y - ai.toward.y * 3};
   }
-  // Trucks: a couple per depot.
-  const ProductionQueue& vq = ps.queues[static_cast<size_t>(Queue::Vehicles)];
-  (void)vq;
-  (void)trucks;
-  (void)mcvs;
+  const ProductionQueue& dq = ps.queues[static_cast<size_t>(Queue::Defenses)];
+  const Doctrine doc = doctrineFor(faction);
+  if (dq.items.empty() && ps.credits > 700) {
+    const int farDepots = std::max(0, roleCount[2] - 1);
+    if (nests < std::min(farDepots, 6) + (doc.fortify >= 2 ? 2 : 1)) produce(typeOf("mg_nest"));
+    else if (bunkers < tune.bunkers) produce(typeOf("bunker"));
+    else if (atGuns < tune.atGuns + (doc.fortify >= 3 ? 1 : 0)) produce(typeOf("atgun"));
+    else if (towers < tune.towers) produce(typeOf("tower"));
+    else if (guns < (ai.difficulty == AiDifficulty::Hard ? 1 : 0) && ps.credits > 2500)
+      produce(typeOf("howitzer_pit"));
+  }
+  // Expansion comes first: while a depot, a yard or power is on order, the
+  // army holds back new orders so the work isn't starved of supplies.
+  return (!bq.items.empty() && !bq.ready) || mcvQueued;
 }
 
-void SkirmishAi::manageArmy(Simulation& sim, uint8_t p) {
+// Field works across the approach: a trench line for the home guard, wire in
+// front of it, tank traps on the way in.
+void SkirmishAi::fortify(Simulation& sim, uint8_t p) {
+  AiPlayer& ai = players_[p];
+  const Tuning& tune = kTuning[static_cast<int>(ai.difficulty)];
+  Registry& reg = sim.reg_;
+  const UnitTypeRegistry& types = sim.types_;
+  std::string faction;
+  int trenches = 0, wire = 0, traps = 0;
+  for (uint32_t e : reg.pool<CUnit>().entities()) {
+    const CUnit& u = reg.pool<CUnit>().get(e);
+    if (u.owner != p) continue;
+    const UnitTypeDef& d = types.get(u.type);
+    if (faction.empty()) faction = d.faction;
+    trenches += d.model == "trench";
+    wire += d.model == "wire";
+    traps += d.model == "traps";
+  }
+  const Doctrine doc = doctrineFor(faction);
+  if (doc.fortify == 0 || tune.trenchPieces == 0 || sim.players_[p].credits < 400) return;
+  auto typeOf = [&](const char* model) {
+    for (int t = 0; t < static_cast<int>(types.size()); ++t)
+      if (types.get(t).faction == faction && types.get(t).model == model) return t;
+    return -1;
+  };
+  const Vec2i side{-ai.toward.y, ai.toward.x};
+  // A line `n` pieces long across the approach, `ahead` tiles out.
+  auto line = [&](const char* model, int ahead, int n, int gap) {
+    const int t = typeOf(model);
+    if (t < 0 || !sim.canProduce(p, t)) return false;
+    Command c;
+    c.type = CommandType::PlaceWalls;
+    c.player = p;
+    c.unitType = static_cast<uint16_t>(t);
+    for (int i = -n / 2; i <= n / 2; ++i) {
+      if (gap > 0 && std::abs(i) < gap) continue;  // a way through
+      const Vec2i at{ai.base.x + ai.toward.x * ahead + side.x * i, ai.base.y + ai.toward.y * ahead + side.y * i};
+      const Vec2i o = sim.footprintOrigin(t, at);
+      if (!sim.canPlace(t, o)) continue;
+      c.spawns.push_back({static_cast<uint16_t>(t), p, {o.x * 256 + 128, o.y * 256 + 128}, 0, -1});
+    }
+    if (c.spawns.empty()) return false;  // already built (or no room): on to the next line
+    sim.queueInternal(std::move(c));
+    return true;
+  };
+  const int pieces = tune.trenchPieces + (doc.fortify >= 3 ? 4 : 0);
+  if (trenches < pieces && line("trench", 11, pieces + 1, 0)) return;
+  if (doc.fortify >= 2 && wire < pieces && line("wire", 13, pieces + 4, 3)) return;
+  if (doc.fortify >= 3 && traps < 6) line("traps", 15, 12, 4);
+}
+
+void SkirmishAi::manageArmy(Simulation& sim, uint8_t p, bool saving) {
   AiPlayer& ai = players_[p];
   const Tuning& tune = kTuning[static_cast<int>(ai.difficulty)];
   Registry& reg = sim.reg_;
   const PlayerState& ps = sim.players_[p];
   const UnitTypeRegistry& types = sim.types_;
 
-  // Train a mixed army when there is money to spare.
   std::string faction;
   std::vector<Entity> army, producers;
   int engineers = 0;
@@ -303,6 +484,43 @@ void SkirmishAi::manageArmy(Simulation& sim, uint8_t p) {
     if (d.isStructure() || d.capacity > 0 || d.deploysTo >= 0 || d.weapons.empty()) continue;
     army.push_back(reg.handle(e));
   }
+  const Doctrine doc = doctrineFor(faction);
+  auto modelOf = [&](Entity e) -> const std::string& { return types.get(reg.get<CUnit>(e).type).model; };
+  auto isInfantry = [&](Entity e) { return types.get(reg.get<CUnit>(e).type).infantry(); };
+  auto strength = [&](const std::vector<Entity>& units) {
+    int32_t s = 0;
+    for (Entity e : units) s += isInfantry(e) ? 1 : 4;
+    return s;
+  };
+  auto centreOf = [&](const std::vector<Entity>& units) {
+    int64_t x = 0, y = 0;
+    for (Entity e : units) {
+      x += reg.get<CPosition>(e).x;
+      y += reg.get<CPosition>(e).y;
+    }
+    const int64_t n = std::max<int64_t>(1, static_cast<int64_t>(units.size()));
+    return Vec2i{static_cast<int32_t>(x / n), static_cast<int32_t>(y / n)};
+  };
+  auto order = [&](CommandType type, const std::vector<Entity>& units, Vec2i target, Formation f = Formation::Box) {
+    if (units.empty()) return;
+    Command c;
+    c.type = type;
+    c.player = p;
+    c.units = units;
+    c.target = target;
+    c.formation = f;
+    sim.queueInternal(std::move(c));
+  };
+  auto bind = [&](const std::vector<Entity>& units) {
+    if (units.size() < 5) return;
+    Command c;
+    c.type = CommandType::BindGroup;
+    c.player = p;
+    c.units = units;
+    sim.queueInternal(std::move(c));
+  };
+
+  // --- Production, to the side's doctrine --------------------------------------
   if (ps.credits > tune.reserve) {
     std::vector<int> infantry, vehicles;
     for (int t = 0; t < static_cast<int>(types.size()); ++t) {
@@ -312,55 +530,50 @@ void SkirmishAi::manageArmy(Simulation& sim, uint8_t p) {
     }
     const ProductionQueue& iq = ps.queues[static_cast<size_t>(Queue::Infantry)];
     const ProductionQueue& vq = ps.queues[static_cast<size_t>(Queue::Vehicles)];
-    // Pick deterministically, weighted by each type's aiWeight.
+    // Short of raiders: favour the fast vehicles for a while.
+    int fastCount = 0;
+    for (Entity e : army) fastCount += fast(modelOf(e));
+    const int fastBoost = fastCount < doc.raidSize ? 3 : 1;
+    auto weightOf = [&](int t) {
+      const UnitTypeDef& d = types.get(t);
+      return std::max(0, d.aiWeight) * modelWeight(faction, d.model) * (fast(d.model) ? fastBoost : 1);
+    };
     auto weighted = [&](const std::vector<int>& list, uint32_t salt) {
       int32_t total = 0;
-      for (int t : list) total += std::max(0, types.get(t).aiWeight);
+      for (int t : list) total += weightOf(t);
       if (total <= 0) return -1;
       int32_t r = static_cast<int32_t>(hash32(sim.tick_ * 2654435761u + p * 97u + salt) % static_cast<uint32_t>(total));
       for (int t : list) {
-        r -= std::max(0, types.get(t).aiWeight);
+        r -= weightOf(t);
         if (r < 0) return t;
       }
       return list.back();
     };
-    if (!infantry.empty() && iq.items.size() < 10) {
+    const bool wantInfantry = static_cast<int>(hash32(sim.tick_ * 7919u + p) % 100) < doc.infantryShare;
+    auto produce = [&](int t, int amount) {
+      Command c;
+      c.type = CommandType::Produce;
+      c.player = p;
+      c.unitType = static_cast<uint16_t>(t);
+      c.amount = amount;
+      sim.queueInternal(std::move(c));
+    };
+    if (!infantry.empty() && iq.items.size() < (saving ? 3u : wantInfantry ? 15u : 5u)) {
       const int t = weighted(infantry, 1);
-      if (t >= 0) {
-        Command c;
-        c.type = CommandType::Produce;
-        c.player = p;
-        c.unitType = static_cast<uint16_t>(t);
-        c.amount = 5;  // infantry come as fireteams
-        sim.queueInternal(std::move(c));
-      }
+      if (t >= 0) produce(t, 5);  // infantry come as fireteams
     }
-    if (!vehicles.empty() && vq.items.size() < 2) {
+    if (!vehicles.empty() && !saving && vq.items.size() < (wantInfantry ? 1u : 3u)) {
       const int t = weighted(vehicles, 2);
-      if (t >= 0) {
-        Command c;
-        c.type = CommandType::Produce;
-        c.player = p;
-        c.unitType = static_cast<uint16_t>(t);
-        c.amount = 1;
-        sim.queueInternal(std::move(c));
-      }
+      if (t >= 0) produce(t, 1);
     }
-    // A couple of engineers to patch up the base.
-    if (engineers < tune.engineers && iq.items.empty()) {
+    if (engineers < tune.engineers && iq.items.empty())
       for (int t = 0; t < static_cast<int>(types.size()); ++t) {
         const UnitTypeDef& d = types.get(t);
         if (d.faction == faction && d.repair > 0 && sim.canProduce(p, t)) {
-          Command c;
-          c.type = CommandType::Produce;
-          c.player = p;
-          c.unitType = static_cast<uint16_t>(t);
-          c.amount = 1;
-          sim.queueInternal(std::move(c));
+          produce(t, 1);
           break;
         }
       }
-    }
   }
   // New troops gather at the staging point.
   for (Entity e : producers) {
@@ -375,54 +588,217 @@ void SkirmishAi::manageArmy(Simulation& sim, uint8_t p) {
     }
   }
 
-  // Forget fallen wave members.
-  std::erase_if(ai.wave, [&](Entity e) { return !reg.alive(e); });
-  auto inWave = [&](Entity e) { return std::find(ai.wave.begin(), ai.wave.end(), e) != ai.wave.end(); };
+  // --- Who is where ----------------------------------------------------------------
+  auto alive = [&](Entity e) { return reg.alive(e) && reg.has<CUnit>(e) && reg.get<CUnit>(e).owner == p; };
+  std::erase_if(ai.wave, [&](Entity e) { return !alive(e); });
+  std::erase_if(ai.raiders, [&](Entity e) { return !alive(e); });
+  std::erase_if(ai.guard, [&](Entity e) { return !alive(e); });
+  auto in = [](const std::vector<Entity>& v, Entity e) { return std::find(v.begin(), v.end(), e) != v.end(); };
 
-  // Defend: enemies near our structures pull in everyone not attacking.
+  // Damaged vehicles head home for repairs (engineers patch them up there).
+  std::vector<Entity> limping;
+  for (Entity e : army) {
+    if (isInfantry(e)) continue;
+    const CUnit& u = reg.get<CUnit>(e);
+    if (u.health * 100 < types.get(u.type).maxHealth * 35 && dist({reg.get<CPosition>(e).x, reg.get<CPosition>(e).y}, ai.base) > 10 * T) {
+      limping.push_back(e);
+      std::erase(ai.wave, e);
+      std::erase(ai.raiders, e);
+    }
+  }
+  if (!limping.empty() && sim.tick_ % (TICKS_PER_SECOND * 6) < tune.thinkTicks) order(CommandType::Move, limping, ai.base);
+
+  std::vector<Entity> home;
+  for (Entity e : army)
+    if (!in(ai.wave, e) && !in(ai.raiders, e) && !in(ai.guard, e) && !in(limping, e)) home.push_back(e);
+
+  // The home guard: infantry kept back to man the base's trenches and bunkers.
+  for (Entity e : home)
+    if (static_cast<int>(ai.guard.size()) < tune.guard * (2 + std::min(doc.fortify, 2)) / 4 && isInfantry(e) && modelOf(e) != "sniper") ai.guard.push_back(e);
+  std::erase_if(home, [&](Entity e) { return in(ai.guard, e); });
+  {
+    // Idle guards go into the nearest trench or bunker with room.
+    std::vector<Entity> idle;
+    for (Entity e : ai.guard)
+      if (!reg.has<CGarrisoned>(e) && reg.get<COrder>(e).type == OrderType::Idle) idle.push_back(e);
+    if (!idle.empty()) {
+      Entity best;
+      int32_t bestD = INT32_MAX;
+      for (uint32_t s : reg.pool<CStructure>().entities()) {
+        const CUnit& su = reg.pool<CUnit>().get(s);
+        if (su.owner != p) continue;
+        const UnitTypeDef& sd = types.get(su.type);
+        if (sd.garrison <= 0) continue;
+        const CGarrison* g = reg.pool<CGarrison>().tryGet(s);
+        if (g && static_cast<int32_t>(g->occupants.size()) >= sd.garrison) continue;
+        const CPosition& sp = reg.pool<CPosition>().get(s);
+        const int32_t d = dist({sp.x, sp.y}, ai.staging);
+        if (d < bestD && dist({sp.x, sp.y}, ai.base) < 24 * T) {
+          bestD = d;
+          best = reg.handle(s);
+        }
+      }
+      if (best.valid()) {
+        Command c;
+        c.type = CommandType::Occupy;
+        c.player = p;
+        c.units = idle;
+        c.targetUnit = best;
+        sim.queueInternal(std::move(c));
+      }
+    }
+  }
+
+  // --- Defence: enemies near any of our structures ---------------------------------
   Vec2i threat{-1, -1};
+  int threatSize = 0;
   for (uint32_t e : reg.pool<CUnit>().entities()) {
     const CUnit& u = reg.pool<CUnit>().get(e);
     if (u.owner >= MAX_PLAYERS || sim.allied(u.owner, p) || types.get(u.type).isStructure()) continue;
     const CPosition& c = reg.pool<CPosition>().get(e);
     if (!sim.canSee(p, c.x, c.y)) continue;
-    if (dist({c.x, c.y}, ai.base) < 18 * LEPTONS_PER_TILE) {
-      threat = {c.x, c.y};
-      break;
+    if (dist({c.x, c.y}, ai.base) < 20 * T) {
+      if (threat.x < 0) threat = {c.x, c.y};
+      threatSize += types.get(u.type).infantry() ? 1 : 4;
     }
   }
-  std::vector<Entity> home;
-  for (Entity e : army)
-    if (!inWave(e)) home.push_back(e);
-  if (threat.x >= 0 && !home.empty()) {
-    Command c;
-    c.type = CommandType::AttackMove;
-    c.player = p;
-    c.target = threat;
+  if (threat.x >= 0) {
+    std::vector<Entity> responders;
     for (Entity e : home)
-      if (reg.get<COrder>(e).type == OrderType::Idle || reg.get<COrder>(e).type == OrderType::Move) c.units.push_back(e);
-    if (!c.units.empty()) sim.queueInternal(std::move(c));
-    return;
+      if (reg.get<COrder>(e).type == OrderType::Idle || reg.get<COrder>(e).type == OrderType::Move) responders.push_back(e);
+    // A real attack on the base brings the main force home if it isn't committed.
+    if (threatSize > strength(home) && ai.phase != 1)
+      for (Entity e : ai.wave) responders.push_back(e);
+    order(CommandType::AttackMove, responders, threat);
+    if (threatSize > strength(home) && ai.phase != 1) {
+      ai.wave.clear();
+      ai.phase = 0;
+    }
   }
 
-  // Attack: once enough troops have gathered (or it's been long enough).
-  const int needed = tune.waveSize + tune.waveGrowth * static_cast<int>(ai.waves);
-  const bool due = sim.tick_ > ai.lastWaveTick + tune.waveTimeout && home.size() >= static_cast<size_t>(needed / 2);
-  if (ai.wave.empty() && (static_cast<int>(home.size()) >= needed || due)) {
-    ai.wave = home;
-    ++ai.waves;
-    ai.lastWaveTick = sim.tick_;
-    ai.waveTarget = {-1, -1};
-  }
-  if (!ai.wave.empty()) {
-    // Target: the nearest enemy structure to the wave's centre; failing that, the nearest enemy unit.
-    int64_t wx = 0, wy = 0;
-    for (Entity e : ai.wave) {
-      wx += reg.get<CPosition>(e).x;
-      wy += reg.get<CPosition>(e).y;
+  // --- Raiders: fast vehicles hunting depots and stragglers ---------------------------
+  if (ai.raiders.empty() && sim.tick_ >= ai.raidReady && threat.x < 0) {
+    std::vector<Entity> pick;
+    for (Entity e : home)
+      if (!isInfantry(e) && fast(modelOf(e)) && static_cast<int>(pick.size()) < doc.raidSize) pick.push_back(e);
+    if (static_cast<int>(pick.size()) >= std::max(2, doc.raidSize - 1)) {
+      ai.raiders = pick;
+      ai.raidTarget = {-1, -1};
+      bind(pick);
+      std::erase_if(home, [&](Entity e) { return in(ai.raiders, e); });
     }
-    const Vec2i centre{static_cast<int32_t>(wx / static_cast<int64_t>(ai.wave.size())),
-                       static_cast<int32_t>(wy / static_cast<int64_t>(ai.wave.size()))};
+  }
+  if (!ai.raiders.empty()) {
+    const Vec2i rc = centreOf(ai.raiders);
+    // Target: the enemy depot (else any structure) with the fewest defenders near it.
+    Vec2i best{-1, -1};
+    int32_t bestScore = INT32_MAX;
+    for (uint32_t e : reg.pool<CStructure>().entities()) {
+      const CUnit& u = reg.pool<CUnit>().get(e);
+      if (u.owner >= MAX_PLAYERS || sim.allied(u.owner, p) || u.health <= 0) continue;
+      const UnitTypeDef& d = types.get(u.type);
+      if (d.category == UnitCategory::Fortification) continue;
+      const CPosition& c = reg.pool<CPosition>().get(e);
+      int defenders = 0;
+      for (uint32_t o : reg.pool<CUnit>().entities()) {
+        const CUnit& ou = reg.pool<CUnit>().get(o);
+        if (ou.owner != u.owner || types.get(ou.type).weapons.empty()) continue;
+        const CPosition& oc = reg.pool<CPosition>().get(o);
+        if (std::abs(oc.x - c.x) < 9 * T && std::abs(oc.y - c.y) < 9 * T) defenders += types.get(ou.type).isStructure() ? 6 : types.get(ou.type).infantry() ? 1 : 4;
+      }
+      const int32_t score = defenders * 8 * T + dist({c.x, c.y}, rc) / 2 - (d.role == "depot" ? 30 * T : 0);
+      if (score < bestScore) {
+        bestScore = score;
+        best = {c.x, c.y};
+      }
+    }
+    const bool spent = strength(ai.raiders) * 2 < doc.raidSize * 4;  // half gone: home
+    if (best.x < 0 || spent) {
+      order(CommandType::Move, ai.raiders, ai.staging);
+      ai.raiders.clear();
+      ai.raidReady = sim.tick_ + TICKS_PER_SECOND * 50;
+    } else {
+      bool idle = false;
+      for (Entity e : ai.raiders) idle = idle || reg.get<COrder>(e).type == OrderType::Idle;
+      if (dist(best, ai.raidTarget) > 3 * T || idle) {
+        order(CommandType::AttackMove, ai.raiders, best, Formation::Column);
+        ai.raidTarget = best;
+      }
+    }
+  }
+
+  // --- The main force ----------------------------------------------------------------
+  const int32_t needed = (tune.waveSize + tune.waveGrowth * static_cast<int>(std::min<uint32_t>(ai.waves, 8))) * doc.waveScale / 100;
+  // Fast vehicles stay back for raiding.
+  std::erase_if(home, [&](Entity e) { return fast(modelOf(e)); });
+  if (ai.phase == 0) {
+    // Gathering. Attack once strong enough (or it's been long enough).
+    const bool due = sim.tick_ > ai.lastWaveTick + tune.waveTimeout && strength(home) >= needed / 2;
+    if ((strength(home) >= needed || due) && threat.x < 0 && !home.empty()) {
+      ai.wave = home;
+      home.clear();
+      ++ai.waves;
+      ai.lastWaveTick = sim.tick_;
+      ai.phaseTick = sim.tick_;
+      ai.phase = 1;
+      ai.launchStrength = strength(ai.wave);
+      ai.waveTarget = {-1, -1};
+      bind(ai.wave);  // into a battle group
+      // Every other attack goes in by a flank.
+      const Vec2i c = centreOf(ai.wave);
+      const Vec2i side{-ai.toward.y, ai.toward.x};
+      const int s = (ai.waves % 2 == 0) ? 1 : -1;
+      ai.flank = (ai.waves % 3 != 1) ? Vec2i{c.x + ai.toward.x * 16 + side.x * s * 14, c.y + ai.toward.y * 16 + side.y * s * 14}
+                                     : Vec2i{-1, -1};
+      if (ai.flank.x >= 0) {
+        ai.flank.x = std::clamp(ai.flank.x, 3 * T, sim.map_.widthLeptons() - 3 * T);
+        ai.flank.y = std::clamp(ai.flank.y, 3 * T, sim.map_.heightLeptons() - 3 * T);
+      }
+    }
+  }
+  if (ai.phase != 0 && ai.wave.empty()) ai.phase = 0;
+  if (ai.phase == 1 || ai.phase == 2) {
+    // Fresh troops: the Soviets feed them into the attack as they arrive; the
+    // Germans send them on to the regrouping point, or forward as a bound
+    // second echelon once there are enough of them.
+    const int32_t echelon = doc.stream || ai.phase == 2 ? 5 : std::max(12, needed / 3);
+    if (!home.empty() && strength(home) >= echelon) {
+      std::vector<Entity> fresh;
+      for (Entity e : home)
+        if (reg.get<COrder>(e).type == OrderType::Idle) fresh.push_back(e);
+      if (!fresh.empty()) {
+        if (!doc.stream) bind(fresh);
+        order(CommandType::AttackMove, fresh, ai.phase == 2 && ai.forward.x >= 0 ? ai.forward : centreOf(ai.wave), Formation::Wedge);
+        for (Entity e : fresh) ai.wave.push_back(e);
+      }
+    }
+  }
+  if (ai.phase == 1 && !ai.wave.empty()) {
+    const Vec2i centre = centreOf(ai.wave);
+    // Badly hurt: fall back a little, dig in and regroup - don't run home.
+    if (strength(ai.wave) * 100 < ai.launchStrength * doc.regroupLoss) {
+      ai.phase = 2;
+      ai.phaseTick = sim.tick_;
+      ai.forward = {centre.x - ai.toward.x * 7, centre.y - ai.toward.y * 7};
+      ai.forward.x = std::clamp(ai.forward.x, 2 * T, sim.map_.widthLeptons() - 2 * T);
+      ai.forward.y = std::clamp(ai.forward.y, 2 * T, sim.map_.heightLeptons() - 2 * T);
+      order(CommandType::Move, ai.wave, ai.forward, Formation::Line);
+      return;
+    }
+    // A flanking approach first.
+    if (ai.flank.x >= 0) {
+      if (dist(centre, ai.flank) < 5 * T || sim.tick_ > ai.phaseTick + TICKS_PER_SECOND * 50) {
+        ai.flank = {-1, -1};
+        ai.waveTarget = {-1, -1};
+      } else {
+        if (ai.waveTarget != ai.flank) {
+          order(CommandType::AttackMove, ai.wave, ai.flank, Formation::Wedge);
+          ai.waveTarget = ai.flank;
+        }
+        return;
+      }
+    }
+    // Target: the nearest enemy structure to the force; failing that, the nearest enemy unit.
     Vec2i target{-1, -1};
     Entity targetUnit;
     int32_t best = INT32_MAX;
@@ -442,19 +818,17 @@ void SkirmishAi::manageArmy(Simulation& sim, uint8_t p) {
       }
     if (target.x < 0) {
       ai.wave.clear();  // nothing left to attack
+      ai.phase = 0;
       return;
     }
-    // Re-issue when the target changes or units have gone idle.
     std::vector<Entity> idle;
     for (Entity e : ai.wave)
       if (reg.get<COrder>(e).type == OrderType::Idle) idle.push_back(e);
-    if (dist(target, ai.waveTarget) > 3 * LEPTONS_PER_TILE || !idle.empty()) {
-      const bool newTarget = dist(target, ai.waveTarget) > 3 * LEPTONS_PER_TILE;
-      // Units standing idle near the target: those that can hurt it attack it
-      // directly (attack-move won't pick a building on its own if it's tough),
-      // the rest move on to the nearest enemy troops.
+    const bool newTarget = dist(target, ai.waveTarget) > 3 * T;
+    if (newTarget || !idle.empty()) {
       std::vector<Entity> movers = newTarget ? ai.wave : idle;
       if (!newTarget && reg.alive(targetUnit)) {
+        // Units idle near the target attack it directly if they can hurt it.
         const CUnit& tu = reg.get<CUnit>(targetUnit);
         Command atk;
         atk.type = CommandType::Attack;
@@ -467,33 +841,61 @@ void SkirmishAi::manageArmy(Simulation& sim, uint8_t p) {
           for (int w : d.weapons)
             useful = useful || sim.weapons_.damageCenti(sim.weapons_.forTarget(w, types.get(tu.type).armor), types.get(tu.type).armor) > 100;
           const CPosition& ep = reg.get<CPosition>(e);
-          if (useful && dist({ep.x, ep.y}, target) < 14 * LEPTONS_PER_TILE) atk.units.push_back(e);
+          if (useful && dist({ep.x, ep.y}, target) < 14 * T) atk.units.push_back(e);
           else rest.push_back(e);
         }
         if (!atk.units.empty()) sim.queueInternal(std::move(atk));
         movers = std::move(rest);
       }
-      if (!movers.empty()) {
-        Command c;
-        c.type = CommandType::AttackMove;
-        c.player = p;
-        c.target = target;
-        c.units = movers;
-        c.formation = Formation::Wedge;
-        sim.queueInternal(std::move(c));
-      }
+      order(CommandType::AttackMove, movers, target, Formation::Wedge);
       ai.waveTarget = target;
       ai.waveTargetUnit = targetUnit;
     }
-    // A wave worn down to a handful falls back.
-    if (ai.wave.size() * 4 < static_cast<size_t>(needed)) {
-      Command c;
-      c.type = CommandType::Move;
-      c.player = p;
-      c.target = ai.staging;
-      c.units = ai.wave;
-      sim.queueInternal(std::move(c));
-      ai.wave.clear();
+  } else if (ai.phase == 2 && !ai.wave.empty()) {
+    // Regrouping: infantry take cover in buildings or trenches nearby; go
+    // again once strong enough, or after a minute.
+    if (sim.tick_ % (TICKS_PER_SECOND * 10) < tune.thinkTicks) {
+      std::vector<Entity> men;
+      for (Entity e : ai.wave)
+        if (isInfantry(e) && !reg.has<CGarrisoned>(e) && reg.get<COrder>(e).type == OrderType::Idle) men.push_back(e);
+      if (!men.empty()) {
+        Entity best;
+        int32_t bestD = 8 * T;
+        for (uint32_t s : reg.pool<CStructure>().entities()) {
+          const CUnit& su = reg.pool<CUnit>().get(s);
+          const UnitTypeDef& sd = types.get(su.type);
+          if (sd.garrison <= 0 || (su.owner < MAX_PLAYERS && su.owner != p)) continue;
+          const CPosition& sp = reg.pool<CPosition>().get(s);
+          const int32_t d = dist({sp.x, sp.y}, ai.forward);
+          if (d < bestD) {
+            bestD = d;
+            best = reg.handle(s);
+          }
+        }
+        if (best.valid()) {
+          Command c;
+          c.type = CommandType::Occupy;
+          c.player = p;
+          c.units = men;
+          c.targetUnit = best;
+          sim.queueInternal(std::move(c));
+        }
+      }
+    }
+    const uint32_t waited = sim.tick_ - ai.phaseTick;
+    if ((waited > TICKS_PER_SECOND * 20 && strength(ai.wave) >= needed * 7 / 10) || waited > TICKS_PER_SECOND * 60) {
+      // Out of cover and on again.
+      Command out;
+      out.type = CommandType::Unload;
+      out.player = p;
+      out.units = ai.wave;
+      sim.queueInternal(std::move(out));
+      ai.phase = 1;
+      ai.phaseTick = sim.tick_;
+      ai.launchStrength = strength(ai.wave);
+      ai.waveTarget = {-1, -1};
+      ai.flank = {-1, -1};
+      bind(ai.wave);
     }
   }
 }
@@ -511,11 +913,23 @@ void SkirmishAi::save(ByteWriter& w) const {
     w.podVector(a.wave);
     w.pod(a.waveTarget);
     w.pod(a.waveTargetUnit);
+    w.u8(a.phase);
+    w.u32(a.phaseTick);
+    w.u32(static_cast<uint32_t>(a.launchStrength));
+    w.pod(a.flank);
+    w.pod(a.forward);
+    w.podVector(a.raiders);
+    w.pod(a.raidTarget);
+    w.u32(a.raidReady);
+    w.podVector(a.guard);
+    w.u32(a.lastFortify);
+    w.pod(a.expandTo);
   }
 }
 
-bool SkirmishAi::load(ByteReader& r) {
+bool SkirmishAi::load(ByteReader& r, int version) {
   for (AiPlayer& a : players_) {
+    a = AiPlayer{};
     a.enabled = r.u8() != 0;
     a.difficulty = static_cast<AiDifficulty>(std::min<uint8_t>(r.u8(), 2));
     a.nextThink = r.u32();
@@ -527,6 +941,21 @@ bool SkirmishAi::load(ByteReader& r) {
     a.wave = r.podVector<Entity>();
     a.waveTarget = r.pod<Vec2i>();
     a.waveTargetUnit = r.pod<Entity>();
+    if (version >= 3) {
+      a.phase = r.u8();
+      a.phaseTick = r.u32();
+      a.launchStrength = static_cast<int32_t>(r.u32());
+      a.flank = r.pod<Vec2i>();
+      a.forward = r.pod<Vec2i>();
+      a.raiders = r.podVector<Entity>();
+      a.raidTarget = r.pod<Vec2i>();
+      a.raidReady = r.u32();
+      a.guard = r.podVector<Entity>();
+      a.lastFortify = r.u32();
+      a.expandTo = r.pod<Vec2i>();
+    } else if (!a.wave.empty()) {
+      a.phase = 1;
+    }
   }
   return r.ok();
 }

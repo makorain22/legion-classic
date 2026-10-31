@@ -31,9 +31,10 @@ std::string nowString() {
 void GameScene::addTownBuildings(MapFile& f) const {
   static const char* kinds[] = {"neutral_cottage", "neutral_cottage_bombed", "neutral_townhouse", "neutral_church",
                                 "neutral_ruin",    "neutral_adobe",          "neutral_barn",      "neutral_shed",
-                                "neutral_izba",    "neutral_warehouse",      "neutral_well",      "neutral_water_tower"};
+                                "neutral_izba",    "neutral_warehouse",      "neutral_well",      "neutral_water_tower",
+                                "neutral_station", "neutral_farmhouse",      "neutral_school"};
   for (const Map::Lot& l : f.map.lots) {
-    const char* id = kinds[l.kind % 12];
+    const char* id = kinds[l.kind % 15];
     const int t = types_.find(id);
     if (t < 0) continue;
     const UnitTypeDef& d = types_.get(t);

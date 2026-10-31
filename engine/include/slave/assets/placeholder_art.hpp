@@ -61,6 +61,9 @@ struct SpriteCatalog {
   std::unordered_map<std::string, UnitArt> units;  // by "model@faction", e.g. "tank@ger"
   EffectArt effects;
   std::array<int, 16> trench{};  // trench decal by neighbour mask (+X, +Y, -X, -Y)
+  // Field works that join their neighbours (sandbags, wire): a standing
+  // sprite per neighbour mask, by model name.
+  std::unordered_map<std::string, std::array<int, 16>> joined;
   std::array<int, 4> oil{};      // oil stain variants
   std::array<int, 3> rubble{};   // building rubble, 2 / 3 / 4 tiles across
   std::array<std::vector<int>, static_cast<size_t>(PropKind::Count)> props;

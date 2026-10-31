@@ -352,3 +352,67 @@ TEST_CASE("save and replay files round-trip and refuse damage") {
   broken.resize(broken.size() - 10);
   CHECK_FALSE(decodeSaveFile(broken, g, true, err));
 }
+
+TEST_CASE("each side's computer player fights to its own doctrine") {
+  Rules R;
+  Map map(128, 128);
+  map.generateCountryside(1951);
+  Simulation sim(map, R.types, R.weapons, 11);
+  base(sim, R, 0, "ger", {22 * 256, 64 * 256});
+  base(sim, R, 1, "rus", {106 * 256, 64 * 256});
+  for (uint8_t p : {uint8_t{0}, uint8_t{1}}) {
+    Command s;
+    s.type = CommandType::Spawn;
+    s.player = p;
+    s.unitType = R.t(p ? "rus_rifleman" : "ger_rifleman");
+    s.count = 10;
+    s.target = {(p ? 96 : 32) * 256, 64 * 256};
+    sim.queue(s);
+    Command c;
+    c.type = CommandType::SetController;
+    c.player = p;
+    c.amount = 2;
+    sim.queue(c);
+  }
+  sim.tick();
+  bool raided = false, regrouped = false, bound = false;
+  int peakDepots[2] = {};
+  for (int i = 0; i < 15 * 60 * 8; ++i) {
+    sim.tick();
+    for (uint8_t p = 0; p < 2; ++p) {
+      raided |= !sim.ai().player(p).raiders.empty();
+      regrouped |= sim.ai().player(p).phase == 2;
+    }
+    if (i % 150 == 0) {
+      int depots[2] = {};
+      for (uint32_t e : sim.registry().pool<CUnit>().entities()) {
+        bound |= sim.registry().pool<CGroupMember>().has(e);
+        const CUnit& u = sim.registry().pool<CUnit>().get(e);
+        if (u.owner <= 1 && sim.types().get(u.type).role == "depot") ++depots[u.owner];
+      }
+      for (int p = 0; p < 2; ++p) peakDepots[p] = std::max(peakDepots[p], depots[p]);
+    }
+  }
+  int count[2][4] = {};  // depots, trenches, wire, men (depots: see the peak instead)
+  int army[2] = {};
+  for (uint32_t e : sim.registry().pool<CUnit>().entities()) {
+    const CUnit& u = sim.registry().pool<CUnit>().get(e);
+    if (u.owner > 1) continue;
+    const UnitTypeDef& d = sim.types().get(u.type);
+    count[u.owner][0] += d.role == "depot";
+    count[u.owner][1] += d.model == "trench";
+    count[u.owner][2] += d.model == "wire";
+    if (!d.isStructure() && !d.weapons.empty()) {
+      ++army[u.owner];
+      count[u.owner][3] += d.infantry();
+    }
+  }
+  for (int p = 0; p < 2; ++p) {
+    CHECK(peakDepots[p] >= 4);  // it expanded onto more supply points
+    CHECK(count[p][1] >= 5);  // and dug a trench line
+  }
+  CHECK(count[0][2] > 0);   // the Germans wire their front
+  CHECK(raided);            // fast vehicles went raiding
+  CHECK(bound);             // forces fight as bound units
+  CHECK(regrouped);         // a hurt attack regroups instead of running home
+}

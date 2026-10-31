@@ -431,35 +431,6 @@ VoxelModel makeWatchtower(const FactionLook& look) {
   return m;
 }
 
-VoxelModel makeBunker(const FactionLook& look) {
-  VoxelModel m(24, 24, 12);
-  m.box(0, 0, 0, 24, 24, 1, EARTH);
-  // Rounded concrete pillbox with earth banked against it.
-  for (int z = 1; z < 9; ++z) {
-    const float r = 10.5f - std::max(0, z - 5) * 1.2f;
-    cylinder(m, 12, 12, r + 1.5f - z * 0.18f, z, z + 1, z < 4 ? EARTH : CONCRETE);
-  }
-  weather(m, EARTH, EARTH_DARK, SANDBAG_DARK, 61, 30, 10);
-  weather(m, CONCRETE, CONCRETE_DARK, CONCRETE_LIGHT, 62, 25, 10);
-  cylinder(m, 12, 12, 7.0f, 9, 10, look.sloped ? CONCRETE_DARK : CONCRETE);
-  // Firing slits all round.
-  for (int a = 0; a < 8; ++a) {
-    const float ang = a * 0.785f;
-    const int x = static_cast<int>(12 + std::cos(ang) * 8.6f), y = static_cast<int>(12 + std::sin(ang) * 8.6f);
-    m.box(x, y, 5, x + 1, y + 1, 6, WINDOW);
-  }
-  m.box(10, 10, 10, 14, 14, 11, TEAM);
-  return m;
-}
-
-// The bunker's machine gun, turning on the roof.
-VoxelModel makeBunkerGun(const FactionLook&) {
-  VoxelModel m(24, 24, 13);
-  m.box(11, 11, 10, 13, 13, 12, STEEL_DARK);
-  m.box(13, 11, 11, 19, 12, 12, STEEL_DARK);
-  return m;
-}
-
 VoxelModel makeAtGunPit(const FactionLook&) {
   VoxelModel m(24, 24, 8);
   // A ring of sandbags round a shallow pit.
@@ -541,58 +512,14 @@ VoxelModel makeHowitzer(const FactionLook& look) {
   return m;
 }
 
-// A low, lumpy wall of bags filling the tile, so neighbouring pieces join up.
-VoxelModel makeSandbags(const FactionLook&) {
-  VoxelModel m(12, 12, 4);
-  for (int y = 0; y < 12; ++y)
-    for (int x = 0; x < 12; ++x) {
-      const float dx = std::abs(x + 0.5f - 6.0f), dy = std::abs(y + 0.5f - 6.0f);
-      const int h = (dx < 4.5f && dy < 4.5f) ? 3 : (dx < 6 && dy < 6) ? 2 : 1;
-      for (int z = 0; z < h; ++z) {
-        // Each bag is 3 x 2 voxels, rows offset like brickwork; seams darker.
-        const bool seam = ((x + (z % 2) * 1 + (y / 2) % 2) % 3 == 0) || (y % 2 == 0 && z == h - 1 && x % 3 == 1);
-        m.set(x, y, z, seam ? SANDBAG_DARK : SANDBAG);
-      }
-    }
-  return m;
-}
-
-// Two stakes and a loose coil of wire between them: see-through, so a line of
-// it reads as an entanglement rather than a wall.
-VoxelModel makeWire(const FactionLook&) {
-  VoxelModel m(12, 12, 5);
-  m.box(2, 2, 0, 3, 3, 5, WOOD_DARK);
-  m.box(9, 9, 0, 10, 10, 5, WOOD_DARK);
-  for (int i = 0; i < 24; ++i) {
-    const float t = i / 24.0f * 6.2831853f * 2.0f;  // two loops of the coil
-    const float u = i / 24.0f;
-    const int x = static_cast<int>(1.5f + u * 9.0f + std::cos(t) * 1.4f);
-    const int y = static_cast<int>(1.5f + u * 9.0f + std::sin(t) * 1.4f);
-    const int z = static_cast<int>(2.0f + std::sin(t) * 1.5f);
-    if (i % 3 != 2) m.set(x, y, z, i % 2 ? STEEL : STEEL_DARK);
-  }
-  return m;
-}
-
-// Czech hedgehogs: three crossed girders each.
-VoxelModel makeTankTraps(const FactionLook&) {
-  VoxelModel m(12, 12, 8);
-  auto hog = [&](int cx, int cy) {
-    for (int i = -3; i <= 3; ++i) {
-      m.set(cx + i, cy, 3 + i / 2 + 1, RUST);
-      m.set(cx, cy + i, 4 - i / 2, STEEL_DARK);
-      m.set(cx + i / 2, cy - i / 2, 3 + (i + 3) / 2, RUST);
-      m.set(cx + i, cy + i, 1 + std::abs(i), STEEL_DARK);
-    }
-  };
-  hog(4, 4);
-  hog(8, 8);
-  return m;
-}
+// Sandbags, wire and hedgehogs as one piece (the sidebar picture and the body).
+VoxelModel makeSandbagPiece(const FactionLook&) { return makeSandbagLine(5); }
+VoxelModel makeWirePiece(const FactionLook&) { return makeWireLine(5); }
+VoxelModel makeHedgehogPiece(const FactionLook&) { return makeHedgehogs(0); }
 
 // Bakes a structure: one view for the body, and 16 facings of its turret if any.
 void addStructure(AtlasBuilder& ab, SpriteCatalog& cat, const std::string& name, VoxelModel (*make)(const FactionLook&),
-                  VoxelModel (*turret)(const FactionLook&) = nullptr) {
+                  VoxelModel (*turret)(const FactionLook&) = nullptr, float voxelTiles = kStructureVoxel) {
   for (const FactionLook& look : kFactions) {
     if (cat.units.count(name + "@" + look.id)) continue;  // an art pack provides it
     const VoxelPalette pal = makePalette(look);
@@ -601,7 +528,7 @@ void addStructure(AtlasBuilder& ab, SpriteCatalog& cat, const std::string& name,
     art.body.facings = 1;
     art.body.animFrames = 1;
     art.body.first = static_cast<int>(ab.count());
-    BakeOptions o = unitBake(kStructureVoxel);
+    BakeOptions o = unitBake(voxelTiles);
     o.pivotX = body.sizeX() / 2.0f;
     o.pivotY = body.sizeY() / 2.0f;
     o.shadowAlpha = 110;
@@ -614,7 +541,7 @@ void addStructure(AtlasBuilder& ab, SpriteCatalog& cat, const std::string& name,
       art.turret.facings = 16;
       art.turret.first = static_cast<int>(ab.count());
       for (int f = 0; f < 16; ++f) {
-        BakeOptions to = unitBake(kStructureVoxel);
+        BakeOptions to = unitBake(voxelTiles);
         to.yawRadians = static_cast<float>(f) * kTwoPi / 16.0f;
         to.pivotX = t.sizeX() / 2.0f;
         to.pivotY = t.sizeY() / 2.0f;
@@ -897,11 +824,27 @@ bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error, const ArtOption
   addStructure(ab, cat, "barracks", &makeBarracks);
   addStructure(ab, cat, "factory", &makeFactory);
   addStructure(ab, cat, "tower", &makeWatchtower);
-  addStructure(ab, cat, "bunker", &makeBunker, &makeBunkerGun);
+  addStructure(ab, cat, "bunker", &makePillbox, &makePillboxGun, kFineStructureVoxel);
   addStructure(ab, cat, "atgun", &makeAtGunPit, &makeAtGun);
-  addStructure(ab, cat, "sandbags", &makeSandbags);
-  addStructure(ab, cat, "wire", &makeWire);
-  addStructure(ab, cat, "traps", &makeTankTraps);
+  addStructure(ab, cat, "sandbags", &makeSandbagPiece, nullptr, kFineStructureVoxel);
+  addStructure(ab, cat, "wire", &makeWirePiece, nullptr, kFineStructureVoxel);
+  addStructure(ab, cat, "traps", &makeHedgehogPiece, nullptr, kFineStructureVoxel);
+  {
+    // Sandbag walls and wire entanglements join up with their neighbours.
+    const VoxelPalette fpal = makePalette(kFactions[0]);
+    for (const char* model : {"sandbags", "wire", "fence"}) {
+      std::array<int, 16>& frames = cat.joined[model];
+      for (int mask = 0; mask < 16; ++mask) {
+        const VoxelModel vm = model[0] == 's' ? makeSandbagLine(mask) : model[0] == 'w' ? makeWireLine(mask) : makeFenceLine(mask);
+        BakeOptions o = unitBake(kFineStructureVoxel);
+        o.pivotX = 12;
+        o.pivotY = 12;
+        o.shadowAlpha = model[0] == 's' ? 110 : 60;
+        BakedSprite b = bakeVoxels(vm, fpal, o);
+        frames[static_cast<size_t>(mask)] = ab.add(std::move(b.image), b.anchorX, b.anchorY);
+      }
+    }
+  }
   addStructure(ab, cat, "cottage", &makeCottage);
   addStructure(ab, cat, "cottage_bombed", &makeCottageBombed);
   addStructure(ab, cat, "townhouse", &makeTownhouse);
@@ -916,6 +859,9 @@ bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error, const ArtOption
   addStructure(ab, cat, "warehouse", &makeWarehouse);
   addStructure(ab, cat, "well", &makeWell);
   addStructure(ab, cat, "water_tower", &makeWaterTower);
+  addStructure(ab, cat, "station", &makeStation);
+  addStructure(ab, cat, "farmhouse", &makeFarmhouse);
+  addStructure(ab, cat, "school", &makeSchool);
   addEconomyDecals(ab, cat);
   {
     // Trenches are ground decals; their "unit art" is the lone foxhole piece.

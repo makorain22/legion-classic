@@ -68,6 +68,7 @@ constexpr float kTwoPi = 6.2831853f;
 constexpr float kVehicleVoxel = 1.0f / 36.0f;
 constexpr float kInfantryVoxel = 1.0f / 56.0f;
 constexpr float kStructureVoxel = 1.0f / 12.0f;
+constexpr float kFineStructureVoxel = 1.0f / 24.0f;
 
 BakeOptions unitBake(float voxelTiles);
 
@@ -197,6 +198,13 @@ VoxelModel makeLogs(int v);
 VoxelModel makeHaystack(int v);
 VoxelModel makeCrates(int v);
 VoxelModel makeFence(int v);
+// Field works at 24 voxels a tile (kFineStructureVoxel).
+VoxelModel makeSandbagLine(int mask);
+VoxelModel makeWireLine(int mask);
+VoxelModel makeFenceLine(int mask);
+VoxelModel makeHedgehogs(int v);
+VoxelModel makePillbox(const FactionLook& look);
+VoxelModel makePillboxGun(const FactionLook& look);
 VoxelModel makeCottage(const FactionLook&);
 VoxelModel makeCottageBombed(const FactionLook&);
 VoxelModel makeTownhouse(const FactionLook&);
@@ -209,6 +217,9 @@ VoxelModel makeIzba(const FactionLook&);
 VoxelModel makeWarehouse(const FactionLook&);
 VoxelModel makeWell(const FactionLook&);
 VoxelModel makeWaterTower(const FactionLook&);
+VoxelModel makeStation(const FactionLook&);
+VoxelModel makeFarmhouse(const FactionLook&);
+VoxelModel makeSchool(const FactionLook&);
 
 // The detailed vehicles and soldiers (unit_models.cpp).
 void addUnitModels(BakeQueue& q, SpriteCatalog& cat);

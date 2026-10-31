@@ -604,6 +604,8 @@ bool importBlitzkrieg(const BlitzkriegImport& job, std::string& error, std::stri
     for (auto& th : pool) th.join();
   }
 
+  // Start clean: an earlier pack's leftovers would linger otherwise.
+  if (fs::exists(job.outDir + "/sprites.json", ec)) fs::remove_all(job.outDir, ec);
   fs::create_directories(job.outDir, ec);
   json sprites = json::object(), units = json::object();
   int written = 0, unitsMade = 0;

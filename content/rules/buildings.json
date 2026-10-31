@@ -892,6 +892,54 @@
       "garrison": 1,
       "description": "A railway water tower: a lookout for one man.",
       "sight": 12
+    },
+    {
+      "id": "neutral_station",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Railway Station",
+      "model": "station",
+      "footprint": [
+        4,
+        2
+      ],
+      "health": 1800,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 24,
+      "description": "A brick railway station with its platform: a strong point at the line."
+    },
+    {
+      "id": "neutral_farmhouse",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Farmhouse",
+      "model": "farmhouse",
+      "footprint": [
+        3,
+        2
+      ],
+      "health": 1000,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 12,
+      "description": "A long farmhouse with stables under one roof."
+    },
+    {
+      "id": "neutral_school",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Schoolhouse",
+      "model": "school",
+      "footprint": [
+        3,
+        2
+      ],
+      "health": 1300,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 16,
+      "description": "A two-storey village school."
     }
   ]
 }

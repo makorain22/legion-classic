@@ -455,8 +455,18 @@ void GameScene::buildBase(uint8_t player, Vec2i centre) {
     if (t >= 0) {
       const UnitTypeDef& d = types_.get(t);
       bool placed = false;
-      for (int oy = -d.footH; oy <= 1 && !placed; ++oy)
-        for (int ox = -d.footW; ox <= 1 && !placed; ++ox) {
+      // Centred on the point, inside its compound, if it fits.
+      std::vector<Vec2i> offs;
+      for (int oy = -d.footH; oy <= 1; ++oy)
+        for (int ox = -d.footW; ox <= 1; ++ox) offs.push_back({ox, oy});
+      const Vec2i mid{-(d.footW / 2), -(d.footH / 2)};
+      std::stable_sort(offs.begin(), offs.end(), [&](Vec2i a, Vec2i b) {
+        return std::abs(a.x - mid.x) + std::abs(a.y - mid.y) < std::abs(b.x - mid.x) + std::abs(b.y - mid.y);
+      });
+      for (const Vec2i off : offs) {
+        if (placed) break;
+        {
+          const int ox = off.x, oy = off.y;
           const Vec2i o{best.x + ox, best.y + oy};
           if (!sim_->canPlace(t, o)) continue;
           Command c;
@@ -466,6 +476,7 @@ void GameScene::buildBase(uint8_t player, Vec2i centre) {
           sim_->tick();
           placed = true;
         }
+      }
     }
   }
   // The front: sandbags with a gate on the road, MG nests either side of
@@ -1496,6 +1507,50 @@ void GameScene::drawUnits(const RectF& view) {
     const auto& variants = art_.props[static_cast<size_t>(p.kind)];
     drawList_.push_back({iso::depthKey(p.x, p.y), order++, variants[p.variant % variants.size()], s.x, s.y, kWhite, tint});
   }
+  // Supply points: a fenced compound with crates and fuel drums, a gate in
+  // front; a depot goes up inside.
+  if (auto fence = art_.joined.find("fence"); fence != art_.joined.end()) {
+    constexpr int R = 3;  // compound: 7 x 7 tiles, fence on the border
+    for (const Vec2i& sp : map_.supplyPoints) {
+      const Vec2f c = groundToScreenWorld(sp.x * 256.0f + 128, sp.y * 256.0f + 128);
+      if (c.x < view.x0 - 300 || c.x > view.x1 + 300 || c.y < view.y0 - 200 || c.y > view.y1 + 300) continue;
+      auto onFence = [&](int x, int y) {
+        const int dx = x - sp.x, dy = y - sp.y;
+        if (std::abs(dx) > R || std::abs(dy) > R || (std::abs(dx) != R && std::abs(dy) != R)) return false;
+        return !(dy == R && (dx == 0 || dx == 1));  // the gate
+      };
+      auto put = [&](int frame, float lx, float ly) {
+        const int tx = static_cast<int>(lx) >> LEPTON_SHIFT, ty = static_cast<int>(ly) >> LEPTON_SHIFT;
+        uint32_t tint = kWhite;
+        if (fog) {
+          const uint8_t f = terrain_.fogAt(tx, ty);
+          if (f == 0) return;
+          const float k = f < 128 ? 0.48f * f / 128.0f : 0.48f + 0.52f * (f - 128) / 127.0f;
+          const uint8_t g = static_cast<uint8_t>(255 * k);
+          tint = rgba8(g, g, g);
+        }
+        const Vec2f s = groundToScreenWorld(lx, ly);
+        drawList_.push_back({iso::depthKey(static_cast<int32_t>(lx), static_cast<int32_t>(ly)), order++, frame, s.x, s.y, kWhite, tint});
+      };
+      for (int y = sp.y - R; y <= sp.y + R; ++y)
+        for (int x = sp.x - R; x <= sp.x + R; ++x) {
+          if (!onFence(x, y) || !map_.inBounds(x, y) || map_.info(x, y).waterDepth > -8) continue;
+          if (sim_->structureAt(x, y).valid()) continue;  // a building stands there
+          const int mask = (onFence(x + 1, y) ? 1 : 0) | (onFence(x, y + 1) ? 2 : 0) | (onFence(x - 1, y) ? 4 : 0) | (onFence(x, y - 1) ? 8 : 0);
+          put(fence->second[static_cast<size_t>(mask)], x * 256.0f + 128, y * 256.0f + 128);
+        }
+      // Stores in the corners.
+      const auto& crates = art_.props[static_cast<size_t>(PropKind::Crates)];
+      if (!crates.empty()) {
+        const int corners[4][2] = {{-2, -2}, {2, -2}, {-2, 2}, {2, 2}};
+        for (int k = 0; k < 4; ++k) {
+          const int x = sp.x + corners[k][0], y = sp.y + corners[k][1];
+          if (sim_->structureAt(x, y).valid() || !map_.inBounds(x, y)) continue;
+          put(crates[static_cast<size_t>(k) % crates.size()], x * 256.0f + 128 + (k % 2 ? 40 : -40), y * 256.0f + 128);
+        }
+      }
+    }
+  }
   for (const BattleFx::Wreck& w : fx_.wrecks()) {
     if (w.bodyFrame < 0) continue;  // a burning ruin: only fire and smoke
     const Vec2f s = groundToScreenWorld(static_cast<float>(w.lx), static_cast<float>(w.ly));
@@ -1568,7 +1623,21 @@ void GameScene::drawUnits(const RectF& view) {
         }
       }
     }
-    drawList_.push_back({depth, order++, art.body.frame(facing, anim), s.x, s.y, teamColor(u.owner), tint});
+    int bodyFrame = art.body.frame(facing, anim);
+    if (def.isStructure()) {
+      // Sandbag walls and wire join up with neighbours of the same kind.
+      if (auto j = art_.joined.find(def.model); j != art_.joined.end()) {
+        const CStructure& st = reg.pool<CStructure>().get(e);
+        auto same = [&](int x, int y) {
+          const Entity o = sim_->structureAt(x, y);
+          return o.valid() && types_.get(reg.get<CUnit>(o).type).model == def.model;
+        };
+        const int mask = (same(st.tx + 1, st.ty) ? 1 : 0) | (same(st.tx, st.ty + 1) ? 2 : 0) | (same(st.tx - 1, st.ty) ? 4 : 0) |
+                         (same(st.tx, st.ty - 1) ? 8 : 0);
+        bodyFrame = j->second[static_cast<size_t>(mask)];
+      }
+    }
+    drawList_.push_back({depth, order++, bodyFrame, s.x, s.y, teamColor(u.owner), tint});
     if (art.hasTurret) {
       const CTurret* t = turrets.tryGet(e);
       const int tf = t ? facingOf(t->angle) : facing;
@@ -1594,19 +1663,22 @@ void GameScene::drawUnits(const RectF& view) {
     if (bagType < 0) continue;
     const UnitArt& bag = unitArt_[static_cast<size_t>(bagType)];
     const CStructure& st = reg.get<CStructure>(bh);
-    std::vector<Vec2i> spots;
-    for (int x = st.tx; x < st.tx + st.w; ++x) spots.push_back({x, st.ty + st.h});              // front
-    if (level >= 2) for (int y = st.ty; y < st.ty + st.h; ++y) spots.push_back({st.tx + st.w, y});  // a side
+    // Bag walls along the sides: rows along X on the front and back, along Y on the sides.
+    std::vector<std::pair<Vec2i, int>> spots;
+    for (int x = st.tx; x < st.tx + st.w; ++x) spots.push_back({{x, st.ty + st.h}, 5});              // front
+    if (level >= 2) for (int y = st.ty; y < st.ty + st.h; ++y) spots.push_back({{st.tx + st.w, y}, 10});  // a side
     if (level >= 3) {
-      for (int y = st.ty; y < st.ty + st.h; ++y) spots.push_back({st.tx - 1, y});
-      for (int x = st.tx; x < st.tx + st.w; ++x) spots.push_back({x, st.ty - 1});
+      for (int y = st.ty; y < st.ty + st.h; ++y) spots.push_back({{st.tx - 1, y}, 10});
+      for (int x = st.tx; x < st.tx + st.w; ++x) spots.push_back({{x, st.ty - 1}, 5});
     }
-    for (const Vec2i& t : spots) {
+    const auto wall = art_.joined.find("sandbags");
+    for (const auto& [t, mask] : spots) {
       if (!map_.inBounds(t.x, t.y) || sim_->structureAt(t.x, t.y).valid()) continue;
       const float lx = t.x * 256.0f + 128, ly = t.y * 256.0f + 128;
       const Vec2f s = groundToScreenWorld(lx, ly);
       if (!view.contains(s)) continue;
-      drawList_.push_back({iso::depthKey(static_cast<int32_t>(lx), static_cast<int32_t>(ly)), order++, bag.body.frame(0, 0), s.x, s.y,
+      const int frame = wall != art_.joined.end() ? wall->second[static_cast<size_t>(mask)] : bag.body.frame(0, 0);
+      drawList_.push_back({iso::depthKey(static_cast<int32_t>(lx), static_cast<int32_t>(ly)), order++, frame, s.x, s.y,
                            teamColor(owner), kWhite});
     }
   }
