@@ -182,10 +182,21 @@ bool kalach(Builder& b, const std::string& out) {
 
   // The Soviet base in the east.
   const int bx = 108, by = 64;
-  for (auto [dx, dy, id] : {std::tuple{0, 0, "rus_yard"}, {-6, -6, "rus_power"}, {-6, 6, "rus_power"}, {4, -7, "rus_refinery"},
+  for (auto [dx, dy, id] : {std::tuple{0, 0, "rus_yard"}, {-6, -6, "rus_power"}, {-6, 6, "rus_power"},
                             {5, 7, "rus_barracks"}, {-1, 12, "rus_factory"}, {-10, -2, "rus_bunker"}, {-10, 3, "rus_atgun"}})
     b.place(id, 1, bx + dx, by + dy);
   b.squad("rus_rifleman", 1, bx - 8, by, 6, 8);
+  // Supply depots on the supply points nearest each side's start.
+  auto nearestPoint = [&](int x, int y) {
+    Vec2i best = b.file.map.supplyPoints.front();
+    for (const Vec2i& p : b.file.map.supplyPoints)
+      if (std::abs(p.x - x) + std::abs(p.y - y) < std::abs(best.x - x) + std::abs(best.y - y)) best = p;
+    return best;
+  };
+  {
+    const Vec2i sp = nearestPoint(bx, by);
+    b.place("rus_depot", 1, sp.x, sp.y);
+  }
 
   // Kampfgruppe Adler, in the west.
   const int gx = 14, gy = 64;
@@ -210,7 +221,8 @@ bool kalach(Builder& b, const std::string& out) {
   brief.actions = {msg(0, "Kampfgruppe Adler: take the crossroads village before the Soviets reinforce it."),
                    objective(0, "Take the village at the crossroads"),
                    objective(0, "Destroy the Soviet base"),
-                   msg(0, "Deploy the construction truck to build a base. Engineers repair damaged vehicles.")};
+                   msg(0, "Deploy the construction truck to build a base, and a supply depot on a supply point for income. "
+                          "Infantry can hold the village houses: right-click a house with them selected.")};
   Trigger taken;
   taken.name = "Village taken";
   taken.conditions = {cond(CondType::UnitsInArea, 0, 0, 4), cond(CondType::NoUnitsInArea, 1, 0)};

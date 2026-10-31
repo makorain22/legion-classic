@@ -111,6 +111,7 @@ void Simulation::tick() {
   processPathQueue();
   lap(stats_.msPaths);
   stepOrders();
+  stepGarrisons();
   lap(stats_.msOrders);
   stepEconomy();
   stepScript();
@@ -129,6 +130,7 @@ void Simulation::tick() {
   lap(stats_.msWeapons);
   stepProjectiles();
   lap(stats_.msProjectiles);
+  stepGroups();
   removeDead();
   stats_.projectiles = static_cast<uint32_t>(reg_.pool<CProjectile>().size());
   ++tick_;
@@ -145,6 +147,10 @@ void Simulation::setOrderIdle(Entity e) {
 }
 
 void Simulation::applyCommand(const Command& cmd) {
+  // Men inside a building come out to go anywhere.
+  if (cmd.type == CommandType::Move || cmd.type == CommandType::AttackMove || cmd.type == CommandType::Repair)
+    for (Entity e : cmd.units)
+      if (reg_.alive(e) && reg_.has<CGarrisoned>(e)) leaveBuilding(e);
   switch (cmd.type) {
     case CommandType::Move:
       orderMove(cmd.units, cmd.target, OrderType::Move, cmd);
@@ -244,6 +250,23 @@ void Simulation::applyCommand(const Command& cmd) {
     case CommandType::SetCredits:
     case CommandType::Repair:
       applyEconomyCommand(cmd);
+      break;
+    case CommandType::BindGroup:
+      if (cmd.player < MAX_PLAYERS) bindUnits(cmd.units, cmd.player);
+      break;
+    case CommandType::UnbindGroup: {
+      std::vector<Entity> groups;
+      for (Entity e : cmd.units)
+        if (const CGroupMember* m = reg_.tryGet<CGroupMember>(e))
+          if (std::find(groups.begin(), groups.end(), m->group) == groups.end()) groups.push_back(m->group);
+      for (Entity g : groups) disband(g);
+      break;
+    }
+    case CommandType::Occupy:
+      applyOccupy(cmd);
+      break;
+    case CommandType::Unload:
+      applyUnload(cmd);
       break;
     case CommandType::SetController:
       if (cmd.player < MAX_PLAYERS)

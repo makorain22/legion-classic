@@ -30,6 +30,8 @@ std::vector<uint8_t> encodeMap(const Map& map, const std::vector<UnitPlacement>&
   j["height"] = map.height();
   j["waterLevel"] = map.waterLevel();
   j["biome"] = biomeId(map.biome);
+  auto& sp = j["supplyPoints"] = nlohmann::json::array();
+  for (const Vec2i& p : map.supplyPoints) sp.push_back({p.x, p.y});
   auto& props = j["props"] = nlohmann::json::array();
   for (const Prop& p : map.props()) props.push_back({static_cast<int>(p.kind), p.variant, p.x, p.y});
   auto& us = j["units"] = nlohmann::json::array();
@@ -134,6 +136,9 @@ bool decodeMap(const std::vector<uint8_t>& bytes, MapFile& out, std::string& err
     m.description = j.value("description", "");
     m.setWaterLevel(j.value("waterLevel", uint16_t{0}));
     if (!parseBiome(j.value("biome", std::string("temperate")), m.biome)) m.biome = Biome::Temperate;
+    m.supplyPoints.clear();
+    for (const auto& pj : j.value("supplyPoints", nlohmann::json::array()))
+      if (pj.is_array() && pj.size() == 2) m.supplyPoints.push_back({pj[0].get<int32_t>(), pj[1].get<int32_t>()});
     for (const auto& pj : j.value("props", nlohmann::json::array())) {
       const int kind = pj.at(0).get<int>();
       if (kind < 0 || kind >= static_cast<int>(PropKind::Count)) continue;

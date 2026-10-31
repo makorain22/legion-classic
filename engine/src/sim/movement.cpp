@@ -78,6 +78,7 @@ void Simulation::stepOrders() {
       case OrderType::Idle:
       case OrderType::Harvest:  // run by the economy step
       case OrderType::Repair:
+      case OrderType::Occupy:  // organisation.cpp
         break;
       case OrderType::Move:
         if (!m.active && !m.request) {
@@ -97,7 +98,7 @@ void Simulation::stepOrders() {
         }
         const CPosition& tp = reg_.get<CPosition>(o.target);
         const int32_t d = effectiveDistance(distance(tp.x - p.x, tp.y - p.y), o.target.index);
-        if (def.speed <= 0) break;  // a gun emplacement fires if it can, but never moves
+        if (def.speed <= 0 || reg_.pool<CGarrisoned>().has(ei)) break;  // emplacements and men inside fire from where they are
         if (d <= maxRange(def) && canSee(u.owner, tp.x, tp.y)) {
           m.active = false;  // in range: stand and fire
           m.request = 0;
@@ -240,14 +241,14 @@ void Simulation::stepSeparation() {
     const uint32_t e = ents[i];
     const CPosition& p = pos.get(e);
     const UnitTypeDef& da = types_.get(units.get(e).type);
-    if (da.isStructure()) continue;  // never pushed; their tiles are blocked anyway
+    if (da.isStructure() || reg_.pool<CGarrisoned>().has(e)) continue;  // never pushed; their tiles are blocked anyway
     const int32_t ra = da.radius;
     int32_t px = 0, py = 0;
     spatial_.query(p.x, p.y, ra + 120, [&](uint32_t o) {
       if (o == e) return;
       const CPosition& q = pos.get(o);
       const UnitTypeDef& db = types_.get(units.get(o).type);
-      if (db.isStructure()) return;
+      if (db.isStructure() || reg_.pool<CGarrisoned>().has(o)) return;
       const int32_t rb = db.radius;
       // Vehicles keep almost their full width apart; infantry may bunch up.
       const int32_t want = (ra > 60 && rb > 60) ? (ra + rb) * 9 / 10 : (ra + rb) * 7 / 10;

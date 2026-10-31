@@ -103,6 +103,13 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
   replaysDir_ = app_.userDir() + "replays/";
   std::error_code ec;
   for (const std::string& d : {mapsDir_, savesDir_, replaysDir_}) std::filesystem::create_directories(d, ec);
+  if (!settings_.load(app_.userDir() + "settings.json")) {
+    showHelp_ = opt_.showHelp;  // first start: show the controls once
+    settings_.save(app_.userDir() + "settings.json");
+  } else {
+    showHelp_ = false;
+  }
+  applySettings();
   editor_ = std::make_unique<Editor>(*this);
   sidebar_ = std::make_unique<Sidebar>(*this);
   menus_ = std::make_unique<Menus>(*this);
@@ -340,8 +347,67 @@ void GameScene::buildBase(uint8_t player, Vec2i centre) {
   add("yard", 0, 0);
   add("power", -4, -4);
   add("power", -4, 4);
-  add("refinery", 0, -6);
   add("barracks", 5, 3);
+  // A supply depot on the nearest supply point.
+  if (!map_.supplyPoints.empty()) {
+    Vec2i best = map_.supplyPoints.front();
+    auto far = [&](Vec2i p) { return std::abs(p.x * T - centre.x) + std::abs(p.y * T - centre.y); };
+    for (const Vec2i& p : map_.supplyPoints)
+      if (far(p) < far(best)) best = p;
+    const int t = types_.find(f + "_depot");
+    if (t >= 0) {
+      const UnitTypeDef& d = types_.get(t);
+      for (int oy = -d.footH; oy <= 1; ++oy)
+        for (int ox = -d.footW; ox <= 1; ++ox) {
+          const Vec2i o{best.x + ox, best.y + oy};
+          if (!sim_->canPlace(t, o)) continue;
+          Command c;
+          c.type = CommandType::SpawnList;
+          c.spawns.push_back({static_cast<uint16_t>(t), player, {o.x * T + d.footW * 128, o.y * T + d.footH * 128}, 0, -1});
+          sim_->queue(std::move(c));
+          sim_->tick();
+          return;
+        }
+    }
+  }
+}
+
+// Selecting one man of a bound unit selects the whole unit (Alt: just him).
+void GameScene::expandToGroups() {
+  if ((SDL_GetModState() & SDL_KMOD_ALT) != 0) return;
+  Registry& reg = sim_->registry();
+  std::vector<Entity> out;
+  for (Entity e : selection_) {
+    if (!reg.alive(e)) continue;
+    if (const CGroup* g = sim_->groupOf(e)) {
+      for (Entity m : g->members)
+        if (reg.alive(m) && std::find(out.begin(), out.end(), m) == out.end()) out.push_back(m);
+    } else if (std::find(out.begin(), out.end(), e) == out.end()) {
+      out.push_back(e);
+    }
+  }
+  selection_ = std::move(out);
+}
+
+void GameScene::bindSelection() {
+  pruneSelection();
+  if (selection_.size() < 2) return;
+  Command c;
+  c.type = CommandType::BindGroup;
+  c.player = player_;
+  c.units = selection_;
+  sim_->queue(std::move(c));
+}
+
+void GameScene::unbindSelection() {
+  pruneSelection();
+  if (selection_.empty()) return;
+  Command c;
+  c.type = CommandType::UnbindGroup;
+  c.player = player_;
+  c.units = selection_;
+  sim_->queue(std::move(c));
+  showStatus("Unit disbanded", 2);
 }
 
 void GameScene::setupStartingArmies() {
@@ -408,12 +474,25 @@ Vec2i GameScene::mouseWorldLeptons() const {
   return {static_cast<int32_t>(std::lround(l.x)), static_cast<int32_t>(std::lround(l.y))};
 }
 
+// A building under the mouse holding men of the side we command.
+Entity GameScene::garrisonUnder(Vec2f screenPx) const {
+  Registry& reg = sim_->registry();
+  const Vec2f g = groundAt(screenPx);
+  const int tx = static_cast<int>(g.x) >> LEPTON_SHIFT, ty = static_cast<int>(g.y) >> LEPTON_SHIFT;
+  const Entity b = sim_->structureAt(tx, ty);
+  if (!b.valid() || !reg.has<CGarrison>(b)) return kNullEntity;
+  for (Entity m : reg.get<CGarrison>(b).occupants)
+    if (reg.alive(m) && selectableOwner(reg.get<CUnit>(m).owner)) return b;
+  return kNullEntity;
+}
+
 Entity GameScene::pickUnit(Vec2f screenPx, bool ownOnly) const {
   Registry& reg = sim_->registry();
   const Vec2f w = cam_.screenToWorld(screenPx);
   Entity best;
   int64_t bestDepth = INT64_MIN;
   for (uint32_t e : reg.pool<CUnit>().entities()) {
+    if (reg.pool<CGarrisoned>().has(e)) continue;  // inside a building: picked through it
     const CUnit& u = reg.pool<CUnit>().get(e);
     if (ownOnly && !selectableOwner(u.owner)) continue;
     if (u.owner != player_) {
@@ -458,9 +537,11 @@ void GameScene::selectInBox(Vec2f a, Vec2f b, bool add) {
     if (types_.get(reg.pool<CUnit>().get(e).type).isStructure() && !editor_->selectsAnyOwner()) continue;
     const Vec2f s = cam_.worldToScreen(unitScreenWorld(e));
     if (!box.contains({s.x, s.y - 6})) continue;
+    if (reg.pool<CGarrisoned>().has(e)) continue;
     const Entity h = reg.handle(e);
     if (std::find(selection_.begin(), selection_.end(), h) == selection_.end()) selection_.push_back(h);
   }
+  expandToGroups();
 }
 
 void GameScene::selectSameTypeOnScreen(Entity like) {
@@ -500,7 +581,7 @@ void GameScene::queueOrder(Command c) {
   }
 }
 
-void GameScene::orderMove(Vec2i target, CommandType type) {
+void GameScene::orderMove(Vec2i target, CommandType type, int formation) {
   pruneSelection();
   if (selection_.empty()) return;
   Command c;
@@ -508,7 +589,7 @@ void GameScene::orderMove(Vec2i target, CommandType type) {
   c.player = player_;
   c.target = target;
   c.units = selection_;
-  c.formation = sidebar_ ? sidebar_->formation() : Formation::Box;
+  c.formation = formation >= 0 ? static_cast<Formation>(formation) : sidebar_ ? sidebar_->formation() : Formation::Box;
   c.forced = (SDL_GetModState() & SDL_KMOD_ALT) != 0;  // Alt: forced march, don't stop to fight
   queueOrder(std::move(c));
   markers_.push_back({groundToScreenWorld(static_cast<float>(target.x), static_cast<float>(target.y)), 0,
@@ -536,6 +617,12 @@ void GameScene::rightClick(Vec2f start, bool dragged, Vec2f end) {
   if (selection_.empty()) return;
   Registry& reg = sim_->registry();
   const bool ctrl = (SDL_GetModState() & SDL_KMOD_CTRL) != 0;
+  if (ctrl && !dragged) {  // Ctrl+right-click: pick how to get there
+    formationPicker_ = true;
+    pickerScreen_ = start;
+    pickerTarget_ = mouseWorldLeptons();
+    return;
+  }
   if (dragged) {
     const Vec2f a = groundAt(start), b = groundAt(end);
     const Vec2i mid{static_cast<int32_t>((a.x + b.x) * 0.5f), static_cast<int32_t>((a.y + b.y) * 0.5f)};
@@ -570,6 +657,30 @@ void GameScene::rightClick(Vec2f start, bool dragged, Vec2f end) {
     return;
   }
   const Entity hit = pickUnit(start, false);
+  // Infantry: right-click a building or bunker to go in, a trench to man it.
+  if (hit.valid()) {
+    const UnitTypeDef& hd = types_.get(reg.get<CUnit>(hit).type);
+    const bool shelter = hd.garrison > 0 && (reg.get<CUnit>(hit).owner >= MAX_PLAYERS || sim_->allied(reg.get<CUnit>(hit).owner, player_));
+    const bool trench = hd.category == UnitCategory::Fortification && hd.cover > 0 && sim_->allied(reg.get<CUnit>(hit).owner, player_);
+    std::vector<Entity> men, others;
+    for (Entity e : selection_) (types_.get(reg.get<CUnit>(e).type).infantry() ? men : others).push_back(e);
+    if ((shelter || trench) && !men.empty() && !(SDL_GetModState() & SDL_KMOD_CTRL)) {
+      Command c;
+      c.type = CommandType::Occupy;
+      c.player = player_;
+      c.units = men;
+      c.targetUnit = hit;
+      sim_->queue(std::move(c));
+      const CPosition& hp = reg.get<CPosition>(hit);
+      markers_.push_back({groundToScreenWorld(static_cast<float>(hp.x), static_cast<float>(hp.y)), 0, rgba8(236, 200, 96)});
+      if (others.empty()) return;
+      const std::vector<Entity> keep = selection_;
+      selection_ = others;
+      rightClick(start, dragged, end);
+      selection_ = keep;
+      return;
+    }
+  }
   if (hit.valid() && !sim_->allied(reg.get<CUnit>(hit).owner, player_) && types_.get(reg.get<CUnit>(hit).type).targetable) {
     orderAttack(hit);
     return;
@@ -658,6 +769,11 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
   if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN || e.type == SDL_EVENT_MOUSE_BUTTON_UP)
     mouse_ = {e.button.x * ps, e.button.y * ps};
 
+  // Rebinding a key on the settings page.
+  if (menus_->capturingKey()) {
+    if (e.type == SDL_EVENT_KEY_DOWN) menus_->captureKey(e.key);
+    return;
+  }
   // Menus take everything while open; in the main menu the battle behind is scenery.
   if (mode_ == Mode::Menu || menus_->wantsInput()) {
     if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_ESCAPE && mode_ != Mode::Menu) menus_->close();
@@ -667,12 +783,12 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
   if (mode_ == Mode::Replay) {
     if (e.type == SDL_EVENT_KEY_DOWN && !uiKeys) {
       const SDL_Keycode k = e.key.key;
-      if (k == SDLK_ESCAPE || k == SDLK_F10) menus_->openInGameMenu();
+      if (settings_.pressed(InputAction::Menu, e.key)) menus_->openInGameMenu();
       else if (k == SDLK_R) revealMap_ = !revealMap_;
-      else if (k == SDLK_SPACE) paused_ = !paused_;
-      else if (k == SDLK_EQUALS || k == SDLK_KP_PLUS) speed_ = std::min(16.0f, speed_ * 2);
-      else if (k == SDLK_MINUS || k == SDLK_KP_MINUS) speed_ = std::max(0.25f, speed_ / 2);
-      else if (k == SDLK_TAB)
+      else if (settings_.pressed(InputAction::Pause, e.key)) paused_ = !paused_;
+      else if (settings_.pressed(InputAction::SpeedUp, e.key)) speed_ = std::min(16.0f, speed_ * 2);
+      else if (settings_.pressed(InputAction::SpeedDown, e.key)) speed_ = std::max(0.25f, speed_ / 2);
+      else if (settings_.pressed(InputAction::NextSide, e.key))
         for (int i = 1; i <= MAX_PLAYERS; ++i) {
           const uint8_t p = static_cast<uint8_t>((player_ + i) % MAX_PLAYERS);
           if (players_[p].active) {
@@ -749,6 +865,12 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
             auto it = std::find(selection_.begin(), selection_.end(), hit);
             if (it == selection_.end()) selection_.push_back(hit);
             else if (add) selection_.erase(it);
+            expandToGroups();
+          } else if (const Entity house = garrisonUnder(mouse_); house.valid()) {
+            // A building our men hold: select the men inside.
+            if (!add) selection_.clear();
+            for (Entity m : sim_->registry().get<CGarrison>(house).occupants)
+              if (sim_->registry().alive(m)) selection_.push_back(m);
           } else if (!add) {
             selection_.clear();
           }
@@ -767,25 +889,33 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
       if (uiKeys) break;
       const SDL_Keycode k = e.key.key;
       const bool ctrl = (e.key.mod & SDL_KMOD_CTRL) != 0;
-      if (k == SDLK_ESCAPE || k == SDLK_F10) {
-        if (k == SDLK_ESCAPE && attackMoveMode_) attackMoveMode_ = false;
+      const Settings& K = settings_;
+      if (K.pressed(InputAction::Menu, e.key)) {
+        if (k == SDLK_ESCAPE && formationPicker_) formationPicker_ = false;
+        else if (k == SDLK_ESCAPE && attackMoveMode_) attackMoveMode_ = false;
         else if (k == SDLK_ESCAPE && !selection_.empty()) selection_.clear();
         else menus_->openInGameMenu();
-      } else if (k == SDLK_A && !ctrl) {
+      } else if (K.pressed(InputAction::AttackMove, e.key)) {
         pruneSelection();
         attackMoveMode_ = !selection_.empty();
-      }
-      else if (k == SDLK_F1) showHelp_ = !showHelp_;
-      else if (k == SDLK_F2) editor_->setActive(!editor_->active());
-      else if (k == SDLK_F3) showDebug_ = !showDebug_;
-      else if (k == SDLK_F12) {
+      } else if (K.pressed(InputAction::Help, e.key)) {
+        showHelp_ = !showHelp_;
+      } else if (K.pressed(InputAction::Editor, e.key)) {
+        editor_->setActive(!editor_->active());
+      } else if (K.pressed(InputAction::Debug, e.key)) {
+        showDebug_ = !showDebug_;
+      } else if (K.pressed(InputAction::ToggleInfo, e.key)) {
+        settings_.showInfoPanel = !settings_.showInfoPanel;
+        saveSettings();
+      } else if (K.pressed(InputAction::Screenshot, e.key)) {
         const std::time_t t = std::time(nullptr);
         char name[64];
         std::strftime(name, sizeof name, "screenshot_%Y%m%d_%H%M%S.png", std::localtime(&t));
         app_.requestScreenshot(app_.userDir() + name);
         showStatus(std::string("Screenshot saved to ") + app_.userDir() + name, 4);
-      } else if (k == SDLK_SPACE) paused_ = !paused_;
-      else if (k == SDLK_TAB) {
+      } else if (K.pressed(InputAction::Pause, e.key)) {
+        paused_ = !paused_;
+      } else if (K.pressed(InputAction::NextSide, e.key)) {
         for (int i = 1; i <= MAX_PLAYERS; ++i) {  // next active side
           const uint8_t p = static_cast<uint8_t>((player_ + i) % MAX_PLAYERS);
           if (players_[p].active) {
@@ -793,30 +923,34 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
             break;
           }
         }
-      } else if (k == SDLK_S && !ctrl) {
+      } else if (K.pressed(InputAction::Stop, e.key)) {
         pruneSelection();
         Command c;
         c.type = CommandType::Stop;
         c.units = selection_;
         sim_->queue(std::move(c));
-      } else if (k == SDLK_A && ctrl) {
+      } else if (K.pressed(InputAction::SelectAll, e.key)) {
         selection_.clear();
         Registry& reg = sim_->registry();
         for (uint32_t i : reg.pool<CUnit>().entities())
           if (reg.pool<CUnit>().get(i).owner == player_) selection_.push_back(reg.handle(i));
-      } else if (k == SDLK_D && !ctrl) {
+      } else if (K.pressed(InputAction::Deploy, e.key)) {
         pruneSelection();
         Command c;
         c.type = CommandType::Deploy;
         c.units = selection_;
         sim_->queue(std::move(c));
+      } else if (K.pressed(InputAction::BindGroup, e.key)) {
+        bindSelection();
+      } else if (K.pressed(InputAction::UnbindGroup, e.key)) {
+        unbindSelection();
       } else if (k == SDLK_DELETE && !editor_->active() && showDebug_) {  // debug only
         Command c;
         c.type = CommandType::Remove;
         c.units = selection_;
         sim_->queue(std::move(c));
         selection_.clear();
-      } else if (k == SDLK_HOME && !selection_.empty()) {
+      } else if (K.pressed(InputAction::CentreSelection, e.key) && !selection_.empty()) {
         pruneSelection();
         if (!selection_.empty()) {
           const CPosition& p = sim_->registry().get<CPosition>(selection_.front());
@@ -831,9 +965,9 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
           std::erase_if(groups_[g], [&](Entity x) { return !sim_->registry().alive(x); });
           selection_ = groups_[g];
         }
-      } else if (k == SDLK_EQUALS || k == SDLK_KP_PLUS) {
+      } else if (K.pressed(InputAction::SpeedUp, e.key)) {
         speed_ = std::min(8.0f, speed_ * 2);
-      } else if (k == SDLK_MINUS || k == SDLK_KP_MINUS) {
+      } else if (K.pressed(InputAction::SpeedDown, e.key)) {
         speed_ = std::max(0.25f, speed_ / 2);
       }
       break;
@@ -847,6 +981,13 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
 // Simulation & per-frame update
 // ---------------------------------------------------------------------------
 void GameScene::editorOpen(bool on) { editor_->setActive(on); }
+
+void GameScene::applySettings() {
+  app_.setFpsLimit(settings_.fpsLimit);
+  app_.setVsync(settings_.vsync);
+}
+
+void GameScene::saveSettings() { settings_.save(app_.userDir() + "settings.json"); }
 
 void GameScene::onTick() {
   // Replays feed the recorded orders in at the tick they were given.
@@ -972,20 +1113,28 @@ void GameScene::onUpdate(float dt, float alpha) {
 
   Vec2f pan;
   const bool* keys = SDL_GetKeyboardState(nullptr);
-  if (!ImGui::GetIO().WantCaptureKeyboard) {
-    if (keys[SDL_SCANCODE_LEFT]) pan.x -= 1;
-    if (keys[SDL_SCANCODE_RIGHT]) pan.x += 1;
-    if (keys[SDL_SCANCODE_UP]) pan.y -= 1;
-    if (keys[SDL_SCANCODE_DOWN]) pan.y += 1;
+  const SDL_Keymod mods = SDL_GetModState();
+  const bool inMenu = mode_ == Mode::Menu || menus_->wantsInput();
+  if (!ImGui::GetIO().WantTextInput && !inMenu) {
+    if (settings_.held(InputAction::ScrollLeft, keys, mods)) pan.x -= 1;
+    if (settings_.held(InputAction::ScrollRight, keys, mods)) pan.x += 1;
+    if (settings_.held(InputAction::ScrollUp, keys, mods)) pan.y -= 1;
+    if (settings_.held(InputAction::ScrollDown, keys, mods)) pan.y += 1;
   }
-  if (!app_.offscreen() && SDL_GetMouseFocus() == app_.window() && !mmbDown_ && !ImGui::GetIO().WantCaptureMouse) {
+  // Edge scrolling works over the sidebar and panels too (they touch the
+  // screen edges), but not while dragging a slider or a window.
+  if (!app_.offscreen() && settings_.edgeScroll && !inMenu && SDL_GetMouseFocus() == app_.window() && !mmbDown_ &&
+      !ImGui::IsAnyItemActive()) {
     const float w = static_cast<float>(app_.pixelWidth()), h = static_cast<float>(app_.pixelHeight());
     if (mouse_.x <= kEdgeScrollPx) pan.x -= 1;
     if (mouse_.x >= w - 1 - kEdgeScrollPx) pan.x += 1;
     if (mouse_.y <= kEdgeScrollPx) pan.y -= 1;
     if (mouse_.y >= h - 1 - kEdgeScrollPx) pan.y += 1;
   }
-  if (pan.x != 0 || pan.y != 0) cam_.pan(pan * (kScrollSpeed * dt));
+  // Screen lock: the cursor stays in the window while playing.
+  const bool lock = settings_.mouseLock && !inMenu;
+  if (lock != app_.mouseLock()) app_.setMouseLock(lock);
+  if (pan.x != 0 || pan.y != 0) cam_.pan(pan * (kScrollSpeed * settings_.scrollSpeed * dt));
 
   ++frame_;
   if (mode_ == Mode::Menu) {
@@ -1005,6 +1154,7 @@ void GameScene::onUpdate(float dt, float alpha) {
   if (opt_.editorSelfTest) runEditorSelfTest();
   if (opt_.economyDemo) runEconomyDemo();
   if (opt_.gallery) runGallery();
+  if (opt_.orgDemo) runOrgDemo();
   if (opt_.flowSelfTest) runFlowSelfTest();
   editor_->update(dt);
   sidebar_->update(dt);
@@ -1214,6 +1364,7 @@ void GameScene::drawUnits(const RectF& view) {
   for (size_t i = 0; i < units.size(); ++i) {
     const uint32_t e = units.entities()[i];
     const CUnit& u = units.data()[i];
+    if (reg.pool<CGarrisoned>().has(e)) continue;  // inside a building
     const CPosition& p = reg.pool<CPosition>().get(e);
     const UnitTypeDef& def = types_.get(u.type);
     uint32_t tint = kWhite;
@@ -1253,6 +1404,35 @@ void GameScene::drawUnits(const RectF& view) {
       const float ly = q.y + (p.y - q.y) * alpha_ + std::sin(ang) * art.turretOffset;
       const Vec2f ts = groundToScreenWorld(lx, ly);
       drawList_.push_back({depth, order++, art.turret.frame(tf, 0), std::round(ts.x), std::round(ts.y), teamColor(u.owner), tint});
+    }
+  }
+  // Occupied buildings are fortified: sandbags go up along the front, then a
+  // side, then all round, as more men move in.
+  for (uint32_t b : reg.pool<CGarrison>().entities()) {
+    const Entity bh = reg.handle(b);
+    const int level = sim_->garrisonLevel(bh);
+    if (level == 0 || !reg.has<CStructure>(bh)) continue;
+    const CGarrison& g = reg.get<CGarrison>(bh);
+    const uint8_t owner = reg.get<CUnit>(g.occupants.front()).owner;
+    if (fog && !sim_->allied(owner, player_) && terrain_.fogAt(reg.get<CStructure>(bh).tx, reg.get<CStructure>(bh).ty) < 128) continue;
+    const int bagType = types_.find(players_[owner % MAX_PLAYERS].faction + "_sandbags");
+    if (bagType < 0) continue;
+    const UnitArt& bag = unitArt_[static_cast<size_t>(bagType)];
+    const CStructure& st = reg.get<CStructure>(bh);
+    std::vector<Vec2i> spots;
+    for (int x = st.tx; x < st.tx + st.w; ++x) spots.push_back({x, st.ty + st.h});              // front
+    if (level >= 2) for (int y = st.ty; y < st.ty + st.h; ++y) spots.push_back({st.tx + st.w, y});  // a side
+    if (level >= 3) {
+      for (int y = st.ty; y < st.ty + st.h; ++y) spots.push_back({st.tx - 1, y});
+      for (int x = st.tx; x < st.tx + st.w; ++x) spots.push_back({x, st.ty - 1});
+    }
+    for (const Vec2i& t : spots) {
+      if (!map_.inBounds(t.x, t.y) || sim_->structureAt(t.x, t.y).valid()) continue;
+      const float lx = t.x * 256.0f + 128, ly = t.y * 256.0f + 128;
+      const Vec2f s = groundToScreenWorld(lx, ly);
+      if (!view.contains(s)) continue;
+      drawList_.push_back({iso::depthKey(static_cast<int32_t>(lx), static_cast<int32_t>(ly)), order++, bag.body.frame(0, 0), s.x, s.y,
+                           teamColor(owner), kWhite});
     }
   }
   std::sort(drawList_.begin(), drawList_.end(), [](const DrawItem& a, const DrawItem& b) {
@@ -1299,6 +1479,9 @@ void GameScene::onImGui() {
     menus_->draw();
     return;
   }
+  showCards_ = settings_.showCards;
+  showChips_ = settings_.showChips;
+  drawWorldOverlays();
   drawHud();
   if (mode_ == Mode::Game) sidebar_->draw();
   if (mode_ == Mode::Game) editor_->imgui();
@@ -1316,6 +1499,43 @@ void GameScene::onImGui() {
   }
   if (showHelp_) drawHelp();
   if (showDebug_) drawDebug();
+  if (formationPicker_) drawFormationPicker();
+}
+
+// Ctrl+right-click: a small menu at the cursor to move or attack-move there
+// in a chosen formation.
+void GameScene::drawFormationPicker() {
+  const float ps = app_.pixelScale();
+  ImGui::SetNextWindowPos(ImVec2(pickerScreen_.x / ps, pickerScreen_.y / ps), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+  ImGui::SetNextWindowBgAlpha(0.92f);
+  ImGui::Begin("##formations", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
+                                            ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove);
+  static const char* names[] = {"Box", "Line", "Column", "Wedge", "Loose"};
+  int pick = -1;
+  bool attack = false;
+  ImGui::TextColored(ImVec4(0.92f, 0.78f, 0.36f, 1), "Move");
+  ImGui::SameLine(110);
+  ImGui::TextColored(ImVec4(1, 0.5f, 0.4f, 1), "Attack-move");
+  for (int i = 0; i < 5; ++i) {
+    ImGui::PushID(i);
+    if (ImGui::Button(names[i], ImVec2(100, 0))) pick = i;
+    ImGui::SameLine(110);
+    if (ImGui::Button((std::string(names[i]) + "##a").c_str(), ImVec2(100, 0))) {
+      pick = i;
+      attack = true;
+    }
+    ImGui::PopID();
+  }
+  if (ImGui::Button("Cancel", ImVec2(210, 0))) formationPicker_ = false;
+  const bool clickedAway = (ImGui::IsMouseClicked(ImGuiMouseButton_Left) || ImGui::IsMouseClicked(ImGuiMouseButton_Right)) &&
+                           !ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+  ImGui::End();
+  if (pick >= 0) {
+    orderMove(pickerTarget_, attack ? CommandType::AttackMove : CommandType::Move, pick);
+    formationPicker_ = false;
+  } else if (clickedAway) {
+    formationPicker_ = false;
+  }
 }
 
 // Mission objectives and scenario messages, under the HUD box.
@@ -1324,7 +1544,7 @@ void GameScene::drawObjectives() {
   for (const Objective& o : sim_->objectives())
     if (o.player == ANY_PLAYER || sim_->allied(o.player, player_)) mine.push_back(&o);
   if (mine.empty() && messages_.empty()) return;
-  ImGui::SetNextWindowPos(ImVec2(editor_->active() ? Editor::kPanelWidth + 16 : 8, 150), ImGuiCond_Always);
+  ImGui::SetNextWindowPos(ImVec2(editor_->active() ? Editor::kPanelWidth + 16 : 8, hudBottom_), ImGuiCond_Always);
   ImGui::SetNextWindowBgAlpha(0.75f);
   ImGui::Begin("##objectives", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
                                             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
@@ -1347,26 +1567,35 @@ void GameScene::drawObjectives() {
 
 void GameScene::drawHud() {
   const bool editing = editor_->active();
+  const bool transient = paused_ || speed_ != 1.0f || attackMoveMode_ || statusTime_ > 0;
+  if (!settings_.showInfoPanel && !transient) {
+    hudBottom_ = 8;
+    return;
+  }
   ImGui::SetNextWindowPos(ImVec2(editing ? Editor::kPanelWidth + 16 : 8, 8));
   ImGui::SetNextWindowBgAlpha(0.82f);
   ImGui::Begin("##hud", nullptr,
                ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
                    ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove);
-  ImGui::TextColored(ImVec4(0.92f, 0.78f, 0.36f, 1), "LEGION CLASSIC");
-  ImGui::SameLine();
-  ImGui::TextDisabled("Slave Engine 1.0  |  Milestone 7");
-  ImGui::Text("Map: %s (%dx%d)", map_.name.c_str(), map_.width(), map_.height());
-  ImGui::Text("Commanding:");
-  ImGui::SameLine();
-  ImGui::TextColored(toImVec(teamColors_[player_]), "%s", players_[player_].name.c_str());
-  ImGui::SameLine();
-  ImGui::TextDisabled("(Tab)");
-  ImGui::Text("Selected: %zu   Units: %zu", selection_.size(), sim_->unitCount());
+  if (settings_.showInfoPanel) {
+    ImGui::TextColored(ImVec4(0.92f, 0.78f, 0.36f, 1), "LEGION CLASSIC");
+    ImGui::SameLine();
+    ImGui::TextDisabled("Slave Engine 1.0  |  build 0.7.5");
+    ImGui::Text("Map: %s (%dx%d)", map_.name.c_str(), map_.width(), map_.height());
+    ImGui::Text("Commanding:");
+    ImGui::SameLine();
+    ImGui::TextColored(toImVec(teamColors_[player_]), "%s", players_[player_].name.c_str());
+    ImGui::SameLine();
+    ImGui::TextDisabled("(Tab)");
+    ImGui::Text("Selected: %zu   Units: %zu", selection_.size(), sim_->unitCount());
+  }
   if (paused_) ImGui::TextColored(ImVec4(1, 0.6f, 0.3f, 1), "PAUSED (Space)");
   else if (speed_ != 1.0f) ImGui::TextColored(ImVec4(1, 0.85f, 0.4f, 1), "Speed x%.2g", speed_);
   if (attackMoveMode_) ImGui::TextColored(ImVec4(1, 0.45f, 0.35f, 1), "ATTACK-MOVE: left-click a destination (Esc cancels)");
   if (statusTime_ > 0) ImGui::TextColored(ImVec4(0.6f, 0.95f, 0.6f, 1), "%s", status_.c_str());
-  ImGui::TextDisabled(editing ? "F2 close editor   F1 help" : "F2 editor   F1 help   F3 debug");
+  if (settings_.showInfoPanel)
+    ImGui::TextDisabled(editing ? "F2 close editor   F1 help   I hide" : "F2 editor   F1 help   F3 debug   I hide");
+  hudBottom_ = ImGui::GetWindowPos().y + ImGui::GetWindowSize().y + 6;
   ImGui::End();
 }
 

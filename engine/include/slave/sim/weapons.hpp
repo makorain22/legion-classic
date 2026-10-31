@@ -66,6 +66,16 @@ class WeaponRegistry {
     if (armor == ArmorClass::Infantry || armor == ArmorClass::Structure) return base;
     return base * warhead(get(weapon).warhead).facing[static_cast<size_t>(side)] / 100;
   }
+  // Damage in hundredths of a hit point (small arms against armour are fractions of a point).
+  int32_t damageCenti(int weapon, ArmorClass armor) const {
+    const WeaponDef& w = get(weapon);
+    return w.damage * warhead(w.warhead).versus[static_cast<size_t>(armor)];
+  }
+  int32_t damageCenti(int weapon, ArmorClass armor, HitSide side) const {
+    const int32_t base = damageCenti(weapon, armor);
+    if (armor == ArmorClass::Infantry || armor == ArmorClass::Structure) return base;
+    return base * warhead(get(weapon).warhead).facing[static_cast<size_t>(side)] / 100;
+  }
   // The round a weapon fires at this armour (guns switch to HE against infantry).
   int forTarget(int weapon, ArmorClass armor) const {
     const WeaponDef& w = get(weapon);

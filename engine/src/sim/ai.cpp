@@ -23,9 +23,9 @@ struct Tuning {
   int engineers;         // kept at home to repair
 };
 const Tuning kTuning[3] = {
-    {45, 6, 2, 15 * 360, 1, 0, 0, 1, 1, 1, 1, 1500, 0},  // easy
-    {20, 10, 3, 15 * 240, 2, 1, 1, 2, 1, 1, 2, 600, 1},  // normal
-    {10, 14, 4, 15 * 180, 3, 2, 1, 3, 2, 2, 2, 300, 2},  // hard
+    {45, 18, 6, 15 * 360, 1, 0, 0, 1, 1, 1, 1, 1500, 0},  // easy
+    {20, 30, 9, 15 * 240, 2, 1, 1, 2, 1, 1, 2, 600, 1},  // normal
+    {10, 42, 12, 15 * 180, 3, 2, 1, 3, 2, 2, 2, 300, 2},  // hard
 };
 
 int32_t dist(Vec2i a, Vec2i b) { return static_cast<int32_t>(distance(a.x - b.x, a.y - b.y)); }
@@ -105,6 +105,30 @@ bool SkirmishAi::placeStructure(Simulation& sim, uint8_t p, int type, bool defen
   const UnitTypeDef& d = sim.types_.get(type);
   const Map& m = sim.map_;
   const Vec2i want = defensive ? Vec2i{ai.base.x + ai.toward.x * 8, ai.base.y + ai.toward.y * 8} : ai.base;
+  if (d.role == "depot") {
+    // Supply depots go on the nearest free supply point.
+    std::vector<std::pair<int32_t, Vec2i>> sites;
+    for (const Vec2i& sp : m.supplyPoints) sites.push_back({dist({sp.x * 256 + 128, sp.y * 256 + 128}, ai.base), sp});
+    std::sort(sites.begin(), sites.end(), [](const auto& a, const auto& b) {
+      return a.first != b.first ? a.first < b.first : (a.second.y != b.second.y ? a.second.y < b.second.y : a.second.x < b.second.x);
+    });
+    for (const auto& [score, sp] : sites) {
+      if (score > 70 * LEPTONS_PER_TILE) break;
+      for (int oy = -d.footH; oy <= 1; ++oy)
+        for (int ox = -d.footW; ox <= 1; ++ox) {
+          const Vec2i o{sp.x + ox, sp.y + oy};
+          if (!sim.canPlace(type, o)) continue;
+          Command c;
+          c.type = CommandType::PlaceBuilding;
+          c.player = p;
+          c.unitType = static_cast<uint16_t>(type);
+          c.target = {o.x * 256 + d.footW * 128, o.y * 256 + d.footH * 128};
+          sim.queueInternal(std::move(c));
+          return true;
+        }
+    }
+    return false;
+  }
   Vec2i best{-1, -1};
   int32_t bestScore = INT32_MAX;
   const int cx = want.x >> LEPTON_SHIFT, cy = want.y >> LEPTON_SHIFT;
@@ -162,7 +186,7 @@ void SkirmishAi::manageEconomy(Simulation& sim, uint8_t p) {
     if (faction.empty()) faction = d.faction;
     if (d.isStructure()) {
       const std::string& r = d.role;
-      roleCount[r == "yard" ? 0 : r == "power" ? 1 : r == "refinery" ? 2 : r == "barracks" ? 3 : r == "factory" ? 4 : 5]++;
+      roleCount[r == "yard" ? 0 : r == "power" ? 1 : (r == "refinery" || r == "depot") ? 2 : r == "barracks" ? 3 : r == "factory" ? 4 : 5]++;
       if (d.model == "bunker") ++bunkers;
       if (d.model == "atgun") ++atGuns;
       if (d.model == "tower") ++towers;
@@ -240,7 +264,7 @@ void SkirmishAi::manageEconomy(Simulation& sim, uint8_t p) {
     else if (roleCount[2] < 1) pick = typeOf("refinery");
     else if (roleCount[3] < 1) pick = typeOf("barracks");
     else if (roleCount[4] < 1) pick = typeOf("factory");
-    else if (roleCount[2] < tune.refineries && ps.credits > 1800) pick = typeOf("refinery");
+    else if (roleCount[2] < tune.refineries + 1 && ps.credits > 1200) pick = typeOf("refinery");
     else if (roleCount[3] < tune.barracks && ps.credits > 1200) pick = typeOf("barracks");
     else if (roleCount[4] < tune.factories && ps.credits > 2500) pick = typeOf("factory");
     if (pick >= 0) produce(pick);
@@ -253,7 +277,8 @@ void SkirmishAi::manageEconomy(Simulation& sim, uint8_t p) {
   }
   // Trucks: a couple per depot.
   const ProductionQueue& vq = ps.queues[static_cast<size_t>(Queue::Vehicles)];
-  if (trucks < roleCount[2] * tune.trucksPerRefinery && vq.items.empty() && ps.credits > 1300) produce(typeOf("truck"));
+  (void)vq;
+  (void)trucks;
   (void)mcvs;
 }
 
@@ -299,14 +324,14 @@ void SkirmishAi::manageArmy(Simulation& sim, uint8_t p) {
       }
       return list.back();
     };
-    if (!infantry.empty() && iq.items.size() < 3) {
+    if (!infantry.empty() && iq.items.size() < 10) {
       const int t = weighted(infantry, 1);
       if (t >= 0) {
         Command c;
         c.type = CommandType::Produce;
         c.player = p;
         c.unitType = static_cast<uint16_t>(t);
-        c.amount = types.get(t).cost <= 150 ? 2 : 1;
+        c.amount = 5;  // infantry come as fireteams
         sim.queueInternal(std::move(c));
       }
     }
@@ -440,7 +465,7 @@ void SkirmishAi::manageArmy(Simulation& sim, uint8_t p) {
           const UnitTypeDef& d = types.get(reg.get<CUnit>(e).type);
           bool useful = false;
           for (int w : d.weapons)
-            useful = useful || sim.weapons_.damageAgainst(sim.weapons_.forTarget(w, types.get(tu.type).armor), types.get(tu.type).armor) > 0;
+            useful = useful || sim.weapons_.damageCenti(sim.weapons_.forTarget(w, types.get(tu.type).armor), types.get(tu.type).armor) > 100;
           const CPosition& ep = reg.get<CPosition>(e);
           if (useful && dist({ep.x, ep.y}, target) < 14 * LEPTONS_PER_TILE) atk.units.push_back(e);
           else rest.push_back(e);

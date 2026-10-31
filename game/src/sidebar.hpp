@@ -34,7 +34,8 @@ class Sidebar {
   bool onEvent(const SDL_Event& e, bool uiWantsMouse);
   void renderWorld(slave::SpriteRenderer& r);  // placement ghost
 
-  bool busy() const { return placeType_ >= 0 || sellMode_; }  // mouse belongs to the sidebar mode
+  bool busy() const { return placeType_ >= 0 || sellMode_; }
+  int placingType() const { return placeType_; }  // mouse belongs to the sidebar mode
   void cancel();
   slave::Formation formation() const { return formation_; }
   void startPlacing(int type);
@@ -63,6 +64,7 @@ class Sidebar {
   std::vector<uint32_t> minimapPixels_;
   std::vector<uint32_t> terrainColors_;  // per tile, cached
   uint32_t terrainRevision_ = UINT32_MAX;
+  int miniZoom_ = 1;  // 1, 2, 4, 8
   int minimapW_ = 0, minimapH_ = 0;
   float minimapTimer_ = 0;
   bool minimapDragging_ = false;

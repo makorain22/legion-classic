@@ -194,6 +194,10 @@ class Editor {
   int newTerrain_ = 1;
   // Civilian buildings always belong to nobody, whichever side is chosen.
   uint8_t placingOwner() const;
+ public:
+  bool placingStructure() const;  // the placement grid is shown
+ private:
+  bool oilClickDone_ = false;  // supply point tool: one change per click
   int newSeed_ = 1940;
   int newBiome_ = 0;
   bool newTowns_ = true;

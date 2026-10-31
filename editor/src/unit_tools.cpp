@@ -568,6 +568,10 @@ void Editor::unitIcon(int type, uint8_t owner, float size) {
   }
 }
 
+bool Editor::placingStructure() const {
+  return active() && tool_ == Tool::PlaceUnits && placeType_ >= 0 && scene_.types().get(placeType_).isStructure();
+}
+
 uint8_t Editor::placingOwner() const {
   return scene_.types().get(placeType_).faction == "neutral" ? NEUTRAL_OWNER : placeOwner_;
 }
@@ -579,14 +583,26 @@ void Editor::drawUnitPalette() {
   ImGui::SameLine();
   ImGui::SetNextItemWidth(-1);
   ImGui::Combo("##cat", &paletteCategory_, [](void*, int i) {
-    static const char* names[] = {"Everything", "Infantry", "Vehicles", "Buildings", "Defences", "Fortifications"};
+    static const char* names[] = {"Everything", "Infantry", "Vehicles", "Base buildings", "Defences", "Fortifications",
+                                  "Civilian buildings"};
     return names[i];
-  }, nullptr, 6);
+  }, nullptr, 7);
   const float icon = 44.0f;
+  static const char* kSections[] = {"Infantry", "Vehicles", "Base buildings", "Defences", "Fortifications", "Civilian buildings"};
+  // Listed by kind under headings: soldiers, vehicles, the base, defences,
+  // fortifications, then the civilian houses (which belong to nobody).
+  auto sectionOf = [](const UnitTypeDef& d) { return d.faction == "neutral" ? 5 : static_cast<int>(d.category); };
+  for (int sec = 0; sec < 6; ++sec) {
+  if (paletteCategory_ > 0 && sec != paletteCategory_ - 1) continue;
+  bool header = false;
   for (int i = 0; i < static_cast<int>(types.size()); ++i) {
     const UnitTypeDef& d = types.get(i);
+    if (sectionOf(d) != sec) continue;
     if (!paletteAllFactions_ && d.faction != faction && d.faction != "neutral") continue;  // civilians always listed
-    if (paletteCategory_ > 0 && static_cast<int>(d.category) != paletteCategory_ - 1) continue;
+    if (!header) {
+      ImGui::SeparatorText(kSections[sec]);
+      header = true;
+    }
     ImGui::PushID(i);
     const bool sel = placeType_ == i && tool_ == Tool::PlaceUnits;
     const ImVec2 start = ImGui::GetCursorScreenPos();
@@ -612,6 +628,7 @@ void Editor::drawUnitPalette() {
       ImGui::EndTooltip();
     }
     ImGui::PopID();
+  }
   }
 }
 

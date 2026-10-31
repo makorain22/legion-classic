@@ -199,6 +199,11 @@ int App::run(Scene& scene) {
       running = false;
     }
     SDL_GL_SwapWindow(window_);
+    if (fpsLimit_ > 0 && !cfg_.offscreen) {
+      const uint64_t frameNs = 1000000000ull / static_cast<uint64_t>(fpsLimit_);
+      const uint64_t spent = SDL_GetTicksNS() - now;
+      if (spent < frameNs) SDL_DelayPrecise(frameNs - spent);
+    }
 
     ++fpsFrames;
     const double real = static_cast<double>(SDL_GetTicksNS() - now) / 1e6;
@@ -209,6 +214,16 @@ int App::run(Scene& scene) {
     }
   }
   return 0;
+}
+
+void App::setVsync(bool on) {
+  cfg_.vsync = on;
+  if (gl_) SDL_GL_SetSwapInterval(on && !cfg_.offscreen ? 1 : 0);
+}
+
+void App::setMouseLock(bool on) {
+  mouseLock_ = on;
+  if (window_ && !cfg_.offscreen) SDL_SetWindowMouseGrab(window_, on);
 }
 
 void App::shutdown() {

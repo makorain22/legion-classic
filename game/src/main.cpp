@@ -53,6 +53,7 @@ int main(int argc, char** argv) {
     else if (a == "--editor-selftest") opt.editorSelfTest = true;
     else if (a == "--economy-demo") opt.economyDemo = true;
     else if (a == "--gallery") opt.gallery = true;
+    else if (a == "--org-demo") opt.orgDemo = true;
     else if (a == "--export-sprites") opt.exportSprites = next();
     else if (a == "--no-bases") opt.noBases = true;
     else if (a == "--menu") opt.showMenu = true;
@@ -70,7 +71,7 @@ int main(int argc, char** argv) {
   slave::App app;
   if (!app.init(cfg)) return 1;
   slave::log::init((app.userDir() + "legion.log").c_str());
-  SLV_INFO("Legion Classic 0.7 (Milestones 6-7) on Slave Engine 1.0");
+  SLV_INFO("Legion Classic 0.7.5 on Slave Engine 1.0");
 
   std::string contentDir = "content/";
   if (const char* base = SDL_GetBasePath()) contentDir = std::string(base) + "content/";

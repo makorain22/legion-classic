@@ -50,7 +50,13 @@ void base(Simulation& sim, const Rules& R, uint8_t owner, const char* f, Vec2i a
   const std::string F = f;
   place(sim, R.t((F + "_yard").c_str()), owner, at);
   place(sim, R.t((F + "_power").c_str()), owner, {at.x - 5 * 256, at.y - 4 * 256});
-  place(sim, R.t((F + "_refinery").c_str()), owner, {at.x, at.y - 6 * 256});
+  {  // a supply depot on the nearest supply point
+    Vec2i best = sim.map().supplyPoints.front();
+    for (const Vec2i& sp : sim.map().supplyPoints)
+      if (std::abs(sp.x * 256 - at.x) + std::abs(sp.y * 256 - at.y) < std::abs(best.x * 256 - at.x) + std::abs(best.y * 256 - at.y))
+        best = sp;
+    place(sim, R.t((F + "_depot").c_str()), owner, {best.x * 256 + 128, best.y * 256 + 128});
+  }
   place(sim, R.t((F + "_barracks").c_str()), owner, {at.x + 5 * 256, at.y + 3 * 256});
   Command c;
   c.type = CommandType::SetCredits;

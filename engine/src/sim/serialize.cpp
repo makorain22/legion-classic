@@ -11,7 +11,7 @@
 namespace slave {
 
 namespace {
-constexpr uint32_t kStateMagic = 0x53494D31;  // "SIM1"
+constexpr uint32_t kStateMagic = 0x53494D32;  // "SIM2": groups, garrisons, supply income
 
 template <class T>
 void savePool(ByteWriter& w, Registry& reg) {
@@ -117,6 +117,23 @@ void Simulation::saveState(ByteWriter& w) const {
   savePool<CStructure>(w, reg_);
   savePool<CProducer>(w, reg_);
   savePool<CHarvester>(w, reg_);
+  savePool<CGroupMember>(w, reg_);
+  savePool<CGarrisoned>(w, reg_);
+  {  // Groups and garrisons hold lists, so they are written field by field.
+    auto& g = reg_.pool<CGroup>();
+    w.podVector(g.entities());
+    for (const CGroup& c : g.data()) {
+      w.u8(c.owner);
+      w.u8(c.vehicles ? 1 : 0);
+      w.u8(static_cast<uint8_t>(c.echelon));
+      w.u16(c.number);
+      w.podVector(c.members);
+    }
+    auto& gs = reg_.pool<CGarrison>();
+    w.podVector(gs.entities());
+    for (const CGarrison& c : gs.data()) w.podVector(c.occupants);
+  }
+  w.pod(groupNumbers_);
   {  // Movers hold paths, so they are written field by field.
     auto& p = reg_.pool<CMover>();
     w.podVector(p.entities());
@@ -148,6 +165,7 @@ void Simulation::saveState(ByteWriter& w) const {
     for (const ProductionQueue& q : ps.queues) writeQueue(w, q);
     w.u8(ps.defeated ? 1 : 0);
     w.u8(ps.won ? 1 : 0);
+    w.i32(ps.incomeAcc);
   }
   w.pod(playedOnce_);
   w.pod(scriptDefeated_);
@@ -216,6 +234,25 @@ bool Simulation::loadState(ByteReader& r, std::string& error) {
   loadPool<CStructure>(r, reg_);
   loadPool<CProducer>(r, reg_);
   loadPool<CHarvester>(r, reg_);
+  loadPool<CGroupMember>(r, reg_);
+  loadPool<CGarrisoned>(r, reg_);
+  {
+    std::vector<uint32_t> ents = r.podVector<uint32_t>();
+    std::vector<CGroup> groups(ents.size());
+    for (CGroup& c : groups) {
+      c.owner = r.u8();
+      c.vehicles = r.u8() != 0;
+      c.echelon = static_cast<Echelon>(r.u8());
+      c.number = r.u16();
+      c.members = r.podVector<Entity>();
+    }
+    reg_.pool<CGroup>().restore(std::move(ents), std::move(groups));
+    std::vector<uint32_t> gents = r.podVector<uint32_t>();
+    std::vector<CGarrison> gars(gents.size());
+    for (CGarrison& c : gars) c.occupants = r.podVector<Entity>();
+    reg_.pool<CGarrison>().restore(std::move(gents), std::move(gars));
+  }
+  groupNumbers_ = r.pod<decltype(groupNumbers_)>();
   {
     std::vector<uint32_t> ents = r.podVector<uint32_t>();
     std::vector<CMover> movers(ents.size());
@@ -246,6 +283,7 @@ bool Simulation::loadState(ByteReader& r, std::string& error) {
     for (ProductionQueue& q : ps.queues) readQueue(r, q);
     ps.defeated = r.u8() != 0;
     ps.won = r.u8() != 0;
+    ps.incomeAcc = r.i32();
   }
   playedOnce_ = r.pod<std::array<bool, MAX_PLAYERS>>();
   scriptDefeated_ = r.pod<std::array<bool, MAX_PLAYERS>>();

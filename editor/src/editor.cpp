@@ -20,7 +20,7 @@ namespace legion {
 
 namespace {
 const char* kToolNames[] = {"Raise", "Lower", "Smooth", "Flatten", "Roughen", "Paint ground", "Place props",
-                            "Erase props", "Oil fields", "Place units", "Select units", "Artillery", "Smite", "Heal", "Draw area"};
+                            "Erase props", "Supply points", "Place units", "Select units", "Artillery", "Smite", "Heal", "Draw area"};
 const char* kToolTips[] = {
     "Raise the ground into hills.",
     "Lower the ground into valleys and riverbeds.",
@@ -30,7 +30,7 @@ const char* kToolTips[] = {
     "Paint grass, dirt, mud, roads and more. Edges blend naturally.",
     "Click to place one, drag to scatter trees, bushes or rocks.",
     "Remove trees, bushes and rocks inside the brush.",
-    "Lay down oil for supply trucks to pump. Hold Shift to drain it away.",
+    "Click to add a supply point (a Supply Depot built on one earns supplies). Shift-click removes the nearest.",
     "Place units for any side: one per click, a brush of them, or a whole block.",
     "Select units of any side; drag them to move them; inspect and edit them.",
     "Call down a barrage of 105 mm shells. Hurts every side.",
@@ -223,7 +223,7 @@ void Editor::beginStroke() {
   flattenTarget_ = m.heightAt(c.x, c.y);
   propAccum_ = 1.0f;  // a single click places one prop
   if (tool_ == Tool::Props || tool_ == Tool::Erase) history_.touchProps(m);
-  if (tool_ == Tool::Oil) history_.touchOil(m);
+  if (tool_ == Tool::Oil) oilClickDone_ = false;
 }
 
 void Editor::endStroke() {
@@ -359,24 +359,25 @@ void Editor::applyErase(Vec2f c) {
 }
 
 void Editor::applyOil(Vec2f c, float dt) {
+  // One click, one change (not painted).
+  if (oilClickDone_) return;
+  oilClickDone_ = true;
+  (void)dt;
   Map& m = scene_.map();
-  const bool drain = (SDL_GetModState() & SDL_KMOD_SHIFT) != 0;
-  const float cx = c.x / LEPTONS_PER_TILE, cy = c.y / LEPTONS_PER_TILE;
-  const float rate = strength_ / 100.0f * 600.0f * dt;
-  for (int y = static_cast<int>(cy - radius_); y <= static_cast<int>(cy + radius_); ++y)
-    for (int x = static_cast<int>(cx - radius_); x <= static_cast<int>(cx + radius_); ++x) {
-      if (!m.inBounds(x, y)) continue;
-      const float d = std::sqrt((x + 0.5f - cx) * (x + 0.5f - cx) + (y + 0.5f - cy) * (y + 0.5f - cy));
-      const float w = falloff(d / radius_, softEdge_);
-      if (w <= 0) continue;
-      // Ragged edges, like a real field.
-      const float n = (hash2(x, y, 0x0111u) % 100) / 100.0f;
-      if (!drain && w < 0.35f && n > w * 2.5f) continue;
-      const int add = static_cast<int>(rate * w * (0.6f + 0.8f * n) + 0.5f);
-      const int v = std::clamp(m.oil(x, y) + (drain ? -add : add), 0, 255);
-      if (!drain && m.info(x, y).waterDepth > -4) continue;  // no oil under water
-      m.setOil(x, y, static_cast<uint8_t>(v));
-    }
+  const int tx = static_cast<int>(c.x) >> LEPTON_SHIFT, ty = static_cast<int>(c.y) >> LEPTON_SHIFT;
+  auto& pts = m.supplyPoints;
+  if ((SDL_GetModState() & SDL_KMOD_SHIFT) != 0) {
+    if (pts.empty()) return;
+    size_t best = 0;
+    for (size_t i = 1; i < pts.size(); ++i)
+      if (std::abs(pts[i].x - tx) + std::abs(pts[i].y - ty) < std::abs(pts[best].x - tx) + std::abs(pts[best].y - ty)) best = i;
+    if (std::abs(pts[best].x - tx) + std::abs(pts[best].y - ty) <= 6) pts.erase(pts.begin() + static_cast<long>(best));
+    return;
+  }
+  if (!m.inBounds(tx, ty) || m.info(tx, ty).waterDepth > -4) return;
+  for (const Vec2i& p : pts)
+    if (std::abs(p.x - tx) < 5 && std::abs(p.y - ty) < 5) return;  // too close to another
+  pts.push_back({tx, ty});
 }
 
 void Editor::afterTerrainEdit(int tx0, int ty0, int tx1, int ty1, bool heights, bool splat) {
@@ -651,7 +652,9 @@ void Editor::drawNewMapDialog() {
   }
   ImGui::SetNextWindowPos(ImGui::GetIO().DisplaySize * 0.5f, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
   if (!ImGui::BeginPopupModal("New map", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) return;
-  ImGui::Combo("Size", &newSizeIndex_, "64 x 64 (skirmish)\0128 x 128\0256 x 256\0512 x 512 (huge)\0001024 x 1024 (experimental)\0");
+  static const char* kSizeNames[] = {"64 x 64 (skirmish)", "128 x 128", "256 x 256", "512 x 512 (huge)",
+                                     "1024 x 1024 (experimental)"};
+  ImGui::Combo("Size", &newSizeIndex_, kSizeNames, 5);
   ImGui::Combo("Terrain", &newTerrain_, "Flat grass\0Random landscape\0");
   if (newTerrain_ == 1) {
     if (ImGui::BeginCombo("Biome", biomeName(static_cast<Biome>(newBiome_)))) {

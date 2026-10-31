@@ -98,13 +98,14 @@ void Menus::draw() {
     case Page::InGame: drawInGame(); break;
     case Page::SaveGame: drawSaveGame(); break;
     case Page::About: drawAbout(); break;
+    case Page::Settings: drawSettings(); break;
     default: break;
   }
 }
 
 void Menus::drawMain() {
   const ImGuiIO& io = ImGui::GetIO();
-  ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.08f, io.DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0, 0.5f));
+  ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
   ImGui::SetNextWindowSize(ImVec2(340, 0));
   ImGui::SetNextWindowBgAlpha(0.88f);
   ImGui::Begin("##main", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
@@ -141,11 +142,13 @@ void Menus::drawMain() {
     for (auto& side : s.sides) side.human = true;  // nobody plays on their own while you build
     scene_.startSkirmish(s);
     scene_.editorOpen(true);
+    page_ = Page::None;  // the menu must close, or it keeps every click and key from the editor
   }
+  if (menuButton("Settings", w)) page_ = Page::Settings;
   if (menuButton("About", w)) page_ = Page::About;
   if (menuButton("Quit", w)) scene_.quit();
   ImGui::Dummy(ImVec2(0, 6));
-  ImGui::TextDisabled("Slave Engine 1.0  -  build 0.7");
+  ImGui::TextDisabled("Slave Engine 1.0  -  build 0.7.5");
   ImGui::End();
 }
 
@@ -341,6 +344,7 @@ void Menus::drawInGame() {
       scene_.restart();
     }
   }
+  if (menuButton("Settings", w)) page_ = Page::Settings;
   if (menuButton("Quit to main menu", w)) {
     page_ = Page::Main;
     scene_.setPaused(false);
@@ -410,6 +414,101 @@ void Menus::drawAbout() {
   ImGui::Dummy(ImVec2(0, 6));
   returnTo_ = Page::Main;
   backButton();
+  ImGui::End();
+}
+
+// ---------------------------------------------------------------------------
+// Settings: display and controls
+// ---------------------------------------------------------------------------
+void Menus::captureKey(const SDL_KeyboardEvent& e) {
+  if (capture_ < 0) return;
+  const SDL_Keycode k = e.key;
+  // Modifier keys alone are not bindings; wait for the real key.
+  if (k == SDLK_LCTRL || k == SDLK_RCTRL || k == SDLK_LSHIFT || k == SDLK_RSHIFT || k == SDLK_LALT || k == SDLK_RALT) return;
+  Settings& st = scene_.settings();
+  auto& slot = st.keys[static_cast<size_t>(capture_)][static_cast<size_t>(captureSlot_)];
+  if (k == SDLK_ESCAPE) {
+    // Esc cancels; Backspace / Delete clears the binding.
+  } else if (k == SDLK_BACKSPACE || k == SDLK_DELETE) {
+    slot = {};
+  } else {
+    slot = {k, modsOf(e.mod)};
+  }
+  capture_ = -1;
+  scene_.saveSettings();
+}
+
+void Menus::drawSettings() {
+  centredWindow("##settings", ImVec2(640, 600));
+  title("Settings");
+  Settings& st = scene_.settings();
+  bool changed = false;
+  if (ImGui::BeginTabBar("##settabs")) {
+    if (ImGui::BeginTabItem("Display")) {
+      static const int fpsValues[] = {30, 60, 75, 120, 144, 165, 240, 0};
+      static const char* fpsNames[] = {"30", "60", "75", "120", "144", "165", "240", "Unlimited"};
+      int fi = 4;
+      for (int i = 0; i < 8; ++i)
+        if (fpsValues[i] == st.fpsLimit) fi = i;
+      ImGui::SetNextItemWidth(200);
+      if (ImGui::Combo("Frame rate limit", &fi, fpsNames, 8)) {
+        st.fpsLimit = fpsValues[fi];
+        changed = true;
+      }
+      changed |= ImGui::Checkbox("Vertical sync", &st.vsync);
+      ImGui::TextDisabled("With vsync on, the frame rate also stops at the monitor's refresh rate.");
+      ImGui::Separator();
+      changed |= ImGui::Checkbox("Lock the mouse inside the window while playing", &st.mouseLock);
+      changed |= ImGui::Checkbox("Scroll when the mouse touches a screen edge", &st.edgeScroll);
+      ImGui::SetNextItemWidth(200);
+      changed |= ImGui::SliderFloat("Scroll speed", &st.scrollSpeed, 0.3f, 3.0f, "%.1fx");
+      changed |= ImGui::Checkbox("Show the game info panel (I)", &st.showInfoPanel);
+      changed |= ImGui::Checkbox("Unit cards over fireteams, platoons and companies", &st.showCards);
+      changed |= ImGui::Checkbox("Chips for enemy forces detected in the fog", &st.showChips);
+      ImGui::EndTabItem();
+    }
+    if (ImGui::BeginTabItem("Controls")) {
+      ImGui::TextDisabled("Click a key to change it, then press the new key (with Ctrl / Shift / Alt if you like).");
+      ImGui::TextDisabled("Esc cancels, Backspace clears. The scenario editor's own keys (Ctrl+S, Ctrl+D, Ctrl+Z) win while it's open.");
+      if (ImGui::BeginTable("##keys", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY, ImVec2(0, 380))) {
+        ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Key", ImGuiTableColumnFlags_WidthFixed, 150);
+        ImGui::TableSetupColumn("Second key", ImGuiTableColumnFlags_WidthFixed, 150);
+        ImGui::TableHeadersRow();
+        for (int a = 0; a < ACTION_COUNT; ++a) {
+          ImGui::TableNextRow();
+          ImGui::TableNextColumn();
+          ImGui::TextUnformatted(actionLabel(static_cast<InputAction>(a)));
+          for (int slot = 0; slot < 2; ++slot) {
+            ImGui::TableNextColumn();
+            ImGui::PushID(a * 2 + slot);
+            const bool waiting = capture_ == a && captureSlot_ == slot;
+            const std::string label = waiting ? std::string("press a key...") : comboName(st.keys[static_cast<size_t>(a)][static_cast<size_t>(slot)]);
+            if (ImGui::Button(label.c_str(), ImVec2(-1, 0))) {
+              capture_ = a;
+              captureSlot_ = slot;
+            }
+            ImGui::PopID();
+          }
+        }
+        ImGui::EndTable();
+      }
+      if (ImGui::Button("Reset to defaults")) {
+        st.resetKeys();
+        changed = true;
+      }
+      ImGui::EndTabItem();
+    }
+    ImGui::EndTabBar();
+  }
+  if (changed) {
+    scene_.applySettings();
+    scene_.saveSettings();
+  }
+  if (menuButton("Back", 120)) {
+    capture_ = -1;
+    page_ = scene_.mode() == Mode::Menu ? Page::Main : Page::InGame;
+  }
   ImGui::End();
 }
 

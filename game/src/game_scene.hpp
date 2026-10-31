@@ -7,7 +7,12 @@
 #include <string>
 #include <vector>
 
+#include <imgui.h>
+
+#include <functional>
+
 #include "battle_fx.hpp"
+#include "settings.hpp"
 #include "sidebar.hpp"
 #include "slave/assets/placeholder_art.hpp"
 #include "slave/map/map.hpp"
@@ -57,7 +62,8 @@ struct SceneOptions {
   bool liveDemo = false;     // scripted Live Scenario Editor session (units, battle tools)
   bool editorSelfTest = false;  // checks unit placement / undo / redo through the real editor
   std::string exportSprites;     // write every sprite as a PNG here, then quit
-  bool gallery = false;         // every unit lined up, for screenshots of the art
+  bool gallery = false;
+  bool orgDemo = false;          // fireteams, platoons, a garrison and fog chips, for screenshots         // every unit lined up, for screenshots of the art
   bool economyDemo = false;     // scripted base building, for automated screenshots
   bool noBases = false;         // start with armies only, no bases (classic skirmish sandbox)
   bool showMenu = false;        // start at the main menu (normal start-up)
@@ -111,6 +117,9 @@ class GameScene final : public slave::Scene {
     return p >= 0 && p < slave::MAX_PLAYERS ? players_[static_cast<size_t>(p)].name : std::string("Civilians");
   }
   const std::string& scenariosDir() const { return scenariosDir_; }
+  Settings& settings() { return settings_; }
+  void applySettings();  // after the settings page changes something
+  void saveSettings();
   // Neutral houses on the generator's village and town plots.
   void addTownBuildings(slave::MapFile& f) const;
 
@@ -131,7 +140,7 @@ class GameScene final : public slave::Scene {
 
   bool& editorShowsFog() { return editorFog_; }
   void centerOn(slave::Vec2i leptons);
-  void orderMove(slave::Vec2i target, slave::CommandType type = slave::CommandType::Move);
+  void orderMove(slave::Vec2i target, slave::CommandType type = slave::CommandType::Move, int formation = -1);
   bool fogEnabled() const;
   Sidebar& sidebar() { return *sidebar_; }
   void setPaused(bool p) { paused_ = p; }
@@ -204,7 +213,35 @@ class GameScene final : public slave::Scene {
   void buildBase(uint8_t player, slave::Vec2i centre);
   void runEconomyDemo();
   void runGallery();
+  void runOrgDemo();
   slave::Vec2i galleryAt_{0, 0};
+  void drawFormationPicker();
+  bool formationPicker_ = false;
+  float hudBottom_ = 8;
+  slave::Vec2f pickerScreen_;
+  slave::Vec2i pickerTarget_;
+  // Overlays over the battlefield (unit_cards.cpp).
+  std::string groupName(const slave::CGroup& g) const;
+  std::string groupSymbol(const slave::CGroup& g) const;
+  void drawNatoSymbol(ImDrawList* dl, ImVec2 c, float scale, const std::string& nato, slave::Echelon e, uint32_t team,
+                      float alpha, bool hostile);
+  void drawWorldOverlays();
+  void drawChips(ImDrawList* dl, const std::function<ImVec2(slave::Vec2f)>& toScreen);
+  struct Chip {
+    int64_t x = 0, y = 0;
+    int count = 0;
+    uint8_t owner = 0;
+    int32_t bestCost = -1;
+    std::string nato;
+  };
+  std::vector<Chip> chips_;
+  std::vector<uint8_t> detect_;
+  int chipTimer_ = 0;
+  bool showCards_ = true, showChips_ = true;
+  void bindSelection();
+  void expandToGroups();
+  slave::Entity garrisonUnder(slave::Vec2f screenPx) const;
+  void unbindSelection();
   void updateCameraBounds();
   void drawHud();
   void drawHelp();
@@ -263,6 +300,7 @@ class GameScene final : public slave::Scene {
   float bannerTime_ = 0;
   std::array<uint32_t, slave::MAX_PLAYERS> teamColors_{};
   std::string scenariosDir_;  // built-in missions, in the content folder
+  Settings settings_;
   std::array<slave::PlayerSetup, slave::MAX_PLAYERS> players_;
   std::unique_ptr<slave::MapFile> snapshot_;
   bool editorFog_ = false;

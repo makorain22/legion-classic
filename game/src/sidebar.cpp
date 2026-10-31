@@ -277,10 +277,22 @@ void Sidebar::rebuildMinimap() {
     int px, py;
     if (!toPixel(p.x, p.y, px, py)) continue;
     const uint32_t c = scene_.teamColor(u.owner) | 0xFF000000u;
-    const int r = d.isStructure() ? std::max(1, d.footW * mw / (W + H)) : 0;
+    const int r = d.isStructure() ? std::max(1, d.footW * mw / (W + H)) : miniZoom_ / 2;
     for (int y = py - r; y <= py + r; ++y)
       for (int x = px - r; x <= px + r; ++x)
         if (x >= 0 && y >= 0 && x < mw && y < mh) minimapPixels_[static_cast<size_t>(y) * mw + x] = d.isStructure() ? shade(c, 1.2f) : c;
+  }
+  // Supply points: gold, or the colour of the side whose depot holds them.
+  for (size_t i = 0; i < m.supplyPoints.size(); ++i) {
+    int px, py;
+    if (!toPixel(m.supplyPoints[i].x * 256 + 128, m.supplyPoints[i].y * 256 + 128, px, py)) continue;
+    const Entity depot = scene_.sim().depotOn(static_cast<int>(i));
+    const uint32_t c = depot.valid() ? scene_.teamColor(reg.get<CUnit>(depot).owner) | 0xFF000000u : rgba8(236, 206, 96);
+    const int r = std::max(1, miniZoom_);
+    for (int y = py - r; y <= py + r; ++y)
+      for (int x = px - r; x <= px + r; ++x)
+        if (x >= 0 && y >= 0 && x < mw && y < mh && (std::abs(x - px) == r || std::abs(y - py) == r))
+          minimapPixels_[static_cast<size_t>(y) * mw + x] = c;
   }
   if (minimap_.width() != mw || minimap_.height() != mh) minimap_.allocate(mw, mh, {true, false, false});
   minimap_.update(0, 0, mw, mh, minimapPixels_.data());
@@ -290,9 +302,11 @@ void Sidebar::drawMinimap(float width) {
   const Map& m = scene_.map();
   const int W = m.width(), H = m.height();
   const int mw = static_cast<int>(width), mh = static_cast<int>(width * 0.5f);
-  if (mw != minimapW_ || mh != minimapH_) {
-    minimapW_ = mw;
-    minimapH_ = mh;
+  // The texture has more pixels when zoomed in, so units stay sharp.
+  const int tw = mw * miniZoom_, th = mh * miniZoom_;
+  if (tw != minimapW_ || th != minimapH_) {
+    minimapW_ = tw;
+    minimapH_ = th;
     terrainColors_.clear();
     minimapTimer_ = 0;
   }
@@ -300,16 +314,25 @@ void Sidebar::drawMinimap(float width) {
     rebuildMinimap();
     minimapTimer_ = 0.25f;
   }
+  // Zoomed in, the minimap shows the part of the map around the camera.
+  const float span = 1.0f / static_cast<float>(miniZoom_);
+  auto norm = [&](Vec2f l) {
+    const float tx = l.x / 256.0f, ty = l.y / 256.0f;
+    return ImVec2((tx - ty + H) / (W + H), (tx + ty) / (W + H));
+  };
+  const float vw = static_cast<float>(scene_.app().pixelWidth()) - kWidth, vh = static_cast<float>(scene_.app().pixelHeight());
+  const ImVec2 camN = norm(scene_.groundAt({vw * 0.5f, vh * 0.5f}));
+  const float u0 = std::clamp(camN.x - span * 0.5f, 0.0f, 1.0f - span), v0 = std::clamp(camN.y - span * 0.5f, 0.0f, 1.0f - span);
+
   const ImVec2 p0 = ImGui::GetCursorScreenPos();
   ImDrawList* dl = ImGui::GetWindowDrawList();
   dl->AddRectFilled(p0, ImVec2(p0.x + mw, p0.y + mh), IM_COL32(10, 10, 8, 255));
-  dl->AddImage(ImTextureRef(static_cast<ImTextureID>(minimap_.id())), p0, ImVec2(p0.x + mw, p0.y + mh));
-  // The camera's view, as a quad on the minimap.
+  dl->AddImage(ImTextureRef(static_cast<ImTextureID>(minimap_.id())), p0, ImVec2(p0.x + mw, p0.y + mh), ImVec2(u0, v0),
+               ImVec2(u0 + span, v0 + span));
   auto toMini = [&](Vec2f l) {
-    const float tx = l.x / 256.0f, ty = l.y / 256.0f;
-    return ImVec2(p0.x + (tx - ty + H) / (W + H) * mw, p0.y + (tx + ty) / (W + H) * mh);
+    const ImVec2 n = norm(l);
+    return ImVec2(p0.x + (n.x - u0) / span * mw, p0.y + (n.y - v0) / span * mh);
   };
-  const float vw = static_cast<float>(scene_.app().pixelWidth()) - kWidth, vh = static_cast<float>(scene_.app().pixelHeight());
   const ImVec2 a = toMini(scene_.groundAt({0, 0})), b = toMini(scene_.groundAt({vw, 0}));
   const ImVec2 c = toMini(scene_.groundAt({vw, vh})), d = toMini(scene_.groundAt({0, vh}));
   dl->PushClipRect(p0, ImVec2(p0.x + mw, p0.y + mh), true);
@@ -319,9 +342,11 @@ void Sidebar::drawMinimap(float width) {
 
   ImGui::InvisibleButton("##minimap", ImVec2(static_cast<float>(mw), static_cast<float>(mh)),
                          ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
+  const bool hovered = ImGui::IsItemHovered();
   auto groundUnderMouse = [&]() {
     const ImVec2 mp = ImGui::GetIO().MousePos;
-    const float sx = (mp.x - p0.x) / mw * (W + H) - H, sy = (mp.y - p0.y) / mh * (W + H);
+    const float nu = u0 + (mp.x - p0.x) / mw * span, nv = v0 + (mp.y - p0.y) / mh * span;
+    const float sx = nu * (W + H) - H, sy = nv * (W + H);
     return Vec2i{static_cast<int32_t>((sx + sy) * 0.5f * 256), static_cast<int32_t>((sy - sx) * 0.5f * 256)};
   };
   if (ImGui::IsItemActive() && ImGui::IsMouseDown(ImGuiMouseButton_Left)) scene_.centerOn(groundUnderMouse());
@@ -332,7 +357,18 @@ void Sidebar::drawMinimap(float width) {
     g.y = std::clamp(g.y, 0, m.heightLeptons() - 1);
     scene_.orderMove(g, CommandType::Move);
   }
-  if (ImGui::IsItemHovered()) ImGui::SetTooltip("Click or drag: look there. Right-click: send the selection there.");
+  if (hovered && ImGui::GetIO().MouseWheel != 0)
+    miniZoom_ = std::clamp(ImGui::GetIO().MouseWheel > 0 ? miniZoom_ * 2 : miniZoom_ / 2, 1, 8);
+  if (hovered) ImGui::SetTooltip("Click or drag: look there. Right-click: send the selection there. Wheel or +/-: zoom.");
+  // Zoom buttons in the top-right corner of the minimap.
+  const ImVec2 after = ImGui::GetCursorScreenPos();
+  ImGui::SetCursorScreenPos(ImVec2(p0.x + mw - 46, p0.y + 2));
+  if (ImGui::SmallButton("-##mz")) miniZoom_ = std::max(1, miniZoom_ / 2);
+  ImGui::SameLine(0, 2);
+  if (ImGui::SmallButton("+##mz")) miniZoom_ = std::min(8, miniZoom_ * 2);
+  ImGui::SetCursorScreenPos(ImVec2(p0.x + 3, p0.y + 2));
+  ImGui::TextColored(ImVec4(0.9f, 0.85f, 0.6f, 0.8f), "%dx", miniZoom_);
+  ImGui::SetCursorScreenPos(after);
 }
 
 // ---------------------------------------------------------------------------
@@ -566,9 +602,14 @@ void Sidebar::draw() {
   ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.93f, 0.78f, 0.38f, 1));
   ImGui::Text("$ %d", ps.credits);
   ImGui::PopStyleColor();
-  ImGui::SameLine(width * 0.45f);
+  if (ImGui::IsItemHovered())
+    ImGui::SetTooltip("Supplies. Income: %d a minute (Supply Depots on supply points, plus the Construction Yard).",
+                      ps.incomePerMinute);
+  ImGui::SameLine();
+  ImGui::TextDisabled("+%d", ps.incomePerMinute);
+  ImGui::SameLine(width * 0.56f);
   const ImVec4 pc = ps.lowPower() ? ImVec4(1, 0.4f, 0.3f, 1) : ImVec4(0.6f, 0.85f, 0.5f, 1);
-  ImGui::TextColored(pc, "Power %d/%d", ps.powerUsed, ps.powerMade);
+  ImGui::TextColored(pc, "Pwr %d/%d", ps.powerUsed, ps.powerMade);
   if (ImGui::IsItemHovered())
     ImGui::SetTooltip("Used / made. Short of power, everything takes twice as long to build.");
   // Power bar.

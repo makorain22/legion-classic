@@ -38,6 +38,36 @@ struct CUnit {
   uint8_t owner = 0;  // player slot 0..7
   int32_t health = 100;
   Stance stance = Stance::Aggressive;
+  uint8_t damageFrac = 0;  // hundredths of a hit point taken but not yet counted (rifles on armour)
+};
+
+// --- Unit organisation ---------------------------------------------------------
+// Infantry: fireteam (5), squad (10), platoon (20), company (100).
+// Vehicles: platoon (5), company (15), battalion (50).
+enum class Echelon : uint8_t { None = 0, Fireteam, Squad, Platoon, Company, Battalion };
+
+// A unit's membership of a group (fireteam, platoon...).
+struct CGroupMember {
+  Entity group;
+};
+
+// A group entity: a bound fighting unit. It has no position; its members do.
+struct CGroup {
+  uint8_t owner = 0;
+  bool vehicles = false;      // an armoured unit (else infantry)
+  Echelon echelon = Echelon::Fireteam;
+  uint16_t number = 1;        // 1st, 2nd... per side and echelon, for its name
+  std::vector<Entity> members;
+};
+
+// Infantry inside a building, bunker or other shelter.
+struct CGarrisoned {
+  Entity building;
+};
+
+// A structure that infantry can occupy.
+struct CGarrison {
+  std::vector<Entity> occupants;
 };
 
 struct CTurret {
@@ -45,7 +75,7 @@ struct CTurret {
   uint8_t wait = 0;
 };
 
-enum class OrderType : uint8_t { Idle = 0, Move, AttackMove, Attack, Harvest, Repair };
+enum class OrderType : uint8_t { Idle = 0, Move, AttackMove, Attack, Harvest, Repair, Occupy };
 
 struct COrder {
   OrderType type = OrderType::Idle;

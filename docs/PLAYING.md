@@ -1,4 +1,4 @@
-# Playing Legion Classic (Milestones 6–7 build)
+# Playing Legion Classic (build 0.7.5)
 
 Double-click `LegionClassic.exe`. No installation is needed; keep the `content`
 folder next to the exe.
@@ -58,19 +58,19 @@ boxy and camouflaged in three colours, Soviet armour sloped and plain green.
 
 | Unit | Built at | Cost | Notes |
 | --- | --- | --- | --- |
-| Rifleman / Grenadier | Barracks | 80 / 100 | Cheap, hit 7 shots in 10. Useless against armour. |
-| MG Team | Barracks | 250 | A heavy machine gun: shreds infantry at 6.5 tiles. |
-| AT Team | Barracks | 300 | Panzerschreck (Germany: big hit, short range) or anti-tank rifle (Russia: longer range, smaller hits). Hunts tanks from cover. |
-| Engineer (Pioneer / Sapper) | Barracks | 200 | Unarmed. Repairs friendly vehicles and buildings: right-click them; idle engineers repair anything damaged nearby. |
-| Sniper | Barracks (needs a Watchtower) | 400 | Sees 11 tiles, kills a man with almost every shot at 9.5 tiles. |
+| Rifleman / Grenadier | Barracks | 8 / 10 | Cheap, hit 7 shots in 10. Only scratch armour: it takes about thirty of them to wear down a heavy tank. |
+| MG Team | Barracks | 40 | A heavy machine gun: shreds infantry at 6.5 tiles. |
+| AT Team | Barracks | 50 | Panzerschreck (Germany: big hit, short range) or anti-tank rifle (Russia: longer range, smaller hits). Hunts tanks from cover. |
+| Engineer (Pioneer / Sapper) | Barracks | 30 | Unarmed. Repairs friendly vehicles and buildings: right-click them; idle engineers repair anything damaged nearby. |
+| Sniper | Barracks (needs a Watchtower) | 80 | Sees 11 tiles, kills a man with almost every shot at 9.5 tiles. |
 | Scout Car | Tank Works | 400 | Fast, sees far: spots for the guns. |
 | Half-track | Tank Works | 450 | Armoured, quick, machine gun on a pivot. |
 | Light Tank | Tank Works | 550 | 37 / 45 mm gun. Fast and cheap; loses to anything heavier. |
-| Medium Tank | Tank Works (needs an Oil Depot) | 850 / 900 | The backbone: 75 / 76 mm gun, HE against infantry. |
-| Tank Destroyer | Tank Works (needs an Oil Depot) | 1100 | No turret, heavy frontal armour, a long gun that out-ranges tanks. Must turn to fire. |
+| Medium Tank | Tank Works (needs a Supply Depot) | 850 / 900 | The backbone: 75 / 76 mm gun, HE against infantry. |
+| Tank Destroyer | Tank Works (needs a Supply Depot) | 1100 | No turret, heavy frontal armour, a long gun that out-ranges tanks. Must turn to fire. |
 | Artillery | Tank Works (needs a Watchtower) | 1200 | Germany: 105 mm howitzer (18 tiles). Russia: rocket truck firing salvoes of 8 rockets (16 tiles) that blanket an area. Needs spotters. |
-| Heavy Tank | Tank Works (needs an Oil Depot and a Watchtower) | 2000 | 88 / 122 mm gun at 10.5–11.5 tiles, armour that shrugs off light guns. |
-| Supply Truck, Construction Truck | Tank Works | 1200, 3000 | Economy (see below). |
+| Heavy Tank | Tank Works (needs a Supply Depot and a Watchtower) | 2000 | 88 / 122 mm gun at 10.5–11.5 tiles, armour that shrugs off light guns. |
+| Construction Truck | Tank Works | 3000 | Unfolds into a new Construction Yard. |
 
 ### Biomes, villages and towns
 
@@ -91,28 +91,84 @@ grey on the minimap.
 
 ### The economy
 
-- **Supplies** ($, top of the sidebar) pay for everything. They come from
-  **oil**: dark stains on the ground. **Supply trucks** pump it out and drive it
-  to an **Oil Depot**, about $500 a trip. Each depot comes with one truck; build
-  more at the Tank Works. Right-click oil with a truck selected to send it
-  there. Fields run dry, so expand to new ones.
+- **Supplies** ($, top of the sidebar, with your income a minute beside it) pay
+  for everything. Your Construction Yard brings in a trickle ($120 a minute).
+  The real money comes from **supply points**: marked SUPPLY on the ground and
+  as gold squares on the minimap. Build a **Supply Depot** on one ($800) and it
+  earns $600 a minute for as long as it stands. Depots can go on any free
+  supply point on the map, however far from your base, so the points out in
+  the middle are worth fighting over. Destroy an enemy depot and its point is
+  free again.
 - **Power.** Most structures use power; Power Stations make it (the bar under
   your supplies). Short of power, everything takes twice as long to build.
 - **Building.** On the sidebar's **Build** tab, click a structure. It is paid
   for as it goes up; when it says READY, click it again and put it down near
-  your other structures (a green footprint means it fits). Structures need
-  others first: the Barracks needs a Power Station, the Tank Works an Oil Depot,
-  and so on (hover a greyed-out button to see what's missing).
+  your other structures (a green footprint means it fits; a grid shows the
+  tiles around the cursor, red where the ground is too steep or wet).
+  Structures need others first: the Barracks needs a Power Station, the Tank
+  Works a Supply Depot, and so on (hover a greyed-out button to see what's
+  missing).
 - **Training.** The **Train** and **Vehicles** tabs queue infantry at the Barracks
-  and vehicles at the Tank Works (Shift-click for 5, right-click to cancel).
-  Select a barracks or works and right-click the ground to set where new units
-  go; that building becomes the one they come out of.
-- **Construction Truck.** Built at the Tank Works; press **D** (or right-click it)
-  to unfold it into a new Construction Yard wherever there is room.
+  and vehicles at the Tank Works. Infantry are cheap: a Grenadier costs $10.
+  Click for one man, **Shift-click for a fireteam of five**; right-click
+  cancels. Select a barracks or works and right-click the ground to set where
+  new units go; that building becomes the one they come out of.
+- **Construction Truck.** Built at the Tank Works; press **Ctrl+D** (or G, or
+  right-click it) to unfold it into a new Construction Yard wherever there is
+  room.
 - **Selling.** The **Sell** button, then click your structures, returns half their
   cost.
 - **Defeat.** A side with no units and no structures left (trenches and walls
   don't count) is defeated. The last side standing wins.
+
+### Fireteams, platoons and companies
+
+Soldiers fight as units, as real armies do:
+
+- **Fireteams form by themselves.** Five men of the same kind standing close
+  together, not yet in a unit, become a fireteam (a fireteam of five trained
+  together forms at the rally point).
+- **Bigger units are bound by hand.** Select the men or fireteams and press
+  **Ctrl+B**: 10 or more make a squad, 20 a platoon, 100 a company. Vehicles
+  bind the same way: 5 make an armoured platoon, 15 a company, 50 a battalion.
+  **Ctrl+U** disbands the selected unit.
+- **Bigger units hit harder.** Members of a fireteam fire 5 % harder, a squad
+  10 %, a platoon 15 %, a company 30 %. Armour gains less (3 %, 6 %, 10 %).
+- **A unit stays together.** Clicking any member selects the whole unit (hold
+  Alt to pick one man), and it moves as one. Men who wander far stay members.
+  Casualties wear a unit down: a company that falls to 20 men becomes a
+  platoon, a platoon at 10 a squad, a squad at 5 a fireteam; a fireteam down to
+  one man breaks up.
+- **Unit cards.** Each unit carries a card above it in NATO style: the frame in
+  your colour (a diamond for the enemy), the branch inside (a cross for
+  infantry, an oval for armour, a slash for recon, a dot for artillery...),
+  the size above (Ø fireteam, • squad, ••• platoon, | company, || battalion), and
+  a name such as *Fireteam Bravo* or *2nd Platoon*. Hovering a soldier or
+  vehicle shows its type, its unit and its strength.
+
+### Holding buildings, bunkers and trenches
+
+- **Right-click a building or bunker** with infantry selected to send them in
+  (houses, churches and ruins hold 6 to 30 men; a bunker 4; a watchtower 1).
+  Men inside take **half damage** and shoot out at full strength. A badge
+  shows how many are inside.
+- **The more men, the more fortified it looks:** sandbags go up along the
+  front, then a side, then all round, and the men take a little less damage
+  still (45 %, then 40 %).
+- **To come out,** give the men inside any move order: click the building to
+  select them, then right-click where they should go.
+- If the building is destroyed, the men inside are thrown out and hurt.
+- **Right-click a trench** with infantry selected to man it: they spread out
+  along the whole trench line, one man to each piece of trench first.
+
+### What you can't see: chips
+
+Black ground has never been seen and dimmed ground isn't watched now. But
+your troops hear and glimpse movement beyond their sight (about twice as
+far). Enemy forces there show as **chips**, like counters on a map table: the
+taller the stack and the more question marks, the more of them (a handful,
+about a platoon, about a company, more), and the symbol on top is the most
+valuable thing among them. Chips can't be shot; send someone to look.
 
 ### Fortifications and defences (Defend tab)
 
@@ -147,8 +203,9 @@ guns and towers are built and placed like other structures.
 
 ### How combat works
 
-- **Weapons and armour.** Rifles and machine guns cut infantry down but can't
-  hurt tanks; AT teams, anti-tank guns and tanks can. Riflemen are green troops: they miss about 3 shots in 10, so
+- **Weapons and armour.** Rifles and machine guns cut infantry down but barely
+  scratch tanks (a heavy tank shrugs off a squad; thirty men firing for half a
+  minute wear it down); AT teams, anti-tank guns and tanks kill them. Riflemen are green troops: they miss about 3 shots in 10, so
   firefights take time. Tanks outrange everything (about 10 tiles) and hit
   hard: armour-piercing shells against vehicles, and high-explosive shells with
   a wide blast against infantry, so infantry without armour support gets
@@ -160,8 +217,8 @@ guns and towers are built and placed like other structures.
   see 11–12. Every unit shoots at whatever its side (and its allies) can see,
   so put scouts forward to let the tanks fire at full range.
 - **Orders.** Right-click an enemy to attack it: your units drive into range,
-  chase it if it moves, and stop when it dies. **Attack-move** (press **A**,
-  then left-click the ground, or Ctrl+right-click) advances to a point and
+  chase it if it moves, and stop when it dies. **Attack-move** (press **Ctrl+A** or **F**,
+  then left-click the ground, or pick it in the Ctrl+right-click menu) advances to a point and
   stops to fight anything met on the way. A plain move ignores the enemy
   (tanks still shoot on the move with their turrets; infantry don't).
 - **Fog of war.** Black ground has never been seen; dimmed ground was seen
@@ -174,37 +231,48 @@ guns and towers are built and placed like other structures.
 
 ## Controls
 
+Every key can be changed under **Settings → Controls** (main menu or Esc).
+These are the defaults:
+
 | Input | Action |
 | --- | --- |
-| Left click | Select a unit (Shift: add or remove) |
+| Left click | Select a unit: the whole fireteam or platoon it belongs to (Shift: add or remove; Alt: just that one) |
 | Left drag | Box-select your units |
 | Double-click | Select all units of that type on screen |
-| Right click | Move the selected units; on a visible enemy: attack it; on a civilian building: shell it; with trucks on oil: pump it; with engineers on a damaged friend: repair it; with a barracks or works selected: rally point |
+| Left click on a building your men hold | Select the men inside |
+| Right click | Move; on a visible enemy: attack it; on a building or bunker with infantry: go in; on a trench: man it; with engineers on a damaged friend: repair it; with a barracks or works selected: rally point |
 | Right drag | Move into formation along the dragged front line |
+| Ctrl+right click | Choose a formation (and move or attack-move) for this order |
 | Alt+right click | Forced march (don't stop to fight) |
-| D | Deploy a construction truck |
-| A, then left click | Attack-move to that point (Esc or right click cancels) |
-| Ctrl+right click | Attack-move |
+| W A S D, arrow keys, screen edges | Scroll |
+| Ctrl+A, then left click (or F) | Attack-move to that point (Esc or right click cancels) |
+| Ctrl+S (or X) | Stop |
+| Ctrl+D (or G) | Deploy a construction truck |
+| Ctrl+B | Bind the selection into a squad, platoon or company (vehicles: platoon, company, battalion) |
+| Ctrl+U | Disband the selected unit |
+| Ctrl+Shift+A | Select all your units |
 | Ctrl+1…9 / 1…9 | Set / recall a control group |
-| Ctrl+A | Select all your units |
-| S | Stop |
 | Tab | Switch which side you command (and see) |
-| Sidebar minimap | Click/drag to look; right-click to send the selection |
-| Arrow keys, screen edges | Scroll |
+| Home or C | Centre the view on the selection |
+| Sidebar minimap | Click/drag to look; right-click to send the selection; wheel or + / − to zoom (1× to 8×) |
 | Middle mouse drag | Pan |
 | Mouse wheel | Zoom 0.5× / 1× / 2× |
-| Home | Centre the view on the selection |
 | Space | Pause |
 | + / − | Game speed (0.25× to 8×) |
-| Delete | Remove the selected units |
-| Esc or F10 | Menu: save, load, replays, restart, quit |
+| I | Show / hide the game info panel |
+| Esc or F10 | Menu: save, load, replays, settings, restart, quit |
 | F1 | Show / hide the controls panel |
-| F2 | Open / close the map editor |
+| F2 | Open / close the map editor (its own keys, Ctrl+S save and Ctrl+D duplicate, win while it's open) |
 | F3 | Debug panel: spawn tools (up to 10,000 units at once), reveal map, all health bars, simulation timings |
 | F11 or Alt+Enter | Fullscreen |
 | F12 | Screenshot |
 
-Screenshots and the log file (`legion.log`) are saved in
+**Settings → Display** sets the frame rate limit (30 to 240, or unlimited;
+144 by default), vsync, whether the mouse is kept inside the window while you
+play (on by default, so edge scrolling always works), edge scrolling, scroll
+speed, the info panel, unit cards and fog chips.
+
+Screenshots, settings and the log file (`legion.log`) are saved in
 `%APPDATA%\Makorain\LegionClassic\`.
 
 ## Live Scenario Editor (F2)
@@ -223,7 +291,7 @@ removes those units again; undoing a delete brings them back where they were.
 
 | Tool | What it does |
 | --- | --- |
-| Oil fields | Lay oil for supply trucks (Shift: drain it) |
+| Supply points | Click to add a supply point (Supply Depots earn on them); Shift-click removes the nearest |
 | Raise / Lower | Build hills or dig valleys and riverbeds |
 | Smooth | Soften bumps and sharp edges |
 | Flatten | Level the ground to the height where the stroke started |
@@ -235,10 +303,12 @@ removes those units again; undoing a delete brings them back where they were.
 
 ### Units tab
 
-- **Place units.** Choose the side, then a unit, building, defence or
-  fortification from the palette (it lists that side's faction and the
-  civilian buildings, which always belong to nobody; tick *Every faction* to
-  mix, or filter by kind). Structures go down exactly on the grid,
+- **Place units.** Choose the side, then a unit from the palette. It is
+  listed under headings: infantry, vehicles, base buildings, defences,
+  fortifications, and civilian buildings (which always belong to nobody).
+  Pick one heading from the list to see only that kind; tick *Every faction*
+  to mix factions. While placing a building, a grid shows the tiles around the
+  cursor. Structures go down exactly on the grid,
   free and anywhere there's room. Pick how:
   - **One**: one unit per click.
   - **Brush**: drag to paint units across an area (size and density sliders).
@@ -343,5 +413,6 @@ no bases), `--debug` (open the debug panel), `--editor` (start with the editor
 open), `--open path\to\map.lmap` (start on a saved map), `--menu` (the main
 menu; the default when started with no options), `--ai-battle` (watch two
 computer players), `--gallery` (every unit and building lined up, for looking
-at the art), `--export-sprites folder` (write every sprite as a PNG for
+at the art), `--org-demo` (a platoon, an armoured platoon, a held building and
+fog chips), `--export-sprites folder` (write every sprite as a PNG for
 repainting; see [ART_PIPELINE.md](ART_PIPELINE.md)).

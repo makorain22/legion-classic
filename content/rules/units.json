@@ -1,5 +1,5 @@
 {
-  "_comment": "Unit types. speed: leptons per tick (256 leptons = 1 tile, 15 ticks = 1 second). turnTicks: ticks per 1/16 turn (0 = instant). sight in tiles. armor: infantry, light, medium, heavy or structure. cost in supplies; buildTime in seconds at full power; builtAt: the structure role that makes it (barracks, factory); requires: structures the side must own first. capacity: oil a supply truck carries. deploysTo: the structure a construction truck unfolds into. repair: hit points per tick an engineer restores to a friendly structure.",
+  "_comment": "Unit types. speed: leptons per tick (256 leptons = 1 tile, 15 ticks = 1 second). turnTicks: ticks per 1/16 turn (0 = instant). sight in tiles. armor: infantry, light, medium, heavy or structure. cost in supplies; buildTime in seconds at full power; builtAt: the structure role that makes it (barracks, factory); requires: structures the side must own first. capacity: oil a supply truck carries. deploysTo: the structure a construction truck unfolds into. repair: hit points per tick an engineer restores to a friendly structure. nato: the symbol on unit cards and chips (infantry, mg, antitank, engineer, sniper, recon, mech, armour, antitank_armour, artillery, hq).",
   "units": [
     {
       "id": "ger_rifleman",
@@ -17,11 +17,12 @@
       "weapons": [
         "rifle"
       ],
-      "cost": 100,
-      "buildTime": 5,
+      "cost": 10,
+      "buildTime": 1.5,
       "builtAt": "barracks",
       "requires": [],
-      "aiWeight": 5
+      "aiWeight": 5,
+      "nato": "infantry"
     },
     {
       "id": "ger_mg_team",
@@ -39,11 +40,12 @@
       "weapons": [
         "mg_heavy"
       ],
-      "cost": 250,
-      "buildTime": 8,
+      "cost": 40,
+      "buildTime": 3,
       "builtAt": "barracks",
       "requires": [],
-      "aiWeight": 2
+      "aiWeight": 2,
+      "nato": "mg"
     },
     {
       "id": "ger_at_team",
@@ -61,11 +63,12 @@
       "weapons": [
         "panzerschreck"
       ],
-      "cost": 300,
-      "buildTime": 9,
+      "cost": 50,
+      "buildTime": 3.5,
       "builtAt": "barracks",
       "requires": [],
-      "aiWeight": 2
+      "aiWeight": 2,
+      "nato": "antitank"
     },
     {
       "id": "ger_engineer",
@@ -80,13 +83,14 @@
       "health": 90,
       "armor": "infantry",
       "sight": 7,
-      "cost": 200,
-      "buildTime": 7,
+      "cost": 30,
+      "buildTime": 3,
       "builtAt": "barracks",
       "requires": [],
       "repair": 1,
       "aiWeight": 0,
-      "weapons": []
+      "weapons": [],
+      "nato": "engineer"
     },
     {
       "id": "ger_sniper",
@@ -104,13 +108,14 @@
       "weapons": [
         "sniper_rifle"
       ],
-      "cost": 400,
-      "buildTime": 12,
+      "cost": 80,
+      "buildTime": 5,
       "builtAt": "barracks",
       "requires": [
         "ger_tower"
       ],
-      "aiWeight": 1
+      "aiWeight": 1,
+      "nato": "sniper"
     },
     {
       "id": "ger_scout_car",
@@ -135,7 +140,8 @@
       "buildTime": 9,
       "builtAt": "factory",
       "requires": [],
-      "aiWeight": 1
+      "aiWeight": 1,
+      "nato": "recon"
     },
     {
       "id": "ger_halftrack",
@@ -160,7 +166,8 @@
       "turret": {
         "turnTicks": 1
       },
-      "aiWeight": 2
+      "aiWeight": 2,
+      "nato": "mech"
     },
     {
       "id": "ger_light_tank",
@@ -186,7 +193,8 @@
       "turret": {
         "turnTicks": 1
       },
-      "aiWeight": 2
+      "aiWeight": 2,
+      "nato": "armour"
     },
     {
       "id": "ger_medium_tank",
@@ -212,9 +220,10 @@
       "buildTime": 20,
       "builtAt": "factory",
       "requires": [
-        "ger_refinery"
+        "ger_depot"
       ],
-      "aiWeight": 5
+      "aiWeight": 5,
+      "nato": "armour"
     },
     {
       "id": "ger_mcv",
@@ -236,29 +245,8 @@
         "ger_factory"
       ],
       "deploysTo": "ger_yard",
-      "aiWeight": 0
-    },
-    {
-      "id": "ger_truck",
-      "name": "Supply Truck",
-      "faction": "ger",
-      "model": "truck",
-      "locomotor": "wheeled",
-      "speed": 26,
-      "turnTicks": 1,
-      "radius": 80,
-      "animTicks": 2,
-      "health": 450,
-      "armor": "light",
-      "sight": 5,
-      "capacity": 100,
-      "cost": 1200,
-      "buildTime": 12,
-      "builtAt": "factory",
-      "requires": [
-        "ger_refinery"
-      ],
-      "aiWeight": 0
+      "aiWeight": 0,
+      "nato": "hq"
     },
     {
       "id": "ger_tank_destroyer",
@@ -280,9 +268,10 @@
       "buildTime": 20,
       "builtAt": "factory",
       "requires": [
-        "ger_refinery"
+        "ger_depot"
       ],
-      "aiWeight": 2
+      "aiWeight": 2,
+      "nato": "antitank_armour"
     },
     {
       "id": "ger_artillery",
@@ -306,7 +295,8 @@
       "requires": [
         "ger_tower"
       ],
-      "aiWeight": 1
+      "aiWeight": 1,
+      "nato": "artillery"
     },
     {
       "id": "ger_heavy_tank",
@@ -329,13 +319,14 @@
       "buildTime": 32,
       "builtAt": "factory",
       "requires": [
-        "ger_refinery",
+        "ger_depot",
         "ger_tower"
       ],
       "turret": {
         "turnTicks": 3
       },
-      "aiWeight": 2
+      "aiWeight": 2,
+      "nato": "armour"
     },
     {
       "id": "rus_rifleman",
@@ -353,11 +344,12 @@
       "weapons": [
         "rifle"
       ],
-      "cost": 80,
-      "buildTime": 5,
+      "cost": 8,
+      "buildTime": 1.5,
       "builtAt": "barracks",
       "requires": [],
-      "aiWeight": 5
+      "aiWeight": 5,
+      "nato": "infantry"
     },
     {
       "id": "rus_mg_team",
@@ -375,11 +367,12 @@
       "weapons": [
         "mg_heavy"
       ],
-      "cost": 250,
-      "buildTime": 8,
+      "cost": 40,
+      "buildTime": 3,
       "builtAt": "barracks",
       "requires": [],
-      "aiWeight": 2
+      "aiWeight": 2,
+      "nato": "mg"
     },
     {
       "id": "rus_at_team",
@@ -397,11 +390,12 @@
       "weapons": [
         "at_rifle"
       ],
-      "cost": 300,
-      "buildTime": 9,
+      "cost": 50,
+      "buildTime": 3.5,
       "builtAt": "barracks",
       "requires": [],
-      "aiWeight": 2
+      "aiWeight": 2,
+      "nato": "antitank"
     },
     {
       "id": "rus_engineer",
@@ -416,13 +410,14 @@
       "health": 90,
       "armor": "infantry",
       "sight": 7,
-      "cost": 200,
-      "buildTime": 7,
+      "cost": 30,
+      "buildTime": 3,
       "builtAt": "barracks",
       "requires": [],
       "repair": 1,
       "aiWeight": 0,
-      "weapons": []
+      "weapons": [],
+      "nato": "engineer"
     },
     {
       "id": "rus_sniper",
@@ -440,13 +435,14 @@
       "weapons": [
         "sniper_rifle"
       ],
-      "cost": 400,
-      "buildTime": 12,
+      "cost": 80,
+      "buildTime": 5,
       "builtAt": "barracks",
       "requires": [
         "rus_tower"
       ],
-      "aiWeight": 1
+      "aiWeight": 1,
+      "nato": "sniper"
     },
     {
       "id": "rus_scout_car",
@@ -471,7 +467,8 @@
       "buildTime": 9,
       "builtAt": "factory",
       "requires": [],
-      "aiWeight": 1
+      "aiWeight": 1,
+      "nato": "recon"
     },
     {
       "id": "rus_halftrack",
@@ -496,7 +493,8 @@
       "turret": {
         "turnTicks": 1
       },
-      "aiWeight": 2
+      "aiWeight": 2,
+      "nato": "mech"
     },
     {
       "id": "rus_light_tank",
@@ -522,7 +520,8 @@
       "turret": {
         "turnTicks": 1
       },
-      "aiWeight": 2
+      "aiWeight": 2,
+      "nato": "armour"
     },
     {
       "id": "rus_medium_tank",
@@ -548,9 +547,10 @@
       "buildTime": 20,
       "builtAt": "factory",
       "requires": [
-        "rus_refinery"
+        "rus_depot"
       ],
-      "aiWeight": 5
+      "aiWeight": 5,
+      "nato": "armour"
     },
     {
       "id": "rus_mcv",
@@ -572,29 +572,8 @@
         "rus_factory"
       ],
       "deploysTo": "rus_yard",
-      "aiWeight": 0
-    },
-    {
-      "id": "rus_truck",
-      "name": "Supply Truck",
-      "faction": "rus",
-      "model": "truck",
-      "locomotor": "wheeled",
-      "speed": 26,
-      "turnTicks": 1,
-      "radius": 80,
-      "animTicks": 2,
-      "health": 450,
-      "armor": "light",
-      "sight": 5,
-      "capacity": 100,
-      "cost": 1200,
-      "buildTime": 12,
-      "builtAt": "factory",
-      "requires": [
-        "rus_refinery"
-      ],
-      "aiWeight": 0
+      "aiWeight": 0,
+      "nato": "hq"
     },
     {
       "id": "rus_tank_destroyer",
@@ -616,9 +595,10 @@
       "buildTime": 20,
       "builtAt": "factory",
       "requires": [
-        "rus_refinery"
+        "rus_depot"
       ],
-      "aiWeight": 2
+      "aiWeight": 2,
+      "nato": "antitank_armour"
     },
     {
       "id": "rus_artillery",
@@ -642,7 +622,8 @@
       "requires": [
         "rus_tower"
       ],
-      "aiWeight": 1
+      "aiWeight": 1,
+      "nato": "artillery"
     },
     {
       "id": "rus_heavy_tank",
@@ -665,13 +646,14 @@
       "buildTime": 32,
       "builtAt": "factory",
       "requires": [
-        "rus_refinery",
+        "rus_depot",
         "rus_tower"
       ],
       "turret": {
         "turnTicks": 4
       },
-      "aiWeight": 2
+      "aiWeight": 2,
+      "nato": "armour"
     }
   ]
 }

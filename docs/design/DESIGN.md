@@ -107,6 +107,30 @@ only the plain cross, Russia the red star.
    models at true scale with camouflage, grime and ambient occlusion, five
    biomes with their own ground, trees, light and water, neutral villages and
    towns, PNG export / override pipeline, a bundled scenario.
+   **7.5 Playtest rework** – done: rebindable keys with WASD, screen lock, FPS
+   limiter, minimap zoom; supply points and depots instead of oil; cheap
+   infantry; fireteams to companies (and armoured platoons to battalions)
+   with NATO cards; garrisons in buildings, bunkers and trench lines; small
+   arms that chip armour; fog chips.
 8. Creation tools: rules editor, sprite studio, mods.
 9. UK faction, tutorial, campaigns (built with the editor), sound and music.
 10. Release 1.0: balance, performance, documentation, packaging.
+
+## Playtest backlog (31 Oct 2026, after Milestones 6–7)
+
+Taken on in 0.7.5 (hard to undo): key layout and rebinding, supply points,
+unit organisation, garrisons, infantry against armour, fog chips, editor
+palette headings, placement grid, the quick fixes.
+
+Still to do (in Milestones 8–10 or a polish pass):
+
+- **Script tab** needs a clearer, more direct interface.
+- **UI redesign** in the spirit of the references: bigger, categorised
+  sidebar buttons, a better-designed frame; an **encyclopedia** of unit stats.
+- **Art pass toward Blitzkrieg:** German units darker; Soviet units green, tan
+  and white; colour grading and atmosphere; buildings with more decoration and
+  different designs per climate; better fortification designs; trenches that
+  follow changing ground heights; longer tracer particles; more lasting
+  corpses and wrecks.
+- **More content:** defences, building types and map decorations.
+

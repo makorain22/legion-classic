@@ -55,7 +55,7 @@ TEST_CASE("both armies field the full roster") {
       if (d.faction == f && !d.isStructure()) have.insert(d.id.substr(4));
     }
     for (const char* u : {"rifleman", "mg_team", "at_team", "engineer", "sniper", "scout_car", "halftrack", "light_tank",
-                          "medium_tank", "heavy_tank", "tank_destroyer", "artillery", "truck", "mcv"})
+                          "medium_tank", "heavy_tank", "tank_destroyer", "artillery", "mcv"})
       CHECK_MESSAGE(have.count(u) == 1, f << "_" << u);
   }
   // Heavy tanks out-gun medium ones; tank destroyers out-range them; snipers out-range rifles.

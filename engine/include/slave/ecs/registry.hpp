@@ -154,6 +154,7 @@ class Registry {
     alive_ = static_cast<size_t>(s.alive);
   }
   size_t aliveCount() const { return alive_; }
+  size_t capacity() const { return generations_.size(); }  // highest entity index + 1
 
   void clear() {
     for (auto& p : pools_)

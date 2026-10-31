@@ -98,7 +98,8 @@ TEST_CASE("map files round-trip exactly") {
   CHECK(f.map.heights() == m.heights());
   CHECK(f.map.splatData() == m.splatData());
   CHECK(f.map.oilData() == m.oilData());
-  CHECK(std::count_if(m.oilData().begin(), m.oilData().end(), [](uint8_t v) { return v > 0; }) > 20);
+  CHECK(m.supplyPoints.size() >= 8);
+  CHECK(f.map.supplyPoints == m.supplyPoints);
   CHECK(f.map.waterLevel() == m.waterLevel());
   CHECK(f.map.props().size() == m.props().size());
   CHECK(f.map.name == "Test Valley");

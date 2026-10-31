@@ -404,32 +404,35 @@ void Map::generateTerrain(uint64_t seed, Biome b) {
       }
     }
 
-  // --- Oil fields ------------------------------------------------------------
-  // One rich field near each side's half of the map, smaller ones out front to
-  // fight over. Mirrored, so neither side starts with an advantage.
+  // --- Supply points ---------------------------------------------------------
+  // Two beside each starting area, more out in the middle to fight over.
+  // Symmetric, so no side starts with an advantage.
   std::fill(oil_.begin(), oil_.end(), uint8_t{0});
-  const int r = std::max(3, W / 36);
-  const struct { int fx, fy, rr; } fields[] = {
-      {20, 34, r + 1}, {80, 66, r + 1},  // home fields (percent of the map)
-      {12, 66, r}, {88, 34, r},          // second home fields
-      {50, 18, r}, {50, 82, r},          // contested, north and south
+  supplyPoints.clear();
+  const struct { int fx, fy; } sites[] = {
+      {17, 38}, {17, 62}, {83, 38}, {83, 62},  // west and east homes
+      {38, 17}, {62, 17}, {38, 83}, {62, 83},  // north and south homes
+      {50, 50}, {32, 30}, {68, 70}, {32, 70}, {68, 30},  // contested
   };
-  for (const auto& f : fields) {
-    // Nudge each field onto dry, fairly flat ground.
-    int cx = W * f.fx / 100, cy = H * f.fy / 100;
-    for (int tries = 0; tries < 40; ++tries) {
-      if (inBounds(cx, cy) && info(cx, cy).waterDepth < -20 && info(cx, cy).slope < 20) break;
-      cx += static_cast<int>(rng.range(-3, 3));
-      cy += static_cast<int>(rng.range(-3, 3));
-      cx = std::clamp(cx, f.rr + 1, W - f.rr - 2);
-      cy = std::clamp(cy, f.rr + 1, H - f.rr - 2);
+  for (const auto& site : sites) {
+    int cx = W * site.fx / 100, cy = H * site.fy / 100;
+    for (int tries = 0; tries < 60; ++tries) {
+      bool ok = true;
+      for (int y = cy - 2; y <= cy + 2 && ok; ++y)
+        for (int x = cx - 2; x <= cx + 2 && ok; ++x)
+          ok = inBounds(x, y) && info(x, y).waterDepth < -16 && info(x, y).slope < 20;
+      if (ok) break;
+      cx = std::clamp(cx + static_cast<int>(rng.range(-3, 3)), 3, W - 4);
+      cy = std::clamp(cy + static_cast<int>(rng.range(-3, 3)), 3, H - 4);
     }
-    addOilField(cx, cy, f.rr, s + static_cast<uint32_t>(cx * 31 + cy));
+    supplyPoints.push_back({cx, cy});
   }
-  // Clear trees off the fields so trucks and players can see them.
+  // Clear trees off the sites so they can be seen and built on.
   std::erase_if(props_, [&](const Prop& p) {
     const int tx = p.x >> LEPTON_SHIFT, ty = p.y >> LEPTON_SHIFT;
-    return inBounds(tx, ty) && oil(tx, ty) > 0;
+    for (const Vec2i& sp : supplyPoints)
+      if (std::abs(tx - sp.x) <= 3 && std::abs(ty - sp.y) <= 3) return true;
+    return false;
   });
 
   // --- Villages and towns ------------------------------------------------------
@@ -449,6 +452,8 @@ void Map::generateTerrain(uint64_t seed, Biome b) {
       }
     for (const Lot& l : lots)
       if (std::abs(l.tx - cx) < half + 3 && std::abs(l.ty - cy) < half + 3) return false;
+    for (const Vec2i& sp : supplyPoints)
+      if (std::abs(sp.x - cx) < half + 4 && std::abs(sp.y - cy) < half + 4) return false;
     return true;
   };
   auto clearProps = [&](int cx, int cy, int half) {

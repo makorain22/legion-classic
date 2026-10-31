@@ -4,9 +4,9 @@
     "bullet": {
       "infantry": 100,
       "light": 30,
-      "medium": 4,
-      "heavy": 2,
-      "structure": 2
+      "medium": 7,
+      "heavy": 5,
+      "structure": 3
     },
     "ap": {
       "infantry": 25,

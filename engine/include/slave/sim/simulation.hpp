@@ -59,6 +59,11 @@ enum class CommandType : uint8_t {
   SetCredits,     // player's supplies become `amount`
   SetController,  // player is played by the computer at difficulty `amount` (0..2), or by a human (-1)
   Repair,         // engineers in `units` mend `targetEntity` (a friendly structure or vehicle)
+  // --- Organisation and shelter -------------------------------------------------
+  BindGroup,      // `units` become one fighting unit (fireteam ... company / platoon ... battalion)
+  UnbindGroup,    // the groups of `units` are disbanded
+  Occupy,         // infantry in `units` enter `targetUnit` (a building or bunker) or man its trench line
+  Unload,         // occupants of the structures in `units` (or the occupants listed) come out
 };
 
 // Production lines: one per kind of thing a side builds.
@@ -80,6 +85,8 @@ struct PlayerState {
   std::array<ProductionQueue, QUEUE_COUNT> queues;
   bool defeated = false;
   bool won = false;
+  int32_t incomeAcc = 0;  // supplies earned but not yet whole (income is per minute)
+  int32_t incomePerMinute = 0;  // for the sidebar
   bool lowPower() const { return powerUsed > powerMade; }
 };
 
@@ -157,6 +164,7 @@ enum class EventType : uint8_t {
   ScriptMessage,    // `text` for owner (ANY_PLAYER = everyone)
   ObjectivesChanged,
   CameraTo,         // move owner's view to `at`
+  GroupFormed,      // owner bound `amount` units into a fighting unit
 };
 
 struct SimEvent {
@@ -169,6 +177,7 @@ struct SimEvent {
   Angle facing = 0;       // UnitDied: body facing
   Angle turret = 0;       // UnitDied: turret facing
   bool hit = true;        // Impact: did it hit a unit
+  int32_t amount = 0;     // GroupFormed: members
   std::string text;       // ScriptMessage
 };
 
@@ -307,7 +316,33 @@ class Simulation {
   void applyEconomyCommand(const Command& cmd);
  public:
   bool canRepair(Entity engineer, Entity target) const;
+  // --- Organisation, shelter and supply (organisation.cpp) ---------------------
+  const CGroup* groupOf(Entity unit) const;
+  int32_t groupBonus(Entity shooter) const;  // extra firepower, percent
+  static int32_t echelonSize(bool vehicles, Echelon e);
+  bool canGarrison(Entity unit, Entity building) const;
+  int garrisonLevel(Entity building) const;  // 0 empty, 1..3 how fortified it looks
+  std::vector<Vec2i> trenchLine(Entity piece) const;
+  int supplyPointFor(int type, Vec2i origin) const;  // a free supply point a depot there would stand on, or -1
+  Entity depotOn(int point) const;
+  // Tests and tools: hurt a unit as a weapon would (hundredths of a hit point).
+  void debugDamage(Entity e, int32_t centi) {
+    if (reg_.alive(e) && reg_.has<CUnit>(e)) damage(e.index, centi, kNullEntity);
+  }
  private:
+  uint16_t nextGroupNumber(uint8_t owner, bool vehicles, Echelon e);
+  Entity makeGroup(const std::vector<Entity>& members, uint8_t owner, bool vehicles, Echelon e);
+  void disband(Entity group);
+  void bindUnits(const std::vector<Entity>& units, uint8_t owner);
+  void refreshGroup(Entity group);
+  void stepGroups();
+  void enterBuilding(Entity u, Entity b);
+  void leaveBuilding(Entity u);
+  void applyOccupy(const Command& cmd);
+  void applyUnload(const Command& cmd);
+  void stepGarrisons();
+  int32_t shelterPercent(uint32_t victim) const;
+  void stepIncome();
   void checkDefeat();
 
   // scripting (script.cpp)
@@ -365,6 +400,7 @@ class Simulation {
   SpatialHash spatial_;
   Vision vision_;
   std::vector<PathRequest> pathQueue_;
+  std::array<std::array<uint16_t, 6>, MAX_PLAYERS * 2> groupNumbers_{};  // last number used, per side, kind, echelon
   size_t pathQueueHead_ = 0;
   uint32_t nextRequest_ = 1;
   std::vector<uint32_t> dead_;

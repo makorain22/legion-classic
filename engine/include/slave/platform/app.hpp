@@ -58,6 +58,14 @@ class App {
   const std::string& userDir() const { return userDir_; }
   bool offscreen() const { return cfg_.offscreen; }
 
+  // Frame limiter: 0 = unlimited (vsync still applies if on).
+  void setFpsLimit(int fps) { fpsLimit_ = fps; }
+  int fpsLimit() const { return fpsLimit_; }
+  void setVsync(bool on);
+  // Keeps the mouse inside the window (for edge scrolling) while it has focus.
+  void setMouseLock(bool on);
+  bool mouseLock() const { return mouseLock_; }
+
  private:
   void updateSize();
 
@@ -72,6 +80,8 @@ class App {
   bool simBehind_ = false;
   std::string pendingShot_;
   std::string userDir_;
+  int fpsLimit_ = 0;
+  bool mouseLock_ = false;
 };
 
 }  // namespace slave

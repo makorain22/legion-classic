@@ -51,7 +51,7 @@ void Simulation::stepTargeting() {
       if (!canSee(u.owner, q.x, q.y)) return;
       const ArmorClass armor = types_.get(v.type).armor;
       bool useful = false;
-      for (int w : def.weapons) useful = useful || weapons_.damageAgainst(weapons_.forTarget(w, armor), armor) > 0;
+      for (int w : def.weapons) useful = useful || weapons_.damageCenti(weapons_.forTarget(w, armor), armor) > 0;
       if (!useful) return;
       best = d;
       bestIdx = o2;
@@ -64,6 +64,7 @@ void Simulation::stepTargeting() {
 // march stop to fight back (then carry on), and idle ones go after attackers
 // they can't reach from where they stand. Forced marches ignore all of it.
 void Simulation::reactToFire(uint32_t ei, CCombat& c, CUnit& u, const CPosition& p, COrder& o) {
+  if (reg_.pool<CGarrisoned>().has(ei)) return;  // men inside shoot back from where they are
   if (!c.hurtBy.valid()) return;
   const Entity attacker = c.hurtBy;
   c.hurtBy = kNullEntity;  // handled once per hit
@@ -124,7 +125,7 @@ void Simulation::stepWeapons() {
           const int w = weapons_.forTarget(def.weapons[slot], armor);
           const WeaponDef& wd = weapons_.get(w);
           if (c.cooldown[slot] > 0 || d > static_cast<uint32_t>(wd.range)) continue;
-          if (weapons_.damageAgainst(w, armor) <= 0) continue;
+          if (weapons_.damageCenti(w, armor) <= 0) continue;
           c.cooldown[slot] = static_cast<uint16_t>(wd.cooldown);
           shots.push_back({ei, w, {p.x, p.y}, {tp.x, tp.y}, c.target});
         }
@@ -208,6 +209,7 @@ void Simulation::stepProjectiles() {
 
 void Simulation::impact(int weapon, uint8_t owner, Vec2i at, Entity directTarget, Vec2i from, Entity shooter) {
   const WeaponDef& wd = weapons_.get(weapon);
+  const int32_t bonus = 100 + groupBonus(shooter);  // bound units hit harder
   auto& units = reg_.pool<CUnit>();
   auto& pos = reg_.pool<CPosition>();
   auto& facings = reg_.pool<CFacing>();
@@ -224,7 +226,7 @@ void Simulation::impact(int weapon, uint8_t owner, Vec2i at, Entity directTarget
   // A round landing on a structure's footprint hits the structure.
   const Entity building = structureAt(at.x >> LEPTON_SHIFT, at.y >> LEPTON_SHIFT);
   if (building.valid() && types_.get(units.get(building.index).type).targetable) {
-    int32_t dmg = weapons_.damageAgainst(weapon, types_.get(units.get(building.index).type).armor);
+    int32_t dmg = weapons_.damageCenti(weapon, types_.get(units.get(building.index).type).armor) * bonus / 100;
     if (allied(units.get(building.index).owner, owner)) dmg /= 2;
     damage(building.index, dmg, shooter);
     hit = true;
@@ -237,8 +239,8 @@ void Simulation::impact(int weapon, uint8_t owner, Vec2i at, Entity directTarget
       const CPosition& q = pos.get(o);
       const uint32_t d = distance(q.x - at.x, q.y - at.y);
       if (d > static_cast<uint32_t>(wd.splash)) return;
-      int32_t dmg = weapons_.damageAgainst(weapon, types_.get(v.type).armor, sideOf(o)) *
-                    (wd.splash * 2 - static_cast<int32_t>(d)) / (wd.splash * 2);
+      int32_t dmg = static_cast<int32_t>(static_cast<int64_t>(weapons_.damageCenti(weapon, types_.get(v.type).armor, sideOf(o))) *
+                                         bonus / 100 * (wd.splash * 2 - static_cast<int32_t>(d)) / (wd.splash * 2));
       if (allied(v.owner, owner)) dmg /= 2;
       damage(o, dmg, shooter);
       hit = true;
@@ -260,7 +262,8 @@ void Simulation::impact(int weapon, uint8_t owner, Vec2i at, Entity directTarget
       });
     }
     if (victim != UINT32_MAX) {
-      damage(victim, weapons_.damageAgainst(weapon, types_.get(units.get(victim).type).armor, sideOf(victim)), shooter);
+      damage(victim, weapons_.damageCenti(weapon, types_.get(units.get(victim).type).armor, sideOf(victim)) * bonus / 100,
+             shooter);
       hit = true;
     }
   }
@@ -273,17 +276,20 @@ void Simulation::impact(int weapon, uint8_t owner, Vec2i at, Entity directTarget
   events_.push_back(ev);
 }
 
+// `amount` is in hundredths of a hit point, so rifles chip away at armour.
 void Simulation::damage(uint32_t victim, int32_t amount, Entity shooter) {
   if (amount <= 0) return;
   CUnit& u = reg_.pool<CUnit>().get(victim);
   if (u.health <= 0) return;
   const UnitTypeDef& vd = types_.get(u.type);
   if (!vd.targetable) return;
-  // Infantry in a trench or behind sandbags take less.
+  // Infantry in a trench or behind sandbags take less; inside a building, half.
   if (vd.infantry()) {
     const CPosition& vp = reg_.pool<CPosition>().get(victim);
     const uint8_t cover = coverAt(vp.x >> LEPTON_SHIFT, vp.y >> LEPTON_SHIFT);
-    if (cover) amount = std::max(1, amount * (100 - cover) / 100);
+    if (cover && !reg_.pool<CGarrisoned>().has(victim)) amount = std::max(1, static_cast<int32_t>(static_cast<int64_t>(amount) * (100 - cover) / 100));
+    const int32_t shelter = shelterPercent(victim);
+    if (shelter < 100) amount = std::max(1, static_cast<int32_t>(static_cast<int64_t>(amount) * shelter / 100));
   }
   // Remember who is shooting at us, so we can answer.
   if (shooter.valid() && reg_.alive(shooter) && reg_.has<CUnit>(shooter) &&
@@ -292,7 +298,10 @@ void Simulation::damage(uint32_t victim, int32_t amount, Entity shooter) {
       c->hurtBy = shooter;
       c->hurtTick = tick_;
     }
-  u.health -= amount;
+  const int64_t total = static_cast<int64_t>(amount) + u.damageFrac;
+  const int64_t whole = total / 100;
+  u.damageFrac = static_cast<uint8_t>(total % 100);
+  u.health = static_cast<int32_t>(std::max<int64_t>(static_cast<int64_t>(u.health) - whole, -1000000));
   if (u.health > 0) return;
   dead_.push_back(victim);
   const CPosition& p = reg_.pool<CPosition>().get(victim);

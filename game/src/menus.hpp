@@ -16,13 +16,16 @@ class Menus {
 
   void draw();  // whatever is open
   bool inGameMenuOpen() const { return page_ == Page::InGame || page_ == Page::SaveGame || page_ == Page::LoadGame ||
-                                       page_ == Page::Replays; }
+                                       page_ == Page::Replays || page_ == Page::Settings; }
   void openInGameMenu();
   void close();
   bool wantsInput() const { return page_ != Page::None; }
+  // Rebinding a key: the next key press goes here.
+  bool capturingKey() const { return capture_ >= 0; }
+  void captureKey(const SDL_KeyboardEvent& e);
 
  private:
-  enum class Page { None, Main, Skirmish, Scenarios, LoadGame, Replays, InGame, SaveGame, About };
+  enum class Page { None, Main, Skirmish, Scenarios, LoadGame, Replays, InGame, SaveGame, About, Settings };
   struct FileEntry {
     std::string path, file, title, detail;
   };
@@ -35,6 +38,7 @@ class Menus {
   void drawSaveGame();
   void drawReplayBar();
   void drawAbout();
+  void drawSettings();
   void refreshFiles(const std::string& dir, const char* ext, bool replays);
   bool backButton();
 
@@ -46,6 +50,7 @@ class Menus {
   int selected_ = -1;
   char saveName_[96] = "";
   std::string error_;
+  int capture_ = -1, captureSlot_ = 0;  // action being rebound
 };
 
 }  // namespace legion

@@ -72,6 +72,9 @@ bool UnitTypeRegistry::loadJson(const nlohmann::json& doc, std::string& error) {
       d.deploysToId = u.value("deploysTo", "");
       d.freeUnitId = u.value("freeUnit", "");
       d.repair = u.value("repair", 0);
+      d.garrison = u.value("garrison", 0);
+      d.nato = u.value("nato", std::string());
+      d.income = u.value("income", 0);
       d.aiWeight = u.value("aiWeight", 1);
       // Structures.
       if (u.contains("footprint")) {

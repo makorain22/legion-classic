@@ -421,4 +421,74 @@ void GameScene::runGallery() {
   }
 }
 
+// Unit organisation, garrisons and fog chips on show (--org-demo).
+void GameScene::runOrgDemo() {
+  Registry& reg = sim_->registry();
+  const int32_t T = LEPTONS_PER_TILE;
+  auto spawnList = [&](const char* id, uint8_t owner, Vec2i at, int n, int cols, int gap) {
+    Command c;
+    c.type = CommandType::SpawnList;
+    const int t = types_.find(id);
+    if (t < 0) return;
+    for (int i = 0; i < n; ++i)
+      c.spawns.push_back({static_cast<uint16_t>(t), owner, {at.x + (i % cols) * gap, at.y + (i / cols) * gap}, angleOfFacing(2), -1});
+    sim_->queue(std::move(c));
+  };
+  if (frame_ == 2) {
+    Command rm;
+    rm.type = CommandType::Remove;
+    for (uint32_t i : reg.pool<CUnit>().entities()) rm.units.push_back(reg.handle(i));
+    sim_->queue(std::move(rm));
+    galleryAt_ = findLand({map_.widthLeptons() / 2, map_.heightLeptons() / 2});
+    const Vec2i c = galleryAt_;
+    spawnList("neutral_townhouse", NEUTRAL_OWNER, {c.x + 4 * T, c.y - 3 * T}, 1, 1, 0);
+    spawnList("ger_rifleman", 0, {c.x, c.y}, 12, 4, 70);              // will hold the house
+    spawnList("ger_rifleman", 0, {c.x - 8 * T, c.y + 2 * T}, 25, 5, 80);  // a platoon
+    spawnList("ger_medium_tank", 0, {c.x - 7 * T, c.y - 5 * T}, 5, 5, 180);  // an armoured platoon
+    spawnList("ger_mg_team", 0, {c.x - 2 * T, c.y + 5 * T}, 5, 5, 90);    // a fireteam of MGs
+    spawnList("rus_rifleman", 1, {c.x + 17 * T, c.y + 2 * T}, 40, 8, 80);  // out in the fog
+    spawnList("rus_medium_tank", 1, {c.x + 19 * T, c.y - 6 * T}, 4, 4, 200);
+    spawnList("rus_rifleman", 1, {c.x + 14 * T, c.y - 10 * T}, 6, 3, 80);
+    centerOn(c);
+  }
+  if (frame_ == 4) {
+    Command team;
+    team.type = CommandType::SetStance;
+    team.stance = Stance::HoldFire;
+    for (uint32_t i : reg.pool<CUnit>().entities()) team.units.push_back(reg.handle(i));
+    sim_->queue(std::move(team));
+    std::vector<Entity> houseMen, platoon, tanks;
+    Entity house;
+    const Vec2i c = galleryAt_;
+    for (uint32_t i : reg.pool<CUnit>().entities()) {
+      const CUnit& u = reg.pool<CUnit>().get(i);
+      const CPosition& p = reg.pool<CPosition>().get(i);
+      const std::string& id = types_.get(u.type).id;
+      if (id == "neutral_townhouse") house = reg.handle(i);
+      if (id == "ger_rifleman" && p.x >= c.x - T) houseMen.push_back(reg.handle(i));
+      if (id == "ger_rifleman" && p.x < c.x - 4 * T) platoon.push_back(reg.handle(i));
+      if (id == "ger_medium_tank") tanks.push_back(reg.handle(i));
+    }
+    Command occ;
+    occ.type = CommandType::Occupy;
+    occ.player = 0;
+    occ.units = houseMen;
+    occ.targetUnit = house;
+    sim_->queue(std::move(occ));
+    Command bind;
+    bind.type = CommandType::BindGroup;
+    bind.player = 0;
+    bind.units = platoon;
+    sim_->queue(bind);
+    bind.units = tanks;
+    sim_->queue(std::move(bind));
+  }
+  if (frame_ == 6) {
+    selection_.clear();
+    for (uint32_t i : reg.pool<CUnit>().entities())
+      if (types_.get(reg.pool<CUnit>().get(i).type).id == "ger_medium_tank") selection_.push_back(reg.handle(i));
+    centerOn({galleryAt_.x + 4 * T, galleryAt_.y});
+  }
+}
+
 }  // namespace legion

@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.7.5 – Playtest rework: controls, economy, unit organisation, garrisons, fog chips (31 Oct 2026)
+
+From playtest feedback, the changes that are hard to undo come first.
+
+- **Controls:** every key can be rebound (Settings → Controls), saved with
+  your settings. WASD scrolls alongside the arrows; commands moved to Ctrl:
+  attack-move Ctrl+A (or F), stop Ctrl+S (or X), deploy Ctrl+D (or G), select
+  all Ctrl+Shift+A. Ctrl+right-click opens a formation picker (move or
+  attack-move in box, line, column, wedge or loose).
+- **Fixes:** edge scrolling works over the sidebar and panels; the mouse is
+  kept inside the window while playing (screen lock, can be turned off); the
+  main menu is centred; a frame rate limiter (default 144, or unlimited) and
+  vsync setting; minimap zoom (1×–8×, buttons and wheel); the editor started
+  from the main menu no longer leaves the menu open and swallowing input;
+  the editor's map size list is fixed; the game info panel is hidden by
+  default (I toggles it) and the controls panel shows only on first start.
+- **Economy:** oil and supply trucks are gone. Supply points on every random
+  map (two by each start, more in the middle); a Supply Depot on one earns
+  $600 a minute, anywhere on the map; the yard trickles $120. The computer
+  claims the nearest free points. Income shows on the sidebar; points show on
+  the ground and minimap. Editor tool to place them.
+- **Cheaper infantry and fortifications:** Grenadiers $10 (Riflemen $8), MG
+  teams $40, AT teams $50, engineers $30, snipers $80; train one man or a
+  fireteam of five. Sandbags and trenches $5, wire $3, tank traps $10.
+- **Unit organisation:** fireteams of five form automatically; bind by hand
+  (Ctrl+B) into squads (10), platoons (20) and companies (100), or armoured
+  platoons (5), companies (15) and battalions (50); Ctrl+U disbands.
+  Firepower bonus by size; casualties demote (a company becomes a platoon at
+  20); members stay members however far they go. Selecting one selects the
+  unit. NATO-style cards with branch and size marks and automatic names;
+  hover readout with type, unit and strength.
+- **Garrisons:** infantry occupy civilian buildings (6–30 men), bunkers (4) and
+  watchtowers (1), take half damage inside and fire out; sandbags go up in
+  three stages as more men move in. Men are thrown out, hurt, if the building
+  falls. Right-clicking a trench mans the whole trench line.
+- **Small arms against armour:** damage is counted in hundredths of a hit
+  point, so rifles chip at tanks: about thirty men wear a heavy tank down.
+- **Fog chips (R.U.S.E style):** enemy forces detected beyond sight (twice
+  each unit's sight) show as stacks of chips: the size gives a rough count,
+  the symbol the most valuable unit.
+- **Editor:** the unit palette is grouped under headings (infantry, vehicles,
+  base buildings, defences, fortifications, civilian buildings); a placement
+  grid around the cursor when placing buildings (also from the sidebar).
+- Saves from 0.7.0 don't load (the saved state now holds units, garrisons and
+  income).
+- 71 unit tests (adds fireteams, binding and demotion, garrisons, small arms
+  against armour, supply depots).
+
 ## 0.7.0 – Milestones 6 and 7: computer player, scripting, saves and replays; art and content (31 Oct 2026)
 
 **Milestone 6: the computer player, scenario scripting, saves and replays**

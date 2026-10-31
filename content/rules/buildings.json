@@ -1,5 +1,5 @@
 {
-  "_comment": "Structures: buildings, defences and fortifications. footprint in tiles [width, depth]; power: + produced, - used; role: what it provides (yard builds structures, barracks trains infantry, factory builds vehicles, refinery takes oil); buildRadius: tiles around it where its side may build; cover: % less damage for infantry standing in it; coverAround: same for infantry next to it; blocks: which movement types it stops (default all). Faction 'neutral' structures are civilian buildings: nobody builds them, nobody attacks them unless ordered to, and infantry beside them take cover.",
+  "_comment": "Structures: buildings, defences and fortifications. footprint in tiles [width, depth]; power: + produced, - used; role: what it provides (yard builds structures, barracks trains infantry, factory builds vehicles, depot earns supplies on a supply point); buildRadius: tiles around it where its side may build; cover: % less damage for infantry standing in it; coverAround: same for infantry next to it; blocks: which movement types it stops (default all). Faction 'neutral' structures are civilian buildings: nobody builds them, nobody attacks them unless ordered to, and infantry beside them take cover. garrison: how many infantry it holds (they take half damage inside). income: supplies per minute (a depot only while on a supply point).",
   "units": [
     {
       "id": "ger_yard",
@@ -17,7 +17,8 @@
       "buildRadius": 10,
       "sight": 7,
       "cost": 3000,
-      "category": "building"
+      "category": "building",
+      "income": 120
     },
     {
       "id": "ger_power",
@@ -41,26 +42,26 @@
       ]
     },
     {
-      "id": "ger_refinery",
+      "id": "ger_depot",
       "faction": "ger",
       "armor": "structure",
-      "name": "Oil Depot",
+      "name": "Supply Depot",
       "model": "refinery",
       "footprint": [
         3,
         3
       ],
       "health": 1000,
-      "power": -30,
-      "role": "refinery",
+      "power": -20,
+      "role": "depot",
       "buildRadius": 5,
-      "cost": 1500,
-      "buildTime": 15,
+      "cost": 800,
+      "buildTime": 12,
       "builtAt": "yard",
       "requires": [
         "ger_power"
       ],
-      "freeUnit": "ger_truck"
+      "income": 600
     },
     {
       "id": "ger_barracks",
@@ -101,7 +102,7 @@
       "buildTime": 20,
       "builtAt": "yard",
       "requires": [
-        "ger_refinery"
+        "ger_depot"
       ]
     },
     {
@@ -115,14 +116,15 @@
         1
       ],
       "health": 300,
-      "cost": 250,
+      "cost": 150,
       "buildTime": 6,
       "sight": 13,
       "category": "defense",
       "builtAt": "yard",
       "requires": [
         "ger_barracks"
-      ]
+      ],
+      "garrison": 1
     },
     {
       "id": "ger_bunker",
@@ -148,7 +150,8 @@
       "builtAt": "yard",
       "requires": [
         "ger_barracks"
-      ]
+      ],
+      "garrison": 4
     },
     {
       "id": "ger_atgun",
@@ -187,7 +190,7 @@
         1
       ],
       "health": 250,
-      "cost": 25,
+      "cost": 5,
       "category": "fortification",
       "coverAround": 40,
       "autoTarget": false,
@@ -207,7 +210,7 @@
         1
       ],
       "health": 1000,
-      "cost": 20,
+      "cost": 5,
       "category": "fortification",
       "cover": 60,
       "blocks": [
@@ -231,7 +234,7 @@
         1
       ],
       "health": 120,
-      "cost": 15,
+      "cost": 3,
       "category": "fortification",
       "blocks": [
         "foot"
@@ -253,7 +256,7 @@
         1
       ],
       "health": 500,
-      "cost": 30,
+      "cost": 10,
       "category": "fortification",
       "blocks": [
         "wheeled",
@@ -281,7 +284,8 @@
       "buildRadius": 10,
       "sight": 7,
       "cost": 3000,
-      "category": "building"
+      "category": "building",
+      "income": 120
     },
     {
       "id": "rus_power",
@@ -305,26 +309,26 @@
       ]
     },
     {
-      "id": "rus_refinery",
+      "id": "rus_depot",
       "faction": "rus",
       "armor": "structure",
-      "name": "Oil Depot",
+      "name": "Supply Depot",
       "model": "refinery",
       "footprint": [
         3,
         3
       ],
       "health": 1000,
-      "power": -30,
-      "role": "refinery",
+      "power": -20,
+      "role": "depot",
       "buildRadius": 5,
-      "cost": 1500,
-      "buildTime": 15,
+      "cost": 800,
+      "buildTime": 12,
       "builtAt": "yard",
       "requires": [
         "rus_power"
       ],
-      "freeUnit": "rus_truck"
+      "income": 600
     },
     {
       "id": "rus_barracks",
@@ -365,7 +369,7 @@
       "buildTime": 20,
       "builtAt": "yard",
       "requires": [
-        "rus_refinery"
+        "rus_depot"
       ]
     },
     {
@@ -379,14 +383,15 @@
         1
       ],
       "health": 300,
-      "cost": 250,
+      "cost": 150,
       "buildTime": 6,
       "sight": 13,
       "category": "defense",
       "builtAt": "yard",
       "requires": [
         "rus_barracks"
-      ]
+      ],
+      "garrison": 1
     },
     {
       "id": "rus_bunker",
@@ -412,7 +417,8 @@
       "builtAt": "yard",
       "requires": [
         "rus_barracks"
-      ]
+      ],
+      "garrison": 4
     },
     {
       "id": "rus_atgun",
@@ -451,7 +457,7 @@
         1
       ],
       "health": 250,
-      "cost": 25,
+      "cost": 5,
       "category": "fortification",
       "coverAround": 40,
       "autoTarget": false,
@@ -471,7 +477,7 @@
         1
       ],
       "health": 1000,
-      "cost": 20,
+      "cost": 5,
       "category": "fortification",
       "cover": 60,
       "blocks": [
@@ -495,7 +501,7 @@
         1
       ],
       "health": 120,
-      "cost": 15,
+      "cost": 3,
       "category": "fortification",
       "blocks": [
         "foot"
@@ -517,7 +523,7 @@
         1
       ],
       "health": 500,
-      "cost": 30,
+      "cost": 10,
       "category": "fortification",
       "blocks": [
         "wheeled",
@@ -541,7 +547,8 @@
       ],
       "health": 900,
       "coverAround": 30,
-      "autoTarget": false
+      "autoTarget": false,
+      "garrison": 10
     },
     {
       "id": "neutral_cottage_bombed",
@@ -555,7 +562,8 @@
       ],
       "health": 500,
       "coverAround": 30,
-      "autoTarget": false
+      "autoTarget": false,
+      "garrison": 6
     },
     {
       "id": "neutral_townhouse",
@@ -569,7 +577,8 @@
       ],
       "health": 1400,
       "coverAround": 30,
-      "autoTarget": false
+      "autoTarget": false,
+      "garrison": 20
     },
     {
       "id": "neutral_church",
@@ -583,7 +592,8 @@
       ],
       "health": 2400,
       "coverAround": 30,
-      "autoTarget": false
+      "autoTarget": false,
+      "garrison": 30
     },
     {
       "id": "neutral_ruin",
@@ -597,7 +607,8 @@
       ],
       "health": 600,
       "coverAround": 30,
-      "autoTarget": false
+      "autoTarget": false,
+      "garrison": 8
     },
     {
       "id": "neutral_adobe",
@@ -611,7 +622,8 @@
       ],
       "health": 1000,
       "coverAround": 30,
-      "autoTarget": false
+      "autoTarget": false,
+      "garrison": 10
     }
   ]
 }

@@ -15,6 +15,8 @@
 #include <string>
 #include <vector>
 
+#include "slave/math/vec.hpp"
+
 #include "slave/core/fixed.hpp"
 #include "slave/sim/unit_types.hpp"
 
@@ -146,6 +148,10 @@ class Map {
   void setOil(int tx, int ty, uint8_t v) { oil_[static_cast<size_t>(ty) * width_ + tx] = v; }
   std::vector<uint8_t>& oilData() { return oil_; }
   const std::vector<uint8_t>& oilData() const { return oil_; }
+  // --- Supply points ---------------------------------------------------------------
+  // Sites where a Supply Depot can be built; a depot on one earns supplies.
+  // Stored in tiles (the point's centre tile). Saved with the map.
+  std::vector<Vec2i> supplyPoints;
   // Adds a natural-looking oil field: richest in the middle, ragged edges.
   void addOilField(int cx, int cy, int radius, uint32_t seed);
 

@@ -42,6 +42,7 @@ Vec2i Simulation::footprintOrigin(int type, Vec2i centre) const {
 bool Simulation::canPlace(int type, Vec2i o) const {
   const UnitTypeDef& d = types_.get(type);
   if (!d.isStructure()) return false;
+  if (d.role == "depot" && supplyPointFor(type, o) < 0) return false;  // depots go on free supply points
   for (int y = o.y; y < o.y + d.footH; ++y)
     for (int x = o.x; x < o.x + d.footW; ++x) {
       if (!map_.inBounds(x, y) || (map_.block(x, y) & Map::kOccupied)) return false;
@@ -63,6 +64,7 @@ bool Simulation::canPlace(int type, Vec2i o) const {
 
 bool Simulation::inBuildRange(uint8_t player, int type, Vec2i o) const {
   const UnitTypeDef& d = types_.get(type);
+  if (d.role == "depot") return true;  // supply points can be claimed anywhere on the map
   auto& units = reg_.pool<CUnit>();
   auto& structs = reg_.pool<CStructure>();
   for (uint32_t e : structs.entities()) {
@@ -466,6 +468,7 @@ void Simulation::stepEconomy() {
   }
   for (uint8_t p = 0; p < MAX_PLAYERS; ++p) stepProduction(p);
   stepHarvesters();
+  stepIncome();
   stepRepairs();
   if (tick_ % 15 == 0) checkDefeat();
 }
