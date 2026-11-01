@@ -132,6 +132,9 @@ if(LEGION_BUILD_GAME)
   target_include_directories(slave PUBLIC engine/include)
   find_package(Threads REQUIRED)  # sprites are baked on all cores
   target_link_libraries(slave PUBLIC slave_core glad imgui stb SDL3::SDL3-static Threads::Threads)
+  if(WIN32)
+    target_link_libraries(slave PUBLIC dbghelp)  # crash reports
+  endif()
   legion_warnings(slave)
 
   # -------------------------------------------------------------------------
@@ -142,6 +145,13 @@ if(LEGION_BUILD_GAME)
   target_include_directories(LegionClassic PRIVATE game/src editor/src)
   target_link_libraries(LegionClassic PRIVATE slave)
   legion_warnings(LegionClassic)
+  if(MSVC)
+    # Symbols for crash reports: a .pdb beside the .exe, same optimised code.
+    target_compile_options(slave PRIVATE $<$<CONFIG:Release>:/Zi>)
+    target_compile_options(slave_core PRIVATE $<$<CONFIG:Release>:/Zi>)
+    target_compile_options(LegionClassic PRIVATE $<$<CONFIG:Release>:/Zi>)
+    target_link_options(LegionClassic PRIVATE $<$<CONFIG:Release>:/DEBUG /OPT:REF /OPT:ICF>)
+  endif()
   set_target_properties(LegionClassic PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
     RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/bin

@@ -75,6 +75,8 @@ struct SceneOptions {
   bool showMenu = false;        // start at the main menu (normal start-up)
   bool aiBattle = false;        // a skirmish between two computer players
   int side = -1;                // watch from this side (player number) at the start
+  float speed = 1.0f;           // starting game speed (testing)
+  int monkey = 0;               // > 0: random clicks and keys from a human seat (crash hunting)
   bool flowSelfTest = false;    // checks skirmish, save, load and replay through the real game
   int biome = 0;
 };
@@ -345,6 +347,8 @@ class GameScene final : public slave::Scene {
   int frame_ = 0;
   bool paused_ = false;
   float speed_ = 1.0f;
+  uint32_t monkeyRng_ = 12345;
+  void monkeyStep();
   bool quit_ = false;
   bool showHelp_ = true, showDebug_ = false;
   bool attackMoveMode_ = false;  // "A": next left click attack-moves

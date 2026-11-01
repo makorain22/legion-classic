@@ -123,14 +123,15 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
   if (opt_.zoom >= 2.0f) cam_.zoomStep(+1, {0, 0}), cam_.zoomStep(+1, {0, 0});
   else if (opt_.zoom <= 0.5f) cam_.zoomStep(-1, {0, 0});
 
+  speed_ = std::clamp(opt_.speed, 0.25f, 16.0f);
   if (opt_.showMenu) {
     startAttract();
-  } else if (opt_.aiBattle || opt_.flowSelfTest) {
+  } else if (opt_.aiBattle || opt_.flowSelfTest || opt_.monkey > 0) {
     SkirmishSetup s;
     s.seed = opt_.seed;
     s.biome = opt_.biome;
     s.mapSize = opt_.mapSize;
-    s.sides[0] = {true, "ger", opt_.flowSelfTest, 2, 0, rgba8(196, 58, 44)};
+    s.sides[0] = {true, opt_.side == 1 ? "rus" : "ger", opt_.flowSelfTest || opt_.monkey > 0, 2, 0, rgba8(196, 58, 44)};
     s.sides[1] = {true, "rus", false, 2, 1, rgba8(52, 96, 196)};
     startSkirmish(s);
     if (opt_.side >= 0 && opt_.side < MAX_PLAYERS && players_[opt_.side].active) {
@@ -347,6 +348,99 @@ std::vector<UnitPlacement> GameScene::exportUnits() {
 void GameScene::showStatus(const std::string& text, float seconds) {
   status_ = text;
   statusTime_ = seconds;
+}
+
+// Crash hunting: random mouse and keyboard input, as a restless player would
+// give it. Never quits, saves or opens files.
+void GameScene::monkeyStep() {
+  auto rnd = [&](uint32_t n) {
+    monkeyRng_ = monkeyRng_ * 1664525u + 1013904223u;
+    return n ? (monkeyRng_ >> 8) % n : 0u;
+  };
+  const float W = static_cast<float>(app_.pixelWidth()), H = static_cast<float>(app_.pixelHeight());
+  if (rnd(120) == 0) {  // look at something of ours again
+    std::vector<Vec2i> mine;
+    for (uint32_t e : sim_->registry().pool<CUnit>().entities())
+      if (sim_->registry().pool<CUnit>().get(e).owner == player_)
+        mine.push_back({sim_->registry().pool<CPosition>().get(e).x, sim_->registry().pool<CPosition>().get(e).y});
+    if (!mine.empty()) centerOn(mine[rnd(static_cast<uint32_t>(mine.size()))]);
+  }
+  for (int i = 0; i < opt_.monkey; ++i) {
+    SDL_Event e{};
+    const uint32_t what = rnd(100);
+    // Keep the cursor mostly on the battlefield, sometimes on the sidebar.
+    const float x = rnd(4) == 0 ? W - 1 - static_cast<float>(rnd(280)) : static_cast<float>(rnd(static_cast<uint32_t>(W - 300)));
+    const float y = static_cast<float>(rnd(static_cast<uint32_t>(H)));
+    if (what < 45) {
+      e.type = SDL_EVENT_MOUSE_MOTION;
+      e.motion.x = x;
+      e.motion.y = y;
+      SDL_WarpMouseInWindow(nullptr, x, y);
+      SDL_PushEvent(&e);
+    } else if (what < 80) {
+      const uint8_t button = rnd(3) == 0 ? SDL_BUTTON_RIGHT : SDL_BUTTON_LEFT;
+      e.type = SDL_EVENT_MOUSE_MOTION;
+      e.motion.x = x;
+      e.motion.y = y;
+      SDL_PushEvent(&e);
+      e = SDL_Event{};
+      e.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+      e.button.button = button;
+      e.button.down = true;
+      e.button.clicks = static_cast<uint8_t>(1 + (rnd(5) == 0));
+      e.button.x = x;
+      e.button.y = y;
+      SDL_PushEvent(&e);
+      // Sometimes a drag.
+      const float x2 = rnd(3) == 0 ? x + static_cast<float>(rnd(300)) - 150 : x;
+      const float y2 = rnd(3) == 0 ? y + static_cast<float>(rnd(200)) - 100 : y;
+      e = SDL_Event{};
+      e.type = SDL_EVENT_MOUSE_MOTION;
+      e.motion.x = x2;
+      e.motion.y = y2;
+      SDL_PushEvent(&e);
+      e = SDL_Event{};
+      e.type = SDL_EVENT_MOUSE_BUTTON_UP;
+      e.button.button = button;
+      e.button.x = x2;
+      e.button.y = y2;
+      SDL_PushEvent(&e);
+    } else if (what < 85) {
+      e.type = SDL_EVENT_MOUSE_WHEEL;
+      e.wheel.y = rnd(2) ? 1.0f : -1.0f;
+      e.wheel.mouse_x = x;
+      e.wheel.mouse_y = y;
+      SDL_PushEvent(&e);
+    } else {
+      // A bound action, but never the menu, the editor, screenshots or fullscreen.
+      const InputAction a = static_cast<InputAction>(rnd(ACTION_COUNT));
+      if (a == InputAction::Menu || a == InputAction::Editor || a == InputAction::Screenshot ||
+          a == InputAction::Debug || a == InputAction::Pause || a == InputAction::SpeedDown)
+        continue;
+      const KeyCombo& k = settings_.keys[static_cast<size_t>(a)][rnd(2)];
+      if (k.empty()) continue;
+      SDL_Keymod mod = SDL_KMOD_NONE;
+      if (k.mods & kModCtrl) mod = static_cast<SDL_Keymod>(mod | SDL_KMOD_LCTRL);
+      if (k.mods & kModShift) mod = static_cast<SDL_Keymod>(mod | SDL_KMOD_LSHIFT);
+      if (k.mods & kModAlt) mod = static_cast<SDL_Keymod>(mod | SDL_KMOD_LALT);
+      if (rnd(4) == 0 && !(k.mods & kModCtrl)) {  // number keys: control groups
+        e.type = SDL_EVENT_KEY_DOWN;
+        e.key.key = static_cast<SDL_Keycode>(SDLK_1 + rnd(9));
+        e.key.mod = rnd(2) ? SDL_KMOD_LCTRL : SDL_KMOD_NONE;
+        e.key.down = true;
+        SDL_PushEvent(&e);
+        continue;
+      }
+      e.type = SDL_EVENT_KEY_DOWN;
+      e.key.key = k.key;
+      e.key.mod = mod;
+      e.key.down = true;
+      SDL_PushEvent(&e);
+      e.type = SDL_EVENT_KEY_UP;
+      e.key.down = false;
+      SDL_PushEvent(&e);
+    }
+  }
 }
 
 void GameScene::updateCameraBounds() {
@@ -1257,6 +1351,7 @@ void GameScene::drawStructureEffects(float dt) {
 }
 
 void GameScene::onUpdate(float dt, float alpha) {
+  if (opt_.monkey > 0) monkeyStep();
   alpha_ = alpha;
   time_ += dt;
   cam_.setViewport(app_.pixelWidth(), app_.pixelHeight());
@@ -1844,7 +1939,7 @@ void GameScene::drawHud() {
   if (settings_.showInfoPanel) {
     ImGui::TextColored(ImVec4(0.92f, 0.78f, 0.36f, 1), "LEGION CLASSIC");
     ImGui::SameLine();
-    ImGui::TextDisabled("Slave Engine 1.0  |  build 0.7.7");
+    ImGui::TextDisabled("Slave Engine 1.0  |  build 0.7.8");
     ImGui::Text("Map: %s (%dx%d)", map_.name.c_str(), map_.width(), map_.height());
     ImGui::Text("Commanding:");
     ImGui::SameLine();

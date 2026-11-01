@@ -308,6 +308,7 @@ std::vector<Vec2i> Simulation::trenchLine(Entity piece) const {
   std::vector<Vec2i> tiles;
   if (!reg_.alive(piece) || !reg_.has<CStructure>(piece)) return tiles;
   const uint16_t type = reg_.get<CUnit>(piece).type;
+  const uint8_t owner = reg_.get<CUnit>(piece).owner;
   const CStructure& s = reg_.get<CStructure>(piece);
   std::vector<uint8_t> seen(tileStructure_.size(), 0);
   std::vector<Vec2i> stack{{s.tx, s.ty}};
@@ -319,7 +320,9 @@ std::vector<Vec2i> Simulation::trenchLine(Entity piece) const {
     if (seen[i]) continue;
     seen[i] = 1;
     const uint32_t e = tileStructure_[i];
-    if (e == UINT32_MAX || !reg_.pool<CUnit>().has(e) || reg_.pool<CUnit>().get(e).type != type) continue;
+    if (e == UINT32_MAX || !reg_.pool<CUnit>().has(e) || reg_.pool<CUnit>().get(e).type != type ||
+        reg_.pool<CUnit>().get(e).owner != owner)
+      continue;  // only our own side's pieces of the line
     tiles.push_back(t);
     stack.push_back({t.x + 1, t.y});
     stack.push_back({t.x - 1, t.y});

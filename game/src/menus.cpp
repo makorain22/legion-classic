@@ -151,7 +151,7 @@ void Menus::drawMain() {
   if (menuButton("About", w)) page_ = Page::About;
   if (menuButton("Quit", w)) scene_.quit();
   ImGui::Dummy(ImVec2(0, 6));
-  ImGui::TextDisabled("Slave Engine 1.0  -  build 0.7.7");
+  ImGui::TextDisabled("Slave Engine 1.0  -  build 0.7.8");
   ImGui::End();
 }
 

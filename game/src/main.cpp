@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+
+#include "slave/platform/crash.hpp"
 #include <cstring>
 #include <string>
 
@@ -95,6 +97,8 @@ int main(int argc, char** argv) {
     else if (a == "--menu") opt.showMenu = true;
     else if (a == "--ai-battle") opt.aiBattle = true;
     else if (a == "--side") opt.side = std::atoi(next());
+    else if (a == "--speed") opt.speed = static_cast<float>(std::atof(next()));
+    else if (a == "--monkey") opt.monkey = std::atoi(next());
     else if (a == "--flow-selftest") opt.flowSelfTest = true;
     else if (a == "--biome") {
       slave::Biome b;
@@ -114,7 +118,8 @@ int main(int argc, char** argv) {
   slave::App app;
   if (!app.init(cfg)) return 1;
   slave::log::init((app.userDir() + "legion.log").c_str());
-  SLV_INFO("Legion Classic 0.7.7 on Slave Engine 1.0");
+  slave::crash::install(app.userDir(), "0.7.8");
+  SLV_INFO("Legion Classic 0.7.8 on Slave Engine 1.0");
 
   std::string contentDir = "content/";
   if (const char* base = SDL_GetBasePath()) contentDir = std::string(base) + "content/";

@@ -38,6 +38,7 @@ jobs:
           $dst = "dist/LegionClassic"
           New-Item -ItemType Directory -Force $dst | Out-Null
           Copy-Item build/bin/LegionClassic.exe $dst/
+          Copy-Item build/bin/LegionClassic.pdb $dst/ -ErrorAction SilentlyContinue
           Copy-Item -Recurse build/bin/content $dst/content
           Copy-Item README.md $dst/
           Copy-Item docs/PLAYING.md $dst/
