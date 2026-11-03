@@ -133,6 +133,10 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
     s.mapSize = opt_.mapSize;
     s.sides[0] = {true, opt_.side == 1 ? "rus" : "ger", opt_.flowSelfTest || opt_.monkey > 0, 2, 0, rgba8(196, 58, 44)};
     s.sides[1] = {true, "rus", false, 2, 1, rgba8(52, 96, 196)};
+    if (opt_.sides >= 4) {
+      s.sides[2] = {true, "ger", false, 2, 0, rgba8(220, 180, 40)};
+      s.sides[3] = {true, "rus", false, 2, 1, rgba8(60, 170, 80)};
+    }
     startSkirmish(s);
     if (opt_.side >= 0 && opt_.side < MAX_PLAYERS && players_[opt_.side].active) {
       setPlayer(static_cast<uint8_t>(opt_.side));

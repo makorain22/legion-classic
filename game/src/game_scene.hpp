@@ -76,6 +76,7 @@ struct SceneOptions {
   bool aiBattle = false;        // a skirmish between two computer players
   int side = -1;                // watch from this side (player number) at the start
   float speed = 1.0f;           // starting game speed (testing)
+  int sides = 2;                // --ai-battle: 2 (1v1) or 4 (2v2)
   int monkey = 0;               // > 0: random clicks and keys from a human seat (crash hunting)
   bool flowSelfTest = false;    // checks skirmish, save, load and replay through the real game
   int biome = 0;
