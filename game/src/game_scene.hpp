@@ -35,6 +35,7 @@ struct SkirmishSetup {
   int mapSize = 128;
   uint64_t seed = 1940;
   int biome = 0;
+  int layout = -1;      // MapLayout, or -1: the seed picks
   int credits = 5000;
   int startLayout = 0;  // 0 teams on opposite sides (west / east), 1 fixed (W, E, N, S), 2 shuffled
   struct Side {
@@ -76,6 +77,7 @@ struct SceneOptions {
   bool aiBattle = false;        // a skirmish between two computer players
   int side = -1;                // watch from this side (player number) at the start
   float speed = 1.0f;           // starting game speed (testing)
+  int layout = -1;              // map layout for generated maps (-1: from the seed)
   int sides = 2;                // --ai-battle: 2 (1v1) or 4 (2v2)
   int monkey = 0;               // > 0: random clicks and keys from a human seat (crash hunting)
   bool flowSelfTest = false;    // checks skirmish, save, load and replay through the real game

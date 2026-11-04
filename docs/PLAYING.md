@@ -31,7 +31,10 @@ players on a random map.
 - **Skirmish.** Pick a map size, a biome (temperate, winter, desert, tropical
   or urban), a seed, the starting supplies and up to four sides. Each side is
   you or the computer (easy, normal or hard), Germany or Russia, on a team of
-  your choice. **Starting positions**: *Opposite sides* (the default: teams
+  your choice. **Landscape**: river valley, front line river, confluence,
+  lakeland, crossroads, ridge, marshes, great lake, open steppe, deep forest,
+  hill country or twin rivers, or *Random* to let the seed pick (the menu
+  shows which). **Starting positions**: *Opposite sides* (the default: teams
   face each other across the map, as in Company of Heroes), *Fixed* or
   *Shuffled*. Every side starts with a base laid out like a military post (a
   compound with a parade ground, barracks, power, a depot on the nearest

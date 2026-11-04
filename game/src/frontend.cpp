@@ -99,8 +99,8 @@ void GameScene::startSkirmish(const SkirmishSetup& s) {
   lastScenarioPath_.clear();
   MapFile f;
   f.map.resize(s.mapSize, s.mapSize);
-  f.map.generate(static_cast<Biome>(s.biome), s.seed);
-  f.map.name = std::string(biomeName(static_cast<Biome>(s.biome))) + " skirmish";
+  f.map.generate(static_cast<Biome>(s.biome), s.seed, s.layout);
+  f.map.name = std::string(mapLayoutName(f.map.layout)) + " (" + biomeName(static_cast<Biome>(s.biome)) + ")";
   f.players.resize(MAX_PLAYERS);
   int slot = 0;
   for (int i = 0; i < 4; ++i) {

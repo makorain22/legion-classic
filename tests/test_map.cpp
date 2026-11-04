@@ -176,3 +176,49 @@ TEST_CASE("scenario sides round-trip with the map") {
   CHECK_FALSE(f.players[2].active);
   CHECK(f.players[2].color == 0xFF48A042u);
 }
+
+TEST_CASE("every map layout keeps the starts dry and joined up") {
+  auto reach = [](const Map& m, Vec2i a, Vec2i b, Locomotor loco) {
+    std::vector<uint8_t> seen(static_cast<size_t>(m.width()) * m.height(), 0);
+    std::vector<Vec2i> q{a};
+    seen[static_cast<size_t>(a.y) * m.width() + a.x] = 1;
+    for (size_t i = 0; i < q.size(); ++i) {
+      const Vec2i p = q[i];
+      if (std::abs(p.x - b.x) <= 1 && std::abs(p.y - b.y) <= 1) return true;
+      for (const Vec2i d : {Vec2i{1, 0}, Vec2i{-1, 0}, Vec2i{0, 1}, Vec2i{0, -1}}) {
+        const Vec2i n{p.x + d.x, p.y + d.y};
+        if (!m.passable(n.x, n.y, loco) || seen[static_cast<size_t>(n.y) * m.width() + n.x]) continue;
+        seen[static_cast<size_t>(n.y) * m.width() + n.x] = 1;
+        q.push_back(n);
+      }
+    }
+    return false;
+  };
+  std::vector<std::vector<uint16_t>> seenHeights;
+  for (int layout = 0; layout < static_cast<int>(MapLayout::Count); ++layout)
+    for (int size : {96, 160}) {
+      CAPTURE(layout);
+      CAPTURE(size);
+      Map m(size, size);
+      m.generate(Biome::Temperate, 1000 + static_cast<uint64_t>(layout), layout);
+      CHECK(static_cast<int>(m.layout) == layout);
+      const int W = m.width(), H = m.height();
+      const Vec2i west{W * 17 / 100, H / 2}, east{W * 83 / 100, H / 2}, north{W / 2, H * 17 / 100}, south{W / 2, H * 83 / 100};
+      for (const Vec2i& p : {west, east, north, south, Vec2i{W * 15 / 100, H * 3 / 10}, Vec2i{W * 85 / 100, H * 7 / 10}}) {
+        CHECK(m.info(p.x, p.y).waterDepth < -10);
+        CHECK(m.info(p.x, p.y).slope < 20);
+      }
+      for (const Vec2i& sp : m.supplyPoints) CHECK(m.info(sp.x, sp.y).waterDepth < 0);
+      CHECK(reach(m, west, east, Locomotor::Tracked));
+      CHECK(reach(m, north, south, Locomotor::Tracked));
+      CHECK(reach(m, west, north, Locomotor::Foot));
+      if (size == 96) seenHeights.push_back(m.heights());
+    }
+  // Every layout looks different.
+  for (size_t i = 0; i < seenHeights.size(); ++i)
+    for (size_t j = i + 1; j < seenHeights.size(); ++j) CHECK(seenHeights[i] != seenHeights[j]);
+  // Without a layout, seeds spread over them.
+  std::vector<int> used(static_cast<size_t>(MapLayout::Count), 0);
+  for (uint64_t seed = 0; seed < 200; ++seed) ++used[static_cast<size_t>(layoutForSeed(seed))];
+  for (int n : used) CHECK(n > 0);
+}

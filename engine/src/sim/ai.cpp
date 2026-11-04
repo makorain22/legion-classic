@@ -432,7 +432,7 @@ void SkirmishAi::fortify(Simulation& sim, uint8_t p) {
     traps += d.model == "traps";
   }
   const Doctrine doc = doctrineFor(faction);
-  if (doc.fortify == 0 || tune.trenchPieces == 0 || sim.players_[p].credits < 400) return;
+  if (doc.fortify == 0 || tune.trenchPieces == 0 || sim.players_[p].credits < 60) return;  // field works are cheap
   auto typeOf = [&](const char* model) {
     for (int t = 0; t < static_cast<int>(types.size()); ++t)
       if (types.get(t).faction == faction && types.get(t).model == model) return t;
@@ -451,7 +451,7 @@ void SkirmishAi::fortify(Simulation& sim, uint8_t p) {
       if (gap > 0 && std::abs(i) < gap) continue;  // a way through
       const Vec2i at{ai.base.x + ai.toward.x * ahead + side.x * i, ai.base.y + ai.toward.y * ahead + side.y * i};
       const Vec2i o = sim.footprintOrigin(t, at);
-      if (!sim.canPlace(t, o)) continue;
+      if (!sim.canPlace(t, o) || !sim.inBuildRange(p, t, o)) continue;  // (out of range would be refused)
       c.spawns.push_back({static_cast<uint16_t>(t), p, {o.x * 256 + 128, o.y * 256 + 128}, 0, -1});
     }
     if (c.spawns.empty()) return false;  // already built (or no room): on to the next line

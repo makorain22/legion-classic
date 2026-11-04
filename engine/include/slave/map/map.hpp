@@ -67,6 +67,15 @@ const char* biomeName(Biome b);
 const char* biomeId(Biome b);
 bool parseBiome(const std::string& s, Biome& out);
 
+// The lie of the land a random map is built around.
+enum class MapLayout : uint8_t {
+  RiverValley = 0, FrontLine, Confluence, Lakeland, Crossroads, Ridge,
+  Marshes, GreatLake, Steppe, Forest, HillCountry, TwinRivers, Count
+};
+const char* mapLayoutName(MapLayout l);
+// The layout a seed picks when none is chosen.
+MapLayout layoutForSeed(uint64_t seed);
+
 class Map {
  public:
   Map() = default;
@@ -167,11 +176,13 @@ class Map {
 
   // Random landscape: gentle hills, a river, dirt roads, fields and woods.
   void generateCountryside(uint64_t seed);
-  void generateTerrain(uint64_t seed, Biome b);
+  void generateTerrain(uint64_t seed, Biome b, int layout);
   // Random landscape in a biome (temperate countryside, snowy steppe, desert,
-  // jungle, ruined town). Sets `biome`.
-  void generate(Biome b, uint64_t seed);
+  // jungle, ruined town) around a layout (river valley, lakes, a ridge...;
+  // -1: the seed picks one). Sets `biome` and `layout`.
+  void generate(Biome b, uint64_t seed, int layout = -1);
   Biome biome = Biome::Temperate;
+  MapLayout layout = MapLayout::RiverValley;
 
   // Building plots chosen by the generator for villages and towns (neutral
   // houses the game places when a skirmish starts). Not saved with the map.

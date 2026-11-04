@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.7.8 – Map variety, crash reports (in progress)
+
+- **Twelve landscapes for random maps:** river valley, front line river (a
+  river between the sides with three fords), confluence, lakeland,
+  crossroads (a market town where two roads cross), ridge (high ground
+  crossed at passes), marshes (shallow pools men can wade, causeway roads),
+  great lake, open steppe (dry gullies), deep forest, hill country and twin
+  rivers. Choose one in Skirmish and the editor's New map (*Landscape*), or
+  leave it on *Random* and the seed picks one; every seed varies the rest
+  (where rivers wind, how many lakes, roads, woods and villages). Rivers bend
+  round the starting areas, which stay dry and level; roads ford every river.
+- **Crash reports:** a crash writes `legion-crash.txt` and
+  `legion-crash.dmp` beside `legion.log`; Windows builds ship
+  `LegionClassic.pdb` so reports name the exact place.
+- The computer digs its trench line, wire and tank traps even when short of
+  supplies, and only where it may build.
+- Trench lines join only pieces of the same side.
+
 ## 0.7.7 – Playtest rework: trenches, unit cards, bases, computer doctrines, field works (1 Nov 2026)
 
 From the 0.7.6 playtest.

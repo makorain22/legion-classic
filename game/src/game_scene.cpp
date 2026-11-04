@@ -131,6 +131,7 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
     s.seed = opt_.seed;
     s.biome = opt_.biome;
     s.mapSize = opt_.mapSize;
+    s.layout = opt_.layout;
     s.sides[0] = {true, opt_.side == 1 ? "rus" : "ger", opt_.flowSelfTest || opt_.monkey > 0, 2, 0, rgba8(196, 58, 44)};
     s.sides[1] = {true, "rus", false, 2, 1, rgba8(52, 96, 196)};
     if (opt_.sides >= 4) {
@@ -150,7 +151,7 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
   } else {
     MapFile f;
     f.map.resize(opt_.mapSize, opt_.mapSize);
-    f.map.generate(static_cast<Biome>(opt_.biome), opt_.seed);
+    f.map.generate(static_cast<Biome>(opt_.biome), opt_.seed, opt_.layout);
     f.map.name = "Random countryside";
     addTownBuildings(f);
     replaceWorld(std::move(f));

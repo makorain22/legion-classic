@@ -214,6 +214,7 @@ class Editor {
   bool oilClickDone_ = false;  // supply point tool: one change per click
   int newSeed_ = 1940;
   int newBiome_ = 0;
+  int newLayout_ = -1;
   bool newTowns_ = true;
   char nameBuf_[96] = "";
   std::vector<std::string> mapFiles_;

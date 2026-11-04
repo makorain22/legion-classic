@@ -732,6 +732,12 @@ void Editor::drawNewMapDialog() {
         if (ImGui::Selectable(biomeName(static_cast<Biome>(b)), b == newBiome_)) newBiome_ = b;
       ImGui::EndCombo();
     }
+    if (ImGui::BeginCombo("Landscape", newLayout_ < 0 ? "Random (from the seed)" : mapLayoutName(static_cast<MapLayout>(newLayout_)))) {
+      if (ImGui::Selectable("Random (from the seed)", newLayout_ < 0)) newLayout_ = -1;
+      for (int l = 0; l < static_cast<int>(MapLayout::Count); ++l)
+        if (ImGui::Selectable(mapLayoutName(static_cast<MapLayout>(l)), l == newLayout_)) newLayout_ = l;
+      ImGui::EndCombo();
+    }
     ImGui::InputInt("Seed", &newSeed_);
     ImGui::Checkbox("Villages and towns", &newTowns_);
   }
@@ -741,8 +747,8 @@ void Editor::drawNewMapDialog() {
     const int size = kNewSizes[newSizeIndex_];
     f.map.resize(size, size);
     if (newTerrain_ == 1) {
-      f.map.generate(static_cast<Biome>(newBiome_), static_cast<uint64_t>(newSeed_));
-      f.map.name = std::string(biomeName(static_cast<Biome>(newBiome_))) + " " + std::to_string(newSeed_);
+      f.map.generate(static_cast<Biome>(newBiome_), static_cast<uint64_t>(newSeed_), newLayout_);
+      f.map.name = std::string(mapLayoutName(f.map.layout)) + " " + std::to_string(newSeed_);
       if (newTowns_) scene_.addTownBuildings(f);
     } else {
       f.map.name = "New map";

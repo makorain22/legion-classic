@@ -173,6 +173,21 @@ void Menus::drawSkirmish() {
       if (ImGui::Selectable(biomeName(static_cast<Biome>(b)), b == biome)) setup_.biome = b;
     ImGui::EndCombo();
   }
+  ImGui::SetNextItemWidth(200);
+  if (ImGui::BeginCombo("Landscape", setup_.layout < 0 ? "Random (from the seed)" : mapLayoutName(static_cast<MapLayout>(setup_.layout)))) {
+    if (ImGui::Selectable("Random (from the seed)", setup_.layout < 0)) setup_.layout = -1;
+    for (int l = 0; l < static_cast<int>(MapLayout::Count); ++l)
+      if (ImGui::Selectable(mapLayoutName(static_cast<MapLayout>(l)), l == setup_.layout)) setup_.layout = l;
+    ImGui::EndCombo();
+  }
+  if (ImGui::IsItemHovered())
+    ImGui::SetTooltip("The lie of the land: river valley, front line river, confluence, lakeland, crossroads town,\n"
+                      "ridge with passes, marshes, great lake, open steppe, deep forest, hill country or twin rivers.\n"
+                      "Random lets the seed pick one - every seed gives a different map.");
+  if (setup_.layout < 0) {
+    ImGui::SameLine();
+    ImGui::TextDisabled("this seed: %s", mapLayoutName(layoutForSeed(setup_.seed)));
+  }
   int seed = static_cast<int>(setup_.seed);
   ImGui::SetNextItemWidth(200);
   if (ImGui::InputInt("Map seed", &seed)) setup_.seed = static_cast<uint64_t>(std::max(0, seed));

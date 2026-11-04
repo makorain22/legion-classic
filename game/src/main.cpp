@@ -100,6 +100,7 @@ int main(int argc, char** argv) {
     else if (a == "--speed") opt.speed = static_cast<float>(std::atof(next()));
     else if (a == "--monkey") opt.monkey = std::atoi(next());
     else if (a == "--sides") opt.sides = std::atoi(next());
+    else if (a == "--layout") opt.layout = std::atoi(next());
     else if (a == "--flow-selftest") opt.flowSelfTest = true;
     else if (a == "--biome") {
       slave::Biome b;

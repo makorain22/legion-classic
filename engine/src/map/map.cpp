@@ -168,7 +168,6 @@ bool parseBiome(const std::string& s, Biome& out) {
   return false;
 }
 
-void Map::generate(Biome b, uint64_t seed) { generateTerrain(seed, b); }
 
 bool Map::buildable(int tx, int ty) const {
   if (!inBounds(tx, ty)) return false;
@@ -196,83 +195,404 @@ void Map::addOilField(int cx, int cy, int radius, uint32_t seed) {
 // river with muddy banks, dirt roads that ford it, woods and patchy ground.
 // Heights use integer maths only, so every PC generates the same terrain.
 // ---------------------------------------------------------------------------
-void Map::generateCountryside(uint64_t seed) { generateTerrain(seed, Biome::Temperate); }
+void Map::generateCountryside(uint64_t seed) { generateTerrain(seed, Biome::Temperate, 0); }
 
-void Map::generateTerrain(uint64_t seed, Biome b) {
+const char* mapLayoutName(MapLayout l) {
+  static const char* names[] = {"River valley", "Front line river", "Confluence", "Lakeland",   "Crossroads",
+                                "Ridge",        "Marshes",          "Great lake", "Open steppe", "Deep forest",
+                                "Hill country", "Twin rivers"};
+  return names[static_cast<int>(l) % static_cast<int>(MapLayout::Count)];
+}
+
+MapLayout layoutForSeed(uint64_t seed) {
+  return static_cast<MapLayout>(hash2(static_cast<int32_t>(seed), static_cast<int32_t>(seed >> 32), 0x5EED) %
+                                static_cast<uint32_t>(MapLayout::Count));
+}
+
+void Map::generate(Biome b, uint64_t seed, int layout) {
+  generateTerrain(seed, b, layout < 0 ? static_cast<int>(layoutForSeed(seed)) : layout);
+}
+
+namespace {
+// A winding line across the map (river, road, ridge, gully), in tiles.
+struct Curve {
+  std::vector<Vec2f> pts;
+  float halfWidth = 1;  // tiles
+};
+
+// From a to b with the middle points pushed sideways by up to `wander` tiles,
+// then rounded off (Chaikin) so it bends naturally.
+Curve makeCurve(Vec2f a, Vec2f b, float wander, float halfWidth, Rng& rng, int segments = 10) {
+  Curve c;
+  c.halfWidth = halfWidth;
+  const Vec2f d = b - a;
+  const float len = std::max(1.0f, std::sqrt(d.x * d.x + d.y * d.y));
+  const Vec2f side{-d.y / len, d.x / len};
+  std::vector<Vec2f> p;
+  float drift = 0;
+  for (int i = 0; i <= segments; ++i) {
+    const float t = static_cast<float>(i) / segments;
+    if (i > 0 && i < segments) drift = std::clamp(drift + (static_cast<float>(rng.range(-1000, 1000)) / 1000.0f) * wander * 0.6f, -wander, wander);
+    const float w = (i == 0 || i == segments) ? 0.0f : drift;
+    p.push_back({a.x + d.x * t + side.x * w, a.y + d.y * t + side.y * w});
+  }
+  for (int pass = 0; pass < 2; ++pass) {
+    std::vector<Vec2f> q{p.front()};
+    for (size_t i = 0; i + 1 < p.size(); ++i) {
+      q.push_back({p[i].x * 0.75f + p[i + 1].x * 0.25f, p[i].y * 0.75f + p[i + 1].y * 0.25f});
+      q.push_back({p[i].x * 0.25f + p[i + 1].x * 0.75f, p[i].y * 0.25f + p[i + 1].y * 0.75f});
+    }
+    q.push_back(p.back());
+    p = std::move(q);
+  }
+  c.pts = std::move(p);
+  return c;
+}
+
+// Distance (tiles) from a point to the curve, and how far along it the nearest point lies.
+float curveDistance(const Curve& c, Vec2f p, float* along = nullptr) {
+  float best = 1e9f, bestAlong = 0, run = 0;
+  for (size_t i = 0; i + 1 < c.pts.size(); ++i) {
+    const Vec2f a = c.pts[i], b = c.pts[i + 1];
+    const float dx = b.x - a.x, dy = b.y - a.y;
+    const float l2 = dx * dx + dy * dy;
+    const float t = l2 > 0 ? std::clamp(((p.x - a.x) * dx + (p.y - a.y) * dy) / l2, 0.0f, 1.0f) : 0.0f;
+    const float ex = a.x + dx * t - p.x, ey = a.y + dy * t - p.y;
+    const float d2 = ex * ex + ey * ey;
+    const float seg = std::sqrt(l2);
+    if (d2 < best) {
+      best = d2;
+      bestAlong = run + seg * t;
+    }
+    run += seg;
+  }
+  if (along) *along = bestAlong;
+  return std::sqrt(best);
+}
+
+Vec2f curvePoint(const Curve& c, float t) {
+  const float f = std::clamp(t, 0.0f, 1.0f) * static_cast<float>(c.pts.size() - 1);
+  const size_t i = std::min(c.pts.size() - 2, static_cast<size_t>(f));
+  const float k = f - static_cast<float>(i);
+  return {c.pts[i].x + (c.pts[i + 1].x - c.pts[i].x) * k, c.pts[i].y + (c.pts[i + 1].y - c.pts[i].y) * k};
+}
+
+struct Lake {
+  Vec2f c;
+  float rx = 5, ry = 5;  // tiles
+  float depth = 38;      // height units below the water line at the middle
+};
+
+// Everything a layout decides before the land is shaped.
+struct Plan {
+  std::vector<Curve> rivers, roads, ridges, gullies;
+  std::vector<float> passes;  // along the first ridge: where it dips low enough to cross (0..1)
+  std::vector<Lake> lakes;
+  int32_t hillAmp = 150, hillCell = 48, baseHeight = 430;
+  float riverDepth = 38;
+  int forestShift = 0;   // + more woods, - fewer
+  int hamletScale = 3;   // hamlets per 128x128
+  bool centralTown = false;
+  bool marsh = false;
+};
+}  // namespace
+
+void Map::generateTerrain(uint64_t seed, Biome b, int layoutIndex) {
   biome = b;
+  layout = static_cast<MapLayout>(std::clamp(layoutIndex, 0, static_cast<int>(MapLayout::Count) - 1));
   lots.clear();
   const bool winter = b == Biome::Winter, desert = b == Biome::Desert, tropical = b == Biome::Tropical,
              urban = b == Biome::Urban;
   Rng rng(seed);
   const uint32_t s = static_cast<uint32_t>(seed);
   const int W = width_, H = height_;
+  const float Wf = static_cast<float>(W), Hf = static_cast<float>(H);
+  const float scale = std::sqrt(Wf * Hf) / 128.0f;  // features grow with the map
   props_.clear();
-
-  // --- Rolling hills -----------------------------------------------------
-  for (int cy = 0; cy < cornersY(); ++cy)
-    for (int cx = 0; cx < cornersX(); ++cx) {
-      const int32_t n = fractal(cx, cy, 48, s);  // 0..1023
-      // Deserts roll in long dunes; towns sit on flatter ground.
-      const int32_t amp = urban ? 90 : desert ? 170 : tropical ? 130 : 150;
-      int32_t h = 430 + (n - 512) * amp / 512;
-      if (desert) h += (valueNoise(cx * 3, cy, 22, s + 77) - 512) * 30 / 512;  // dune ridges
-      setCorner(cx, cy, static_cast<uint16_t>(h));
-    }
   waterLevel_ = 330;
+  const int32_t wl = waterLevel_;
+  auto rf = [&](float lo, float hi) { return lo + (hi - lo) * static_cast<float>(rng.below(10001)) / 10000.0f; };
 
-  // --- River (west to east) ------------------------------------------------
-  const int32_t riverY0 = H * 3 / 10 + static_cast<int32_t>(rng.below(static_cast<uint32_t>(H * 4 / 10)));
-  auto riverY = [&](int32_t x) { return riverY0 * 256 + (valueNoise(x, 0, 40, s + 31) - 512) * H * 40 / 1024; };  // x256
-  // Desert rivers are narrow; jungle rivers broad and slow.
-  const int32_t riverScale = desert ? 160 : tropical ? 360 : 256;
-  auto riverHalfWidth = [&](int32_t x) {
-    return (2 * 256 + valueNoise(x, 7, 30, s + 37) * 256 / 512) * riverScale / 256;
-  };  // x256
-  // --- Two dirt roads (north to south) -----------------------------------
-  auto roadX = [&](int road, int32_t y) {
-    const int32_t base = (road == 0 ? W * 26 / 100 : W * 72 / 100) * 256;
-    return base + (valueNoise(y, road * 50, 36, s + 41 + road) - 512) * W * 20 / 1024;
+  // Where sides may start (1v1, 2v2 and four-way): kept dry and fairly flat.
+  const Vec2f spots[] = {{Wf * 0.17f, Hf * 0.5f},  {Wf * 0.83f, Hf * 0.5f},  {Wf * 0.5f, Hf * 0.17f},
+                         {Wf * 0.5f, Hf * 0.83f},  {Wf * 0.15f, Hf * 0.3f},  {Wf * 0.15f, Hf * 0.7f},
+                         {Wf * 0.85f, Hf * 0.3f},  {Wf * 0.85f, Hf * 0.7f}};
+  auto nearSpot = [&](Vec2f p, float r) {
+    for (const Vec2f& sp : spots)
+      if (std::abs(p.x - sp.x) < r && std::abs(p.y - sp.y) < r) return true;
+    return false;
   };
 
-  const int32_t wl = waterLevel_;
-  constexpr int32_t kValley = 12 * 256;  // banks rise over 12 tiles: no cliffs
-  for (int cy = 0; cy < cornersY(); ++cy)
-    for (int cx = 0; cx < cornersX(); ++cx) {
-      int32_t h = corner(cx, cy);
-      const int32_t d = std::abs(cy * 256 - riverY(cx));  // distance from the river centre, x256
-      const int32_t hw = riverHalfWidth(cx);
-      if (d < hw) {
-        // River bed: a continuous bowl, shallow at the edge, deep in the middle.
-        const int64_t t = static_cast<int64_t>(d) * 1024 / hw;  // 0..1024
-        const int32_t bed = wl - 4 - static_cast<int32_t>(38 * (1024 * 1024 - t * t) / (1024 * 1024));
-        h = std::min(h, bed);
-      } else if (d < hw + kValley) {
-        // Valley sides ease from the water's edge up to the original ground.
-        int64_t t = static_cast<int64_t>(d - hw) * 1024 / kValley;  // 0..1024
-        t = 1024 - (1024 - t) * (1024 - t) / 1024;                  // ease-out: steepest by the water
-        const int32_t valley = static_cast<int32_t>((wl - 4) + (static_cast<int64_t>(h) - (wl - 4)) * t / 1024);
-        h = std::min(h, valley);
+  // --- The layout ------------------------------------------------------------
+  Plan plan;
+  const float rw = (desert ? 1.6f : tropical ? 3.4f : 2.4f) * std::min(1.4f, std::max(0.8f, scale));  // river half width
+  auto riverWE = [&](float y) { plan.rivers.push_back(makeCurve({-4, y}, {Wf + 4, y + rf(-0.08f, 0.08f) * Hf}, Hf * 0.09f, rw, rng)); };
+  auto riverNS = [&](float x, float wander) {
+    plan.rivers.push_back(makeCurve({x, -4}, {x + rf(-0.06f, 0.06f) * Wf, Hf + 4}, Wf * wander, rw, rng));
+  };
+  auto roadWE = [&](float y, float wander) { plan.roads.push_back(makeCurve({-2, y}, {Wf + 2, y + rf(-0.06f, 0.06f) * Hf}, Hf * wander, 1, rng)); };
+  auto roadNS = [&](float x, float wander) { plan.roads.push_back(makeCurve({x, -2}, {x + rf(-0.06f, 0.06f) * Wf, Hf + 2}, Wf * wander, 1, rng)); };
+  auto addLakes = [&](int count, float rMin, float rMax, float depth, float keepOut) {
+    for (int i = 0, tries = 0; i < count && tries < count * 30; ++tries) {
+      Lake l;
+      l.rx = rf(rMin, rMax) * scale;
+      l.ry = l.rx * rf(0.6f, 1.4f);
+      l.depth = depth;
+      l.c = {rf(0.08f, 0.92f) * Wf, rf(0.08f, 0.92f) * Hf};
+      if (nearSpot(l.c, std::max(l.rx, l.ry) + keepOut)) continue;
+      bool clash = false;
+      for (const Lake& o : plan.lakes)
+        clash = clash || std::hypot(o.c.x - l.c.x, o.c.y - l.c.y) < std::max(o.rx, o.ry) + std::max(l.rx, l.ry) + 4;
+      if (clash) continue;
+      plan.lakes.push_back(l);
+      ++i;
+    }
+  };
+  // Rivers and lakes bend round the starting areas instead of stopping short.
+  auto skirtSpots = [&](Curve& c) {
+    for (int iter = 0; iter < 4; ++iter) {
+      // Ease the bends, then push clear again.
+      std::vector<Vec2f> q = c.pts;
+      for (size_t i = 1; i + 1 < q.size(); ++i)
+        q[i] = {(c.pts[i - 1].x + c.pts[i].x * 2 + c.pts[i + 1].x) / 4, (c.pts[i - 1].y + c.pts[i].y * 2 + c.pts[i + 1].y) / 4};
+      c.pts = std::move(q);
+      for (size_t i = 1; i + 1 < c.pts.size(); ++i)
+        for (const Vec2f& sp : spots) {
+          const float keep = 12.5f + c.halfWidth;
+          float dx = c.pts[i].x - sp.x, dy = c.pts[i].y - sp.y;
+          const float d = std::sqrt(dx * dx + dy * dy);
+          if (d >= keep) continue;
+          if (d < 0.01f) dx = 1, dy = 0;
+          const float k = keep / std::max(d, 0.01f);
+          c.pts[i] = {sp.x + dx * k, sp.y + dy * k};
+        }
+    }
+  };
+  switch (layout) {
+    case MapLayout::RiverValley:  // a river west to east, two roads crossing it
+      riverWE(Hf * rf(0.36f, 0.64f));
+      roadNS(Wf * rf(0.22f, 0.3f), 0.1f);
+      roadNS(Wf * rf(0.68f, 0.76f), 0.1f);
+      break;
+    case MapLayout::FrontLine:  // a river between the sides, three fords
+      riverNS(Wf * rf(0.46f, 0.54f), 0.06f);
+      for (float y : {0.22f, 0.5f, 0.78f}) roadWE(Hf * (y + rf(-0.04f, 0.04f)), 0.05f);
+      plan.forestShift = 20;
+      break;
+    case MapLayout::Confluence: {  // two rivers meet in the middle and flow on south
+      const Vec2f mid{Wf * rf(0.45f, 0.55f), Hf * rf(0.42f, 0.5f)};
+      plan.rivers.push_back(makeCurve({Wf * rf(0.18f, 0.3f), -4}, mid, Wf * 0.06f, rw * 0.8f, rng, 6));
+      plan.rivers.push_back(makeCurve({Wf * rf(0.7f, 0.82f), -4}, mid, Wf * 0.06f, rw * 0.8f, rng, 6));
+      plan.rivers.push_back(makeCurve(mid, {Wf * rf(0.62f, 0.75f), Hf + 4}, Wf * 0.06f, rw * 1.2f, rng, 6));
+      roadWE(Hf * rf(0.55f, 0.65f), 0.06f);
+      roadWE(Hf * rf(0.2f, 0.28f), 0.05f);
+      roadNS(Wf * rf(0.3f, 0.36f), 0.05f);
+      break;
+    }
+    case MapLayout::Lakeland:  // lakes scattered among the woods
+      addLakes(4 + static_cast<int>(rng.below(5)), 4.0f, 10.0f, 36, 15);
+      roadWE(Hf * rf(0.45f, 0.55f), 0.14f);
+      roadNS(Wf * rf(0.45f, 0.55f), 0.14f);
+      plan.forestShift = 10;
+      break;
+    case MapLayout::Crossroads:  // two roads cross at a market town; a brook and a pond
+      roadWE(Hf * 0.5f, 0.03f);
+      roadNS(Wf * 0.5f, 0.03f);
+      plan.roads.push_back(makeCurve({-2, Hf * rf(0.05f, 0.2f)}, {Wf + 2, Hf * rf(0.8f, 0.95f)}, Hf * 0.08f, 1, rng));
+      plan.rivers.push_back(makeCurve({Wf * rf(0.3f, 0.4f), -4}, {Wf * rf(0.6f, 0.7f), Hf + 4}, Wf * 0.12f, 1.1f, rng));
+      plan.rivers.back().halfWidth = 1.2f;
+      addLakes(1 + static_cast<int>(rng.below(2)), 3.0f, 5.0f, 30, 16);
+      plan.centralTown = true;
+      plan.hamletScale = 2;
+      break;
+    case MapLayout::Ridge: {  // a high ridge between the sides, crossed at a few passes
+      plan.ridges.push_back(makeCurve({Wf * rf(0.45f, 0.55f), -6}, {Wf * rf(0.45f, 0.55f), Hf + 6}, Wf * 0.07f, 9.0f * scale, rng));
+      plan.passes = {rf(0.16f, 0.3f), rf(0.45f, 0.55f), rf(0.7f, 0.84f)};
+      for (float t : plan.passes) {
+        const Vec2f pp = curvePoint(plan.ridges[0], t);
+        plan.roads.push_back(makeCurve({-2, pp.y + rf(-0.05f, 0.05f) * Hf}, pp, Hf * 0.04f, 1, rng, 5));
+        plan.roads.push_back(makeCurve(pp, {Wf + 2, pp.y + rf(-0.05f, 0.05f) * Hf}, Hf * 0.04f, 1, rng, 5));
       }
-      // Roads cross the river on a shallow ford.
-      for (int r = 0; r < 2; ++r) {
-        const int32_t rd = std::abs(cx * 256 - roadX(r, cy));
-        if (rd < 3 * 256 && h < wl + 3) {
-          const int32_t raise = wl + 3 - rd * rd * 4 / (256 * 256);
-          h = std::max(h, raise);
+      plan.hillAmp = 120;
+      break;
+    }
+    case MapLayout::Marshes:  // low, wet ground: shallow pools men can wade, causeway roads
+      plan.hillAmp = 50;
+      plan.baseHeight = 352;
+      addLakes(18 + static_cast<int>(rng.below(14)), 2.0f, 5.5f, 9, 12);
+      roadWE(Hf * rf(0.4f, 0.6f), 0.08f);
+      roadNS(Wf * rf(0.3f, 0.4f), 0.08f);
+      roadNS(Wf * rf(0.6f, 0.7f), 0.08f);
+      plan.marsh = true;
+      plan.forestShift = -10;
+      break;
+    case MapLayout::GreatLake: {  // a great lake in the middle: fight round its shores
+      Lake l;
+      l.c = {Wf * rf(0.47f, 0.53f), Hf * rf(0.47f, 0.53f)};
+      l.rx = Wf * rf(0.17f, 0.22f);
+      l.ry = Hf * rf(0.15f, 0.2f);
+      l.depth = 44;
+      plan.lakes.push_back(l);
+      roadWE(Hf * rf(0.12f, 0.18f), 0.04f);
+      roadWE(Hf * rf(0.82f, 0.88f), 0.04f);
+      roadNS(Wf * rf(0.2f, 0.25f), 0.05f);
+      roadNS(Wf * rf(0.75f, 0.8f), 0.05f);
+      break;
+    }
+    case MapLayout::Steppe:  // open grassland, long roads, dry gullies
+      plan.hillAmp = 70;
+      plan.hillCell = 64;
+      plan.forestShift = -60;
+      roadWE(Hf * rf(0.3f, 0.4f), 0.04f);
+      roadWE(Hf * rf(0.6f, 0.7f), 0.04f);
+      roadNS(Wf * rf(0.45f, 0.55f), 0.05f);
+      for (int i = 0, n = 3 + static_cast<int>(rng.below(4)); i < n; ++i) {
+        const Vec2f a{rf(0.2f, 0.8f) * Wf, rf(0.1f, 0.9f) * Hf};
+        const float ang = rf(0, 6.283f), len = rf(12, 30) * scale;
+        plan.gullies.push_back(makeCurve(a, {a.x + std::cos(ang) * len, a.y + std::sin(ang) * len}, len * 0.2f, 2.5f, rng, 6));
+      }
+      plan.hamletScale = 2;
+      break;
+    case MapLayout::Forest:  // dense woods, logging tracks, a stream
+      plan.forestShift = 90;
+      for (int i = 0; i < 3; ++i)
+        plan.roads.push_back(makeCurve({rf(0, 0.2f) * Wf, rf(0.1f, 0.9f) * Hf}, {rf(0.8f, 1) * Wf, rf(0.1f, 0.9f) * Hf}, Hf * 0.12f, 1, rng));
+      roadNS(Wf * rf(0.4f, 0.6f), 0.12f);
+      plan.rivers.push_back(makeCurve({Wf * rf(0.2f, 0.4f), -4}, {Wf * rf(0.6f, 0.8f), Hf + 4}, Wf * 0.1f, 1.4f, rng));
+      plan.hamletScale = 2;
+      break;
+    case MapLayout::HillCountry:  // rough hills and a winding river
+      plan.hillAmp = 250;
+      plan.hillCell = 32;
+      riverNS(Wf * rf(0.45f, 0.55f), 0.14f);
+      roadWE(Hf * rf(0.3f, 0.4f), 0.1f);
+      roadWE(Hf * rf(0.6f, 0.7f), 0.1f);
+      break;
+    case MapLayout::TwinRivers:  // two rivers make a long island in the middle
+      riverNS(Wf * rf(0.33f, 0.37f), 0.04f);
+      riverNS(Wf * rf(0.63f, 0.67f), 0.04f);
+      for (float y : {0.3f, 0.7f}) roadWE(Hf * (y + rf(-0.05f, 0.05f)), 0.05f);
+      roadNS(Wf * 0.5f, 0.06f);
+      break;
+    default: break;
+  }
+  for (Curve& r : plan.rivers) skirtSpots(r);
+  if (urban) plan.hillAmp = std::min(plan.hillAmp, 90);
+  if (desert) plan.hillAmp = plan.hillAmp * 170 / 150;
+
+  // --- Distance fields at every height corner ------------------------------------
+  const int CX = cornersX(), CY = cornersY();
+  std::vector<float> roadDist(static_cast<size_t>(CX) * CY, 1e9f);
+  for (int cy = 0; cy < CY; ++cy)
+    for (int cx = 0; cx < CX; ++cx) {
+      float d = 1e9f;
+      for (const Curve& r : plan.roads) d = std::min(d, curveDistance(r, {static_cast<float>(cx), static_cast<float>(cy)}));
+      roadDist[static_cast<size_t>(cy) * CX + cx] = d;
+    }
+  // Road distance anywhere (tiles), from the corners.
+  auto roadAt = [&](float tx, float ty) {
+    const int x0 = std::clamp(static_cast<int>(tx), 0, CX - 2), y0 = std::clamp(static_cast<int>(ty), 0, CY - 2);
+    const float fx = std::clamp(tx - x0, 0.0f, 1.0f), fy = std::clamp(ty - y0, 0.0f, 1.0f);
+    auto at = [&](int x, int y) { return roadDist[static_cast<size_t>(y) * CX + x]; };
+    const float top = at(x0, y0) + (at(x0 + 1, y0) - at(x0, y0)) * fx;
+    const float bot = at(x0, y0 + 1) + (at(x0 + 1, y0 + 1) - at(x0, y0 + 1)) * fx;
+    return top + (bot - top) * fy;
+  };
+
+  // --- Shape the land -------------------------------------------------------------
+  constexpr float kValley = 12.0f;  // banks rise over 12 tiles: no cliffs
+  std::vector<int32_t> hill(static_cast<size_t>(CX) * CY);
+  for (int cy = 0; cy < CY; ++cy)
+    for (int cx = 0; cx < CX; ++cx) {
+      const int32_t n = fractal(cx, cy, plan.hillCell, s);  // 0..1023
+      int32_t h = plan.baseHeight + (n - 512) * plan.hillAmp / 512;
+      if (desert) h += (valueNoise(cx * 3, cy, 22, s + 77) - 512) * 30 / 512;  // dune ridges
+      hill[static_cast<size_t>(cy) * CX + cx] = h;
+    }
+  for (int cy = 0; cy < CY; ++cy)
+    for (int cx = 0; cx < CX; ++cx) {
+      const Vec2f p{static_cast<float>(cx), static_cast<float>(cy)};
+      float h = static_cast<float>(hill[static_cast<size_t>(cy) * CX + cx]);
+      // Starting areas stay dry and gentle: how much this corner belongs to one.
+      float protect = 0, target = h;
+      for (const Vec2f& sp : spots) {
+        const float wgt = 1.0f - smoothstep(7.5f, 12.5f, std::hypot(p.x - sp.x, p.y - sp.y));
+        if (wgt > protect) {
+          protect = wgt;
+          const int sx = std::clamp(static_cast<int>(sp.x), 0, CX - 1), sy = std::clamp(static_cast<int>(sp.y), 0, CY - 1);
+          target = std::max(static_cast<float>(hill[static_cast<size_t>(sy) * CX + sx]), static_cast<float>(wl + 36));
         }
       }
-      setCorner(cx, cy, static_cast<uint16_t>(std::clamp(h, 0, 65535)));
+      // Ridges: a broad hump, low where a pass crosses.
+      for (size_t r = 0; r < plan.ridges.size(); ++r) {
+        float along = 0;
+        const float d = curveDistance(plan.ridges[r], p, &along);
+        const Curve& c = plan.ridges[r];
+        if (d < c.halfWidth * 1.6f) {
+          float total = 0;
+          for (size_t i = 0; i + 1 < c.pts.size(); ++i) total += std::hypot(c.pts[i + 1].x - c.pts[i].x, c.pts[i + 1].y - c.pts[i].y);
+          float lift = 230.0f * (1.0f - smoothstep(0.0f, c.halfWidth * 1.6f, d));
+          lift *= 0.8f + 0.4f * valueNoise(static_cast<int32_t>(along), 3, 12, s + 59) / 1023.0f;
+          if (r == 0)
+            for (float t : plan.passes) lift *= smoothstep(4.0f, 11.0f * scale, std::abs(along - t * total));
+          h += lift * (1.0f - protect);
+        }
+      }
+      // Gullies: dry ravines cut into the plain.
+      for (const Curve& g : plan.gullies) {
+        const float d = curveDistance(g, p);
+        if (d < g.halfWidth + 4) h -= 45.0f * (1.0f - smoothstep(0.0f, g.halfWidth + 4, d));
+      }
+      if (!plan.gullies.empty()) h = std::max(h, static_cast<float>(wl + 8));
+      // Rivers and lakes: a bowl below the water line, banks easing up.
+      float waterT = 1e9f, bank = 1e9f, depth = plan.riverDepth;
+      for (const Curve& r : plan.rivers) {
+        float along = 0;
+        const float d = curveDistance(r, p, &along);
+        const float hw = r.halfWidth * (0.8f + 0.5f * valueNoise(static_cast<int32_t>(along * 4), 7, 30, s + 37) / 1023.0f);
+        if (d / hw < waterT) {
+          waterT = d / hw;
+          bank = d - hw;
+          depth = plan.riverDepth * std::min(1.0f, hw / 2.0f);
+        }
+      }
+      for (const Lake& l : plan.lakes) {
+        const float dx = (p.x - l.c.x) / l.rx, dy = (p.y - l.c.y) / l.ry;
+        const float ang = std::atan2(dy, dx);
+        const float wobble = 0.85f + 0.3f * valueNoise(static_cast<int32_t>((ang + 3.2f) * 20), 11, 9, s + 71) / 1023.0f;
+        const float t = std::sqrt(dx * dx + dy * dy) / wobble;
+        if (t < waterT) {
+          waterT = t;
+          bank = (t - 1.0f) * std::min(l.rx, l.ry);
+          depth = l.depth;
+        }
+      }
+      const float valley = plan.marsh ? 5.0f : kValley;
+      if (waterT < 1.0f) {
+        const float bed = static_cast<float>(wl) - 4 - depth * (1.0f - waterT * waterT);
+        h = std::min(h, bed);
+      } else if (bank < valley) {
+        float t = bank / valley;
+        t = 1 - (1 - t) * (1 - t);  // ease-out: steepest by the water
+        h = std::min(h, static_cast<float>(wl - 4) + (h - static_cast<float>(wl - 4)) * t);
+      }
+      // Roads cross water on fords (and marsh on causeways).
+      const float rd = roadDist[static_cast<size_t>(cy) * CX + cx];
+      const float top = static_cast<float>(wl) + (plan.marsh ? 6.0f : 3.0f);
+      if (rd < 3.0f && h < top) h = std::max(h, top - rd * rd * 4.0f);
+      if (protect > 0) h += (target - h) * protect;
+      setCorner(cx, cy, static_cast<uint16_t>(std::clamp(static_cast<int>(h), 0, 65535)));
     }
 
   // Two gentle smoothing passes remove any leftover ridges from the carving.
   for (int pass = 0; pass < 2; ++pass) {
     std::vector<uint16_t> src = heights_;
-    for (int cy = 1; cy < cornersY() - 1; ++cy)
-      for (int cx = 1; cx < cornersX() - 1; ++cx) {
+    for (int cy = 1; cy < CY - 1; ++cy)
+      for (int cx = 1; cx < CX - 1; ++cx) {
         int32_t sum = 0;
         for (int oy = -1; oy <= 1; ++oy)
           for (int ox = -1; ox <= 1; ++ox)
-            sum += src[static_cast<size_t>(cy + oy) * cornersX() + cx + ox] * ((ox == 0 && oy == 0) ? 4 : 1);
+            sum += src[static_cast<size_t>(cy + oy) * CX + cx + ox] * ((ox == 0 && oy == 0) ? 4 : 1);
         setCorner(cx, cy, static_cast<uint16_t>(sum / 12));
       }
   }
@@ -291,7 +611,7 @@ void Map::generateTerrain(uint64_t seed, Biome b) {
       const float mudNoise = valueNoise(sx, sy, 5, s + 109) / 1023.0f;
       const float sandNoise = valueNoise(sx, sy, 6, s + 107) / 1023.0f;
       const float slopeK = smoothstep(24.0f, 40.0f, static_cast<float>(info(itx, ity).slope));
-      const float shoreMud = 1.0f - smoothstep(-4.0f, 10.0f + mudNoise * 14.0f, above);
+      const float shoreMud = 1.0f - smoothstep(-4.0f, (plan.marsh ? 22.0f : 10.0f) + mudNoise * 14.0f, above);
       if (winter) {
         // Snow over everything; thawed, trampled patches and frozen mud by the water.
         w[int(Layer::Snow)] = 1.4f;
@@ -321,23 +641,25 @@ void Map::generateTerrain(uint64_t seed, Biome b) {
         w[int(Layer::Mud)] = shoreMud * 2.0f;
         w[int(Layer::Rock)] = slopeK * 3.0f + smoothstep(0.7f, 0.8f, mudNoise) * 0.9f;
       } else {
-        w[int(Layer::Grass)] = 1.0f;
-        w[int(Layer::DryGrass)] = smoothstep(0.58f, 0.72f, dry) * 1.0f;
+        const bool steppe = layout == MapLayout::Steppe;
+        w[int(Layer::Grass)] = steppe ? 0.7f : 1.0f;
+        w[int(Layer::DryGrass)] = smoothstep(steppe ? 0.4f : 0.58f, steppe ? 0.6f : 0.72f, dry) * (steppe ? 1.5f : 1.0f);
         w[int(Layer::Dirt)] = smoothstep(0.66f, 0.76f, dirt) * 1.6f;
         w[int(Layer::Mud)] = 2.2f * shoreMud;
         w[int(Layer::Sand)] = (1.0f - smoothstep(2.0f, 10.0f, std::abs(above - 6.0f))) * smoothstep(0.55f, 0.8f, sandNoise) * 1.4f;
         w[int(Layer::Rock)] = slopeK * 3.0f;
       }
-
-      for (int r = 0; r < 2; ++r) {
-        const float rd = std::abs(tx * 256.0f - roadX(r, static_cast<int32_t>(ty))) / 256.0f;
-        w[int(Layer::Road)] = std::max(w[int(Layer::Road)], (1.0f - smoothstep(0.45f, 0.95f, rd)) * 4.0f);
-      }
+      const float rd = roadAt(tx, ty);
+      w[int(Layer::Road)] = (1.0f - smoothstep(0.45f, 0.95f, rd)) * 4.0f;
       if (urban) {
         // A grid of streets every 12 tiles.
         const float gx = std::fmod(tx + 6.0f, 12.0f), gy = std::fmod(ty + 6.0f, 12.0f);
         const float sd = std::min(std::abs(gx - 6.0f), std::abs(gy - 6.0f));
         w[int(Layer::Road)] = std::max(w[int(Layer::Road)], (1.0f - smoothstep(0.5f, 1.0f, sd)) * 4.0f);
+      } else if (plan.centralTown) {
+        // The market square.
+        const float d = std::max(std::abs(tx - Wf * 0.5f), std::abs(ty - Hf * 0.5f));
+        w[int(Layer::Road)] = std::max(w[int(Layer::Road)], (1.0f - smoothstep(2.5f, 3.2f, d)) * 4.0f);
       }
       float sum = 0;
       for (float v : w) sum += v;
@@ -351,11 +673,8 @@ void Map::generateTerrain(uint64_t seed, Biome b) {
     }
 
   // --- Woods, hedges and rocks ---------------------------------------------
-  auto nearRoad = [&](int x, int y) {
-    for (int r = 0; r < 2; ++r)
-      if (std::abs(x * 256 + 128 - roadX(r, y)) < 3 * 256) return true;
-    return false;
-  };
+  auto nearRoad = [&](int x, int y) { return roadAt(x + 0.5f, y + 0.5f) < 3.0f; };
+  const int32_t fs = plan.forestShift;
   for (int y = 1; y < H - 1; ++y)
     for (int x = 1; x < W - 1; ++x) {
       const TileInfo& t = info(x, y);
@@ -366,13 +685,18 @@ void Map::generateTerrain(uint64_t seed, Biome b) {
                             y * 256 + rng.range(40, 216)});
         continue;
       }
-      const int32_t forest = fractal(x + 1000, y + 1000, 28, s + 13);
+      const int32_t forest = fractal(x + 1000, y + 1000, 28, s + 13) + fs;
       const bool nearWater = t.waterDepth > -40;
       auto put = [&](PropKind kind, uint32_t variants) {
         props_.push_back({kind, static_cast<uint8_t>(rng.below(variants)), x * 256 + rng.range(40, 216),
                           y * 256 + rng.range(40, 216)});
       };
       const uint32_t pick = rng.below(100);
+      if (plan.marsh && nearWater && !winter && !desert) {
+        // Reed beds and alders round the pools.
+        if (rng.below(100) < 18) put(pick < 60 ? PropKind::Bush : pick < 80 ? PropKind::DeadTree : PropKind::Tree, pick < 80 ? 4 : 4);
+        continue;
+      }
       if (winter) {
         const uint32_t chance = forest > 690 ? 65 : (forest > 610 ? 16 : 1);
         if (rng.below(100) >= chance) continue;
@@ -406,7 +730,7 @@ void Map::generateTerrain(uint64_t seed, Biome b) {
         put(pick < 40 ? PropKind::Tree : pick < 70 ? PropKind::DeadTree : PropKind::Debris, 4);
       } else {
         const uint32_t chance = forest > 700 ? 70 : (forest > 620 ? 18 : 1);
-        if (rng.below(1000) < 4 && forest < 560) {  // haystacks out in the fields
+        if (rng.below(1000) < (layout == MapLayout::Steppe ? 9u : 4u) && forest < 560) {  // haystacks out in the fields
           put(PropKind::Haystack, 3);
           continue;
         }
@@ -431,17 +755,23 @@ void Map::generateTerrain(uint64_t seed, Biome b) {
       {50, 50}, {32, 30}, {68, 70}, {32, 70}, {68, 30},  // contested
   };
   for (const auto& site : sites) {
-    int cx = W * site.fx / 100, cy = H * site.fy / 100;
-    for (int tries = 0; tries < 60; ++tries) {
+    const int ox = W * site.fx / 100, oy = H * site.fy / 100;
+    int cx = ox, cy = oy;
+    bool found = false;
+    for (int tries = 0; tries < 120 && !found; ++tries) {
       bool ok = true;
       for (int y = cy - 2; y <= cy + 2 && ok; ++y)
         for (int x = cx - 2; x <= cx + 2 && ok; ++x)
           ok = inBounds(x, y) && info(x, y).waterDepth < -16 && info(x, y).slope < 20;
-      if (ok) break;
-      cx = std::clamp(cx + static_cast<int>(rng.range(-3, 3)), 3, W - 4);
-      cy = std::clamp(cy + static_cast<int>(rng.range(-3, 3)), 3, H - 4);
+      if (ok) {
+        found = true;
+        break;
+      }
+      const int r = 3 + tries / 3;  // look further out as it goes (a lake in the way)
+      cx = std::clamp(ox + static_cast<int>(rng.range(-r, r)), 3, W - 4);
+      cy = std::clamp(oy + static_cast<int>(rng.range(-r, r)), 3, H - 4);
     }
-    supplyPoints.push_back({cx, cy});
+    if (found) supplyPoints.push_back({cx, cy});
   }
   // Clear trees off the sites so they can be seen and built on.
   std::erase_if(props_, [&](const Prop& p) {
@@ -456,9 +786,9 @@ void Map::generateTerrain(uint64_t seed, Biome b) {
   // east, north, south), the oil and the water. Towns fill whole street
   // blocks; elsewhere a few hamlets sit along the roads.
   if (b == Biome::Tropical) return;
-  const int spots[4][2] = {{W * 17 / 100, H / 2}, {W * 83 / 100, H / 2}, {W / 2, H * 17 / 100}, {W / 2, H * 83 / 100}};
+  const int homes[4][2] = {{W * 17 / 100, H / 2}, {W * 83 / 100, H / 2}, {W / 2, H * 17 / 100}, {W / 2, H * 83 / 100}};
   auto plotFree = [&](int cx, int cy, int half) {
-    for (const auto& sp : spots)
+    for (const auto& sp : homes)
       if (std::abs(cx - sp[0]) < 15 && std::abs(cy - sp[1]) < 15) return false;
     for (int y = cy - half; y <= cy + half; ++y)
       for (int x = cx - half; x <= cx + half; ++x) {
@@ -495,22 +825,39 @@ void Map::generateTerrain(uint64_t seed, Biome b) {
       }
     return;
   }
-  const int hamlets = std::max(1, W * H / (128 * 128)) * (desert ? 2 : 3);
+  auto houseKind = [&](bool town) -> uint8_t {
+    const uint32_t pick = rng.below(100);
+    if (desert) return pick < 85 ? 5 : 10;
+    if (winter) return pick < 45 ? 8 : pick < 60 ? 6 : pick < 72 ? 7 : pick < 82 ? 1 : pick < 90 ? 10 : pick < 96 ? 4 : 3;
+    if (town) return pick < 34 ? 2 : pick < 50 ? 0 : pick < 60 ? 14 : pick < 68 ? 12 : pick < 76 ? 9 : pick < 84 ? 3 : pick < 92 ? 11 : 1;
+    return pick < 36 ? 0 : pick < 50 ? 1 : pick < 61 ? 6 : pick < 69 ? 7 : pick < 75 ? 10 : pick < 79 ? 11
+         : pick < 87 ? 13 : pick < 94 ? 4 : 3;
+  };
+  auto bigKind = [](uint8_t k) { return k == 9 || k == 12 || k == 13 || k == 14; };
+  if (plan.centralTown) {
+    // A market town round the crossroads.
+    for (int k = 0; k < 90; ++k) {
+      const int cx = W / 2 + static_cast<int>(rng.range(-11, 11)), cy = H / 2 + static_cast<int>(rng.range(-11, 11));
+      if (std::max(std::abs(cx - W / 2), std::abs(cy - H / 2)) < 5 || nearRoad(cx, cy)) continue;
+      uint8_t kind = houseKind(true);
+      if (bigKind(kind) && !plotFree(cx, cy, 2)) kind = desert ? 5 : winter ? 8 : 2;
+      if (!plotFree(cx, cy, 1)) continue;
+      lots.push_back({cx, cy, kind});
+      clearProps(cx, cy, bigKind(kind) ? 2 : 1);
+    }
+  }
+  if (plan.roads.empty()) return;
+  const int hamlets = std::max(1, W * H / (128 * 128)) * (desert ? 2 : plan.hamletScale);
   for (int hIdx = 0; hIdx < hamlets; ++hIdx) {
     // A hamlet: three to six houses around a point beside a road.
-    const int road = hIdx % 2;
-    const int hy = 6 + static_cast<int>(rng.below(static_cast<uint32_t>(std::max(1, H - 12))));
-    const int hx = (roadX(road, hy) >> 8) + (rng.below(2) ? 4 : -4);
+    const Curve& road = plan.roads[static_cast<size_t>(hIdx) % plan.roads.size()];
+    const Vec2f at = curvePoint(road, rf(0.08f, 0.92f));
+    const int hx = static_cast<int>(at.x) + (rng.below(2) ? 4 : -4), hy = static_cast<int>(at.y) + (rng.below(2) ? 3 : -3);
     const int count = 3 + static_cast<int>(rng.below(4));
     for (int k = 0; k < count * 3 && k < 24; ++k) {
       const int cx = hx + static_cast<int>(rng.range(-6, 6)), cy = hy + static_cast<int>(rng.range(-6, 6));
       if (nearRoad(cx, cy) || !plotFree(cx, cy, 1)) continue;
-      const uint32_t pick = rng.below(100);
-      uint8_t kind = 0;
-      if (desert) kind = pick < 85 ? 5 : 10;
-      else if (winter) kind = pick < 45 ? 8 : pick < 60 ? 6 : pick < 72 ? 7 : pick < 82 ? 1 : pick < 90 ? 10 : pick < 96 ? 4 : 3;
-      else kind = pick < 36 ? 0 : pick < 50 ? 1 : pick < 61 ? 6 : pick < 69 ? 7 : pick < 75 ? 10 : pick < 79 ? 11
-                  : pick < 87 ? 13 : pick < 94 ? 4 : 3;
+      uint8_t kind = houseKind(false);
       if (kind == 13 && !plotFree(cx, cy, 2)) kind = 0;
       lots.push_back({cx, cy, kind});
       clearProps(cx, cy, 1);
