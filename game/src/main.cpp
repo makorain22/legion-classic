@@ -101,6 +101,11 @@ int main(int argc, char** argv) {
     else if (a == "--monkey") opt.monkey = std::atoi(next());
     else if (a == "--sides") opt.sides = std::atoi(next());
     else if (a == "--layout") opt.layout = std::atoi(next());
+    else if (a == "--showcase") {
+      opt.showcase = next();
+      opt.aiBattle = true;
+    } else if (a == "--showcase-warm") opt.showcaseWarm = std::atoi(next()) * 15;
+    else if (a == "--showcase-seconds") opt.showcaseSeconds = std::atoi(next());
     else if (a == "--flow-selftest") opt.flowSelfTest = true;
     else if (a == "--biome") {
       slave::Biome b;

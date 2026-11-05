@@ -7,7 +7,9 @@
 
 #include <SDL3/SDL.h>
 
+#include <cstdio>
 #include <string>
+#include <vector>
 
 namespace slave {
 
@@ -51,6 +53,12 @@ class App {
   void requestScreenshot(const std::string& path) { pendingShot_ = path; }
   bool saveScreenshot(const std::string& path) const;
 
+  // Video capture through ffmpeg (development: trailers and bug videos).
+  // Every `everyN`th frame goes to `path` (an .mp4) at `fps`.
+  bool startRecording(const std::string& path, int everyN, int fps);
+  void stopRecording();
+  bool recording() const { return rec_ != nullptr; }
+
   double fps() const { return fps_; }
   double frameMs() const { return frameMs_; }
   int ticksLastFrame() const { return ticksLastFrame_; }
@@ -68,6 +76,9 @@ class App {
 
  private:
   void updateSize();
+  std::FILE* rec_ = nullptr;
+  int recEvery_ = 1;
+  std::vector<uint8_t> recBuf_;
 
   AppConfig cfg_;
   SDL_Window* window_ = nullptr;

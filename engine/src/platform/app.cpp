@@ -119,6 +119,33 @@ void App::toggleFullscreen() {
   SDL_SetWindowFullscreen(window_, fullscreen_);
 }
 
+bool App::startRecording(const std::string& path, int everyN, int fps) {
+  stopRecording();
+  const std::string cmd = "ffmpeg -loglevel error -y -f rawvideo -pix_fmt rgba -s " + std::to_string(pw_) + "x" +
+                          std::to_string(ph_) + " -r " + std::to_string(fps) +
+                          " -i - -vf vflip -c:v libx264 -preset veryfast -crf 20 -pix_fmt yuv420p \"" + path + "\"";
+#ifdef _WIN32
+  rec_ = _popen(cmd.c_str(), "wb");
+#else
+  rec_ = popen(cmd.c_str(), "w");
+#endif
+  recEvery_ = std::max(1, everyN);
+  if (rec_) SLV_INFO("Recording to %s", path.c_str());
+  else SLV_ERROR("Could not start ffmpeg for %s", path.c_str());
+  return rec_ != nullptr;
+}
+
+void App::stopRecording() {
+  if (!rec_) return;
+#ifdef _WIN32
+  _pclose(rec_);
+#else
+  pclose(rec_);
+#endif
+  rec_ = nullptr;
+  SLV_INFO("Recording finished");
+}
+
 bool App::saveScreenshot(const std::string& path) const {
   Image img(pw_, ph_);
   glPixelStorei(GL_PACK_ALIGNMENT, 4);
@@ -190,6 +217,12 @@ int App::run(Scene& scene) {
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
     ++frame;
+    if (rec_ && frame % recEvery_ == 0) {
+      recBuf_.resize(static_cast<size_t>(pw_) * ph_ * 4);
+      glPixelStorei(GL_PACK_ALIGNMENT, 4);
+      glReadPixels(0, 0, pw_, ph_, GL_RGBA, GL_UNSIGNED_BYTE, recBuf_.data());
+      std::fwrite(recBuf_.data(), 1, recBuf_.size(), rec_);
+    }
     if (!pendingShot_.empty()) {
       saveScreenshot(pendingShot_);
       pendingShot_.clear();
@@ -227,6 +260,7 @@ void App::setMouseLock(bool on) {
 }
 
 void App::shutdown() {
+  stopRecording();
   if (ImGui::GetCurrentContext()) {
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplSDL3_Shutdown();

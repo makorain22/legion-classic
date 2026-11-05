@@ -355,6 +355,60 @@ void GameScene::showStatus(const std::string& text, float seconds) {
   statusTime_ = seconds;
 }
 
+// Showcase: fast-forward into the game, then record it at normal speed with
+// the camera easing to wherever the fiercest fighting is.
+void GameScene::showcaseStep(float dt) {
+  showTime_ += dt;
+  paused_ = false;
+  std::erase_if(hot_, [&](const Hot& h) { return showTime_ - h.t > 6.0f; });
+  if (showPhase_ == 0) {
+    speed_ = 16;
+    if (sim_->tickCount() < static_cast<uint32_t>(opt_.showcaseWarm)) return;
+    speed_ = 1;
+    showPhase_ = 1;
+    app_.startRecording(opt_.showcase, 2, 30);  // every other frame at 60 = 30 fps
+  }
+  ++showFrames_;
+  if (showFrames_ >= opt_.showcaseSeconds * 60) {
+    app_.stopRecording();
+    quit_ = true;
+    return;
+  }
+  // A new place to look every eight seconds, or when it has gone quiet here.
+  const int32_t T = LEPTONS_PER_TILE;
+  int hereCount = 0;
+  for (const Hot& h : hot_)
+    if (showFocus_.x >= 0 && std::abs(h.at.x - showFocus_.x) < 10 * T && std::abs(h.at.y - showFocus_.y) < 10 * T) ++hereCount;
+  if (showTime_ - showFocusAt_ > 8.0f || (showTime_ - showFocusAt_ > 3.0f && hereCount == 0) || showFocus_.x < 0) {
+    int best = 0;
+    Vec2i pick{-1, -1};
+    for (const Hot& a : hot_) {
+      int n = 0;
+      for (const Hot& b : hot_) n += std::abs(a.at.x - b.at.x) < 10 * T && std::abs(a.at.y - b.at.y) < 10 * T;
+      if (n > best) best = n, pick = a.at;
+    }
+    if (pick.x < 0 && showFocus_.x < 0) pick = {players_[player_].startX, players_[player_].startY};
+    if (pick.x >= 0) {
+      showFocus_ = {static_cast<float>(pick.x), static_cast<float>(pick.y)};
+      showFocusAt_ = showTime_;
+      // Select our men there, as a player would.
+      selection_.clear();
+      for (uint32_t e : sim_->registry().pool<CUnit>().entities()) {
+        const CUnit& u = sim_->registry().pool<CUnit>().get(e);
+        const CPosition& p = sim_->registry().pool<CPosition>().get(e);
+        if (u.owner == player_ && !types_.get(u.type).isStructure() && std::abs(p.x - pick.x) < 9 * T && std::abs(p.y - pick.y) < 9 * T)
+          selection_.push_back(sim_->registry().handle(e));
+      }
+    }
+  }
+  if (showFocus_.x >= 0) {
+    const Vec2f want = groundToScreenWorld(showFocus_.x, showFocus_.y);
+    const Vec2f c = cam_.center();
+    const float k = std::min(1.0f, dt * 1.1f);
+    cam_.setCenter({c.x + (want.x - c.x) * k, c.y + (want.y - c.y) * k});
+  }
+}
+
 // Crash hunting: random mouse and keyboard input, as a restless player would
 // give it. Never quits, saves or opens files.
 void GameScene::monkeyStep() {
@@ -1276,6 +1330,8 @@ void GameScene::onTick() {
     const bool seen = watching(ev.at.x, ev.at.y) || (ev.type == EventType::Fire && watching(ev.from.x, ev.from.y));
     fx_.onEvent(ev, seen, teamColors_);
     announce(ev);
+    if (!opt_.showcase.empty() && (ev.type == EventType::Impact || ev.type == EventType::UnitDied) && seen)
+      hot_.push_back({ev.at, showTime_});
     if (mode_ == Mode::Menu && (ev.type == EventType::Impact || ev.type == EventType::UnitDied) && (frame_ % 90 == 0 || attractFocus_.x < 0))
       attractFocus_ = {static_cast<float>(ev.at.x), static_cast<float>(ev.at.y)};
     if (ev.type == EventType::StructurePlaced) {
@@ -1357,6 +1413,7 @@ void GameScene::drawStructureEffects(float dt) {
 
 void GameScene::onUpdate(float dt, float alpha) {
   if (opt_.monkey > 0) monkeyStep();
+  if (!opt_.showcase.empty() && mode_ == Mode::Game) showcaseStep(dt);
   alpha_ = alpha;
   time_ += dt;
   cam_.setViewport(app_.pixelWidth(), app_.pixelHeight());

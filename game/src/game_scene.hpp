@@ -79,7 +79,10 @@ struct SceneOptions {
   float speed = 1.0f;           // starting game speed (testing)
   int layout = -1;              // map layout for generated maps (-1: from the seed)
   int sides = 2;                // --ai-battle: 2 (1v1) or 4 (2v2)
-  int monkey = 0;               // > 0: random clicks and keys from a human seat (crash hunting)
+  int monkey = 0;
+  std::string showcase;         // record a video of an AI battle to this .mp4, camera following the fighting
+  int showcaseWarm = 15 * 60 * 5;  // ticks to fast-forward first
+  int showcaseSeconds = 60;               // > 0: random clicks and keys from a human seat (crash hunting)
   bool flowSelfTest = false;    // checks skirmish, save, load and replay through the real game
   int biome = 0;
 };
@@ -351,6 +354,13 @@ class GameScene final : public slave::Scene {
   bool paused_ = false;
   float speed_ = 1.0f;
   uint32_t monkeyRng_ = 12345;
+  // Showcase recording.
+  void showcaseStep(float dt);
+  struct Hot { slave::Vec2i at; float t; };
+  std::vector<Hot> hot_;
+  float showTime_ = 0, showFocusAt_ = -100;
+  int showPhase_ = 0, showFrames_ = 0;
+  slave::Vec2f showFocus_{-1, -1};
   void monkeyStep();
   bool quit_ = false;
   bool showHelp_ = true, showDebug_ = false;
