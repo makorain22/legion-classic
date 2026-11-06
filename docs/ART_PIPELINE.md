@@ -79,8 +79,10 @@ effects, decals).
 | `effects/...`, `decals/...` | Explosions, fire, muzzle flashes, smoke, dust, craters; trench pieces (by which neighbours they join), oil stains, rubble |
 
 `<model>` is the `model` field of the unit in `content/rules/*.json`
-(`tank`, `heavy_tank`, `rifleman`, `cottage`, ...); `<faction>` is `ger` or
-`rus`. Civilian buildings are exported under both.
+(`tank`, `heavy_tank`, `rifleman`, `cottage`, ...); `<faction>` is `ger`,
+`rus` or `gbr`. Civilian buildings are exported under all three. A side
+with no art of its own for a model uses `model@ger`; when an art pack
+provides a German building but no British one, the British use the pack's.
 
 ### Team colour in PNG files
 

@@ -1,4 +1,4 @@
-# Playing Legion Classic (build 0.8.0)
+# Playing Legion Classic (build 0.9.0)
 
 Double-click `LegionClassic.exe`. No installation is needed; keep the `content`
 and `mods` folders next to the exe.
@@ -30,7 +30,7 @@ players on a random map.
 
 - **Skirmish.** Pick a map size, a biome (temperate, winter, desert, tropical
   or urban), a seed, the starting supplies and up to four sides. Each side is
-  you or the computer (easy, normal or hard), Germany or Russia, on a team of
+  you or the computer (easy, normal or hard), Germany, Russia or Britain, on a team of
   your choice. **Landscape**: river valley, front line river, confluence,
   lakeland, crossroads, ridge, marshes, great lake, open steppe, deep forest,
   hill country or twin rivers, or *Random* to let the seed pick (the menu
@@ -63,6 +63,11 @@ gives ordinary orders. Each side fights to **its own doctrine**:
   second echelon.
 - **Russia** masses riflemen and T-34s, leans on artillery, attacks with bigger
   forces and feeds new troops into an attack as they arrive.
+- **Britain** is methodical: an observation post goes up early to bring on the
+  Sextons and an extra 5.5-inch gun pit, the front is dug in and wired, and it
+  waits to attack with bigger set-piece forces than the others, falling back
+  sooner to save lives (it regroups at 40% of its strength, the others at 30%).
+  Bren teams and carriers are its favourite light kit.
 
 Its forces move all the time. The **main force** gathers in front of the base,
 binds into a unit and attacks, often round a flank; when it is badly hurt it
@@ -92,8 +97,12 @@ mid-battle.
 
 ### The armies
 
-Both sides field the same kinds of unit, built their own way: German armour is
-boxy and camouflaged in three colours, Soviet armour sloped and plain green.
+Every army fields the same kinds of unit, built its own way: German armour is
+boxy and camouflaged in three colours, Soviet armour sloped and plain green,
+British armour plain service brown with the white-red-white recognition flash
+(on German-style hulls until the British models are made; British soldiers wear
+the flat Brodie helmet). The table gives German / Soviet figures; the British
+differences follow it.
 
 | Unit | Built at | Cost | Notes |
 | --- | --- | --- | --- |
@@ -110,6 +119,29 @@ boxy and camouflaged in three colours, Soviet armour sloped and plain green.
 | Artillery | Tank Works (needs a Watchtower) | 1200 | Germany: 105 mm howitzer (18 tiles). Russia: rocket truck firing salvoes of 8 rockets (16 tiles) that blanket an area. Needs spotters. |
 | Heavy Tank | Tank Works (needs a Supply Depot and a Watchtower) | 2000 | 88 / 122 mm gun at 10.5–11.5 tiles, armour that shrugs off light guns. |
 | Construction Truck | Tank Works | 3000 | Unfolds into a new Construction Yard. |
+
+**The British** build the same base under their own names (Drill Hall, Tank
+Workshop, Supply Dump, Observation Post, Pillbox, 6-pdr Gun Pit, Vickers Nest,
+Slit Trench, Dannert Wire, Anti-Tank Cubes) and field:
+
+| Unit | Slot | Cost | Notes |
+| --- | --- | --- | --- |
+| Rifleman | Rifleman | 10 | The Lee-Enfield fires faster than other rifles (1.3 s against 1.5 s). |
+| Bren Team | MG Team | 40 | Lighter than an MG 42 or a Maxim (6 tiles) but more accurate and quicker on its feet. |
+| PIAT Team | AT Team | 50 | Short (4 tiles), slow to reload, hits hard enough for side and rear shots. |
+| Royal Engineer | Engineer | 30 | As the others. |
+| Dingo Scout Car | Scout Car | 400 | The fastest thing on wheels. |
+| Universal Carrier | Half-track | 400 | Cheaper and quicker than a half-track, thinner skinned. |
+| Crusader | Light Tank | 600 | A 6-pounder: the best gun on a light tank. |
+| Cromwell | Medium Tank | 850 | Fast, with a dual-purpose 75 mm: good HE, weaker AP than the German 75. |
+| Sherman Firefly | Tanks (needs a Supply Dump and an Observation Post) | 1150 | A Sherman with the 17-pounder: the British answer to heavy tanks. |
+| Achilles | Tank Destroyer | 1050 | The 17-pounder in an open turret on a fast, thin hull. |
+| Sexton | Artillery | 1100 | A 25-pounder: 17 tiles, fires every 4 s (the German 105 every 6.3 s). |
+| Churchill | Heavy Tank | 1800 | The toughest thing on tracks (1150 hit points), very slow, only a 75 mm gun. |
+| Construction Lorry | Construction Truck | 3000 | Unfolds into a Construction Yard. |
+
+The British *Medium Gun Emplacement* mounts a 5.5-inch gun: 24 tiles, the
+longest reach on the field.
 
 ### Biomes, villages and towns
 
@@ -324,7 +356,7 @@ These are the defaults:
 play (on by default, so edge scrolling always works), edge scrolling, scroll
 speed, the info panel, unit cards (and whether enemy cards show) and fog
 chips. The sidebar wears your side's colours: field grey for the Germans,
-khaki for the Soviets.
+khaki for the Soviets, service brown and stone (with the roundel) for the British.
 
 Screenshots, settings and the log file (`legion.log`) are saved in
 `%APPDATA%\Makorain\LegionClassic\`.
@@ -406,7 +438,7 @@ each side's units get the order as their own.
 ### Sides tab
 
 Up to 8 sides. For each: whether it's in the scenario, name, faction
-(Germany or Russia), colour, team, starting supplies (*Give now* sets them in
+(Germany, Russia or Britain), colour, team, starting supplies (*Give now* sets them in
 the running battle too), and whether a human or the computer (easy, normal, hard) plays
 it; the change takes effect at once. Sides on the same **team**
 are allies: they share vision and never shoot each other. **Start view here**
@@ -487,7 +519,9 @@ start), `--demo` (the two armies attack each other), `--no-bases` (armies only,
 no bases), `--debug` (open the debug panel), `--editor` (start with the editor
 open), `--open path\to\map.lmap` (start on a saved map), `--menu` (the main
 menu; the default when started with no options), `--ai-battle` (watch two
-computer players; add `--side 1` to watch from the Soviet side), `--gallery` (every unit and building lined up, for looking
+computer players; add `--side 1` to watch from the Soviet side, `--sides 4`
+for two against two, and `--factions gbr,rus` (or `ger,gbr,rus,gbr` with four
+sides) to choose who plays each side), `--gallery` (every unit and building lined up, for looking
 at the art), `--org-demo` (a platoon, an armoured platoon, a held building and
 fog chips), `--export-sprites folder` (write every sprite as a PNG for
 repainting; see [ART_PIPELINE.md](ART_PIPELINE.md)), `--tool rules:ger_medium_tank`,

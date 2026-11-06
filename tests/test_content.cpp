@@ -46,9 +46,9 @@ Entity spawn(Simulation& sim, uint16_t type, uint8_t owner, Vec2i at, Angle faci
 constexpr int32_t T = LEPTONS_PER_TILE;
 }  // namespace
 
-TEST_CASE("both armies field the full roster") {
+TEST_CASE("every army fields the full roster") {
   Rules R;
-  for (const char* f : {"ger", "rus"}) {
+  for (const char* f : {"ger", "rus", "gbr"}) {
     std::set<std::string> have;
     for (size_t i = 0; i < R.types.size(); ++i) {
       const UnitTypeDef& d = R.types.get(static_cast<int>(i));
@@ -70,6 +70,40 @@ TEST_CASE("both armies field the full roster") {
   CHECK(range("rus_artillery") > range("rus_heavy_tank"));
   CHECK(R.types.get(R.t("ger_engineer")).repair > 0);
   CHECK(R.types.get(R.t("ger_engineer")).weapons.empty());
+}
+
+TEST_CASE("the British: the same base, their own guns") {
+  Rules R;
+  // Every structure the other armies build, the British build too, with the same role and footprint.
+  for (size_t i = 0; i < R.types.size(); ++i) {
+    const UnitTypeDef& d = R.types.get(static_cast<int>(i));
+    if (d.faction != "ger") continue;
+    const std::string mine = "gbr_" + d.id.substr(4);
+    const int t = R.types.find(mine);
+    CHECK_MESSAGE(t >= 0, mine);
+    if (t < 0) continue;
+    const UnitTypeDef& g = R.types.get(t);
+    CHECK(g.faction == "gbr");
+    CHECK(g.model == d.model);  // art falls back to these models until British ones exist
+    CHECK(g.role == d.role);
+    CHECK(g.isStructure() == d.isStructure());
+    for (const std::string& req : g.requiresIds) CHECK_MESSAGE(req.rfind("gbr_", 0) == 0, mine);  // no German prerequisites
+  }
+  CHECK(R.types.get(R.t("gbr_mcv")).deploysTo == R.t("gbr_yard"));
+  auto best = [&](const char* id, bool ap) {
+    int32_t d = 0;
+    for (int w : R.types.get(R.t(id)).weapons)
+      if ((R.weapons.warhead(R.weapons.get(w).warhead).id == "ap") == ap) d = std::max(d, R.weapons.get(w).damage);
+    return d;
+  };
+  // The Firefly and the Achilles carry the 17-pounder: the hardest British punch against armour.
+  CHECK(best("gbr_firefly", true) > best("gbr_medium_tank", true));
+  CHECK(best("gbr_tank_destroyer", true) > best("gbr_heavy_tank", true));
+  // The Churchill is the toughest thing on tracks; the 25-pounder fires faster than the German 105.
+  CHECK(R.types.get(R.t("gbr_heavy_tank")).maxHealth > R.types.get(R.t("ger_heavy_tank")).maxHealth);
+  auto cooldown = [&](const char* id) { return R.weapons.get(R.types.get(R.t(id)).weapons.front()).cooldown; };
+  CHECK(cooldown("gbr_artillery") < cooldown("ger_artillery"));
+  CHECK(cooldown("gbr_rifleman") < cooldown("ger_rifleman"));  // the Lee-Enfield's rapid fire
 }
 
 TEST_CASE("a rocket truck fires its whole salvo, a rocket at a time") {

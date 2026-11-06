@@ -200,7 +200,16 @@ void Simulation::saveState(ByteWriter& w) const {
   ai_.save(w);
 }
 
-bool Simulation::loadState(ByteReader& r, std::string& error) {
+std::vector<std::string> Simulation::typeIds() const {
+  std::vector<std::string> ids;
+  ids.reserve(types_.size());
+  for (int t = 0; t < static_cast<int>(types_.size()); ++t) ids.push_back(types_.get(t).id);
+  return ids;
+}
+
+bool Simulation::loadState(ByteReader& r, std::string& error, const std::vector<std::string>* savedTypes,
+                           bool* remapped) {
+  if (remapped) *remapped = false;
   const uint32_t magic = r.u32();
   const int version = magic == kStateMagic ? 3 : magic == kStateMagicV2 ? 2 : 0;
   if (version == 0) {
@@ -333,6 +342,35 @@ bool Simulation::loadState(ByteReader& r, std::string& error) {
   if (!ai_.load(r, version) || !r.ok()) {
     error = "saved state is damaged";
     return false;
+  }
+  // Saved with the unit types in another order (a newer roster, other mods)?
+  // Renumber by id; a type these rules don't have at all refuses the load.
+  if (savedTypes) {
+    std::vector<int> to(savedTypes->size(), -1);
+    bool same = savedTypes->size() <= types_.size();
+    for (size_t i = 0; i < savedTypes->size(); ++i) {
+      to[i] = types_.find((*savedTypes)[i]);
+      if (to[i] != static_cast<int>(i)) same = false;
+    }
+    if (!same) {
+      auto map = [&](uint16_t& type) {
+        if (type >= to.size()) return true;  // caught by the check below
+        if (to[type] < 0) {
+          error = "the game uses a unit type these rules don't have (" + (*savedTypes)[type] +
+                  "; enable the mods it was made with)";
+          return false;
+        }
+        type = static_cast<uint16_t>(to[type]);
+        return true;
+      };
+      for (CUnit& u : reg_.pool<CUnit>().data())
+        if (!map(u.type)) return false;
+      for (PlayerState& ps : players_)
+        for (ProductionQueue& q : ps.queues)
+          for (uint16_t& t : q.items)
+            if (!map(t)) return false;
+      if (remapped) *remapped = true;
+    }
   }
   // Made with other rules (mods)? Refuse rather than read past the end of a table.
   for (const CUnit& u : reg_.pool<CUnit>().data())

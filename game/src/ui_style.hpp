@@ -8,7 +8,7 @@
 namespace legion::ui {
 
 // Palette. Set by setFaction: olive steel for the menus, field grey for the
-// Germans, khaki for the Soviets.
+// Germans, khaki for the Soviets, brown service drab and stone for the British.
 inline ImU32 kPlate = IM_COL32(58, 60, 46, 255);       // steel plate
 inline ImU32 kPlateDark = IM_COL32(34, 36, 28, 255);
 inline ImU32 kPlateLight = IM_COL32(96, 98, 76, 255);
@@ -20,12 +20,13 @@ inline ImU32 kStencilDim = IM_COL32(140, 134, 114, 255);
 constexpr ImU32 kGood = IM_COL32(124, 214, 96, 255);
 constexpr ImU32 kBad = IM_COL32(226, 92, 70, 255);
 
-enum class Theme { Olive, German, Soviet };
-// Switches the palette: "ger", "rus", anything else = olive.
+enum class Theme { Olive, German, Soviet, British };
+// Switches the palette: "ger", "rus", "gbr", anything else = olive.
 void setFaction(const char* faction);
 Theme theme();
 // The side's emblem for decorations - a plain cross for the Germans, a red
-// star for the Soviets, a laurel-less roundel otherwise.
+// star for the Soviets, a blue-white-red roundel for the British, a plain brass
+// ring otherwise.
 void emblem(ImDrawList* dl, ImVec2 centre, float size);
 // A painted stencil strip (side number, unit marking) across a plate.
 void stencilStrip(ImDrawList* dl, ImVec2 a, ImVec2 b);

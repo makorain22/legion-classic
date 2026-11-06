@@ -38,10 +38,12 @@ struct Doctrine {
   int fortify;        // 0..3: how much it digs in
   int raidSize;       // vehicles in a raiding party
   int regroupLoss;    // percent of the launch strength left when it falls back
+  int guns;           // extra howitzer emplacements at home
 };
 Doctrine doctrineFor(const std::string& faction) {
-  if (faction == "rus") return {65, 120, true, 1, 4, 30};  // mass, momentum, artillery
-  return {50, 130, false, 3, 4, 30};  // quality, combined arms, fortification
+  if (faction == "rus") return {65, 120, true, 1, 4, 30, 0};  // mass, momentum, artillery
+  if (faction == "gbr") return {50, 140, false, 2, 3, 40, 1};  // methodical: big set-piece attacks, guns, spare lives
+  return {50, 130, false, 3, 4, 30, 0};  // quality, combined arms, fortification
 }
 // Preferences within the roster, on top of each unit's aiWeight.
 int modelWeight(const std::string& faction, const std::string& model) {
@@ -50,6 +52,12 @@ int modelWeight(const std::string& faction, const std::string& model) {
     if (model == "tank") return 3;  // T-34s in numbers
     if (model == "artillery") return 2;
     if (model == "heavy_tank" || model == "tank_destroyer") return 1;
+    return 1;
+  }
+  if (faction == "gbr") {
+    if (model == "artillery") return 3;  // the Royal Artillery: Sextons in every attack
+    if (model == "tank" || model == "heavy_tank" || model == "tank_destroyer") return 2;
+    if (model == "mg_team" || model == "halftrack") return 2;  // Bren and carrier
     return 1;
   }
   if (model == "tank" || model == "heavy_tank" || model == "tank_destroyer") return 2;
@@ -399,13 +407,18 @@ bool SkirmishAi::manageEconomy(Simulation& sim, uint8_t p) {
   }
   const ProductionQueue& dq = ps.queues[static_cast<size_t>(Queue::Defenses)];
   const Doctrine doc = doctrineFor(faction);
-  if (dq.items.empty() && ps.credits > 700) {
+  // A watchtower unlocks the heavy kit (guns, snipers, heavy tanks): a side
+  // that lives by its guns puts one up as soon as it has a barracks.
+  if (dq.items.empty() && towers == 0 && roleCount[3] > 0 && ps.credits > 300 && (doc.guns > 0 || minutes >= 8))
+    produce(typeOf("tower"));
+  else if (dq.items.empty() && ps.credits > 700) {
     const int farDepots = std::max(0, roleCount[2] - 1);
     if (nests < std::min(farDepots, 6) + (doc.fortify >= 2 ? 2 : 1)) produce(typeOf("mg_nest"));
     else if (bunkers < tune.bunkers) produce(typeOf("bunker"));
     else if (atGuns < tune.atGuns + (doc.fortify >= 3 ? 1 : 0)) produce(typeOf("atgun"));
     else if (towers < tune.towers) produce(typeOf("tower"));
-    else if (guns < (ai.difficulty == AiDifficulty::Hard ? 1 : 0) && ps.credits > 2500)
+    else if (guns < (ai.difficulty == AiDifficulty::Hard ? 1 : 0) + (ai.difficulty != AiDifficulty::Easy ? doc.guns : 0) &&
+             ps.credits > 2500)
       produce(typeOf("howitzer_pit"));
   }
   // Expansion comes first: while a depot, a yard or power is on order, the

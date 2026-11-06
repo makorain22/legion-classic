@@ -12,6 +12,7 @@
 #include "game_scene.hpp"
 #include "menus.hpp"
 #include "slave/core/log.hpp"
+#include "slave/sim/factions.hpp"
 
 using namespace slave;
 
@@ -87,6 +88,7 @@ std::string GameScene::metaJson(const std::string& title) const {
                   : std::vector<std::string>{};
   j["rules"] = rulesHash_;
   if (rulesEditedLive_) j["rulesEdited"] = true;
+  if (sim_) j["types"] = sim_->typeIds();  // so a later roster can renumber the units by id
   auto& sides = j["sides"] = nlohmann::json::array();
   for (uint8_t i = 0; i < MAX_PLAYERS; ++i) {
     const PlayerSetup& p = players_[i];
@@ -120,7 +122,7 @@ void GameScene::startSkirmish(const SkirmishSetup& s) {
     p.difficulty = static_cast<uint8_t>(side.difficulty);
     p.credits = s.credits;
     static const char* aiNames[3] = {"easy", "normal", "hard"};
-    p.name = std::string(side.faction == "rus" ? "Russia" : "Germany") +
+    p.name = std::string(slave::factionName(side.faction)) +
              (side.human ? "" : std::string(" (computer, ") + aiNames[std::clamp(side.difficulty, 0, 2)] + ")");
     f.players[static_cast<size_t>(i)] = p;
     if (side.open) ++slot;
@@ -311,11 +313,23 @@ bool GameScene::loadFromSave(SaveFile& f, bool replay, std::string& error) {
   const bool sameRules = !meta.is_object() || meta.value("rules", rulesHash_) == rulesHash_;
   mode_ = Mode::Game;
   replaceWorld(std::move(mf), true);
+  // The unit type list it was saved with. Saves from before 0.9.0 don't carry
+  // one; theirs is today's list without the British, who came in 0.9.0 (mods
+  // still add their types after the base game's in each file, as then).
+  std::vector<std::string> savedTypes;
+  if (meta.is_object() && meta.contains("types") && meta["types"].is_array()) {
+    for (const auto& t : meta["types"]) savedTypes.push_back(t.is_string() ? t.get<std::string>() : std::string());
+  } else {
+    for (int t = 0; t < static_cast<int>(types_.size()); ++t)
+      if (types_.get(t).faction != "gbr") savedTypes.push_back(types_.get(t).id);
+  }
   ByteReader r(f.stateBytes);
-  if (!sim_->loadState(r, error)) {
+  bool renumbered = false;
+  if (!sim_->loadState(r, error, replay ? nullptr : &savedTypes, &renumbered)) {
     toMainMenu();
     return false;
   }
+  if (renumbered && sameRules) sim_->rulesChanged();
   if (!sameRules) {
     sim_->rulesChanged();  // the mods were edited since: bring the units in line
     showStatus("The mods have changed since this game was saved", 5);

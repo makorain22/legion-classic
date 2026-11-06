@@ -101,6 +101,7 @@ int main(int argc, char** argv) {
     else if (a == "--speed") opt.speed = static_cast<float>(std::atof(next()));
     else if (a == "--monkey") opt.monkey = std::atoi(next());
     else if (a == "--sides") opt.sides = std::atoi(next());
+    else if (a == "--factions") opt.factions = next();
     else if (a == "--layout") opt.layout = std::atoi(next());
     else if (a == "--showcase") {
       opt.showcase = next();
@@ -130,8 +131,8 @@ int main(int argc, char** argv) {
   slave::App app;
   if (!app.init(cfg)) return 1;
   slave::log::init((app.userDir() + "legion.log").c_str());
-  slave::crash::install(app.userDir(), "0.8.0");
-  SLV_INFO("Legion Classic 0.8.0 on Slave Engine 1.0");
+  slave::crash::install(app.userDir(), "0.9.0");
+  SLV_INFO("Legion Classic 0.9.0 on Slave Engine 1.0");
 
   std::string contentDir = "content/";
   if (const char* base = SDL_GetBasePath()) contentDir = std::string(base) + "content/";

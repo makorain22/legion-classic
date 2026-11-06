@@ -39,9 +39,9 @@ struct Field {
 
 const std::vector<Field>& fieldsFor(RulesEditor::Kind k) {
   static const std::vector<Field> units = {
-      {"id", F::Text, "Id", "The name the rules, maps and saves use. Faction prefix by custom: ger_..., rus_...", 0, 0, 0, {}, "Identity"},
+      {"id", F::Text, "Id", "The name the rules, maps and saves use. Faction prefix by custom: ger_..., rus_..., gbr_...", 0, 0, 0, {}, "Identity"},
       {"name", F::Text, "Name", "What players see."},
-      {"faction", F::Enum, "Faction", "Which side builds it.", 0, 0, 0, {"ger", "rus", "neutral"}},
+      {"faction", F::Enum, "Faction", "Which side builds it.", 0, 0, 0, {"ger", "rus", "gbr", "neutral"}},
       {"group", F::Text, "Sidebar group", "Heading it is listed under in the sidebar and encyclopedia."},
       {"description", F::Long, "Description", "A line or two for the encyclopedia."},
       {"model", F::Model, "Model", "The art it is drawn with (any built-in or art-pack model)."},
@@ -71,7 +71,7 @@ const std::vector<Field>& fieldsFor(RulesEditor::Kind k) {
   static const std::vector<Field> buildings = {
       {"id", F::Text, "Id", "The name the rules, maps and saves use.", 0, 0, 0, {}, "Identity"},
       {"name", F::Text, "Name", "What players see."},
-      {"faction", F::Enum, "Faction", "Which side builds it; neutral = civilian (nobody builds it).", 0, 0, 0, {"ger", "rus", "neutral"}},
+      {"faction", F::Enum, "Faction", "Which side builds it; neutral = civilian (nobody builds it).", 0, 0, 0, {"ger", "rus", "gbr", "neutral"}},
       {"group", F::Text, "Sidebar group", "Heading it is listed under."},
       {"description", F::Long, "Description", "A line or two for the encyclopedia."},
       {"model", F::Model, "Model", "The art it is drawn with."},
@@ -203,7 +203,7 @@ void RulesEditor::open() {
     }
     orig_[i] = work_[i];
   }
-  std::set<std::string> f{"ger", "rus"};
+  std::set<std::string> f{"ger", "rus", "gbr"};
   for (const auto& e : work_[1]["units"]) f.insert(e.value("faction", std::string()));
   for (const auto& e : work_[2]["units"]) f.insert(e.value("faction", std::string()));
   f.erase("");

@@ -520,8 +520,13 @@ VoxelModel makeHedgehogPiece(const FactionLook&) { return makeHedgehogs(0); }
 // Bakes a structure: one view for the body, and 16 facings of its turret if any.
 void addStructure(AtlasBuilder& ab, SpriteCatalog& cat, const std::string& name, VoxelModel (*make)(const FactionLook&),
                   VoxelModel (*turret)(const FactionLook&) = nullptr, float voxelTiles = kStructureVoxel) {
+  // An art pack's German building that has no British version stands in for
+  // the British too (artFor falls back to "@ger", winter and desert included),
+  // rather than a voxel building among the pack's ones.
+  const bool packGerman = cat.units.count(name + "@ger") > 0;
   for (const FactionLook& look : kFactions) {
     if (cat.units.count(name + "@" + look.id)) continue;  // an art pack provides it
+    if (look.british && packGerman) continue;
     const VoxelPalette pal = makePalette(look);
     const VoxelModel body = make(look);
     UnitArt art;

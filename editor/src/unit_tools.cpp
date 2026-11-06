@@ -13,6 +13,7 @@
 #include "game_scene.hpp"
 #include "slave/core/rng.hpp"
 #include "slave/math/iso.hpp"
+#include "slave/sim/factions.hpp"
 
 using namespace slave;
 
@@ -30,8 +31,6 @@ uint32_t fromImVec(const ImVec4& v) {
 }
 const char* kOrderNames[] = {"Idle", "Moving", "Attack-moving", "Attacking"};
 const char* kArmorNames[] = {"infantry", "light", "medium", "heavy", "structure"};
-const char* kFactionIds[] = {"ger", "rus"};
-const char* kFactionNames[] = {"Germany", "Russia"};
 Rng& toolRng() {
   static Rng rng(0x5CE7A510);  // presentation-side randomness; the sim receives exact positions
   return rng;
@@ -843,9 +842,9 @@ void Editor::drawSidesTab() {
       changed |= ImGui::Checkbox("In the scenario", &s.active);
       ImGui::SetNextItemWidth(-70);
       ImGui::InputText("Name", &s.name);
-      int f = s.faction == "rus" ? 1 : 0;
+      int f = factionIndex(s.faction);
       ImGui::SetNextItemWidth(-70);
-      if (ImGui::Combo("Faction", &f, kFactionNames, 2)) s.faction = kFactionIds[f];
+      if (ImGui::Combo("Faction", &f, factionComboItems())) s.faction = kPlayableFactions[f].id;
       ImVec4 col = toImVec(s.color);
       ImGui::SetNextItemWidth(-70);
       if (ImGui::ColorEdit3("Colour", &col.x, ImGuiColorEditFlags_NoInputs)) {

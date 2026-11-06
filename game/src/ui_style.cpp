@@ -195,6 +195,16 @@ void setFaction(const char* faction) {
     kBrassDim = IM_COL32(168, 92, 60, 255);  // rules and frames in faded red
     kStencil = IM_COL32(238, 228, 198, 255);
     kStencilDim = IM_COL32(170, 158, 122, 255);
+  } else if (f == "gbr") {  // brown service drab, stone and brass
+    gTheme = Theme::British;
+    kPlate = IM_COL32(96, 82, 58, 255);
+    kPlateDark = IM_COL32(54, 45, 31, 255);
+    kPlateLight = IM_COL32(146, 128, 96, 255);
+    kInset = IM_COL32(30, 25, 18, 255);
+    kBrass = IM_COL32(220, 190, 120, 255);
+    kBrassDim = IM_COL32(120, 112, 132, 255);  // rules and frames in faded slate blue
+    kStencil = IM_COL32(234, 226, 204, 255);
+    kStencilDim = IM_COL32(164, 150, 122, 255);
   } else {
     gTheme = Theme::Olive;
     kPlate = IM_COL32(58, 60, 46, 255);
@@ -239,6 +249,13 @@ void emblem(ImDrawList* dl, ImVec2 c, float s) {
       dl->AddPolyline(pts, 10, IM_COL32(232, 190, 90, 255), ImDrawFlags_Closed, std::max(1.0f, s * 0.05f));
       break;
     }
+    case Theme::British: {
+      // A roundel: blue ring, white ring, red centre.
+      dl->AddCircleFilled(c, 0.5f * s, IM_COL32(32, 52, 112, 255), 32);
+      dl->AddCircleFilled(c, 0.34f * s, IM_COL32(236, 234, 226, 255), 28);
+      dl->AddCircleFilled(c, 0.18f * s, IM_COL32(192, 34, 30, 255), 20);
+      break;
+    }
     case Theme::Olive:
       dl->AddCircle(c, 0.42f * s, kBrass, 20, std::max(1.0f, s * 0.07f));
       dl->AddCircleFilled(c, 0.16f * s, kBrass, 12);
@@ -248,10 +265,13 @@ void emblem(ImDrawList* dl, ImVec2 c, float s) {
 
 void stencilStrip(ImDrawList* dl, ImVec2 a, ImVec2 b) {
   // Diagonal hazard-style stripes, faded, in the side's colours.
-  const ImU32 c1 = gTheme == Theme::Soviet ? IM_COL32(150, 36, 28, 150)
-                   : gTheme == Theme::German ? IM_COL32(20, 20, 20, 120)
-                                             : IM_COL32(30, 30, 22, 120);
-  const ImU32 c2 = gTheme == Theme::German ? IM_COL32(210, 210, 200, 70) : IM_COL32(220, 190, 110, 70);
+  const ImU32 c1 = gTheme == Theme::Soviet    ? IM_COL32(150, 36, 28, 150)
+                   : gTheme == Theme::German  ? IM_COL32(20, 20, 20, 120)
+                   : gTheme == Theme::British ? IM_COL32(150, 34, 30, 140)  // the white-red-white flash
+                                              : IM_COL32(30, 30, 22, 120);
+  const ImU32 c2 = gTheme == Theme::German    ? IM_COL32(210, 210, 200, 70)
+                   : gTheme == Theme::British ? IM_COL32(230, 226, 214, 90)
+                                              : IM_COL32(220, 190, 110, 70);
   dl->PushClipRect(a, b, true);
   const float h = b.y - a.y;
   int i = 0;

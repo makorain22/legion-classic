@@ -940,6 +940,356 @@
       "autoTarget": false,
       "garrison": 16,
       "description": "A two-storey village school."
+    },
+    {
+      "id": "gbr_yard",
+      "faction": "gbr",
+      "armor": "structure",
+      "name": "Construction Yard",
+      "model": "yard",
+      "footprint": [
+        4,
+        3
+      ],
+      "health": 2000,
+      "power": 20,
+      "role": "yard",
+      "buildRadius": 10,
+      "sight": 7,
+      "cost": 3000,
+      "category": "building",
+      "income": 120,
+      "group": "Base",
+      "description": "Builds every other structure, and only near itself and your other buildings. Earns a trickle of supplies."
+    },
+    {
+      "id": "gbr_power",
+      "faction": "gbr",
+      "armor": "structure",
+      "name": "Power Station",
+      "model": "power",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 700,
+      "power": 100,
+      "role": "power",
+      "buildRadius": 5,
+      "cost": 300,
+      "buildTime": 8,
+      "builtAt": "yard",
+      "requires": [
+        "gbr_yard"
+      ],
+      "group": "Base",
+      "description": "Powers the base. Short of power, everything takes twice as long to build."
+    },
+    {
+      "id": "gbr_depot",
+      "faction": "gbr",
+      "armor": "structure",
+      "name": "Supply Dump",
+      "model": "refinery",
+      "footprint": [
+        3,
+        3
+      ],
+      "health": 1000,
+      "power": -20,
+      "role": "depot",
+      "buildRadius": 5,
+      "cost": 800,
+      "buildTime": 12,
+      "builtAt": "yard",
+      "requires": [
+        "gbr_power"
+      ],
+      "income": 600,
+      "group": "Base",
+      "description": "Must stand on a supply point. Earns supplies every minute it stands."
+    },
+    {
+      "id": "gbr_barracks",
+      "faction": "gbr",
+      "armor": "structure",
+      "name": "Drill Hall",
+      "model": "barracks",
+      "footprint": [
+        3,
+        2
+      ],
+      "health": 800,
+      "power": -20,
+      "role": "barracks",
+      "buildRadius": 5,
+      "cost": 500,
+      "buildTime": 10,
+      "builtAt": "yard",
+      "requires": [
+        "gbr_power"
+      ],
+      "group": "Production",
+      "description": "Trains infantry."
+    },
+    {
+      "id": "gbr_factory",
+      "faction": "gbr",
+      "armor": "structure",
+      "name": "Tank Workshop",
+      "model": "factory",
+      "footprint": [
+        4,
+        3
+      ],
+      "health": 1400,
+      "power": -40,
+      "role": "factory",
+      "buildRadius": 5,
+      "cost": 2000,
+      "buildTime": 20,
+      "builtAt": "yard",
+      "requires": [
+        "gbr_depot"
+      ],
+      "group": "Production",
+      "description": "Builds vehicles and tanks."
+    },
+    {
+      "id": "gbr_tower",
+      "faction": "gbr",
+      "armor": "structure",
+      "name": "Observation Post",
+      "model": "tower",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 300,
+      "cost": 150,
+      "buildTime": 6,
+      "sight": 13,
+      "category": "defense",
+      "builtAt": "yard",
+      "requires": [
+        "gbr_barracks"
+      ],
+      "garrison": 1,
+      "group": "Emplacements",
+      "description": "A raised observation post: one man inside sees far over the countryside and spots for the guns."
+    },
+    {
+      "id": "gbr_bunker",
+      "faction": "gbr",
+      "armor": "structure",
+      "name": "Pillbox",
+      "model": "bunker",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 900,
+      "cost": 600,
+      "buildTime": 10,
+      "sight": 7,
+      "category": "defense",
+      "weapons": [
+        "mg_bunker"
+      ],
+      "turret": {
+        "turnTicks": 1
+      },
+      "builtAt": "yard",
+      "requires": [
+        "gbr_barracks"
+      ],
+      "garrison": 4,
+      "group": "Emplacements",
+      "description": "A hexagonal concrete pillbox. Holds infantry, who fire from it well protected."
+    },
+    {
+      "id": "gbr_atgun",
+      "faction": "gbr",
+      "armor": "structure",
+      "name": "6-pdr Gun Pit",
+      "model": "atgun",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 600,
+      "cost": 800,
+      "buildTime": 12,
+      "sight": 8,
+      "category": "defense",
+      "weapons": [
+        "cannon_at"
+      ],
+      "turret": {
+        "turnTicks": 3
+      },
+      "builtAt": "yard",
+      "requires": [
+        "gbr_factory"
+      ],
+      "group": "Emplacements",
+      "description": "A dug-in 6-pounder anti-tank gun behind sandbags. Covers an approach for armour."
+    },
+    {
+      "id": "gbr_sandbags",
+      "faction": "gbr",
+      "armor": "structure",
+      "name": "Sandbags",
+      "model": "sandbags",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 250,
+      "cost": 5,
+      "category": "fortification",
+      "coverAround": 40,
+      "autoTarget": false,
+      "builtAt": "yard",
+      "requires": [
+        "gbr_yard"
+      ],
+      "group": "Field works",
+      "description": "Infantry beside sandbags take less damage."
+    },
+    {
+      "id": "gbr_trench",
+      "faction": "gbr",
+      "armor": "structure",
+      "name": "Slit Trench",
+      "model": "trench",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 1000,
+      "cost": 5,
+      "category": "fortification",
+      "cover": 60,
+      "blocks": [
+        "wheeled"
+      ],
+      "targetable": false,
+      "autoTarget": false,
+      "builtAt": "yard",
+      "requires": [
+        "gbr_barracks"
+      ],
+      "group": "Field works",
+      "description": "A dug-in trench piece. Up to three men take cover in it, fire from it and stay until told to evacuate (E).",
+      "garrison": 3
+    },
+    {
+      "id": "gbr_wire",
+      "faction": "gbr",
+      "armor": "structure",
+      "name": "Dannert Wire",
+      "model": "wire",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 120,
+      "cost": 3,
+      "category": "fortification",
+      "blocks": [
+        "foot"
+      ],
+      "autoTarget": false,
+      "builtAt": "yard",
+      "requires": [
+        "gbr_yard"
+      ],
+      "group": "Field works",
+      "description": "Coils of concertina wire. Slows infantry to a crawl."
+    },
+    {
+      "id": "gbr_traps",
+      "faction": "gbr",
+      "armor": "structure",
+      "name": "Anti-Tank Cubes",
+      "model": "traps",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 500,
+      "cost": 10,
+      "category": "fortification",
+      "blocks": [
+        "wheeled",
+        "tracked"
+      ],
+      "autoTarget": false,
+      "builtAt": "yard",
+      "requires": [
+        "gbr_yard"
+      ],
+      "group": "Field works",
+      "description": "Concrete cubes that stop vehicles; infantry walk through."
+    },
+    {
+      "id": "gbr_mg_nest",
+      "faction": "gbr",
+      "armor": "structure",
+      "name": "Vickers Nest",
+      "model": "mg_nest",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 450,
+      "cost": 250,
+      "buildTime": 5,
+      "sight": 7,
+      "category": "defense",
+      "weapons": [
+        "mg_nest"
+      ],
+      "turret": {
+        "turnTicks": 1
+      },
+      "builtAt": "yard",
+      "requires": [
+        "gbr_barracks"
+      ],
+      "group": "Emplacements",
+      "description": "A Vickers machine gun behind a ring of sandbags. Cheap, quick to raise, and murderous to infantry.",
+      "nato": "mg"
+    },
+    {
+      "id": "gbr_howitzer_pit",
+      "faction": "gbr",
+      "armor": "structure",
+      "name": "Medium Gun Emplacement",
+      "model": "howitzer_pit",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 700,
+      "cost": 1500,
+      "buildTime": 16,
+      "sight": 8,
+      "category": "defense",
+      "weapons": [
+        "gun_55in"
+      ],
+      "turret": {
+        "turnTicks": 4
+      },
+      "builtAt": "yard",
+      "requires": [
+        "gbr_factory"
+      ],
+      "group": "Emplacements",
+      "description": "A 5.5-inch medium gun dug in behind sandbags. The longest reach on the field, slow to fire.",
+      "nato": "artillery"
     }
   ]
 }

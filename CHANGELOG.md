@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.9.0 – Milestone 9: Britain, sound, tutorial, campaigns (in progress)
+
+- **A third army: Britain** (`gbr`). Fourteen units, mirroring the German and
+  Soviet roster with British kit and its own guns: Rifleman (rapid-fire
+  Lee-Enfield), Bren Team, PIAT Team, Royal Engineer, Sniper, Dingo Scout
+  Car, Universal Carrier, Crusader (6-pounder), Cromwell (75 mm), Sherman
+  Firefly and Achilles (17-pounder), Sexton (25-pounder), Churchill (the
+  toughest tank in the game) and Construction Lorry; the base under British
+  names, with a Pillbox, a 6-pdr Gun Pit, a Vickers Nest and a 5.5-inch
+  Medium Gun Emplacement. Eleven new weapons in `weapons.json`.
+- **British doctrine** for the computer: an early observation post to bring
+  on the guns, Sextons in every attack and an extra gun pit, a trench line
+  and wire, big set-piece attacks, falling back sooner. Every side's computer
+  now puts up a watchtower by the eighth minute, so heavy tanks, snipers and
+  artillery come into its games.
+- **Skirmish, the editor's Sides tab, the rules editor and the encyclopedia**
+  offer Britain. The sidebar wears service brown and stone with an RAF-style
+  roundel. Placeholder art: British soldiers in Brodie helmets and
+  battledress; vehicles in plain service brown with the white-red-white
+  recognition flash on the German hull shapes (British models to come). With
+  the Blitzkrieg art pack, the pack's German-side buildings stand in for
+  British ones.
+- **Saves carry their unit list** (meta `types`) and are renumbered by id on
+  loading, so adding units (a new army, a mod) no longer breaks older saves;
+  0.8.0 saves load with the British taken into account.
+- `--factions gbr,rus[,ger,gbr]` chooses the armies of an `--ai-battle`.
+
 ## 0.8.0 – Milestone 8: creation tools and mods (6 Nov 2026)
 
 - **Mods.** A mod is a folder of rule changes, sprites and scenarios that sits

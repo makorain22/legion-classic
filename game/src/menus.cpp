@@ -12,6 +12,7 @@
 #include <nlohmann/json.hpp>
 
 #include "slave/core/rng.hpp"
+#include "slave/sim/factions.hpp"
 
 using namespace slave;
 
@@ -159,7 +160,7 @@ void Menus::drawMain() {
   if (menuButton("About", w)) page_ = Page::About;
   if (menuButton("Quit", w)) scene_.quit();
   ImGui::Dummy(ImVec2(0, 6));
-  ImGui::TextDisabled("Slave Engine 1.0  -  build 0.8.0");
+  ImGui::TextDisabled("Slave Engine 1.0  -  build 0.9.0");
   if (scene_.content().modIds().size() > 1)
     ImGui::TextDisabled("%zu mod%s enabled", scene_.content().modIds().size() - 1,
                         scene_.content().modIds().size() > 2 ? "s" : "");
@@ -361,10 +362,10 @@ void Menus::drawSkirmish() {
       if (w >= 2) s.difficulty = w - 2;
     }
     ImGui::SameLine();
-    int f = s.faction == "rus" ? 1 : 0;
+    int f = slave::factionIndex(s.faction);
     ImGui::SetNextItemWidth(120);
     ImGui::BeginDisabled(!s.open);
-    if (ImGui::Combo("##faction", &f, "Germany\0Russia\0")) s.faction = f ? "rus" : "ger";
+    if (ImGui::Combo("##faction", &f, slave::factionComboItems())) s.faction = slave::kPlayableFactions[f].id;
     ImGui::SameLine();
     int team = s.team + 1;
     ImGui::SetNextItemWidth(100);

@@ -19,8 +19,10 @@ namespace legion {
 
 namespace {
 
-const char* kSides[3] = {"Germany", "Soviet Union", "Civilian"};
-const char* kSideIds[3] = {"ger", "rus", "neutral"};
+constexpr int kSideCount = 4;
+const char* kSides[kSideCount] = {"Germany", "Soviet Union", "United Kingdom", "Civilian"};
+const char* kSideIds[kSideCount] = {"ger", "rus", "gbr", "neutral"};
+const char* kSideShort[kSideCount] = {"German", "Soviet", "British", "Civil"};
 const char* kArmour[ARMOR_COUNT] = {"Infantry", "Light", "Medium", "Heavy", "Structure"};
 const char* kArmourShort[ARMOR_COUNT] = {"Inf", "Light", "Med", "Heavy", "Bldg"};
 
@@ -56,7 +58,9 @@ void Encyclopedia::open(int type) {
   if (type >= 0 && type < static_cast<int>(scene_.types().size())) {
     selected_ = type;
     const std::string& f = scene_.types().get(type).faction;
-    side_ = f == "ger" ? 0 : f == "rus" ? 1 : 2;
+    side_ = kSideCount - 1;
+    for (int i = 0; i < kSideCount; ++i)
+      if (f == kSideIds[i]) side_ = i;
   }
 }
 
@@ -91,10 +95,10 @@ void Encyclopedia::draw() {
   // --- The list -------------------------------------------------------------
   ImGui::BeginChild("##list", ImVec2(250, 0), true);
   {
-    const float bw = (ImGui::GetContentRegionAvail().x - 8) / 3.0f;
-    for (int i = 0; i < 3; ++i) {
+    const float bw = (ImGui::GetContentRegionAvail().x - 4 * (kSideCount - 1)) / kSideCount;
+    for (int i = 0; i < kSideCount; ++i) {
       if (i) ImGui::SameLine(0, 4);
-      if (ui::plateButton(kSides[i], i == 0 ? "German" : i == 1 ? "Soviet" : "Civil", ImVec2(bw, 24), side_ == i)) side_ = i;
+      if (ui::plateButton(kSides[i], kSideShort[i], ImVec2(bw, 24), side_ == i)) side_ = i;
       if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", kSides[i]);
     }
     ImGui::Dummy(ImVec2(0, 2));

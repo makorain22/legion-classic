@@ -13,11 +13,14 @@ namespace slave::art {
 
 // Germany: dunkelgelb under olive and red-brown stripes, field-grey uniforms.
 // The Soviet Union: plain 4BO green armour and khaki uniforms.
-const FactionLook kFactions[2] = {
+// Britain: plain SCC 2 service brown armour, khaki battledress, green helmets.
+const FactionLook kFactions[kFactionLooks] = {
     // German: darker - weathered dark yellow under heavy green and brown, field-grey uniforms.
     {"ger", {118, 108, 76, 255}, {74, 80, 70, 255}, {66, 72, 64, 255}, false, true, {64, 74, 48, 255}, {84, 58, 42, 255}},
     // Soviet: 4BO green armour, tan-khaki uniforms, green helmets (white markings on the vehicles).
     {"rus", {78, 92, 52, 255}, {146, 130, 90, 255}, {74, 88, 54, 255}, true, false, {68, 80, 46, 255}, {92, 102, 64, 255}},
+    // British: service-drab brown armour, khaki-brown battledress, dull green Brodie helmets.
+    {"gbr", {92, 82, 60, 255}, {124, 106, 72, 255}, {82, 86, 60, 255}, false, false, {72, 74, 52, 255}, {60, 56, 44, 255}, true},
 };
 
 Rgba scale(Rgba c, float k) {
@@ -433,6 +436,10 @@ const std::vector<const char*>& nationalMark(const FactionLook& look, bool small
   static const std::vector<const char*> star = {"...R...", "..RRR..", "RRRRRRR", ".RRRRR.",
                                                 "..RRR..", ".RR.RR.", "RR...RR"};
   static const std::vector<const char*> starSmall = {"..R..", "RRRRR", ".RRR.", ".R.R.", "R...R"};
+  // British: the white-red-white recognition flash, upright stripes.
+  static const std::vector<const char*> flash = {"WWRRWW", "WWRRWW", "WWRRWW", "WWRRWW"};
+  static const std::vector<const char*> flashSmall = {"WRW", "WRW", "WRW"};
+  if (look.british) return small ? flashSmall : flash;
   if (look.sloped) return small ? starSmall : star;
   return small ? crossSmall : cross;
 }

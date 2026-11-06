@@ -6,7 +6,8 @@
 // so the grid centre is the unit's position. Turrets are separate models in
 // the same grid that the game turns around their ring.
 //
-// Markings are the plain national cross and the red star only.
+// Markings are the plain national cross, the red star and the British
+// white-red-white recognition flash only.
 
 #include <algorithm>
 #include <cmath>
@@ -57,8 +58,9 @@ void crewman(VoxelModel& m, const FactionLook& look, float cx, float cy, int z) 
   m.box(x - 1, y - 1, z, x + 2, y + 2, z + 1, UNIFORM_DARK);  // shoulders
   m.box(x, y, z + 1, x + 1, y + 1, z + 3, SKIN);                // head
   m.box(x - 1, y, z + 1, x, y + 1, z + 2, UNIFORM_DARK);
-  // German black cap with headphones; Soviet padded leather helmet.
+  // German black cap with headphones; Soviet padded leather helmet; British black beret.
   m.box(x, y, z + 2, x + 1, y + 1, z + 3, look.sloped ? LEATHER : MARK_BLACK);
+  if (look.british) m.set(x - 1, y, z + 2, MARK_BLACK);  // the beret pulled over to one side
 }
 
 void headlight(VoxelModel& m, int x, int y, int z) {
@@ -742,6 +744,11 @@ void soldier(VoxelModel& m, const FactionLook& look, float ox, float oy, const S
   if (s.cap) {
     m.box(X + 1, Y + 1, zh + 2, X + 3, Y + 3, zh + 3, CAP);
     m.box(X + 3, Y + 1, zh + 2, X + 4, Y + 3, zh + 3, CAP);      // peak
+  } else if (look.british) {
+    m.box(X - 1, Y, zh + 2, X + 5, Y + 4, zh + 3, HELMET);       // the wide flat brim of the Brodie helmet
+    m.box(X, Y - 1, zh + 2, X + 4, Y + 5, zh + 3, HELMET);
+    m.box(X - 1, Y, zh + 2, X, Y + 4, zh + 3, HELMET_DARK);      // brim edge in shade
+    m.box(X + 1, Y + 1, zh + 3, X + 3, Y + 3, zh + 4, HELMET);   // shallow crown
   } else if (sov) {
     m.box(X, Y + 1, zh + 2, X + 4, Y + 3, zh + 3, HELMET);       // round helmet
     m.box(X + 1, Y, zh + 2, X + 3, Y + 4, zh + 3, HELMET);

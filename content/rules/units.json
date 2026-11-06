@@ -706,6 +706,391 @@
       "nato": "armour",
       "group": "Tanks",
       "description": "A breakthrough tank: a 122 mm gun that wrecks bunkers and tanks alike, under heavy armour."
+    },
+    {
+      "id": "gbr_rifleman",
+      "name": "Rifleman",
+      "faction": "gbr",
+      "model": "rifleman",
+      "locomotor": "foot",
+      "speed": 10,
+      "turnTicks": 0,
+      "radius": 28,
+      "animTicks": 3,
+      "health": 100,
+      "armor": "infantry",
+      "sight": 7,
+      "weapons": [
+        "rifle_smle"
+      ],
+      "cost": 10,
+      "buildTime": 1.5,
+      "builtAt": "barracks",
+      "requires": [],
+      "aiWeight": 5,
+      "nato": "infantry",
+      "group": "Infantry",
+      "description": "The backbone of the army. A well-drilled regular whose Lee-Enfield fires faster than any other bolt-action rifle."
+    },
+    {
+      "id": "gbr_mg_team",
+      "name": "Bren Team",
+      "faction": "gbr",
+      "model": "mg_team",
+      "locomotor": "foot",
+      "speed": 9,
+      "turnTicks": 0,
+      "radius": 28,
+      "animTicks": 3,
+      "health": 110,
+      "armor": "infantry",
+      "sight": 7,
+      "weapons": [
+        "bren"
+      ],
+      "cost": 40,
+      "buildTime": 3,
+      "builtAt": "barracks",
+      "requires": [],
+      "aiWeight": 2,
+      "nato": "mg",
+      "group": "Infantry",
+      "description": "A Bren gun and its number two. Lighter than a heavy machine gun but more accurate, and it keeps up with the section."
+    },
+    {
+      "id": "gbr_at_team",
+      "name": "PIAT Team",
+      "faction": "gbr",
+      "model": "at_team",
+      "locomotor": "foot",
+      "speed": 9,
+      "turnTicks": 0,
+      "radius": 28,
+      "animTicks": 3,
+      "health": 100,
+      "armor": "infantry",
+      "sight": 7,
+      "weapons": [
+        "piat"
+      ],
+      "cost": 50,
+      "buildTime": 3.5,
+      "builtAt": "barracks",
+      "requires": [],
+      "aiWeight": 2,
+      "nato": "antitank",
+      "group": "Infantry",
+      "description": "A spring-fired anti-tank projector. Short-ranged and slow to reload, but it knocks out tanks from the side and rear."
+    },
+    {
+      "id": "gbr_engineer",
+      "name": "Royal Engineer",
+      "faction": "gbr",
+      "model": "engineer",
+      "locomotor": "foot",
+      "speed": 10,
+      "turnTicks": 0,
+      "radius": 28,
+      "animTicks": 3,
+      "health": 90,
+      "armor": "infantry",
+      "sight": 7,
+      "cost": 30,
+      "buildTime": 3,
+      "builtAt": "barracks",
+      "requires": [],
+      "repair": 1,
+      "aiWeight": 0,
+      "weapons": [],
+      "nato": "engineer",
+      "group": "Specialists",
+      "description": "Builds field works, repairs vehicles and buildings, and clears the way. Unarmed."
+    },
+    {
+      "id": "gbr_sniper",
+      "name": "Sniper",
+      "faction": "gbr",
+      "model": "sniper",
+      "locomotor": "foot",
+      "speed": 10,
+      "turnTicks": 0,
+      "radius": 28,
+      "animTicks": 3,
+      "health": 70,
+      "armor": "infantry",
+      "sight": 11,
+      "weapons": [
+        "sniper_rifle"
+      ],
+      "cost": 80,
+      "buildTime": 5,
+      "builtAt": "barracks",
+      "requires": [
+        "gbr_tower"
+      ],
+      "aiWeight": 1,
+      "nato": "sniper",
+      "group": "Specialists",
+      "description": "A trained marksman with a scoped rifle. Picks off infantry from long range and sees far; fragile and slow to fire."
+    },
+    {
+      "id": "gbr_scout_car",
+      "name": "Dingo Scout Car",
+      "faction": "gbr",
+      "model": "scoutcar",
+      "locomotor": "wheeled",
+      "speed": 38,
+      "turnTicks": 1,
+      "radius": 82,
+      "animTicks": 1,
+      "health": 150,
+      "armor": "light",
+      "sight": 12,
+      "weapons": [
+        "mg_light"
+      ],
+      "turret": {
+        "turnTicks": 1
+      },
+      "cost": 400,
+      "buildTime": 9,
+      "builtAt": "factory",
+      "requires": [],
+      "aiWeight": 1,
+      "nato": "recon",
+      "group": "Recon & transport",
+      "description": "A small, very fast scout car with a Bren gun. Finds the enemy; does not stand and fight tanks."
+    },
+    {
+      "id": "gbr_halftrack",
+      "name": "Universal Carrier",
+      "faction": "gbr",
+      "model": "halftrack",
+      "locomotor": "tracked",
+      "speed": 34,
+      "turnTicks": 1,
+      "radius": 90,
+      "animTicks": 2,
+      "health": 220,
+      "armor": "light",
+      "sight": 8,
+      "weapons": [
+        "mg_light"
+      ],
+      "cost": 400,
+      "buildTime": 9,
+      "builtAt": "factory",
+      "requires": [],
+      "turret": {
+        "turnTicks": 1
+      },
+      "aiWeight": 2,
+      "nato": "mech",
+      "group": "Recon & transport",
+      "description": "A small tracked carrier with a Bren gun, quick across any country. Cheap, thinly armoured and everywhere."
+    },
+    {
+      "id": "gbr_light_tank",
+      "name": "Crusader",
+      "faction": "gbr",
+      "model": "light_tank",
+      "locomotor": "tracked",
+      "speed": 30,
+      "turnTicks": 1,
+      "radius": 88,
+      "animTicks": 2,
+      "health": 320,
+      "armor": "medium",
+      "sight": 8,
+      "weapons": [
+        "cannon_6pdr",
+        "mg_light"
+      ],
+      "cost": 600,
+      "buildTime": 13,
+      "builtAt": "factory",
+      "requires": [],
+      "turret": {
+        "turnTicks": 1
+      },
+      "aiWeight": 2,
+      "nato": "armour",
+      "group": "Tanks",
+      "description": "A fast cruiser tank with a 6-pounder. Outguns other light tanks and runs down raiders; thin-skinned against real armour."
+    },
+    {
+      "id": "gbr_medium_tank",
+      "name": "Cromwell",
+      "faction": "gbr",
+      "model": "tank",
+      "locomotor": "tracked",
+      "speed": 21,
+      "turnTicks": 2,
+      "radius": 100,
+      "animTicks": 2,
+      "health": 400,
+      "armor": "heavy",
+      "sight": 8,
+      "weapons": [
+        "cannon_75qf",
+        "mg_light"
+      ],
+      "turret": {
+        "turnTicks": 2
+      },
+      "cost": 850,
+      "buildTime": 20,
+      "builtAt": "factory",
+      "requires": [
+        "gbr_depot"
+      ],
+      "aiWeight": 5,
+      "nato": "armour",
+      "group": "Tanks",
+      "description": "A fast cruiser tank with a dual-purpose 75 mm gun: good HE against infantry and guns, middling against heavy armour."
+    },
+    {
+      "id": "gbr_mcv",
+      "name": "Construction Lorry",
+      "faction": "gbr",
+      "model": "mcv",
+      "locomotor": "wheeled",
+      "speed": 20,
+      "turnTicks": 2,
+      "radius": 90,
+      "animTicks": 2,
+      "health": 800,
+      "armor": "light",
+      "sight": 5,
+      "cost": 3000,
+      "buildTime": 30,
+      "builtAt": "factory",
+      "requires": [
+        "gbr_factory"
+      ],
+      "deploysTo": "gbr_yard",
+      "aiWeight": 0,
+      "nato": "hq",
+      "group": "Engineering",
+      "description": "Unfolds into a Construction Yard where it is deployed. The heart of a base: guard it."
+    },
+    {
+      "id": "gbr_tank_destroyer",
+      "name": "Achilles",
+      "faction": "gbr",
+      "model": "tank_destroyer",
+      "locomotor": "tracked",
+      "speed": 20,
+      "turnTicks": 2,
+      "radius": 104,
+      "animTicks": 2,
+      "health": 380,
+      "armor": "medium",
+      "sight": 7,
+      "weapons": [
+        "cannon_17pdr"
+      ],
+      "cost": 1050,
+      "buildTime": 20,
+      "builtAt": "factory",
+      "requires": [
+        "gbr_depot"
+      ],
+      "aiWeight": 2,
+      "nato": "antitank_armour",
+      "group": "Support",
+      "description": "A 17-pounder in an open turret on a fast hull. Kills any tank at long range; its thin armour wants a covered position."
+    },
+    {
+      "id": "gbr_artillery",
+      "name": "Sexton",
+      "faction": "gbr",
+      "model": "artillery",
+      "locomotor": "tracked",
+      "speed": 17,
+      "turnTicks": 2,
+      "radius": 96,
+      "animTicks": 2,
+      "health": 240,
+      "armor": "light",
+      "sight": 5,
+      "weapons": [
+        "howitzer_25pdr"
+      ],
+      "cost": 1100,
+      "buildTime": 20,
+      "builtAt": "factory",
+      "requires": [
+        "gbr_tower"
+      ],
+      "aiWeight": 2,
+      "nato": "artillery",
+      "group": "Support",
+      "description": "A 25-pounder on a tracked chassis. Shorter-ranged than heavier guns but fires quickly: the Royal Artillery's answer to every problem."
+    },
+    {
+      "id": "gbr_firefly",
+      "name": "Sherman Firefly",
+      "faction": "gbr",
+      "model": "tank",
+      "locomotor": "tracked",
+      "speed": 17,
+      "turnTicks": 2,
+      "radius": 100,
+      "animTicks": 2,
+      "health": 430,
+      "armor": "heavy",
+      "sight": 8,
+      "weapons": [
+        "cannon_17pdr",
+        "mg_light"
+      ],
+      "turret": {
+        "turnTicks": 2
+      },
+      "cost": 1150,
+      "buildTime": 22,
+      "builtAt": "factory",
+      "requires": [
+        "gbr_depot",
+        "gbr_tower"
+      ],
+      "aiWeight": 2,
+      "nato": "armour",
+      "group": "Tanks",
+      "description": "A Sherman refitted with the 17-pounder. One in each troop: the tank that deals with Tigers."
+    },
+    {
+      "id": "gbr_heavy_tank",
+      "name": "Churchill",
+      "faction": "gbr",
+      "model": "heavy_tank",
+      "locomotor": "tracked",
+      "speed": 11,
+      "turnTicks": 3,
+      "radius": 118,
+      "animTicks": 2,
+      "health": 1150,
+      "armor": "heavy",
+      "sight": 8,
+      "weapons": [
+        "cannon_75qf",
+        "mg_light"
+      ],
+      "cost": 1800,
+      "buildTime": 30,
+      "builtAt": "factory",
+      "requires": [
+        "gbr_depot",
+        "gbr_tower"
+      ],
+      "turret": {
+        "turnTicks": 3
+      },
+      "aiWeight": 2,
+      "nato": "armour",
+      "group": "Tanks",
+      "description": "An infantry tank: very slow, very thick, and hard to stop. Climbs anything and leads the assault; its gun is no better than a Cromwell's."
     }
   ]
 }

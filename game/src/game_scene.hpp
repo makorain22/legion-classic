@@ -82,6 +82,7 @@ struct SceneOptions {
   float speed = 1.0f;           // starting game speed (testing)
   int layout = -1;              // map layout for generated maps (-1: from the seed)
   int sides = 2;                // --ai-battle: 2 (1v1) or 4 (2v2)
+  std::string factions;         // --ai-battle: "ger,gbr,..." per side (default Germany v Russia)
   int monkey = 0;
   std::string showcase;         // record a video of an AI battle to this .mp4, camera following the fighting
   int showcaseWarm = 15 * 60 * 5;  // ticks to fast-forward first

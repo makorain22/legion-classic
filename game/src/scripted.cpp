@@ -354,8 +354,8 @@ void GameScene::runFlowSelfTest() {
   }
 }
 
-// Every unit of both armies lined up for inspection (--gallery): Germany in
-// the front rows, the Soviet Union behind, each type facing a different way.
+// Every unit of every army lined up for inspection (--gallery): Germany in
+// the front rows, then the Soviet Union, then Britain, each type facing a different way.
 void GameScene::runGallery() {
   Registry& reg = sim_->registry();
   const int32_t T = LEPTONS_PER_TILE;
@@ -366,13 +366,16 @@ void GameScene::runGallery() {
     sim_->queue(std::move(rm));
     const Vec2i c = findLand({map_.widthLeptons() / 2, map_.heightLeptons() / 2});
     galleryAt_ = c;
-    Command team;
-    team.type = CommandType::SetTeam;
-    team.player = 1;
-    team.count = 0;
-    sim_->queue(std::move(team));
+    for (uint8_t pl : {uint8_t(1), uint8_t(2)}) {
+      Command team;
+      team.type = CommandType::SetTeam;
+      team.player = pl;
+      team.count = 0;
+      sim_->queue(std::move(team));
+    }
     int row = 0;
-    for (const char* fac : {"ger", "rus"}) {
+    uint8_t owner = 0;
+    for (const char* fac : {"ger", "rus", "gbr"}) {
       std::vector<int> inf, veh;
       for (size_t t = 0; t < types_.size(); ++t) {
         const UnitTypeDef& d = types_.get(static_cast<int>(t));
@@ -385,7 +388,7 @@ void GameScene::runGallery() {
           Command s;
           s.type = CommandType::Spawn;
           s.unitType = static_cast<uint16_t>((*list)[i]);
-          s.player = static_cast<uint8_t>(fac[0] == 'g' ? 0 : 1);
+          s.player = owner;
           s.count = 1;
           s.target = {c.x + static_cast<int32_t>((i - list->size() / 2.0f) * step * T), c.y + (row - 2) * 3 * T};
           s.facing = angleOfFacing(static_cast<int>((i * 3 + row) % 16));
@@ -393,6 +396,7 @@ void GameScene::runGallery() {
         }
         ++row;
       }
+      ++owner;
     }
     // The civilian buildings, in a row behind.
     int k = 0;

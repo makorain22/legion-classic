@@ -2,6 +2,10 @@
 // triggers and the computer player.
 #include <doctest/doctest.h>
 
+#include <algorithm>
+#include <fstream>
+#include <set>
+
 #include <nlohmann/json.hpp>
 
 #include "slave/sim/savefile.hpp"
@@ -160,6 +164,65 @@ TEST_CASE("a saved game continues exactly as the original would") {
   Simulation broken(copy2, R.types, R.weapons, 1);
   ByteReader br(bad);
   CHECK_FALSE(broken.loadState(br, err));
+}
+
+TEST_CASE("a game saved with an older roster loads with its units renumbered by id") {
+  // The rules as they were before the British: same files without the gbr entries.
+  auto read = [](const char* f) {
+    std::ifstream in(std::string(LEGION_RULES_DIR) + f);
+    return nlohmann::json::parse(in);
+  };
+  nlohmann::json w = read("weapons.json"), u = read("units.json"), b = read("buildings.json");
+  for (nlohmann::json* doc : {&u, &b}) {
+    auto& list = (*doc)["units"];
+    list.erase(std::remove_if(list.begin(), list.end(), [](const nlohmann::json& e) { return e["faction"] == "gbr"; }),
+               list.end());
+  }
+  WeaponRegistry oldWeapons;
+  UnitTypeRegistry oldTypes;
+  std::string err;
+  REQUIRE(loadRuleSet(w, u, b, oldWeapons, oldTypes, err));
+  Map map(128, 128);
+  map.generateCountryside(1940);
+  Simulation old(map, oldTypes, oldWeapons, 7);
+  const int32_t T = 256;
+  place(old, static_cast<uint16_t>(oldTypes.find("ger_yard")), 0, {30 * T, 40 * T});
+  place(old, static_cast<uint16_t>(oldTypes.find("rus_barracks")), 1, {90 * T, 40 * T});
+  for (const char* id : {"rus_medium_tank", "ger_rifleman"}) {
+    Command c;
+    c.type = CommandType::Spawn;
+    c.player = id[0] == 'g' ? 0 : 1;
+    c.unitType = static_cast<uint16_t>(oldTypes.find(id));
+    c.count = 1;
+    c.target = {(id[0] == 'g' ? 30 : 90) * T, 70 * T};
+    old.queue(c);
+  }
+  old.tick();
+  REQUIRE(old.unitCount() == 4);
+  ByteWriter out;
+  old.saveState(out);
+
+  Rules R;  // today's rules: the British sit between the units and the buildings
+  REQUIRE(R.types.find("ger_yard") != oldTypes.find("ger_yard"));
+  Map copy = map;
+  Simulation now(copy, R.types, R.weapons, 7);
+  const std::vector<std::string> saved = old.typeIds();
+  ByteReader r(out.bytes());
+  bool remapped = false;
+  REQUIRE(now.loadState(r, err, &saved, &remapped));
+  CHECK(remapped);
+  std::multiset<std::string> ids;
+  for (const CUnit& c : now.registry().pool<CUnit>().data()) ids.insert(R.types.get(c.type).id);
+  CHECK(ids == std::multiset<std::string>{"ger_yard", "rus_barracks", "rus_medium_tank", "ger_rifleman"});
+
+  // A type the rules don't have is refused, not misread.
+  std::vector<std::string> alien = saved;
+  alien[static_cast<size_t>(oldTypes.find("ger_yard"))] = "xyz_secret_weapon";
+  Map copy2 = map;
+  Simulation refuse(copy2, R.types, R.weapons, 7);
+  ByteReader r2(out.bytes());
+  CHECK_FALSE(refuse.loadState(r2, err, &alien));
+  CHECK(err.find("xyz_secret_weapon") != std::string::npos);
 }
 
 TEST_CASE("a replay (start state + logged commands) reproduces the game") {
@@ -422,4 +485,52 @@ TEST_CASE("each side's computer player fights to its own doctrine") {
   CHECK(sim.ai().player(1).waves > 0);
   (void)regrouped;
 
+}
+
+TEST_CASE("the British computer player digs in, brings up the guns and attacks") {
+  Rules R;
+  Map map(128, 128);
+  map.generateCountryside(1944);
+  Simulation sim(map, R.types, R.weapons, 17);
+  base(sim, R, 0, "gbr", {22 * 256, 64 * 256});
+  base(sim, R, 1, "ger", {106 * 256, 64 * 256});
+  for (uint8_t p : {uint8_t{0}, uint8_t{1}}) {
+    Command s;
+    s.type = CommandType::Spawn;
+    s.player = p;
+    s.unitType = R.t(p ? "ger_rifleman" : "gbr_rifleman");
+    s.count = 10;
+    s.target = {(p ? 96 : 32) * 256, 64 * 256};
+    sim.queue(s);
+    Command c;
+    c.type = CommandType::SetController;
+    c.player = p;
+    c.amount = 2;
+    sim.queue(c);
+  }
+  sim.tick();
+  int peakGuns = 0, peakTrench = 0, peakWire = 0;
+  bool foreign = false;
+  for (int i = 0; i < 15 * 60 * 9; ++i) {
+    sim.tick();
+    if (i % 150) continue;
+    int guns = 0, trench = 0, wire = 0;
+    for (uint32_t e : sim.registry().pool<CUnit>().entities()) {
+      const CUnit& u = sim.registry().pool<CUnit>().get(e);
+      if (u.owner != 0) continue;
+      const UnitTypeDef& d = sim.types().get(u.type);
+      foreign |= d.faction != "gbr";
+      guns += d.model == "artillery" || d.model == "howitzer_pit";
+      trench += d.model == "trench";
+      wire += d.model == "wire";
+    }
+    peakGuns = std::max(peakGuns, guns);
+    peakTrench = std::max(peakTrench, trench);
+    peakWire = std::max(peakWire, wire);
+  }
+  CHECK_FALSE(foreign);         // it builds only British kit
+  CHECK(peakTrench >= 5);       // a trench line
+  CHECK(peakWire > 0);          // wired (fortify 2)
+  CHECK(peakGuns > 0);          // Sextons or a medium gun pit
+  CHECK(sim.ai().player(0).waves > 0);  // and it attacked
 }

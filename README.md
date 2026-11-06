@@ -10,18 +10,18 @@ battle and change anything, the rules included.
 
 ![A German and a Soviet force meet on a river crossing](docs/images/battle.jpg)
 
-> **Status: in development (0.8.0).** Milestones 1–8 of 10 are done: a full
-> skirmish game against the computer, two armies, the Live Scenario Editor, and
-> the tools for making mods. Next: the British, a tutorial, campaigns, sound and
-> music. The game is built together with Claude (Anthropic's AI); see
+> **Status: in development (0.9.0).** Milestones 1–8 of 10 are done: a full
+> skirmish game against the computer, the Live Scenario Editor, and the tools
+> for making mods; Milestone 9 has brought a third army, the British. Next: a
+> tutorial, campaigns, sound and music. The game is built together with Claude (Anthropic's AI); see
 > [How it is made](#how-it-is-made).
 
 ## Features
 
-- **Two armies, Germany and the Soviet Union,** each with a full roster:
-  riflemen, MG and anti-tank teams, snipers, engineers, scout cars,
-  half-tracks, light, medium and heavy tanks, tank destroyers, howitzers and
-  rocket trucks.
+- **Three armies, Germany, the Soviet Union and Britain,** each with a full
+  roster: riflemen, MG and anti-tank teams, snipers, engineers, scout cars,
+  half-tracks and carriers, light, medium and heavy tanks, tank destroyers,
+  howitzers, rocket trucks and self-propelled guns.
 - **Real formations.** Men fight as fireteams, squads, platoons and companies;
   tanks and infantry bound together become battle groups. Each unit carries a
   NATO card with its strength.
@@ -31,7 +31,8 @@ battle and change anything, the rules included.
   chips sized by their strength.
 - **A computer player with a doctrine per side.** The Germans fortify in depth
   and attack with combined arms; the Soviets mass infantry and artillery and
-  stream reinforcements in. Both raid, regroup and expand.
+  stream reinforcements in; the British dig in, bring up the guns and attack
+  in set pieces. All of them raid, regroup and expand.
 - **Twelve landscapes** in five climates (temperate, winter, desert, tropical,
   urban), with river valleys, lakes, ridges, marshes and towns.
 - **Live Scenario Editor (F2).** Sculpt terrain, place units for any side,

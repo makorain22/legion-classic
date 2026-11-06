@@ -19,7 +19,7 @@ class Encyclopedia {
   GameScene& scene_;
   bool open_ = false;
   int selected_ = -1;
-  int side_ = 0;  // 0 Germany, 1 Soviet Union, 2 civilian
+  int side_ = 0;  // 0 Germany, 1 Soviet Union, 2 United Kingdom, 3 civilian
 };
 
 }  // namespace legion

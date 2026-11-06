@@ -49,9 +49,11 @@ struct FactionLook {
   bool sloped;     // Soviet armour: sloped plates and cast, rounded turrets
   bool camo;       // three-tone camouflage over the base colour
   Rgba camoA, camoB;
+  bool british = false;  // Brodie helmets, black berets, the white-red-white recognition flash
 };
 
-extern const FactionLook kFactions[2];
+constexpr int kFactionLooks = 3;
+extern const FactionLook kFactions[kFactionLooks];
 VoxelPalette makePalette(const FactionLook& f);
 
 Rgba scale(Rgba c, float k);

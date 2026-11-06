@@ -12,6 +12,8 @@
 #include <filesystem>
 #include <nlohmann/json.hpp>
 
+#include "slave/sim/factions.hpp"
+
 #include "editor.hpp"
 #include "menus.hpp"
 #include "rules_editor.hpp"
@@ -134,6 +136,18 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
     if (opt_.sides >= 4) {
       s.sides[2] = {true, "ger", false, 2, 0, rgba8(220, 180, 40)};
       s.sides[3] = {true, "rus", false, 2, 1, rgba8(60, 170, 80)};
+    }
+    // --factions gbr,rus[,ger,gbr]: who plays each side.
+    {
+      size_t i = 0, at = 0;
+      const std::string& f = opt_.factions;
+      while (at < f.size() && i < s.sides.size()) {
+        const size_t comma = std::min(f.find(',', at), f.size());
+        const std::string id = f.substr(at, comma - at);
+        if (slave::factionIndex(id) != 0 || id == "ger") s.sides[i].faction = id;
+        ++i;
+        at = comma + 1;
+      }
     }
     startSkirmish(s);
     if (opt_.side >= 0 && opt_.side < MAX_PLAYERS && players_[opt_.side].active) {
@@ -1997,7 +2011,7 @@ void GameScene::drawHud() {
   if (settings_.showInfoPanel) {
     ImGui::TextColored(ImVec4(0.92f, 0.78f, 0.36f, 1), "LEGION CLASSIC");
     ImGui::SameLine();
-    ImGui::TextDisabled("Slave Engine 1.0  |  build 0.8.0");
+    ImGui::TextDisabled("Slave Engine 1.0  |  build 0.9.0");
     ImGui::Text("Map: %s (%dx%d)", map_.name.c_str(), map_.width(), map_.height());
     ImGui::Text("Commanding:");
     ImGui::SameLine();

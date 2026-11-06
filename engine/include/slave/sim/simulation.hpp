@@ -262,7 +262,14 @@ class Simulation {
   // The whole simulation state (not the terrain, which is saved with the map).
   // Loading continues exactly where saving stopped: same state hash.
   void saveState(ByteWriter& w) const;
-  bool loadState(ByteReader& r, std::string& error);
+  // `savedTypes`: the unit type ids, in order, of the rules the state was saved
+  // with (save meta "types"). Units and queued orders are renumbered to these
+  // rules by id, so adding a unit type (a new faction, a mod) doesn't scramble
+  // older saves. Sets `remapped` when any number changed.
+  bool loadState(ByteReader& r, std::string& error, const std::vector<std::string>* savedTypes = nullptr,
+                 bool* remapped = nullptr);
+  // The unit type ids in registry order, for the save meta.
+  std::vector<std::string> typeIds() const;
   struct LoggedCommand {
     uint32_t tick;
     Command cmd;

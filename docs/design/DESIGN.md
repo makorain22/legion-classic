@@ -11,7 +11,7 @@ essentials. Keep both in sync when decisions change.
 | Engine | Custom C++20 engine, SDL3 + OpenGL 3.3 core, Dear ImGui for editor UI |
 | Target | Windows 10/11 64-bit PC; Linux possible later |
 | Setting | Alternate-history 1940s–1950s |
-| Factions | Germany and Russia first, United Kingdom third |
+| Factions | Germany and Russia first, United Kingdom third (`gbr`, since 0.9.0) |
 | Art | Gritty, realistic, Blitzkrieg-inspired; voxel-baked sprites (supersampled), replaceable by hand-drawn PNGs |
 | Facings | 16 visible facings, animations at 8–10 fps (heavy retro feel) |
 | Sidebar | Classic right sidebar, minimap on top |
@@ -62,7 +62,8 @@ damage (craters, scorch marks, wrecks, smoke). Five biomes: temperate,
 winter, desert, tropical, urban. Since Milestone 7, units and buildings are
 detailed voxel models baked with ambient occlusion, camouflage and grime (see
 `docs/ART_PIPELINE.md`); any sprite can be replaced by a PNG. Germany uses
-only the plain cross, Russia the red star.
+only the plain cross, Russia the red star, Britain the white-red-white
+recognition flash on vehicles and a roundel in the interface.
 
 ## Core technical rules
 
@@ -119,7 +120,13 @@ only the plain cross, Russia the red star.
    next battle), a sprite studio (facings, animation, side colours, recolour,
    anchors, export / import into a mod), saves and replays that record their
    mods and a rules fingerprint. See docs/MODDING.md.
-9. UK faction, tutorial, campaigns (built with the editor), sound and music.
+9. UK faction, tutorial, campaigns (built with the editor), sound and music –
+   in progress. Done: Britain (`gbr`) – 14 units, the base under British names,
+   11 new weapons, a methodical artillery doctrine for the computer, the UI
+   theme and roundel, Brodie helmets and the recognition flash on the
+   placeholder art (German hull shapes until British voxel models are made),
+   saves renumbered by unit id. Next: sound and music, tutorial, campaigns,
+   skirmish maps.
 10. Release 1.0: balance, performance, documentation, packaging.
 
 ## Playtest backlog (31 Oct 2026, after Milestones 6–7)

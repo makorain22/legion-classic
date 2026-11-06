@@ -30,7 +30,7 @@ struct UnitPlacement {
 // One side in a scenario. Up to 8; `active` sides appear in the game.
 struct PlayerSetup {
   std::string name;
-  std::string faction = "ger";  // "ger", "rus" (UK later)
+  std::string faction = "ger";  // "ger", "rus", "gbr" (slave/sim/factions.hpp)
   uint32_t color = 0xFF2C3AC4;  // RGBA8, little-endian (R in the low byte)
   uint8_t team = 0;             // same team = allies
   bool active = false;
