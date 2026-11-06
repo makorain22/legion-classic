@@ -46,6 +46,8 @@ struct WeaponDef {
   int vsInfantry = -1;       // a gun's alternative round against infantry (e.g. HE), or -1
   int32_t burst = 1;         // shells per shot (rocket salvoes), launched a tick apart
   int32_t burstSpread = 0;   // leptons of extra scatter for each shell of a burst
+  std::string sound;         // presentation: the firing sound (content/audio/audio.json), "" = by kind
+  std::string impact;        // presentation: the sound where it lands, "" = by warhead
 };
 
 class WeaponRegistry {

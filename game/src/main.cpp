@@ -102,6 +102,8 @@ int main(int argc, char** argv) {
     else if (a == "--monkey") opt.monkey = std::atoi(next());
     else if (a == "--sides") opt.sides = std::atoi(next());
     else if (a == "--factions") opt.factions = next();
+    else if (a == "--no-sound") opt.noSound = true;
+    else if (a == "--sound") opt.forceSound = true;
     else if (a == "--layout") opt.layout = std::atoi(next());
     else if (a == "--showcase") {
       opt.showcase = next();

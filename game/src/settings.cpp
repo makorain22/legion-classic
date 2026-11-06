@@ -90,6 +90,15 @@ bool Settings::load(const std::string& path) {
   artPack = j.value("artPack", artPack);
   showEnemyCards = j.value("showEnemyCards", showEnemyCards);
   atmosphere = j.value("atmosphere", atmosphere);
+  if (j.contains("sound") && j["sound"].is_object()) {
+    const auto& s = j["sound"];
+    volMaster = s.value("master", volMaster);
+    volEffects = s.value("effects", volEffects);
+    volVoices = s.value("voices", volVoices);
+    volMusic = s.value("music", volMusic);
+    volAmbience = s.value("ambience", volAmbience);
+    volInterface = s.value("interface", volInterface);
+  }
   mods.clear();
   if (j.contains("mods") && j["mods"].is_array())
     for (const auto& m : j["mods"])
@@ -120,6 +129,8 @@ bool Settings::save(const std::string& path) const {
   j["artPack"] = artPack;
   j["showEnemyCards"] = showEnemyCards;
   j["atmosphere"] = atmosphere;
+  j["sound"] = {{"master", volMaster}, {"effects", volEffects}, {"voices", volVoices},
+                {"music", volMusic},   {"ambience", volAmbience}, {"interface", volInterface}};
   j["mods"] = mods;
   j["toolMod"] = toolMod;
   auto& ks = j["keys"] = nlohmann::json::object();

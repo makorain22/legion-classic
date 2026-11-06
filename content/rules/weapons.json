@@ -1,5 +1,5 @@
 {
-  "_comment": "Weapons and warheads. range and splash are in tiles; cooldown in ticks (15 per second); speed in leptons per tick (256 = 1 tile). Warhead values are percent damage against each armour class; 'facing' is percent damage by the side of a vehicle that is struck (front / side / rear), so flanking pays. accuracy is the percent chance an instant-hit weapon hits (rifles miss 30% of the time: green troops). A gun's 'vsInfantry' names the round it switches to against soldiers. burst: shells fired at once per shot (rocket salvoes), scattered over burstSpread tiles.",
+  "_comment": "Weapons and warheads. range and splash are in tiles; cooldown in ticks (15 per second); speed in leptons per tick (256 = 1 tile). Warhead values are percent damage against each armour class; 'facing' is percent damage by the side of a vehicle that is struck (front / side / rear), so flanking pays. accuracy is the percent chance an instant-hit weapon hits (rifles miss 30% of the time: green troops). A gun's 'vsInfantry' names the round it switches to against soldiers. burst: shells fired at once per shot (rocket salvoes), scattered over burstSpread tiles. sound / impact (presentation only): the firing sound and the sound where it lands, names from content/audio/audio.json; left out, they are chosen by the kind of weapon and its warhead.",
   "warheads": {
     "bullet": {
       "infantry": 100,
@@ -43,7 +43,8 @@
       "cooldown": 22,
       "projectile": "instant",
       "accuracy": 70,
-      "muzzle": 0
+      "muzzle": 0,
+      "sound": "rifle"
     },
     {
       "id": "mg_light",
@@ -54,7 +55,8 @@
       "cooldown": 5,
       "projectile": "instant",
       "accuracy": 55,
-      "muzzle": 0
+      "muzzle": 0,
+      "sound": "mg"
     },
     {
       "id": "mg_bunker",
@@ -65,7 +67,8 @@
       "cooldown": 4,
       "projectile": "instant",
       "accuracy": 60,
-      "muzzle": 0
+      "muzzle": 0,
+      "sound": "hmg"
     },
     {
       "id": "cannon_at",
@@ -77,7 +80,8 @@
       "projectile": "shell",
       "speed": 230,
       "splash": 0.2,
-      "muzzle": 2
+      "muzzle": 2,
+      "sound": "cannon_medium"
     },
     {
       "id": "cannon_75",
@@ -90,7 +94,8 @@
       "speed": 190,
       "splash": 0.3,
       "muzzle": 2,
-      "vsInfantry": "cannon_75_he"
+      "vsInfantry": "cannon_75_he",
+      "sound": "cannon_medium"
     },
     {
       "id": "cannon_75_he",
@@ -102,7 +107,8 @@
       "projectile": "shell",
       "speed": 170,
       "splash": 0.9,
-      "muzzle": 2
+      "muzzle": 2,
+      "sound": "cannon_medium"
     },
     {
       "id": "cannon_76",
@@ -115,7 +121,8 @@
       "speed": 180,
       "splash": 0.3,
       "muzzle": 2,
-      "vsInfantry": "cannon_76_he"
+      "vsInfantry": "cannon_76_he",
+      "sound": "cannon_medium"
     },
     {
       "id": "cannon_76_he",
@@ -127,7 +134,8 @@
       "projectile": "shell",
       "speed": 160,
       "splash": 0.9,
-      "muzzle": 2
+      "muzzle": 2,
+      "sound": "cannon_medium"
     },
     {
       "id": "artillery_105",
@@ -139,7 +147,9 @@
       "projectile": "shell",
       "speed": 260,
       "splash": 1.4,
-      "muzzle": 2
+      "muzzle": 2,
+      "sound": "howitzer",
+      "impact": "explosion_large"
     },
     {
       "id": "mg_heavy",
@@ -150,7 +160,8 @@
       "cooldown": 4,
       "projectile": "instant",
       "accuracy": 55,
-      "muzzle": 0
+      "muzzle": 0,
+      "sound": "hmg"
     },
     {
       "id": "sniper_rifle",
@@ -161,7 +172,8 @@
       "cooldown": 45,
       "projectile": "instant",
       "accuracy": 90,
-      "muzzle": 0
+      "muzzle": 0,
+      "sound": "sniper"
     },
     {
       "id": "panzerschreck",
@@ -173,7 +185,8 @@
       "projectile": "shell",
       "speed": 110,
       "splash": 0.2,
-      "muzzle": 1
+      "muzzle": 1,
+      "sound": "at_launcher"
     },
     {
       "id": "at_rifle",
@@ -184,7 +197,8 @@
       "cooldown": 30,
       "projectile": "instant",
       "accuracy": 65,
-      "muzzle": 1
+      "muzzle": 1,
+      "sound": "at_rifle"
     },
     {
       "id": "cannon_37",
@@ -197,7 +211,8 @@
       "speed": 220,
       "splash": 0.2,
       "muzzle": 1,
-      "vsInfantry": "cannon_37_he"
+      "vsInfantry": "cannon_37_he",
+      "sound": "cannon_small"
     },
     {
       "id": "cannon_37_he",
@@ -209,7 +224,8 @@
       "projectile": "shell",
       "speed": 200,
       "splash": 0.6,
-      "muzzle": 1
+      "muzzle": 1,
+      "sound": "cannon_small"
     },
     {
       "id": "cannon_45",
@@ -222,7 +238,8 @@
       "speed": 210,
       "splash": 0.2,
       "muzzle": 1,
-      "vsInfantry": "cannon_45_he"
+      "vsInfantry": "cannon_45_he",
+      "sound": "cannon_small"
     },
     {
       "id": "cannon_45_he",
@@ -234,7 +251,8 @@
       "projectile": "shell",
       "speed": 190,
       "splash": 0.6,
-      "muzzle": 1
+      "muzzle": 1,
+      "sound": "cannon_small"
     },
     {
       "id": "cannon_88",
@@ -247,7 +265,8 @@
       "speed": 250,
       "splash": 0.3,
       "muzzle": 2,
-      "vsInfantry": "cannon_88_he"
+      "vsInfantry": "cannon_88_he",
+      "sound": "cannon_large"
     },
     {
       "id": "cannon_88_he",
@@ -259,7 +278,9 @@
       "projectile": "shell",
       "speed": 220,
       "splash": 1.1,
-      "muzzle": 2
+      "muzzle": 2,
+      "sound": "cannon_large",
+      "impact": "explosion_medium"
     },
     {
       "id": "cannon_122",
@@ -272,7 +293,8 @@
       "speed": 210,
       "splash": 0.4,
       "muzzle": 2,
-      "vsInfantry": "cannon_122_he"
+      "vsInfantry": "cannon_122_he",
+      "sound": "cannon_large"
     },
     {
       "id": "cannon_122_he",
@@ -284,7 +306,9 @@
       "projectile": "shell",
       "speed": 190,
       "splash": 1.3,
-      "muzzle": 2
+      "muzzle": 2,
+      "sound": "cannon_large",
+      "impact": "explosion_large"
     },
     {
       "id": "cannon_75l70",
@@ -297,7 +321,8 @@
       "speed": 260,
       "splash": 0.25,
       "muzzle": 2,
-      "vsInfantry": "cannon_75_he"
+      "vsInfantry": "cannon_75_he",
+      "sound": "cannon_large"
     },
     {
       "id": "cannon_85",
@@ -310,7 +335,8 @@
       "speed": 240,
       "splash": 0.3,
       "muzzle": 2,
-      "vsInfantry": "cannon_76_he"
+      "vsInfantry": "cannon_76_he",
+      "sound": "cannon_large"
     },
     {
       "id": "howitzer_105",
@@ -322,7 +348,9 @@
       "projectile": "shell",
       "speed": 120,
       "splash": 1.3,
-      "muzzle": 2
+      "muzzle": 2,
+      "sound": "howitzer",
+      "impact": "explosion_large"
     },
     {
       "id": "rocket_salvo",
@@ -336,7 +364,9 @@
       "splash": 1.0,
       "muzzle": 2,
       "burst": 8,
-      "burstSpread": 2.0
+      "burstSpread": 2.0,
+      "sound": "rocket",
+      "impact": "explosion_medium"
     },
     {
       "id": "mg_nest",
@@ -347,7 +377,8 @@
       "cooldown": 4,
       "projectile": "instant",
       "accuracy": 55,
-      "muzzle": 0
+      "muzzle": 0,
+      "sound": "hmg"
     },
     {
       "id": "howitzer_150",
@@ -359,7 +390,9 @@
       "projectile": "shell",
       "speed": 120,
       "splash": 1.5,
-      "muzzle": 2
+      "muzzle": 2,
+      "sound": "howitzer",
+      "impact": "explosion_large"
     },
     {
       "id": "howitzer_122",
@@ -371,7 +404,9 @@
       "projectile": "shell",
       "speed": 125,
       "splash": 1.4,
-      "muzzle": 2
+      "muzzle": 2,
+      "sound": "howitzer",
+      "impact": "explosion_large"
     },
     {
       "id": "rifle_smle",
@@ -382,7 +417,8 @@
       "cooldown": 19,
       "projectile": "instant",
       "accuracy": 70,
-      "muzzle": 0
+      "muzzle": 0,
+      "sound": "rifle"
     },
     {
       "id": "bren",
@@ -393,7 +429,8 @@
       "cooldown": 5,
       "projectile": "instant",
       "accuracy": 65,
-      "muzzle": 0
+      "muzzle": 0,
+      "sound": "lmg"
     },
     {
       "id": "piat",
@@ -405,7 +442,8 @@
       "projectile": "shell",
       "speed": 100,
       "splash": 0.3,
-      "muzzle": 1
+      "muzzle": 1,
+      "sound": "at_launcher"
     },
     {
       "id": "cannon_6pdr",
@@ -418,7 +456,8 @@
       "speed": 230,
       "splash": 0.2,
       "muzzle": 1,
-      "vsInfantry": "cannon_6pdr_he"
+      "vsInfantry": "cannon_6pdr_he",
+      "sound": "cannon_small"
     },
     {
       "id": "cannon_6pdr_he",
@@ -430,7 +469,8 @@
       "projectile": "shell",
       "speed": 200,
       "splash": 0.6,
-      "muzzle": 1
+      "muzzle": 1,
+      "sound": "cannon_small"
     },
     {
       "id": "cannon_75qf",
@@ -443,7 +483,8 @@
       "speed": 180,
       "splash": 0.3,
       "muzzle": 2,
-      "vsInfantry": "cannon_75qf_he"
+      "vsInfantry": "cannon_75qf_he",
+      "sound": "cannon_medium"
     },
     {
       "id": "cannon_75qf_he",
@@ -455,7 +496,8 @@
       "projectile": "shell",
       "speed": 170,
       "splash": 1.0,
-      "muzzle": 2
+      "muzzle": 2,
+      "sound": "cannon_medium"
     },
     {
       "id": "cannon_17pdr",
@@ -468,7 +510,8 @@
       "speed": 270,
       "splash": 0.25,
       "muzzle": 2,
-      "vsInfantry": "cannon_17pdr_he"
+      "vsInfantry": "cannon_17pdr_he",
+      "sound": "cannon_large"
     },
     {
       "id": "cannon_17pdr_he",
@@ -480,7 +523,8 @@
       "projectile": "shell",
       "speed": 220,
       "splash": 0.8,
-      "muzzle": 2
+      "muzzle": 2,
+      "sound": "cannon_large"
     },
     {
       "id": "howitzer_25pdr",
@@ -492,7 +536,9 @@
       "projectile": "shell",
       "speed": 130,
       "splash": 1.1,
-      "muzzle": 2
+      "muzzle": 2,
+      "sound": "howitzer",
+      "impact": "explosion_medium"
     },
     {
       "id": "gun_55in",
@@ -504,7 +550,9 @@
       "projectile": "shell",
       "speed": 130,
       "splash": 1.4,
-      "muzzle": 2
+      "muzzle": 2,
+      "sound": "howitzer",
+      "impact": "explosion_large"
     }
   ]
 }

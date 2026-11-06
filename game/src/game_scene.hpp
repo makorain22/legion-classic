@@ -29,6 +29,7 @@ namespace legion {
 
 class Editor;
 class Menus;
+class GameAudio;
 class Encyclopedia;
 class RulesEditor;
 class SpriteStudio;
@@ -82,6 +83,8 @@ struct SceneOptions {
   float speed = 1.0f;           // starting game speed (testing)
   int layout = -1;              // map layout for generated maps (-1: from the seed)
   int sides = 2;                // --ai-battle: 2 (1v1) or 4 (2v2)
+  bool noSound = false;         // --no-sound
+  bool forceSound = false;      // --sound: sound even with --offscreen (testing)
   std::string factions;         // --ai-battle: "ger,gbr,..." per side (default Germany v Russia)
   int monkey = 0;
   std::string showcase;         // record a video of an AI battle to this .mp4, camera following the fighting
@@ -138,6 +141,7 @@ class GameScene final : public slave::Scene {
     return p >= 0 && p < slave::MAX_PLAYERS ? players_[static_cast<size_t>(p)].name : std::string("Civilians");
   }
   Settings& settings() { return settings_; }
+  GameAudio* audio() { return audio_.get(); }
   void applySettings();  // after the settings page changes something
   void saveSettings();
   // Neutral houses on the generator's village and town plots.
@@ -338,6 +342,10 @@ class GameScene final : public slave::Scene {
   std::unique_ptr<Editor> editor_;
   std::unique_ptr<Sidebar> sidebar_;
   std::unique_ptr<Menus> menus_;
+  std::unique_ptr<GameAudio> audio_;
+  float audioBedsTimer_ = 0;
+  void updateAudio(float dt);
+  void orderSound(bool attack);
   std::unique_ptr<Encyclopedia> encyclopedia_;
   friend class Sidebar;
   friend class Menus;

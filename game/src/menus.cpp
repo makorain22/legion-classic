@@ -2,6 +2,7 @@
 #include "ui_style.hpp"
 #include "rules_editor.hpp"
 #include "sprite_studio.hpp"
+#include "game_audio.hpp"
 
 #include <imgui.h>
 
@@ -34,6 +35,7 @@ bool menuButton(const char* label, float width, bool enabled = true) {
   ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.60f, 0.48f, 0.22f, 1));
   ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.06f, 0.5f));
   const bool pressed = ImGui::Button(label, ImVec2(width, 34));
+  if (pressed) ui::clickSound(false);
   ImGui::PopStyleVar();
   ImGui::PopStyleColor(3);
   ImGui::EndDisabled();
@@ -634,6 +636,29 @@ void Menus::drawSettings() {
       changed |= ImGui::Checkbox("Chips for enemy forces detected in the fog", &st.showChips);
       changed |= ImGui::Checkbox("Atmosphere: period colour grading and a vignette", &st.atmosphere);
       changed |= ImGui::Checkbox("Use the Blitzkrieg art pack when installed (restart to apply)", &st.artPack);
+      ImGui::EndTabItem();
+    }
+    if (ImGui::BeginTabItem("Sound")) {
+      auto slider = [&](const char* label, float& v, const char* help) {
+        int pct = static_cast<int>(v * 100.0f + 0.5f);
+        ImGui::SetNextItemWidth(260);
+        if (ImGui::SliderInt(label, &pct, 0, 100, "%d%%")) {
+          v = static_cast<float>(pct) / 100.0f;
+          changed = true;
+        }
+        if (help) ImGui::TextDisabled("%s", help);
+      };
+      slider("Master", st.volMaster, nullptr);
+      ImGui::Separator();
+      slider("Battle", st.volEffects, "Guns, explosions, engines, construction.");
+      slider("Orders", st.volVoices, "The radio and whistles when you give an order.");
+      slider("Music", st.volMusic, "Quiet pieces while all is calm; the battle music when fighting flares up near you.");
+      slider("Ambience", st.volAmbience, "Wind, birds and weather, and the far-off front when the fighting is away from your view.");
+      slider("Interface", st.volInterface, "Buttons, \"construction complete\" and messages.");
+      ImGui::Separator();
+      ImGui::TextDisabled("Sound fades with distance from the centre of your view: scroll toward a fight to hear it.");
+      if (GameAudio* a = scene_.audio(); a && !a->nowPlaying().empty()) ImGui::TextDisabled("Now playing: %s", a->nowPlaying().c_str());
+      if (GameAudio* a = scene_.audio(); !a || !a->deviceOpen()) ImGui::TextDisabled("No sound device was found when the game started.");
       ImGui::EndTabItem();
     }
     if (ImGui::BeginTabItem("Controls")) {

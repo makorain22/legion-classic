@@ -5,6 +5,8 @@
 
 #include <imgui.h>
 
+#include <functional>
+
 namespace legion::ui {
 
 // Palette. Set by setFaction: olive steel for the menus, field grey for the
@@ -47,6 +49,10 @@ enum class Picto { Building, Defence, Infantry, Vehicle, Book, Sell, Deploy, Sta
 void pictogram(ImDrawList* dl, Picto p, ImVec2 centre, float size, ImU32 col);
 // A tab with a pictogram above a small label.
 bool iconTab(const char* id, Picto p, const char* label, ImVec2 size, bool lit, bool flash);
+
+// Called when a plate button or tab is clicked (the interface's click sounds).
+void setClickSound(std::function<void(bool tab)> fn);
+void clickSound(bool tab);
 
 // The theme for ordinary Dear ImGui widgets drawn on the plates.
 void pushTheme();

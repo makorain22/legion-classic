@@ -127,6 +127,7 @@ if(LEGION_BUILD_GAME)
     engine/src/platform/*.cpp
     engine/src/render/*.cpp
     engine/src/assets/*.cpp
+    engine/src/audio/*.cpp
     engine/src/ui/*.cpp)
   add_library(slave STATIC ${SLAVE_GFX_SOURCES})
   target_include_directories(slave PUBLIC engine/include)
@@ -174,9 +175,12 @@ if(LEGION_BUILD_TESTS)
   file(GLOB_RECURSE TEST_SOURCES CONFIGURE_DEPENDS tests/*.cpp)
   # Editor logic without graphics (undo history) is tested too.
   # So is the Blitzkrieg file reader (it needs no graphics either).
-  add_executable(slave_tests ${TEST_SOURCES} editor/src/history.cpp engine/src/assets/blitzkrieg.cpp)
+  # And the sound mixer and decoders (no sound card needed).
+  add_executable(slave_tests ${TEST_SOURCES} editor/src/history.cpp engine/src/assets/blitzkrieg.cpp
+                 engine/src/audio/mixer.cpp engine/src/audio/decode.cpp)
   target_include_directories(slave_tests PRIVATE editor/src)
-  target_link_libraries(slave_tests PRIVATE slave_core doctest::doctest)
+  target_link_libraries(slave_tests PRIVATE slave_core doctest::doctest stb)
+  target_compile_definitions(slave_tests PRIVATE LEGION_CONTENT_DIR="${CMAKE_SOURCE_DIR}/content/")
   # Some tests play whole games with the real rules.
   target_compile_definitions(slave_tests PRIVATE LEGION_RULES_DIR="${CMAKE_SOURCE_DIR}/content/rules/")
   legion_warnings(slave_tests)

@@ -117,6 +117,8 @@ const std::vector<Field>& fieldsFor(RulesEditor::Kind k) {
       {"burst", F::Int, "Burst", "Shells per shot (rocket salvoes).", 1, 1, 48},
       {"burstSpread", F::Float, "Burst spread", "Extra scatter per shell, in tiles.", 0, 0, 10},
       {"muzzle", F::Int, "Muzzle flash", "Size 0..2 (looks only).", 1, 0, 2},
+      {"sound", F::Text, "Firing sound", "A sound from content/audio/audio.json: rifle, sniper, mg, lmg, hmg, at_launcher, at_rifle, cannon_small, cannon_medium, cannon_large, howitzer, rocket. Empty: chosen by the kind of weapon.", 0, 0, 0, {}, "Sound"},
+      {"impact", F::Text, "Impact sound", "Where it lands: explosion_small, explosion_medium, explosion_large, armour_hit... Empty: chosen by the warhead."},
   };
   static const std::vector<Field> warheads = {
       {"infantry", F::Int, "vs infantry", "% damage.", 100, 0, 1000, {}, "Damage by armour"},

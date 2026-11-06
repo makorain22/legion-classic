@@ -43,7 +43,9 @@ struct Settings {
   bool showEnemyCards = true;  // cards over the other sides' units too (when seen)
   bool showChips = true;       // chips for enemies detected in the fog
   bool atmosphere = true;      // colour grading and a vignette over the battlefield
-  bool artPack = true;         // use content/art/blitzkrieg when present (takes effect on restart)
+  bool artPack = true;
+  // Sound: 0..1 each.
+  float volMaster = 0.85f, volEffects = 1.0f, volVoices = 0.9f, volMusic = 0.6f, volAmbience = 0.8f, volInterface = 0.8f;         // use content/art/blitzkrieg when present (takes effect on restart)
   std::vector<std::string> mods;  // enabled mods (folder names), in load order
   std::string toolMod;            // the mod the rules editor and sprite studio save into
   // Two bindings per action.

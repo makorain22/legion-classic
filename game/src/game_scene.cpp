@@ -1,6 +1,8 @@
 #include "game_scene.hpp"
 
 #include "encyclopedia.hpp"
+#include "game_audio.hpp"
+#include "ui_style.hpp"
 
 #include <glad/gl.h>
 #include <imgui.h>
@@ -92,6 +94,13 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
   renderer_.setWhiteFrame(art_.white);
 
   if (!pickUnitArt(error)) return false;
+  // Sound: base content then each mod's audio folder (a mod's file replaces the game's).
+  audio_ = std::make_unique<GameAudio>();
+  if (!opt_.noSound && (!app_.offscreen() || opt_.forceSound)) {
+    std::string aerr;
+    if (!audio_->init(content_.all("audio/"), aerr)) SLV_WARN("Sound off: %s", aerr.c_str());
+    ui::setClickSound([this](bool tab) { audio_->ui(tab ? "ui_tab" : "ui_click"); });
+  }
   fx_.init(&art_, &unitArt_, &types_, &weapons_,
            [this](float lx, float ly) { return groundToScreenWorld(lx, ly); });
   if (!app_.offscreen()) {
@@ -234,6 +243,10 @@ void GameScene::replaceWorld(MapFile&& file, bool keepCamera) {
   }
   sim_ = std::make_unique<Simulation>(map_, types_, weapons_, opt_.seed);
   terrain_.setMap(map_);
+  if (audio_) {
+    audio_->setBiome(map_.biome);
+    if (mode_ != Mode::Menu) audio_->newBattle();
+  }
   players_ = defaultPlayers();
   for (size_t i = 0; i < file.players.size() && i < players_.size(); ++i) players_[i] = file.players[i];
   applyPlayers();
@@ -884,6 +897,7 @@ void GameScene::orderMove(Vec2i target, CommandType type, int formation) {
   c.formation = formation >= 0 ? static_cast<Formation>(formation) : sidebar_ ? sidebar_->formation() : Formation::Box;
   c.forced = (SDL_GetModState() & SDL_KMOD_ALT) != 0;  // Alt: forced march, don't stop to fight
   queueOrder(std::move(c));
+  orderSound(type == CommandType::AttackMove);
   markers_.push_back({groundToScreenWorld(static_cast<float>(target.x), static_cast<float>(target.y)), 0,
                       type == CommandType::AttackMove ? kAttackRed : kSelectGreen});
 }
@@ -897,6 +911,7 @@ void GameScene::orderAttack(Entity target) {
   c.targetUnit = target;
   c.units = selection_;
   queueOrder(std::move(c));
+  orderSound(true);
   const CPosition& p = sim_->registry().get<CPosition>(target);
   markers_.push_back({groundToScreenWorld(static_cast<float>(p.x), static_cast<float>(p.y)), 0, kAttackRed});
 }
@@ -1290,9 +1305,102 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
 // ---------------------------------------------------------------------------
 void GameScene::editorOpen(bool on) { editor_->setActive(on); }
 
+// The player's order heard: a radio click, a whistle for an infantry attack, an engine.
+void GameScene::orderSound(bool attack) {
+  if (!audio_ || mode_ != Mode::Game) return;
+  Registry& reg = sim_->registry();
+  int inf = 0, veh = 0;
+  float x = 0, y = 0;
+  for (Entity e : selection_) {
+    if (!reg.alive(e)) continue;
+    const UnitTypeDef& d = types_.get(reg.get<CUnit>(e).type);
+    if (d.isStructure()) continue;
+    (d.infantry() ? inf : veh)++;
+    const CPosition& p = reg.get<CPosition>(e);
+    x += static_cast<float>(p.x);
+    y += static_cast<float>(p.y);
+  }
+  const int n = inf + veh;
+  if (n == 0) return;
+  audio_->onOrder(attack, inf, veh, x / n / LEPTONS_PER_TILE, y / n / LEPTONS_PER_TILE);
+}
+
+// Where the ear is, and what is moving and burning around it.
+void GameScene::updateAudio(float dt) {
+  if (!audio_ || !sim_) return;
+  slave::audio::Listener ear;
+  const Vec2f g = iso::screenToWorld(cam_.center());
+  ear.x = g.x / LEPTONS_PER_TILE;
+  ear.y = g.y / LEPTONS_PER_TILE;
+  ear.zoom = cam_.zoom();
+  ear.viewTiles = static_cast<float>(cam_.viewportW()) / (2.0f * cam_.zoom()) / 45.25f;
+  audioBedsTimer_ -= dt;
+  static AudioBeds beds;
+  if (audioBedsTimer_ <= 0) {
+    audioBedsTimer_ = 0.2f;
+    beds = AudioBeds{};
+    Registry& reg = sim_->registry();
+    const float r2 = (ear.viewTiles * 1.3f) * (ear.viewTiles * 1.3f);
+    auto& movers = reg.pool<CMover>();
+    for (uint32_t e : movers.entities()) {
+      if (!movers.get(e).active || !reg.pool<CUnit>().has(e)) continue;
+      const CPosition& p = reg.pool<CPosition>().get(e);
+      const float x = static_cast<float>(p.x) / LEPTONS_PER_TILE, y = static_cast<float>(p.y) / LEPTONS_PER_TILE;
+      if ((x - ear.x) * (x - ear.x) + (y - ear.y) * (y - ear.y) > r2) continue;
+      const UnitTypeDef& d = types_.get(reg.pool<CUnit>().get(e).type);
+      if (d.infantry()) {
+        ++beds.marching;
+        beds.marchX += x;
+        beds.marchY += y;
+      } else if (d.locomotor == Locomotor::Wheeled) {
+        ++beds.wheeled;
+        beds.wheeledX += x;
+        beds.wheeledY += y;
+      } else {
+        ++beds.tracked;
+        beds.trackedX += x;
+        beds.trackedY += y;
+      }
+    }
+    auto& structs = reg.pool<CStructure>();
+    for (uint32_t e : structs.entities()) {
+      const CUnit& u = reg.pool<CUnit>().get(e);
+      const UnitTypeDef& d = types_.get(u.type);
+      if (d.category == UnitCategory::Fortification || u.health * 10 > d.maxHealth * 4) continue;
+      const CPosition& p = reg.pool<CPosition>().get(e);
+      const float x = static_cast<float>(p.x) / LEPTONS_PER_TILE, y = static_cast<float>(p.y) / LEPTONS_PER_TILE;
+      if ((x - ear.x) * (x - ear.x) + (y - ear.y) * (y - ear.y) > r2) continue;
+      ++beds.burning;
+      beds.fireX += x;
+      beds.fireY += y;
+    }
+    auto centre = [](int n, float& x, float& y) {
+      if (n > 0) {
+        x /= static_cast<float>(n);
+        y /= static_cast<float>(n);
+      }
+    };
+    centre(beds.marching, beds.marchX, beds.marchY);
+    centre(beds.wheeled, beds.wheeledX, beds.wheeledY);
+    centre(beds.tracked, beds.trackedX, beds.trackedY);
+    centre(beds.burning, beds.fireX, beds.fireY);
+  }
+  audio_->update(dt, ear, mode_ == Mode::Menu, menus_ && menus_->inGameMenuOpen(), paused_, speed_, beds);
+}
+
 void GameScene::applySettings() {
   app_.setFpsLimit(settings_.fpsLimit);
   app_.setVsync(settings_.vsync);
+  if (audio_) {
+    AudioVolumes v;
+    v.master = settings_.volMaster;
+    v.sfx = settings_.volEffects;
+    v.voice = settings_.volVoices;
+    v.music = settings_.volMusic;
+    v.ambience = settings_.volAmbience;
+    v.ui = settings_.volInterface;
+    audio_->setVolumes(v);
+  }
 }
 
 void GameScene::saveSettings() { settings_.save(app_.userDir() + "settings.json"); }
@@ -1334,6 +1442,7 @@ void GameScene::onTick() {
   for (const SimEvent& ev : events) {
     const bool seen = watching(ev.at.x, ev.at.y) || (ev.type == EventType::Fire && watching(ev.from.x, ev.from.y));
     fx_.onEvent(ev, seen, teamColors_);
+    if (audio_) audio_->onEvent(ev, *sim_, player_, mode_ == Mode::Game);
     announce(ev);
     if (!opt_.showcase.empty() && (ev.type == EventType::Impact || ev.type == EventType::UnitDied) && seen)
       hot_.push_back({ev.at, showTime_});
@@ -1381,6 +1490,7 @@ void GameScene::announce(const SimEvent& ev) {
       banner_ = sim_->allied(ev.owner, player_) ? "VICTORY" : players_[ev.owner].name + " wins";
       if (!sim_->allied(ev.owner, player_) && players_[player_].human) banner_ = "DEFEAT";
       bannerTime_ = 8;
+      if (audio_ && mode_ == Mode::Game) audio_->endOfBattle(sim_->allied(ev.owner, player_));
       break;
     case EventType::PlayerDefeated: {
       if (mode_ == Mode::Menu) break;
@@ -1392,6 +1502,7 @@ void GameScene::announce(const SimEvent& ev) {
         if (players_[p].active && !sim_->allied(p, player_) && !sim_->playerState(p).defeated) enemiesLeft = true;
       if (ev.owner == player_) banner_ = "DEFEAT";
       else if (!enemiesLeft && !sim_->playerState(player_).defeated) banner_ = "VICTORY";
+      if (audio_ && mode_ == Mode::Game && (banner_ == "VICTORY" || banner_ == "DEFEAT")) audio_->endOfBattle(banner_ == "VICTORY");
       break;
     }
     default:
@@ -1449,6 +1560,7 @@ void GameScene::onUpdate(float dt, float alpha) {
   if (pan.x != 0 || pan.y != 0) cam_.pan(pan * (kScrollSpeed * settings_.scrollSpeed * dt));
 
   ++frame_;
+  updateAudio(dt);
   if (mode_ == Mode::Menu) {
     // The menu's battle: drift slowly over the field; start another when it's decided.
     attractTime_ += dt;

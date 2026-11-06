@@ -1,0 +1,563 @@
+{
+ "_comment": "Every sound and piece of music the game plays. sounds: files (one picked at random each time), bus (sfx, voice, music, ambience, ui), volume 0..1, range (tiles beyond the area around the centre of the screen at which it has faded to half: big guns carry further), priority (who gets a voice when all are busy), reverb (send to the hall, 0..1; distance adds more), pitch (random variation, +/- fraction), perSecond and limit (at most this many starts a second and this many playing at once), loop. Weapons name their firing and impact sounds in rules/weapons.json. music: playlists by mood; volume per track. ambience: a loop per biome under everything, and 'battle', the far-off front heard when the fighting is away from the camera. A mod can replace any file by putting one at the same path in its own audio folder.",
+ "sounds": {
+  "rifle": {
+   "files": [
+    "sfx/rifle_0.ogg",
+    "sfx/rifle_1.ogg",
+    "sfx/rifle_2.ogg",
+    "sfx/rifle_3.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.42,
+   "range": 10,
+   "priority": 1,
+   "reverb": 0.12,
+   "pitch": 0.05,
+   "perSecond": 14,
+   "limit": 6
+  },
+  "sniper": {
+   "files": [
+    "sfx/sniper_0.ogg",
+    "sfx/sniper_1.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.6,
+   "range": 16,
+   "priority": 3,
+   "reverb": 0.2,
+   "pitch": 0.05,
+   "perSecond": 8,
+   "limit": 2
+  },
+  "mg": {
+   "files": [
+    "sfx/mg_0.ogg",
+    "sfx/mg_1.ogg",
+    "sfx/mg_2.ogg",
+    "sfx/mg_3.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.5,
+   "range": 12,
+   "priority": 2,
+   "reverb": 0.15,
+   "pitch": 0.05,
+   "perSecond": 8,
+   "limit": 4
+  },
+  "lmg": {
+   "files": [
+    "sfx/lmg_0.ogg",
+    "sfx/lmg_1.ogg",
+    "sfx/lmg_2.ogg",
+    "sfx/lmg_3.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.48,
+   "range": 12,
+   "priority": 2,
+   "reverb": 0.15,
+   "pitch": 0.05,
+   "perSecond": 8,
+   "limit": 4
+  },
+  "hmg": {
+   "files": [
+    "sfx/hmg_0.ogg",
+    "sfx/hmg_1.ogg",
+    "sfx/hmg_2.ogg",
+    "sfx/hmg_3.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.55,
+   "range": 13,
+   "priority": 2,
+   "reverb": 0.15,
+   "pitch": 0.05,
+   "perSecond": 8,
+   "limit": 4
+  },
+  "at_launcher": {
+   "files": [
+    "sfx/at_launcher_0.ogg",
+    "sfx/at_launcher_1.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.6,
+   "range": 14,
+   "priority": 4,
+   "reverb": 0.15,
+   "pitch": 0.05,
+   "perSecond": 8,
+   "limit": 3
+  },
+  "at_rifle": {
+   "files": [
+    "sfx/at_rifle_0.ogg",
+    "sfx/at_rifle_1.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.55,
+   "range": 14,
+   "priority": 3,
+   "reverb": 0.15,
+   "pitch": 0.05,
+   "perSecond": 8,
+   "limit": 3
+  },
+  "cannon_small": {
+   "files": [
+    "sfx/cannon_small_0.ogg",
+    "sfx/cannon_small_1.ogg",
+    "sfx/cannon_small_2.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.62,
+   "range": 18,
+   "priority": 4,
+   "reverb": 0.18,
+   "pitch": 0.05,
+   "perSecond": 8,
+   "limit": 4
+  },
+  "cannon_medium": {
+   "files": [
+    "sfx/cannon_medium_0.ogg",
+    "sfx/cannon_medium_1.ogg",
+    "sfx/cannon_medium_2.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.74,
+   "range": 24,
+   "priority": 5,
+   "reverb": 0.2,
+   "pitch": 0.05,
+   "perSecond": 8,
+   "limit": 4
+  },
+  "cannon_large": {
+   "files": [
+    "sfx/cannon_large_0.ogg",
+    "sfx/cannon_large_1.ogg",
+    "sfx/cannon_large_2.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.85,
+   "range": 30,
+   "priority": 6,
+   "reverb": 0.22,
+   "pitch": 0.05,
+   "perSecond": 8,
+   "limit": 4
+  },
+  "howitzer": {
+   "files": [
+    "sfx/howitzer_0.ogg",
+    "sfx/howitzer_1.ogg",
+    "sfx/howitzer_2.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.9,
+   "range": 40,
+   "priority": 7,
+   "reverb": 0.25,
+   "pitch": 0.04,
+   "perSecond": 8,
+   "limit": 4
+  },
+  "rocket": {
+   "files": [
+    "sfx/rocket_0.ogg",
+    "sfx/rocket_1.ogg",
+    "sfx/rocket_2.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.55,
+   "range": 26,
+   "priority": 5,
+   "reverb": 0.18,
+   "pitch": 0.05,
+   "perSecond": 10,
+   "limit": 6
+  },
+  "explosion_small": {
+   "files": [
+    "sfx/explosion_small_0.ogg",
+    "sfx/explosion_small_1.ogg",
+    "sfx/explosion_small_2.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.6,
+   "range": 18,
+   "priority": 4,
+   "reverb": 0.18,
+   "pitch": 0.05,
+   "perSecond": 10,
+   "limit": 5
+  },
+  "explosion_medium": {
+   "files": [
+    "sfx/explosion_medium_0.ogg",
+    "sfx/explosion_medium_1.ogg",
+    "sfx/explosion_medium_2.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.8,
+   "range": 26,
+   "priority": 6,
+   "reverb": 0.22,
+   "pitch": 0.05,
+   "perSecond": 8,
+   "limit": 5
+  },
+  "explosion_large": {
+   "files": [
+    "sfx/explosion_large_0.ogg",
+    "sfx/explosion_large_1.ogg",
+    "sfx/explosion_large_2.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.95,
+   "range": 36,
+   "priority": 8,
+   "reverb": 0.26,
+   "pitch": 0.04,
+   "perSecond": 6,
+   "limit": 4
+  },
+  "armour_hit": {
+   "files": [
+    "sfx/armour_hit_0.ogg",
+    "sfx/armour_hit_1.ogg",
+    "sfx/armour_hit_2.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.55,
+   "range": 14,
+   "priority": 4,
+   "reverb": 0.12,
+   "pitch": 0.05,
+   "perSecond": 8,
+   "limit": 4
+  },
+  "ricochet": {
+   "files": [
+    "sfx/ricochet_0.ogg",
+    "sfx/ricochet_1.ogg",
+    "sfx/ricochet_2.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.28,
+   "range": 8,
+   "priority": 0,
+   "reverb": 0.1,
+   "pitch": 0.1,
+   "perSecond": 4,
+   "limit": 2
+  },
+  "vehicle_destroyed": {
+   "files": [
+    "sfx/vehicle_destroyed_0.ogg",
+    "sfx/vehicle_destroyed_1.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 1.0,
+   "range": 36,
+   "priority": 9,
+   "reverb": 0.25,
+   "pitch": 0.05,
+   "perSecond": 8,
+   "limit": 3
+  },
+  "collapse": {
+   "files": [
+    "sfx/collapse_0.ogg",
+    "sfx/collapse_1.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.9,
+   "range": 30,
+   "priority": 8,
+   "reverb": 0.25,
+   "pitch": 0.05,
+   "perSecond": 8,
+   "limit": 2
+  },
+  "construction": {
+   "files": [
+    "sfx/construction_0.ogg",
+    "sfx/construction_1.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.5,
+   "range": 10,
+   "priority": 3,
+   "reverb": 0.1,
+   "pitch": 0.05,
+   "perSecond": 8,
+   "limit": 2
+  },
+  "whistle": {
+   "files": [
+    "sfx/whistle_0.ogg",
+    "sfx/whistle_1.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.45,
+   "range": 14,
+   "priority": 5,
+   "reverb": 0.15,
+   "pitch": 0.03,
+   "perSecond": 8,
+   "limit": 2
+  },
+  "engine_rev": {
+   "files": [
+    "sfx/engine_rev_0.ogg",
+    "sfx/engine_rev_1.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.45,
+   "range": 10,
+   "priority": 3,
+   "reverb": 0.08,
+   "pitch": 0.05,
+   "perSecond": 8,
+   "limit": 2
+  },
+  "radio": {
+   "files": [
+    "sfx/radio_0.ogg",
+    "sfx/radio_1.ogg",
+    "sfx/radio_2.ogg"
+   ],
+   "bus": "voice",
+   "volume": 0.4,
+   "range": 0,
+   "priority": 6,
+   "reverb": 0.0,
+   "pitch": 0.0,
+   "perSecond": 3,
+   "limit": 1
+  },
+  "tank_engine": {
+   "files": [
+    "sfx/tank_engine.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.42,
+   "range": 10,
+   "priority": 2,
+   "reverb": 0.06,
+   "pitch": 0.0,
+   "loop": true
+  },
+  "truck_engine": {
+   "files": [
+    "sfx/truck_engine.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.32,
+   "range": 10,
+   "priority": 2,
+   "reverb": 0.06,
+   "pitch": 0.0,
+   "loop": true
+  },
+  "march": {
+   "files": [
+    "sfx/march.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.32,
+   "range": 7,
+   "priority": 1,
+   "reverb": 0.04,
+   "pitch": 0.0,
+   "loop": true
+  },
+  "fire": {
+   "files": [
+    "sfx/fire.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.45,
+   "range": 8,
+   "priority": 2,
+   "reverb": 0.06,
+   "pitch": 0.0,
+   "loop": true
+  },
+  "ui_click": {
+   "files": [
+    "sfx/ui_click.ogg"
+   ],
+   "bus": "ui",
+   "volume": 0.45,
+   "range": 0,
+   "priority": 10,
+   "reverb": 0.0,
+   "pitch": 0.0,
+   "perSecond": 6,
+   "limit": 2
+  },
+  "ui_tab": {
+   "files": [
+    "sfx/ui_tab.ogg"
+   ],
+   "bus": "ui",
+   "volume": 0.35,
+   "range": 0,
+   "priority": 10,
+   "reverb": 0.0,
+   "pitch": 0.0,
+   "perSecond": 6,
+   "limit": 2
+  },
+  "ui_ready": {
+   "files": [
+    "sfx/ui_ready.ogg"
+   ],
+   "bus": "ui",
+   "volume": 0.5,
+   "range": 0,
+   "priority": 10,
+   "reverb": 0.0,
+   "pitch": 0.0,
+   "perSecond": 6,
+   "limit": 2
+  },
+  "ui_denied": {
+   "files": [
+    "sfx/ui_denied.ogg"
+   ],
+   "bus": "ui",
+   "volume": 0.45,
+   "range": 0,
+   "priority": 10,
+   "reverb": 0.0,
+   "pitch": 0.0,
+   "perSecond": 6,
+   "limit": 2
+  },
+  "ui_place": {
+   "files": [
+    "sfx/ui_place.ogg"
+   ],
+   "bus": "ui",
+   "volume": 0.55,
+   "range": 0,
+   "priority": 10,
+   "reverb": 0.0,
+   "pitch": 0.0,
+   "perSecond": 6,
+   "limit": 2
+  },
+  "ui_sell": {
+   "files": [
+    "sfx/ui_sell.ogg"
+   ],
+   "bus": "ui",
+   "volume": 0.45,
+   "range": 0,
+   "priority": 10,
+   "reverb": 0.0,
+   "pitch": 0.0,
+   "perSecond": 6,
+   "limit": 2
+  },
+  "ui_message": {
+   "files": [
+    "sfx/ui_message.ogg"
+   ],
+   "bus": "ui",
+   "volume": 0.4,
+   "range": 0,
+   "priority": 10,
+   "reverb": 0.0,
+   "pitch": 0.0,
+   "perSecond": 6,
+   "limit": 2
+  },
+  "ui_objective": {
+   "files": [
+    "sfx/ui_objective.ogg"
+   ],
+   "bus": "ui",
+   "volume": 0.55,
+   "range": 0,
+   "priority": 10,
+   "reverb": 0.0,
+   "pitch": 0.0,
+   "perSecond": 6,
+   "limit": 2
+  }
+ },
+ "music": {
+  "menu": [
+   {
+    "file": "music/legion.ogg",
+    "title": "Legion",
+    "volume": 0.9
+   }
+  ],
+  "calm": [
+   {
+    "file": "music/quiet_front.ogg",
+    "title": "Quiet Front",
+    "volume": 0.75
+   },
+   {
+    "file": "music/before_dawn.ogg",
+    "title": "Before Dawn",
+    "volume": 0.75
+   },
+   {
+    "file": "music/fields_of_ash.ogg",
+    "title": "Fields of Ash",
+    "volume": 0.75
+   }
+  ],
+  "battle": [
+   {
+    "file": "music/iron_advance.ogg",
+    "title": "Iron Advance",
+    "volume": 0.85
+   },
+   {
+    "file": "music/breakthrough.ogg",
+    "title": "Breakthrough",
+    "volume": 0.85
+   },
+   {
+    "file": "music/hold_the_line.ogg",
+    "title": "Hold the Line",
+    "volume": 0.85
+   }
+  ],
+  "victory": [
+   {
+    "file": "music/victory.ogg",
+    "title": "Victory",
+    "volume": 0.95
+   }
+  ],
+  "defeat": [
+   {
+    "file": "music/fallen.ogg",
+    "title": "Fallen",
+    "volume": 0.9
+   }
+  ]
+ },
+ "ambience": {
+  "temperate": "ambience/temperate.ogg",
+  "winter": "ambience/winter.ogg",
+  "desert": "ambience/desert.ogg",
+  "tropical": "ambience/tropical.ogg",
+  "urban": "ambience/urban.ogg",
+  "battle": "ambience/distant_battle.ogg"
+ }
+}

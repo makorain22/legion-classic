@@ -10,6 +10,15 @@
 namespace legion::ui {
 
 namespace {
+std::function<void(bool)> gClick;
+}  // namespace
+void setClickSound(std::function<void(bool tab)> fn) { gClick = std::move(fn); }
+void clickSound(bool tab) {
+  if (gClick) gClick(tab);
+}
+
+
+namespace {
 ImU32 lerpCol(ImU32 a, ImU32 b, float t) {
   auto ch = [&](int s) {
     const float x = ((a >> s) & 255) * (1 - t) + ((b >> s) & 255) * t;
@@ -56,6 +65,7 @@ bool plateButton(const char* id, const char* label, ImVec2 size, bool lit, bool 
   ImGui::PushID(id);
   const ImVec2 a = ImGui::GetCursorScreenPos();
   const bool clicked = ImGui::InvisibleButton("##plate", size) && enabled;
+  if (clicked && gClick) gClick(false);
   const bool hovered = ImGui::IsItemHovered(), held = ImGui::IsItemActive();
   const ImVec2 b(a.x + size.x, a.y + size.y);
   ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -147,6 +157,7 @@ bool iconTab(const char* id, Picto p, const char* label, ImVec2 size, bool lit, 
   ImGui::PushID(id);
   const ImVec2 a = ImGui::GetCursorScreenPos();
   const bool clicked = ImGui::InvisibleButton("##tab", size);
+  if (clicked && gClick) gClick(true);
   const bool hovered = ImGui::IsItemHovered();
   const ImVec2 b(a.x + size.x, a.y + size.y);
   ImDrawList* dl = ImGui::GetWindowDrawList();
