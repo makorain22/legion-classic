@@ -77,9 +77,10 @@ struct SpriteCatalog {
 
 // Where art comes from besides the built-in voxel models.
 struct ArtOptions {
-  // PNG files here replace generated sprites of the same name (see
-  // docs/ART_PIPELINE.md). Missing files keep the generated art.
-  std::string overrideDir;
+  // PNG files in these folders replace generated sprites of the same name
+  // (see docs/ART_PIPELINE.md); later folders (mods) win. Missing files keep
+  // the generated art.
+  std::vector<std::string> overrideDirs;
   // When set, every sprite is written here as a PNG, in the layout the
   // override folder uses, ready to be repainted.
   std::string exportDir;

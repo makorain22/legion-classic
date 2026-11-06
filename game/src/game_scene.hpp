@@ -15,6 +15,7 @@
 #include "settings.hpp"
 #include "sidebar.hpp"
 #include "slave/assets/placeholder_art.hpp"
+#include "slave/core/content.hpp"
 #include "slave/map/map.hpp"
 #include "slave/map/map_io.hpp"
 #include "slave/platform/app.hpp"
@@ -29,6 +30,8 @@ namespace legion {
 class Editor;
 class Menus;
 class Encyclopedia;
+class RulesEditor;
+class SpriteStudio;
 
 // A skirmish as set up in the menu.
 struct SkirmishSetup {
@@ -84,6 +87,8 @@ struct SceneOptions {
   int showcaseWarm = 15 * 60 * 5;  // ticks to fast-forward first
   int showcaseSeconds = 60;               // > 0: random clicks and keys from a human seat (crash hunting)
   bool flowSelfTest = false;    // checks skirmish, save, load and replay through the real game
+  bool modsSelfTest = false;    // checks the rules editor, mods and sprite studio through the real game
+  std::string tool;             // open a creation tool at start: rules[:id] | sprites[:group] | mods
   int biome = 0;
 };
 
@@ -131,7 +136,6 @@ class GameScene final : public slave::Scene {
   std::string ownerName(int p) const {
     return p >= 0 && p < slave::MAX_PLAYERS ? players_[static_cast<size_t>(p)].name : std::string("Civilians");
   }
-  const std::string& scenariosDir() const { return scenariosDir_; }
   Settings& settings() { return settings_; }
   void applySettings();  // after the settings page changes something
   void saveSettings();
@@ -170,6 +174,30 @@ class GameScene final : public slave::Scene {
   const std::string& mapsDir() const { return mapsDir_; }
   const std::string& currentMapPath() const { return currentMapPath_; }
   void setCurrentMapPath(const std::string& p) { currentMapPath_ = p; }
+
+  // --- Content, mods and creation tools (game_content.cpp) ----------------------
+  const slave::ContentLayers& content() const { return content_; }
+  const std::vector<slave::ModInfo>& installedMods() const { return mods_; }
+  void rescanMods();
+  std::string userModsDir() const { return app_.userDir() + "mods/"; }
+  // Problems found with the enabled mods at the last load (shown in the Mods page).
+  const std::string& modWarnings() const { return modWarnings_; }
+  // Switches to these mods: reloads rules and art, then back to the main menu.
+  bool setMods(const std::vector<std::string>& enabled, std::string& error);
+  // The merged rules in effect (slave::kRuleFiles order) and their fingerprint.
+  const nlohmann::json& rulesDoc(int file) const { return rules_[file]; }
+  const std::string& rulesHash() const { return rulesHash_; }
+  // Puts new rules into the running battle (rules editor). `notes` lists
+  // what could only be kept for the next battle.
+  bool applyRules(const nlohmann::json (&docs)[slave::kRuleFileCount], std::string& notes, std::string& error);
+  // Rebuilds every sprite (after the sprite studio saved overrides).
+  bool reloadArt(std::string& error);
+  std::vector<std::string> scenarioDirs() const { return content_.all("scenarios/"); }
+  // The model art a type would be drawn with (false: no such model).
+  bool artFor(const slave::UnitTypeDef& t, slave::UnitArt& out) const;
+  RulesEditor& rulesEditor() { return *rulesEditor_; }
+  SpriteStudio& spriteStudio() { return *spriteStudio_; }
+  bool creationToolOpen() const;
 
   // --- Game flow (frontend.cpp) ------------------------------------------------
   Mode mode() const { return mode_; }
@@ -270,6 +298,7 @@ class GameScene final : public slave::Scene {
   void runLiveDemo();
   void runEditorSelfTest();
   void runFlowSelfTest();
+  void runModsSelfTest();
   uint64_t flowHash_ = 0;
   uint32_t flowTick_ = 0;
   void startAttract();
@@ -277,10 +306,23 @@ class GameScene final : public slave::Scene {
   void autosaveReplay();
   std::string metaJson(const std::string& title) const;
   bool loadFromSave(slave::SaveFile& f, bool replay, std::string& error);
+  bool rulesMatch(const nlohmann::json& meta, bool replay, std::string& error) const;
   void drawObjectives();
   int selfTestFailures_ = 0;
   std::vector<slave::Vec2i> before_;
   slave::Vec2i moveDelta_;
+
+  bool loadRules(std::string& error);
+  slave::ArtOptions artOptions() const;
+  slave::ContentLayers content_;
+  std::vector<slave::ModInfo> mods_;
+  std::string contentDir_;
+  std::string modWarnings_;
+  nlohmann::json rules_[slave::kRuleFileCount];
+  std::string rulesHash_;
+  bool rulesEditedLive_ = false;  // the battle runs on rules changed in it (saves note it)
+  std::unique_ptr<RulesEditor> rulesEditor_;
+  std::unique_ptr<SpriteStudio> spriteStudio_;
 
   slave::App& app_;
   SceneOptions opt_;
@@ -320,7 +362,6 @@ class GameScene final : public slave::Scene {
   std::string banner_;
   float bannerTime_ = 0;
   std::array<uint32_t, slave::MAX_PLAYERS> teamColors_{};
-  std::string scenariosDir_;  // built-in missions, in the content folder
   Settings settings_;
   std::array<slave::PlayerSetup, slave::MAX_PLAYERS> players_;
   std::unique_ptr<slave::MapFile> snapshot_;

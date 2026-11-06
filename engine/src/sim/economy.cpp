@@ -82,7 +82,7 @@ bool Simulation::inBuildRange(uint8_t player, int type, Vec2i o) const {
 
 bool Simulation::canProduce(uint8_t player, int type) const {
   const UnitTypeDef& d = types_.get(type);
-  if (d.builtAt.empty()) return false;
+  if (d.builtAt.empty() || d.hidden) return false;
   if (!producerFor(player, d.builtAt).valid()) return false;
   auto& units = reg_.pool<CUnit>();
   for (int need : d.prereqs) {

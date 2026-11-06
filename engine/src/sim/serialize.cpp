@@ -334,6 +334,17 @@ bool Simulation::loadState(ByteReader& r, std::string& error) {
     error = "saved state is damaged";
     return false;
   }
+  // Made with other rules (mods)? Refuse rather than read past the end of a table.
+  for (const CUnit& u : reg_.pool<CUnit>().data())
+    if (u.type >= types_.size()) {
+      error = "the game uses unit types these rules don't have (enable the mods it was made with)";
+      return false;
+    }
+  for (const CProjectile& p : reg_.pool<CProjectile>().data())
+    if (p.weapon >= weapons_.size()) {
+      error = "the game uses weapons these rules don't have (enable the mods it was made with)";
+      return false;
+    }
   events_.clear();
   spawnLog_.clear();
   dead_.clear();

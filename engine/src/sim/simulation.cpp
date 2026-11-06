@@ -23,6 +23,34 @@ int32_t Simulation::maxRange(const UnitTypeDef& def) const {
   return r;
 }
 
+void Simulation::rulesChanged() {
+  std::vector<uint32_t> units(reg_.pool<CUnit>().entities().begin(), reg_.pool<CUnit>().entities().end());
+  for (uint32_t i : units) {
+    const Entity e = reg_.handle(i);
+    if (!reg_.alive(e)) continue;
+    CUnit& u = reg_.get<CUnit>(e);
+    if (u.type >= types_.size()) continue;
+    const UnitTypeDef& def = types_.get(u.type);
+    u.health = std::min(u.health, def.maxHealth);
+    const bool armed = !def.weapons.empty();
+    if (armed && !reg_.has<CCombat>(e)) reg_.add<CCombat>(e, {});
+    else if (!armed && reg_.has<CCombat>(e)) reg_.remove<CCombat>(e);
+    if (def.turret && !reg_.has<CTurret>(e)) reg_.add<CTurret>(e, {reg_.get<CFacing>(e).angle, 0});
+    else if (!def.turret && reg_.has<CTurret>(e)) reg_.remove<CTurret>(e);
+    if (def.isStructure()) {
+      const bool makes = def.role == "barracks" || def.role == "factory";
+      if (makes && !reg_.has<CProducer>(e)) reg_.add<CProducer>(e, {});
+      else if (!makes && reg_.has<CProducer>(e)) reg_.remove<CProducer>(e);
+    } else if (def.capacity > 0 && !reg_.has<CHarvester>(e)) {
+      reg_.add<CHarvester>(e, {});
+    } else if (def.capacity == 0 && reg_.has<CHarvester>(e)) {
+      reg_.remove<CHarvester>(e);
+      if (reg_.get<COrder>(e).type == OrderType::Harvest) reg_.get<COrder>(e).type = OrderType::Idle;
+    }
+  }
+  coverDirty_ = true;
+}
+
 Entity Simulation::spawnUnit(uint16_t type, uint8_t player, Vec2i pos, Angle facing) {
   const UnitTypeDef& def = types_.get(type);
   if (def.isStructure()) {

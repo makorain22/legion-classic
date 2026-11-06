@@ -14,7 +14,8 @@ fortification lines and faction-coloured interfaces). Next:
 Milestone 8, creation tools. See
 [`docs/design/DESIGN.md`](docs/design/DESIGN.md) for the full plan,
 [`docs/PLAYING.md`](docs/PLAYING.md) for how to play and
-[`docs/ART_PIPELINE.md`](docs/ART_PIPELINE.md) for replacing art.
+[`docs/ART_PIPELINE.md`](docs/ART_PIPELINE.md) for replacing art and
+[`docs/MODDING.md`](docs/MODDING.md) for mods and the creation tools.
 
 ## Getting a playable build
 
@@ -43,8 +44,9 @@ build/bin/LegionClassic                # run the game
 | --- | --- |
 | `engine/` | Slave Engine: deterministic simulation (`sim/`, `core/`, `ecs/`, `map/`) and presentation (`render/`, `assets/`, `platform/`) |
 | `game/` | Legion Classic itself: scenes, HUD, game rules glue |
-| `editor/` | The built-in map editor (F2): tools, panels, undo history |
+| `editor/` | The built-in map editor (F2): tools, panels, undo history; the rules editor and sprite studio |
 | `content/` | All game data: unit and weapon rules, bundled scenarios, sprite overrides. Mods copy this layout |
+| `mods/` | Mods that ship with the game (an example); players' own go in their user folder |
 | `tests/` | Unit tests (doctest), including the determinism test |
 | `tools/` | Build-time scripts and tools (`make_scenarios.cpp` writes the bundled scenarios) |
 | `external/` | Checked-in generated code (OpenGL loader) |

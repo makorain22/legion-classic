@@ -73,6 +73,7 @@ struct UnitTypeDef {
   uint8_t coverAround = 0;       // % less damage for infantry right next to it (sandbags)
   bool autoTarget = true;        // enemies attack it of their own accord
   bool targetable = true;        // can be attacked at all
+  bool hidden = false;           // deleted by a rules change mid-battle: kept for what exists, never built
 
   bool isStructure() const { return footW > 0; }
   bool infantry() const { return locomotor == Locomotor::Foot && !isStructure(); }
@@ -98,5 +99,11 @@ class UnitTypeRegistry {
  private:
   std::vector<UnitTypeDef> types_;
 };
+
+// Builds both registries from the three merged rule documents (weapons.json,
+// units.json, buildings.json, in that order) and checks every link between
+// them. Errors name the file. Used by the game, the rules editor and tests.
+bool loadRuleSet(const nlohmann::json& weapons, const nlohmann::json& units, const nlohmann::json& buildings,
+                 WeaponRegistry& weaponsOut, UnitTypeRegistry& typesOut, std::string& error);
 
 }  // namespace slave

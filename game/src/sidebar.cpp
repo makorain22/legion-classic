@@ -404,7 +404,7 @@ void Sidebar::drawProduction(float width) {
   const auto& types = scene_.types();
   for (int t = 0; t < static_cast<int>(types.size()); ++t) {
     const UnitTypeDef& d = types.get(t);
-    if (d.builtAt.empty() || d.faction != faction) continue;
+    if (d.builtAt.empty() || d.hidden || d.faction != faction) continue;
     const int tab = d.category == UnitCategory::Building ? 0
                     : (d.category == UnitCategory::Defense || d.category == UnitCategory::Fortification) ? 1
                     : d.category == UnitCategory::Infantry ? 2 : 3;

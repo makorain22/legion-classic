@@ -1,0 +1,7 @@
+{
+  "name": "Example: Veteran Grenadiers",
+  "version": "1.0",
+  "author": "Legion Classic",
+  "description": "A small example of a mod. Grenadiers cost a little more, rifles shoot a little straighter, and the barracks trains Veteran Grenadiers once a watchtower stands. Look inside its rules folder to see how little a mod needs to say.",
+  "requires": []
+}

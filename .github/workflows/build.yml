@@ -40,6 +40,7 @@ jobs:
           Copy-Item build/bin/LegionClassic.exe $dst/
           Copy-Item build/bin/LegionClassic.pdb $dst/ -ErrorAction SilentlyContinue
           Copy-Item -Recurse build/bin/content $dst/content
+          Copy-Item -Recurse build/bin/mods $dst/mods
           Copy-Item README.md $dst/
           Copy-Item docs/PLAYING.md $dst/
           Copy-Item docs/ART_PIPELINE.md $dst/

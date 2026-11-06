@@ -102,7 +102,7 @@ void Encyclopedia::draw() {
       std::vector<int> list;
       for (int t = 0; t < static_cast<int>(types.size()); ++t) {
         const UnitTypeDef& d = types.get(t);
-        if (d.faction == kSideIds[side_] && static_cast<int>(d.category) == c) list.push_back(t);
+        if (!d.hidden && d.faction == kSideIds[side_] && static_cast<int>(d.category) == c) list.push_back(t);
       }
       if (list.empty()) continue;
       ui::sectionTitle(ImGui::GetWindowDrawList(), ImGui::GetCursorScreenPos(), ImGui::GetContentRegionAvail().x,

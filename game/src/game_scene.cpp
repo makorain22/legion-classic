@@ -14,6 +14,8 @@
 
 #include "editor.hpp"
 #include "menus.hpp"
+#include "rules_editor.hpp"
+#include "sprite_studio.hpp"
 #include "slave/core/log.hpp"
 #include "slave/core/rng.hpp"
 #include "slave/math/iso.hpp"
@@ -67,25 +69,20 @@ GameScene::~GameScene() {
 }
 
 bool GameScene::init(const std::string& contentDir, std::string& error) {
-  if (!weapons_.loadFile(contentDir + "rules/weapons.json", error)) return false;
-  if (!types_.loadFile(contentDir + "rules/units.json", error)) return false;
-  if (!types_.loadFile(contentDir + "rules/buildings.json", error)) return false;
-  if (!types_.resolveWeapons(weapons_, error)) return false;
-  if (!types_.resolveLinks(error)) return false;
-  scenariosDir_ = contentDir + "scenarios/";
-  // Settings first: they say whether to use the art pack.
+  contentDir_ = contentDir;
+  // Settings first: they say which mods to load and whether to use the art pack.
   const bool firstStart = !settings_.load(app_.userDir() + "settings.json");
-  ArtOptions artOpt;
-  artOpt.overrideDir = contentDir + "art";
-  artOpt.exportDir = opt_.exportSprites;
-  {
-    std::error_code ec;
-    const std::string pack = contentDir + "art/blitzkrieg";
-    if (!opt_.noArtPack && settings_.artPack && std::filesystem::exists(pack + "/sprites.json", ec)) {
-      artOpt.packDirs.push_back(pack);
-      artPack_ = true;
-    }
+  if (!loadRules(error)) {
+    if (settings_.mods.empty()) return false;
+    // A broken mod must not keep the game from starting: start without mods and say why.
+    const std::string why = error;
+    settings_.mods.clear();
+    if (!loadRules(error)) return false;
+    modWarnings_ += "The mods were switched off: " + why + "\n";
+    SLV_WARN("Mods switched off: %s", why.c_str());
   }
+  const ArtOptions artOpt = artOptions();
+  artPack_ = !artOpt.packDirs.empty();
   if (!buildPlaceholderArt(art_, error, artOpt)) return false;
   if (!renderer_.init(error)) return false;
   if (!terrain_.init(error)) return false;
@@ -93,8 +90,6 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
   renderer_.setWhiteFrame(art_.white);
 
   if (!pickUnitArt(error)) return false;
-  trenchTypes_.assign(types_.size(), false);
-  for (size_t i = 0; i < types_.size(); ++i) trenchTypes_[i] = types_.get(static_cast<int>(i)).model == "trench";
   fx_.init(&art_, &unitArt_, &types_, &weapons_,
            [this](float lx, float ly) { return groundToScreenWorld(lx, ly); });
   if (!app_.offscreen()) {
@@ -118,6 +113,8 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
   sidebar_ = std::make_unique<Sidebar>(*this);
   menus_ = std::make_unique<Menus>(*this);
   encyclopedia_ = std::make_unique<Encyclopedia>(*this);
+  rulesEditor_ = std::make_unique<RulesEditor>(*this);
+  spriteStudio_ = std::make_unique<SpriteStudio>(*this);
 
   cam_.setViewport(app_.pixelWidth(), app_.pixelHeight());
   if (opt_.zoom >= 2.0f) cam_.zoomStep(+1, {0, 0}), cam_.zoomStep(+1, {0, 0});
@@ -163,6 +160,20 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
   if (opt_.startInEditor) editor_->setActive(true);
   if (opt_.editorTab >= 0) editor_->showTab(opt_.editorTab, opt_.editorPage);
   if (!opt_.encyclopedia.empty()) encyclopedia_->open(types_.find(opt_.encyclopedia));
+  if (!opt_.tool.empty()) {
+    const size_t colon = opt_.tool.find(':');
+    const std::string which = opt_.tool.substr(0, colon), arg = colon == std::string::npos ? "" : opt_.tool.substr(colon + 1);
+    if (which == "rules") {
+      rulesEditor_->open();
+      if (!arg.empty()) rulesEditor_->select(types_.find(arg) >= 0 && types_.get(types_.find(arg)).isStructure() ? RulesEditor::Buildings
+                                             : types_.find(arg) >= 0 ? RulesEditor::Units : RulesEditor::Weapons, arg);
+    } else if (which == "sprites") {
+      spriteStudio_->open();
+      if (!arg.empty()) spriteStudio_->select(arg);
+    } else if (which == "mods") {
+      menus_->showMods();
+    }
+  }
   SLV_INFO("Map %dx%d, %zu props, %zu units", map_.width(), map_.height(), map_.props().size(), sim_->unitCount());
   return true;
 }
@@ -193,26 +204,6 @@ void GameScene::openEncyclopedia(int type) {
   if (type < 0 && !selection_.empty() && sim_->registry().alive(selection_.front()))
     type = sim_->registry().get<CUnit>(selection_.front()).type;
   encyclopedia_->open(type);
-}
-
-// Each unit type's sprites: the art for this map's biome when there is any
-// (winter paint on snow), else the faction's, else the German model.
-bool GameScene::pickUnitArt(std::string& error) {
-  unitArt_.clear();
-  const std::string biome = std::string("~") + biomeId(map_.biome);
-  for (const UnitTypeDef& t : types_.all()) {
-    const std::string key = t.model + "@" + t.faction;
-    auto it = art_.units.find(key + biome);
-    if (it == art_.units.end()) it = art_.units.find(key);
-    if (it == art_.units.end()) it = art_.units.find(t.model + "@ger" + biome);
-    if (it == art_.units.end()) it = art_.units.find(t.model + "@ger");
-    if (it == art_.units.end()) {
-      error = "unit '" + t.id + "' uses unknown model '" + t.model + "'";
-      return false;
-    }
-    unitArt_.push_back(it->second);
-  }
-  return true;
 }
 
 void GameScene::replaceWorld(MapFile&& file, bool keepCamera) {
@@ -1464,6 +1455,7 @@ void GameScene::onUpdate(float dt, float alpha) {
   if (opt_.battleDemo) runBattleDemo();
   if (opt_.orgDemo) runOrgDemo();
   if (opt_.flowSelfTest) runFlowSelfTest();
+  if (opt_.modsSelfTest) runModsSelfTest();
   editor_->update(dt);
   sidebar_->update(dt);
   drawStructureEffects(dt * timeScale());
@@ -1886,6 +1878,8 @@ void GameScene::onImGui() {
   if (mode_ == Mode::Menu) {
     menus_->draw();
     encyclopedia_->draw();
+    rulesEditor_->draw();
+    spriteStudio_->draw();
     return;
   }
   showCards_ = settings_.showCards;
@@ -1907,6 +1901,8 @@ void GameScene::onImGui() {
   if (mode_ == Mode::Game) editor_->imgui();
   drawObjectives();
   encyclopedia_->draw();
+  rulesEditor_->draw();
+  spriteStudio_->draw();
   menus_->draw();
   if (bannerTime_ > 0 && !banner_.empty()) {
     const ImGuiIO& io = ImGui::GetIO();
@@ -2001,7 +1997,7 @@ void GameScene::drawHud() {
   if (settings_.showInfoPanel) {
     ImGui::TextColored(ImVec4(0.92f, 0.78f, 0.36f, 1), "LEGION CLASSIC");
     ImGui::SameLine();
-    ImGui::TextDisabled("Slave Engine 1.0  |  build 0.7.8");
+    ImGui::TextDisabled("Slave Engine 1.0  |  build 0.8.0");
     ImGui::Text("Map: %s (%dx%d)", map_.name.c_str(), map_.width(), map_.height());
     ImGui::Text("Commanding:");
     ImGui::SameLine();

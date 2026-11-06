@@ -25,7 +25,7 @@ class Menus {
   void captureKey(const SDL_KeyboardEvent& e);
 
  private:
-  enum class Page { None, Main, Skirmish, Scenarios, LoadGame, Replays, InGame, SaveGame, About, Settings };
+  enum class Page { None, Main, Skirmish, Scenarios, LoadGame, Replays, InGame, SaveGame, About, Settings, Mods };
   struct FileEntry {
     std::string path, file, title, detail;
   };
@@ -39,6 +39,8 @@ class Menus {
   void drawReplayBar();
   void drawAbout();
   void drawSettings();
+  void drawMods();
+  void openMods();
   void refreshFiles(const std::string& dir, const char* ext, bool replays);
   bool backButton();
 
@@ -51,6 +53,11 @@ class Menus {
   char saveName_[96] = "";
   std::string error_;
   int capture_ = -1, captureSlot_ = 0;  // action being rebound
+  std::vector<std::string> modsDraft_;  // the Mods page's enabled list, in load order
+  std::string modSelected_;
+  char newModName_[64] = "";
+ public:
+  void showMods() { openMods(); }  // (screenshots)
 };
 
 }  // namespace legion

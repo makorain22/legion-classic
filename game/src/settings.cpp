@@ -90,6 +90,11 @@ bool Settings::load(const std::string& path) {
   artPack = j.value("artPack", artPack);
   showEnemyCards = j.value("showEnemyCards", showEnemyCards);
   atmosphere = j.value("atmosphere", atmosphere);
+  mods.clear();
+  if (j.contains("mods") && j["mods"].is_array())
+    for (const auto& m : j["mods"])
+      if (m.is_string()) mods.push_back(m.get<std::string>());
+  toolMod = j.value("toolMod", toolMod);
   if (j.contains("keys") && j["keys"].is_object()) {
     for (int a = 0; a < ACTION_COUNT; ++a) {
       const std::string name = actionLabel(static_cast<InputAction>(a));
@@ -115,6 +120,8 @@ bool Settings::save(const std::string& path) const {
   j["artPack"] = artPack;
   j["showEnemyCards"] = showEnemyCards;
   j["atmosphere"] = atmosphere;
+  j["mods"] = mods;
+  j["toolMod"] = toolMod;
   auto& ks = j["keys"] = nlohmann::json::object();
   for (int a = 0; a < ACTION_COUNT; ++a) {
     auto& arr = ks[actionLabel(static_cast<InputAction>(a))] = nlohmann::json::array();

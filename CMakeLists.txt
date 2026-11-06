@@ -160,7 +160,9 @@ if(LEGION_BUILD_GAME)
   # Ship the content folder next to the executable.
   add_custom_command(TARGET LegionClassic POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-            ${CMAKE_SOURCE_DIR}/content $<TARGET_FILE_DIR:LegionClassic>/content)
+            ${CMAKE_SOURCE_DIR}/content $<TARGET_FILE_DIR:LegionClassic>/content
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_SOURCE_DIR}/mods $<TARGET_FILE_DIR:LegionClassic>/mods)
 endif()
 
 # ---------------------------------------------------------------------------

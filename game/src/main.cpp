@@ -21,6 +21,7 @@ void usage() {
   SLV_INFO("Options: --windowed WxH | --fullscreen | --map N | --seed N | --zoom 0.5|1|2 | --spawn N\n"
            "         --offscreen --frames N --screenshot out.png --demo --fixed-dt --no-help --debug\n"
            "         --dump-atlas atlas.png --editor --open map.lmap --editor-demo --live-demo\n"
+           "         --tool rules[:unit_id]|sprites[:units/tank@ger]|mods --mods-selftest\n"
            "         --menu --ai-battle --side N --biome temperate|winter|desert|tropical|urban --gallery\n"
            "         --export-sprites DIR (write every sprite as PNG for repainting; see docs/ART_PIPELINE.md)\n"
            "         --import-blitzkrieg DATA (make the Blitzkrieg art pack from the game's Data folder)");
@@ -107,6 +108,10 @@ int main(int argc, char** argv) {
     } else if (a == "--showcase-warm") opt.showcaseWarm = std::atoi(next()) * 15;
     else if (a == "--showcase-seconds") opt.showcaseSeconds = std::atoi(next());
     else if (a == "--flow-selftest") opt.flowSelfTest = true;
+    else if (a == "--mods-selftest") {
+      opt.modsSelfTest = true;
+      opt.aiBattle = true;
+    } else if (a == "--tool") opt.tool = next();
     else if (a == "--biome") {
       slave::Biome b;
       if (slave::parseBiome(next(), b)) opt.biome = static_cast<int>(b);
@@ -125,8 +130,8 @@ int main(int argc, char** argv) {
   slave::App app;
   if (!app.init(cfg)) return 1;
   slave::log::init((app.userDir() + "legion.log").c_str());
-  slave::crash::install(app.userDir(), "0.7.8");
-  SLV_INFO("Legion Classic 0.7.8 on Slave Engine 1.0");
+  slave::crash::install(app.userDir(), "0.8.0");
+  SLV_INFO("Legion Classic 0.8.0 on Slave Engine 1.0");
 
   std::string contentDir = "content/";
   if (const char* base = SDL_GetBasePath()) contentDir = std::string(base) + "content/";

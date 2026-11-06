@@ -109,6 +109,7 @@ bool UnitTypeRegistry::loadJson(const nlohmann::json& doc, std::string& error) {
       d.coverAround = static_cast<uint8_t>(std::clamp(u.value("coverAround", 0), 0, 90));
       d.autoTarget = u.value("autoTarget", true);
       d.targetable = u.value("targetable", true);
+      d.hidden = u.value("hidden", false);
       d.category = d.isStructure() ? UnitCategory::Building
                    : d.locomotor == Locomotor::Foot ? UnitCategory::Infantry : UnitCategory::Vehicle;
       if (u.contains("category") && !parseCategory(u["category"].get<std::string>(), d.category)) {
@@ -187,6 +188,28 @@ bool UnitTypeRegistry::resolveLinks(std::string& error) {
       return false;
     }
   }
+  return true;
+}
+
+bool loadRuleSet(const nlohmann::json& weapons, const nlohmann::json& units, const nlohmann::json& buildings,
+                 WeaponRegistry& weaponsOut, UnitTypeRegistry& typesOut, std::string& error) {
+  WeaponRegistry w;
+  UnitTypeRegistry t;
+  if (!w.loadJson(weapons, error)) {
+    error = "weapons.json: " + error;
+    return false;
+  }
+  if (!t.loadJson(units, error)) {
+    error = "units.json: " + error;
+    return false;
+  }
+  if (!t.loadJson(buildings, error)) {
+    error = "buildings.json: " + error;
+    return false;
+  }
+  if (!t.resolveWeapons(w, error) || !t.resolveLinks(error)) return false;
+  weaponsOut = std::move(w);
+  typesOut = std::move(t);
   return true;
 }
 

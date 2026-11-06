@@ -1,5 +1,7 @@
 #include "menus.hpp"
 #include "ui_style.hpp"
+#include "rules_editor.hpp"
+#include "sprite_studio.hpp"
 
 #include <imgui.h>
 
@@ -91,6 +93,7 @@ void Menus::draw() {
   if (scene_.mode() == Mode::Menu && page_ == Page::None) page_ = Page::Main;
   if (scene_.mode() == Mode::Menu) ui::setFaction("");  // the menus wear olive
   if (scene_.mode() == Mode::Replay) drawReplayBar();
+  if (scene_.creationToolOpen() && scene_.mode() == Mode::Menu) return;  // the tool has the screen
   switch (page_) {
     case Page::Main: drawMain(); break;
     case Page::Skirmish: drawSkirmish(); break;
@@ -101,6 +104,7 @@ void Menus::draw() {
     case Page::SaveGame: drawSaveGame(); break;
     case Page::About: drawAbout(); break;
     case Page::Settings: drawSettings(); break;
+    case Page::Mods: drawMods(); break;
     default: break;
   }
 }
@@ -123,8 +127,11 @@ void Menus::drawMain() {
   returnTo_ = Page::Main;
   if (menuButton("Skirmish", w)) page_ = Page::Skirmish;
   if (menuButton("Play a scenario", w)) {
-    refreshFiles(scene_.scenariosDir(), ".lmap", false);  // the ones that ship with the game
-    const std::vector<FileEntry> builtIn = files_;
+    std::vector<FileEntry> builtIn;  // the ones that ship with the game, then the mods' missions
+    for (const std::string& dir : scene_.scenarioDirs()) {
+      refreshFiles(dir, ".lmap", false);
+      builtIn.insert(builtIn.end(), files_.begin(), files_.end());
+    }
     refreshFiles(scene_.mapsDir(), ".lmap", false);        // and the player's own
     for (FileEntry& f : files_) f.title += "  (your map)";
     files_.insert(files_.begin(), builtIn.begin(), builtIn.end());
@@ -147,11 +154,145 @@ void Menus::drawMain() {
     page_ = Page::None;  // the menu must close, or it keeps every click and key from the editor
   }
   if (menuButton("Encyclopedia", w)) scene_.openEncyclopedia();
+  if (menuButton("Mods and creation tools", w)) openMods();
   if (menuButton("Settings", w)) page_ = Page::Settings;
   if (menuButton("About", w)) page_ = Page::About;
   if (menuButton("Quit", w)) scene_.quit();
   ImGui::Dummy(ImVec2(0, 6));
-  ImGui::TextDisabled("Slave Engine 1.0  -  build 0.7.8");
+  ImGui::TextDisabled("Slave Engine 1.0  -  build 0.8.0");
+  if (scene_.content().modIds().size() > 1)
+    ImGui::TextDisabled("%zu mod%s enabled", scene_.content().modIds().size() - 1,
+                        scene_.content().modIds().size() > 2 ? "s" : "");
+  ImGui::End();
+}
+
+// ---------------------------------------------------------------------------
+// Mods and creation tools
+// ---------------------------------------------------------------------------
+void Menus::openMods() {
+  scene_.rescanMods();
+  const auto& ids = scene_.content().modIds();
+  modsDraft_.assign(ids.begin() + 1, ids.end());  // what is loaded now, in order
+  error_.clear();
+  page_ = Page::Mods;
+}
+
+void Menus::drawMods() {
+  centredWindow("##mods", ImVec2(760, 580));
+  title("Mods and creation tools");
+  const auto& mods = scene_.installedMods();
+  auto enabledAt = [&](const std::string& id) {
+    auto it = std::find(modsDraft_.begin(), modsDraft_.end(), id);
+    return it == modsDraft_.end() ? -1 : static_cast<int>(it - modsDraft_.begin());
+  };
+
+  // Left: every installed mod, ticked when enabled.
+  ImGui::BeginChild("##modlist", ImVec2(330, 300), ImGuiChildFlags_Borders);
+  if (mods.empty()) {
+    ImGui::TextWrapped("No mods installed. Put mod folders in the mods folder, or make one below or with the "
+                       "rules editor.");
+  }
+  for (const ModInfo& m : mods) {
+    ImGui::PushID(m.id.c_str());
+    bool on = enabledAt(m.id) >= 0;
+    ImGui::BeginDisabled(!m.error.empty());
+    if (ImGui::Checkbox("##on", &on)) {
+      if (on) modsDraft_.push_back(m.id);
+      else modsDraft_.erase(modsDraft_.begin() + enabledAt(m.id));
+    }
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    const std::string label = m.name + (m.error.empty() ? "" : "  (broken)") + "##sel";
+    if (ImGui::Selectable(label.c_str(), modSelected_ == m.id)) modSelected_ = m.id;
+    ImGui::PopID();
+  }
+  ImGui::EndChild();
+  ImGui::SameLine();
+
+  // Right: the chosen mod, and the load order.
+  ImGui::BeginChild("##moddetail", ImVec2(0, 300), ImGuiChildFlags_Borders);
+  if (const ModInfo* m = findMod(mods, modSelected_)) {
+    ImGui::PushStyleColor(ImGuiCol_Text, kGold);
+    ImGui::TextUnformatted(m->name.c_str());
+    ImGui::PopStyleColor();
+    ImGui::TextDisabled("version %s%s%s", m->version.c_str(), m->author.empty() ? "" : "  -  by ", m->author.c_str());
+    if (!m->description.empty()) ImGui::TextWrapped("%s", m->description.c_str());
+    if (!m->dependencies.empty()) {
+      std::string deps;
+      for (const std::string& d : m->dependencies) deps += (deps.empty() ? "" : ", ") + d;
+      ImGui::TextWrapped("Needs: %s", deps.c_str());
+    }
+    if (!m->error.empty()) ImGui::TextColored(ImVec4(0.95f, 0.45f, 0.35f, 1), "%s", m->error.c_str());
+    ImGui::TextDisabled("%s", m->user ? "In your mods folder" : "Installed with the game");
+    std::string has;
+    for (const char* part : {"rules", "art", "scenarios"}) {
+      std::error_code ec;
+      if (std::filesystem::exists(m->dir + part, ec) && !std::filesystem::is_empty(m->dir + part, ec))
+        has += (has.empty() ? "" : ", ") + std::string(part);
+    }
+    ImGui::TextDisabled("Changes: %s", has.empty() ? "nothing yet" : has.c_str());
+  } else {
+    ImGui::TextDisabled("Pick a mod to see what it is.");
+  }
+  ImGui::SeparatorText("Load order");
+  if (modsDraft_.empty()) ImGui::TextDisabled("The game as it comes, no mods.");
+  for (size_t i = 0; i < modsDraft_.size(); ++i) {
+    ImGui::PushID(static_cast<int>(i));
+    const ModInfo* m = findMod(mods, modsDraft_[i]);
+    ImGui::BeginDisabled(i == 0);
+    if (ImGui::ArrowButton("##up", ImGuiDir_Up)) std::swap(modsDraft_[i], modsDraft_[i - 1]);
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::BeginDisabled(i + 1 == modsDraft_.size());
+    if (ImGui::ArrowButton("##down", ImGuiDir_Down)) std::swap(modsDraft_[i], modsDraft_[i + 1]);
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::Text("%zu. %s", i + 1, m ? m->name.c_str() : modsDraft_[i].c_str());
+    ImGui::PopID();
+  }
+  ImGui::TextDisabled("Later mods win where two change the same thing.");
+  ImGui::EndChild();
+
+  const auto& loaded = scene_.content().modIds();
+  const bool changed = modsDraft_ != std::vector<std::string>(loaded.begin() + 1, loaded.end());
+  if (menuButton(changed ? "Apply (reloads rules and art)" : "Applied", 260, changed)) {
+    if (!scene_.setMods(modsDraft_, error_)) error_ = "Couldn't load those mods: " + error_;
+    else openMods();
+  }
+  ImGui::SameLine();
+  if (menuButton("Open mods folder", 200)) {
+    std::string url = "file:///" + scene_.userModsDir();
+    std::replace(url.begin(), url.end(), '\\', '/');
+    SDL_OpenURL(url.c_str());
+  }
+  ImGui::SetNextItemWidth(200);
+  ImGui::InputTextWithHint("##newmod", "new mod name", newModName_, sizeof newModName_);
+  ImGui::SameLine();
+  ImGui::BeginDisabled(newModName_[0] == 0);
+  if (ImGui::Button("Create mod")) {
+    ModInfo made;
+    if (createMod(scene_.userModsDir(), modIdFromName(newModName_), newModName_, made, error_)) {
+      scene_.rescanMods();
+      modSelected_ = made.id;
+      scene_.settings().toolMod = made.id;
+      newModName_[0] = 0;
+      error_.clear();
+    }
+  }
+  ImGui::EndDisabled();
+  if (!error_.empty()) ImGui::TextColored(ImVec4(0.95f, 0.45f, 0.35f, 1), "%s", error_.c_str());
+  if (!scene_.modWarnings().empty()) ImGui::TextColored(ImVec4(0.95f, 0.75f, 0.35f, 1), "%s", scene_.modWarnings().c_str());
+
+  ImGui::SeparatorText("Creation tools");
+  if (menuButton("Rules editor", 200)) scene_.rulesEditor().open();
+  ImGui::SameLine();
+  ImGui::TextWrapped("Units, buildings, weapons and armour: change any number, see it in the battle behind, "
+                     "save it as a mod.");
+  if (menuButton("Sprite studio", 200)) scene_.spriteStudio().open();
+  ImGui::SameLine();
+  ImGui::TextWrapped("Look at every sprite from every side, repaint or recolour it, export it for painting.");
+  ImGui::Dummy(ImVec2(0, 4));
+  backButton();
   ImGui::End();
 }
 

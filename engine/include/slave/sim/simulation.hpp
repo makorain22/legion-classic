@@ -212,6 +212,11 @@ class Simulation {
   Registry& registry() { return reg_; }
   const UnitTypeRegistry& types() const { return types_; }
   const WeaponRegistry& weapons() const { return weapons_; }
+  // The type and weapon registries were changed under the running battle
+  // (rules editor, live): gives units the parts their new rules call for
+  // (guns, turrets, supply loads) and caps health at the new maximum.
+  // Type and weapon numbers must not have moved (see slave::stabiliseRules).
+  void rulesChanged();
   const Map& map() const { return map_; }
   const PlayerState& playerState(uint8_t p) const { return players_[p % MAX_PLAYERS]; }
 

@@ -112,7 +112,13 @@ only the plain cross, Russia the red star.
    infantry; fireteams to companies (and armoured platoons to battalions)
    with NATO cards; garrisons in buildings, bunkers and trench lines; small
    arms that chip armour; fog chips.
-8. Creation tools: rules editor, sprite studio, mods.
+8. **Creation tools** – done (0.8.0): content layers with mods (rules merged
+   by id, art overrides, scenarios; load order with requirements; a mod picker
+   on the main menu), a rules editor with live changes into the running battle
+   (type and weapon numbers kept stable, deleted types kept hidden until the
+   next battle), a sprite studio (facings, animation, side colours, recolour,
+   anchors, export / import into a mod), saves and replays that record their
+   mods and a rules fingerprint. See docs/MODDING.md.
 9. UK faction, tutorial, campaigns (built with the editor), sound and music.
 10. Release 1.0: balance, performance, documentation, packaging.
 

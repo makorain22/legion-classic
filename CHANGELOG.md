@@ -1,6 +1,33 @@
 # Changelog
 
-## 0.7.8 – Map variety, crash reports (in progress)
+## 0.8.0 – Milestone 8: creation tools and mods (6 Nov 2026)
+
+- **Mods.** A mod is a folder of rule changes, sprites and scenarios that sits
+  on top of the game without changing it. *Main menu → Mods and creation
+  tools* lists them: tick, order and **Apply**, and the game reloads its rules
+  and art. Mod rule files name only what they change (matched by id; a new id
+  adds a unit; `"_remove": true` deletes one); mods can require other mods and
+  load after them. A broken mod never stops the game starting. Your own mods
+  live in `%APPDATA%\Makorain\LegionClassic\mods\`; the game ships with an
+  example, *Veteran Grenadiers*. See docs/MODDING.md.
+- **Rules editor.** Every unit, building, weapon and warhead as a form, every
+  field explained, changed fields in gold with what they were. It works out
+  damage per second against each armour, speed, health per supply, and what
+  needs or carries each thing. Changes are checked as you type and go straight
+  into the running battle (the one behind the menu, or yours, from the editor's
+  Battle tab): units already fighting take their new health, guns and turrets.
+  **Save to mod** writes only the differences.
+- **Sprite studio.** Every sprite set: units turned through 16 facings and
+  animated, in any side's colours on any ground; whole sheets frame by frame;
+  hue / saturation / brightness recolouring (winter whitewash, desert sand);
+  anchor nudging; export for painting and PNG import, straight into a mod.
+- **Saves and replays remember their mods** and a fingerprint of the rules:
+  a game made with other mods says which to enable; a replay needs the very
+  same rules.
+- `--tool rules|sprites|mods` opens a creation tool at start;
+  `--mods-selftest` runs the tools through the real game.
+
+## 0.7.8 – Map variety, crash reports (6 Nov 2026)
 
 - **Twelve landscapes for random maps:** river valley, front line river (a
   river between the sides with three fords), confluence, lakeland,
@@ -17,6 +44,8 @@
 - The computer digs its trench line, wire and tank traps even when short of
   supplies, and only where it may build.
 - Trench lines join only pieces of the same side.
+- **Showcase videos:** `--showcase out.mp4` records a computer battle with a
+  camera that follows the fighting (`--showcase-warm`, `--showcase-seconds`).
 
 ## 0.7.7 – Playtest rework: trenches, unit cards, bases, computer doctrines, field works (1 Nov 2026)
 

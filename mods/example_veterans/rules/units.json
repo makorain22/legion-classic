@@ -1,0 +1,29 @@
+{
+  "_comment": "A mod's rule files name only what they change. Entries are matched by id: listed fields replace the game's, everything else stays. A new id adds a unit. {\"id\": \"...\", \"_remove\": true} deletes one.",
+  "units": [
+    { "id": "ger_rifleman", "cost": 12 },
+    {
+      "id": "ger_veteran",
+      "name": "Veteran Grenadier",
+      "faction": "ger",
+      "model": "rifleman",
+      "locomotor": "foot",
+      "speed": 10,
+      "turnTicks": 0,
+      "radius": 28,
+      "animTicks": 3,
+      "health": 160,
+      "armor": "infantry",
+      "sight": 8,
+      "weapons": ["rifle"],
+      "cost": 25,
+      "buildTime": 3,
+      "builtAt": "barracks",
+      "requires": ["ger_tower"],
+      "aiWeight": 2,
+      "nato": "infantry",
+      "group": "Infantry",
+      "description": "Men who have seen the whole war. Tougher and keener-eyed than a new grenadier, and worth what they cost."
+    }
+  ]
+}

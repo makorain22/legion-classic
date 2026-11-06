@@ -81,6 +81,12 @@ std::string GameScene::metaJson(const std::string& title) const {
   const Vec2f c = cam_.center();
   j["camera"] = {c.x, c.y};
   j["revealMap"] = revealMap_;
+  // The rules it was played with: loading needs the same mods (replays the very same rules).
+  j["mods"] = content_.modIds().size() > 1
+                  ? std::vector<std::string>(content_.modIds().begin() + 1, content_.modIds().end())
+                  : std::vector<std::string>{};
+  j["rules"] = rulesHash_;
+  if (rulesEditedLive_) j["rulesEdited"] = true;
   auto& sides = j["sides"] = nlohmann::json::array();
   for (uint8_t i = 0; i < MAX_PLAYERS; ++i) {
     const PlayerSetup& p = players_[i];
@@ -270,16 +276,49 @@ bool GameScene::saveGame(const std::string& path, std::string& error) {
   return true;
 }
 
+// Saves and replays carry the mods and rules they were made with.
+bool GameScene::rulesMatch(const nlohmann::json& meta, bool replay, std::string& error) const {
+  if (!meta.is_object() || !meta.contains("rules")) return true;  // made before mods existed
+  std::vector<std::string> theirs;
+  if (meta.contains("mods") && meta["mods"].is_array())
+    for (const auto& m : meta["mods"])
+      if (m.is_string()) theirs.push_back(m.get<std::string>());
+  const std::vector<std::string> ours(content_.modIds().begin() + 1, content_.modIds().end());
+  auto list = [](const std::vector<std::string>& v) {
+    std::string s;
+    for (const std::string& m : v) s += (s.empty() ? "" : ", ") + m;
+    return s.empty() ? std::string("no mods") : s;
+  };
+  if (theirs != ours) {
+    error = std::string("this ") + (replay ? "replay" : "game") + " was made with " + list(theirs) +
+            "; you have " + list(ours) + " enabled (Mods on the main menu)";
+    return false;
+  }
+  if (replay && meta.value("rules", std::string()) != rulesHash_) {
+    error = meta.value("rulesEdited", false)
+                ? "the rules were changed during this game, so it can't be replayed"
+                : "the mods have changed since this replay was recorded, so it can't be replayed exactly";
+    return false;
+  }
+  return true;
+}
+
 bool GameScene::loadFromSave(SaveFile& f, bool replay, std::string& error) {
   MapFile mf;
   if (!decodeMap(f.mapBytes, mf, error)) return false;
   const nlohmann::json meta = nlohmann::json::parse(f.metaJson, nullptr, false);
+  if (!rulesMatch(meta, replay, error)) return false;
+  const bool sameRules = !meta.is_object() || meta.value("rules", rulesHash_) == rulesHash_;
   mode_ = Mode::Game;
   replaceWorld(std::move(mf), true);
   ByteReader r(f.stateBytes);
   if (!sim_->loadState(r, error)) {
     toMainMenu();
     return false;
+  }
+  if (!sameRules) {
+    sim_->rulesChanged();  // the mods were edited since: bring the units in line
+    showStatus("The mods have changed since this game was saved", 5);
   }
   if (meta.is_object()) {
     player_ = static_cast<uint8_t>(meta.value("player", 0) % MAX_PLAYERS);

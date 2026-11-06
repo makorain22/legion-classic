@@ -1,0 +1,5 @@
+{
+  "weapons": [
+    { "id": "rifle", "accuracy": 75 }
+  ]
+}

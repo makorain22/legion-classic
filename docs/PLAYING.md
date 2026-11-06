@@ -1,7 +1,7 @@
-# Playing Legion Classic (build 0.7.7)
+# Playing Legion Classic (build 0.8.0)
 
 Double-click `LegionClassic.exe`. No installation is needed; keep the `content`
-folder next to the exe.
+and `mods` folders next to the exe.
 
 Windows may show a SmartScreen warning the first time because the game isn't
 code-signed yet: choose **More info → Run anyway**.
@@ -329,6 +329,25 @@ khaki for the Soviets.
 Screenshots, settings and the log file (`legion.log`) are saved in
 `%APPDATA%\Makorain\LegionClassic\`.
 
+## Mods and creation tools
+
+**Main menu → Mods and creation tools** switches mods on and off and opens
+the two creation tools:
+
+- **Rules editor**: every unit, building, weapon and warhead as a form, with
+  each field explained and the numbers that matter worked out (damage per
+  second against each armour, speed, health per supply). Changes go into the
+  battle behind the menu, or the one you are playing, as you type. **Save to
+  mod** keeps them as a mod.
+- **Sprite studio**: every sprite from every side and facing, animated, in any
+  side's colours; recolour a whole set, nudge where it stands, export it for
+  painting or import your own PNGs into a mod.
+
+Both are also on the editor's **Battle** tab (F2). A mod is a folder of rule
+changes, sprites and scenarios; the game ships with a small example,
+*Veteran Grenadiers*. Saved games remember their mods. Everything about making
+mods is in [MODDING.md](MODDING.md).
+
 ## Live Scenario Editor (F2)
 
 The editor opens as a panel on the left while the battle keeps running. Build
@@ -396,6 +415,8 @@ of it (Tab also cycles through the sides).
 
 ### Battle tab
 
+- **Creation tools**: the rules editor and the sprite studio (see
+  [MODDING.md](MODDING.md)); rule changes take effect in this battle at once.
 - **Scenario**: name, author and a briefing / description saved with the map.
 - **Time**: pause and game speed.
 - **Snapshot**: *Take snapshot* remembers the whole battle (terrain, every
@@ -469,4 +490,7 @@ menu; the default when started with no options), `--ai-battle` (watch two
 computer players; add `--side 1` to watch from the Soviet side), `--gallery` (every unit and building lined up, for looking
 at the art), `--org-demo` (a platoon, an armoured platoon, a held building and
 fog chips), `--export-sprites folder` (write every sprite as a PNG for
-repainting; see [ART_PIPELINE.md](ART_PIPELINE.md)).
+repainting; see [ART_PIPELINE.md](ART_PIPELINE.md)), `--tool rules:ger_medium_tank`,
+`--tool sprites:units/tank@ger` or `--tool mods` (open a creation tool at start),
+`--mods-selftest` (checks the rules editor, mods and sprite studio through the
+real game).

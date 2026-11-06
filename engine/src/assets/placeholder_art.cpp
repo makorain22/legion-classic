@@ -911,7 +911,7 @@ bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error, const ArtOption
   cat.moveMarker = ab.add(makeDiamondOutline(32, 16), 16, 8);
 
   for (const std::string& dir : options.packDirs) applyArtOverrides(ab, cat, dir, true);  // props, effects
-  if (!options.overrideDir.empty()) applyArtOverrides(ab, cat, options.overrideDir);
+  for (const std::string& dir : options.overrideDirs) applyArtOverrides(ab, cat, dir);
   if (!options.exportDir.empty()) exportArt(ab, cat, options.exportDir);
 
   for (int size : {1024, 2048, 4096, 8192}) {

@@ -6,6 +6,7 @@
 
 #include <array>
 #include <string>
+#include <vector>
 
 namespace legion {
 
@@ -43,6 +44,8 @@ struct Settings {
   bool showChips = true;       // chips for enemies detected in the fog
   bool atmosphere = true;      // colour grading and a vignette over the battlefield
   bool artPack = true;         // use content/art/blitzkrieg when present (takes effect on restart)
+  std::vector<std::string> mods;  // enabled mods (folder names), in load order
+  std::string toolMod;            // the mod the rules editor and sprite studio save into
   // Two bindings per action.
   std::array<std::array<KeyCombo, 2>, ACTION_COUNT> keys{};
 
