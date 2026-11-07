@@ -1032,7 +1032,7 @@
       "id": "gbr_firefly",
       "name": "Sherman Firefly",
       "faction": "gbr",
-      "model": "tank",
+      "model": "firefly",
       "locomotor": "tracked",
       "speed": 17,
       "turnTicks": 2,

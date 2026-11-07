@@ -90,6 +90,15 @@ void finish(UnitModel& um, const FactionLook& look, uint32_t seed, int mudHeight
   }
 }
 
+UnitModel britishCrusader(const FactionLook&, int);
+UnitModel britishChurchill(const FactionLook&, int);
+UnitModel britishAchilles(const FactionLook&, int);
+UnitModel britishSexton(const FactionLook&, int);
+UnitModel britishCarrier(const FactionLook&, int);
+UnitModel britishDingo(const FactionLook&, int);
+UnitModel britishLorry(const FactionLook&, int);
+UnitModel britishWorkshop(const FactionLook&, int);
+
 UnitModel blank(int gx, int gy, int gz, bool turret) {
   UnitModel um;
   um.body = VoxelModel(gx, gy, gz);
@@ -201,12 +210,17 @@ UnitModel sovietMedium(const FactionLook& look, int f) {
   return um;
 }
 
-UnitModel mediumTank(const FactionLook& look, int f) { return look.sloped ? sovietMedium(look, f) : germanMedium(look, f); }
+UnitModel britishCromwell(const FactionLook& look, int f);
+UnitModel mediumTank(const FactionLook& look, int f) {
+  if (look.british) return britishCromwell(look, f);
+  return look.sloped ? sovietMedium(look, f) : germanMedium(look, f);
+}
 
 // ---------------------------------------------------------------------------
 // Light tanks
 // ---------------------------------------------------------------------------
 UnitModel lightTank(const FactionLook& look, int f) {
+  if (look.british) return britishCrusader(look, f);
   const int GX = 58, GY = 22, GZ = 21;
   UnitModel um = blank(GX, GY, GZ, true);
   VoxelModel& b = um.body;
@@ -268,6 +282,7 @@ UnitModel lightTank(const FactionLook& look, int f) {
 // Heavy tanks
 // ---------------------------------------------------------------------------
 UnitModel heavyTank(const FactionLook& look, int f) {
+  if (look.british) return britishChurchill(look, f);
   const int GX = 96, GY = 30, GZ = 28;
   UnitModel um = blank(GX, GY, GZ, true);
   VoxelModel& b = um.body;
@@ -355,6 +370,7 @@ UnitModel heavyTank(const FactionLook& look, int f) {
 // Tank destroyers: no turret, the gun in a low casemate.
 // ---------------------------------------------------------------------------
 UnitModel tankDestroyer(const FactionLook& look, int f) {
+  if (look.british) return britishAchilles(look, f);
   const int GX = 78, GY = 24, GZ = 21;
   UnitModel um = blank(GX, GY, GZ, false);
   VoxelModel& b = um.body;
@@ -410,6 +426,7 @@ void truckWheel(VoxelModel& m, float cx, float r, float y0, float y1, int f) {
 }
 
 UnitModel artillery(const FactionLook& look, int f) {
+  if (look.british) return britishSexton(look, f);
   if (!look.sloped) {
     const int GX = 66, GY = 22, GZ = 22;
     UnitModel um = blank(GX, GY, GZ, false);
@@ -475,6 +492,7 @@ UnitModel artillery(const FactionLook& look, int f) {
 // Half-tracks: wheels in front, tracks behind, an MG on a pivot (the turret).
 // ---------------------------------------------------------------------------
 UnitModel halftrack(const FactionLook& look, int f) {
+  if (look.british) return britishCarrier(look, f);
   const int GX = 56, GY = 22, GZ = 20;
   UnitModel um = blank(GX, GY, GZ, true);
   VoxelModel& b = um.body;
@@ -520,6 +538,7 @@ UnitModel halftrack(const FactionLook& look, int f) {
 // Scout cars: four wheels, an open turret with a machine gun.
 // ---------------------------------------------------------------------------
 UnitModel scoutCar(const FactionLook& look, int f) {
+  if (look.british) return britishDingo(look, f);
   const int GX = 46, GY = 18, GZ = 17;
   UnitModel um = blank(GX, GY, GZ, true);
   VoxelModel& b = um.body;
@@ -583,6 +602,7 @@ void truckCab(VoxelModel& b, const FactionLook& look, int X1, int GY) {
 }
 
 UnitModel supplyTruck(const FactionLook& look, int f) {
+  if (look.british) return britishLorry(look, f);
   const int GX = 50, GY = 18, GZ = 17;
   UnitModel um = blank(GX, GY, GZ, false);
   VoxelModel& b = um.body;
@@ -605,6 +625,7 @@ UnitModel supplyTruck(const FactionLook& look, int f) {
 }
 
 UnitModel constructionTruck(const FactionLook& look, int f) {
+  if (look.british) return britishWorkshop(look, f);
   const int GX = 62, GY = 22, GZ = 22;
   UnitModel um = blank(GX, GY, GZ, false);
   VoxelModel& b = um.body;
@@ -680,6 +701,450 @@ VoxelModel corpseTwo(const FactionLook& look, int) {
   s.kit = Kit::Ammo;
   soldier(m, look, 10, 14, s);
   return m;
+}
+
+
+// ---------------------------------------------------------------------------
+// British vehicles: Daimler Dingo, Universal Carrier, Crusader, Cromwell,
+// Sherman Firefly, Achilles, Sexton, Churchill and Bedford lorries. Plain
+// service-drab paint, the white-red-white recognition flash, black berets.
+// ---------------------------------------------------------------------------
+// American-pattern running gear (Sherman, M10, Sexton): three bogies a side,
+// two small wheels each under a sprung bracket, a raised front sprocket.
+void vvss(VoxelModel& b, float x0, float x1, int f) {
+  for (float y0 : {0.0f, 21.0f}) {
+    tracks(b, {x0, x1, y0, y0 + 5, 9, 6, 2.0f, true, true}, f);
+    const float step = (x1 - x0 - 6) / 3.0f;
+    for (int k = 0; k < 3; ++k) {
+      const int bx = static_cast<int>(x0 + 3 + step * k + step * 0.5f);
+      const int yo = y0 < 1 ? 0 : static_cast<int>(y0) + 4;
+      b.box(bx - 3, yo, 3, bx + 3, yo + 1, 6, STEEL_DARK);     // bogie bracket
+      b.box(bx - 1, yo, 6, bx + 1, yo + 1, 8, STEEL_DARK);     // volute spring
+    }
+  }
+}
+
+// The cast, rounded hull front of the Sherman family.
+void shermanNose(VoxelModel& b, int X0, int X1) {
+  b.box(X0 + 1, 5, 2, X1 - 3, 21, 9, BASE_DARK);
+  for (int z = 2; z < 8; ++z) {                               // final-drive housing, round in section
+    const float dz = (z - 4.5f) / 3.5f;
+    const int out = static_cast<int>(std::sqrt(std::max(0.0f, 1.0f - dz * dz)) * 4.0f);
+    b.box(X1 - 4, 4, z, X1 - 3 + out, 22, z + 1, BASE_DARK);
+  }
+  for (int y = 6; y < 21; y += 4) b.box(X1, y, 4, X1 + 1, y + 1, 6, STEEL_DARK);  // housing bolts
+}
+
+UnitModel britishDingo(const FactionLook& look, int f) {
+  const int GX = 42, GY = 18, GZ = 15;
+  UnitModel um = blank(GX, GY, GZ, true);
+  VoxelModel& b = um.body;
+  VoxelModel& t = um.turret;
+  const int X0 = 8, X1 = 34;
+  for (float wx : {X0 + 5.0f, X1 - 6.0f})
+    for (float y0 : {0.0f, 15.0f}) truckWheel(b, wx, 2.5f, y0, y0 + 3, f);
+  armourBox(b, X0, X1, 3, 15, 3, 7, -0.35f, -0.3f, -0.25f, BASE);
+  armourBox(b, X0 + 1, X1, 3, 15, 7, 10, 1.8f, 0.7f, 0.35f, BASE);   // low, steeply sloped deck
+  hollow(b, X0 + 9, 5, 8, X1 - 9, 13, 10);                           // the open crew compartment
+  b.box(X0 + 9, 5, 7, X1 - 9, 13, 8, BASE_DARK);
+  b.box(X0 + 6, 3, 9, X0 + 9, 15, 10, CANVAS_DARK);                  // folded sliding roof
+  b.box(X1 - 9, 6, 9, X1 - 8, 12, 10, STEEL_DARK);                  // driver's visor flap
+  for (int y0 : {0, 15}) {                                           // flat mudguards
+    b.box(X0 + 1, y0, 6, X0 + 10, y0 + 3, 7, BASE_DARK);
+    b.box(X1 - 11, y0, 6, X1 - 1, y0 + 3, 7, BASE_DARK);
+  }
+  cylY(b, X0 + 16, 6.5f, 1.8f, 15, 16.6f, RUBBER);                   // spare wheel on the side
+  b.box(X0 - 1, 6, 4, X0, 12, 7, STEEL_DARK);                        // engine grille at the back
+  headlight(b, X1 - 1, 4, 7);
+  headlight(b, X1 - 1, 13, 7);
+  stampSide(b, X0 + 7, 8, false, nationalMark(look, true));
+  stampSide(b, X0 + 7, 8, true, nationalMark(look, true));
+  // A Bren on a pintle, the commander behind it.
+  const float pc = X0 + 18.0f;
+  t.box(static_cast<int>(pc), 8, 9, static_cast<int>(pc) + 1, 10, 11, STEEL_DARK);
+  cylX(t, pc - 1, pc + 6, 9, 11.5f, 0.45f, STEEL_DARK);
+  t.box(static_cast<int>(pc) + 1, 9, 12, static_cast<int>(pc) + 2, 10, 13, STEEL_DARK);  // curved magazine
+  crewman(t, look, pc - 2, 9, 9);
+  teamBand(t, 9, 10);
+  teamBand(b, 7, 8, X0, X1 - 12);
+  um.pivotX = pc;
+  um.pivotY = 9;
+  finish(um, look, 8111, 6);
+  return um;
+}
+
+UnitModel britishCarrier(const FactionLook& look, int f) {
+  const int GX = 48, GY = 22, GZ = 15;
+  UnitModel um = blank(GX, GY, GZ, true);
+  VoxelModel& b = um.body;
+  VoxelModel& t = um.turret;
+  const int X0 = 8, X1 = 39;
+  for (float y0 : {1.0f, 16.0f}) tracks(b, {X0 + 0.0f, X1 + 0.0f, y0, y0 + 5, 6, 3, 2.1f, false, false}, f);
+  // A small open steel box: crew front and back, the engine down the middle.
+  b.box(X0 + 1, 4, 2, X1 - 1, 18, 9, BASE);
+  armourBox(b, X1 - 7, X1, 4, 18, 2, 9, 0.5f, 0, 0, BASE);
+  hollow(b, X0 + 2, 5, 4, X1 - 6, 17, 9);
+  b.box(X0 + 2, 5, 3, X1 - 6, 17, 4, BASE_DARK);
+  b.box(X0 + 11, 9, 4, X0 + 21, 13, 10, BASE_DARK);                 // engine housing between the crew
+  for (int x = X0 + 12; x < X0 + 21; x += 2) b.box(x, 9, 10, x + 1, 13, 11, STEEL_DARK);
+  b.box(X1 - 7, 4, 9, X1 - 2, 11, 11, BASE);                        // the gunner's raised box at the front
+  b.box(X0 - 1, 0, 6, X1 + 1, 1, 7, BASE_DARK);                     // track guards
+  b.box(X0 - 1, 21, 6, X1 + 1, 22, 7, BASE_DARK);
+  for (int x : {X0 + 3, X0 + 6}) b.box(x, 1, 7, x + 2, 3, 10, BASE_DARK);  // jerrycans on the side
+  b.box(X0 + 1, 18, 7, X0 + 10, 21, 9, BLANKET);                    // bedrolls
+  b.box(X0, 6, 7, X0 + 1, 16, 9, STEEL_DARK);                       // rear tow plate
+  crewman(b, look, X1 - 9, 14, 5);                                  // driver
+  crewman(b, look, X0 + 5, 8, 5);
+  crewman(b, look, X0 + 5, 14, 5);
+  headlight(b, X1 - 1, 5, 8);
+  headlight(b, X1 - 1, 16, 8);
+  stampSide(b, X0 + 14, 8, false, nationalMark(look, true));
+  stampSide(b, X0 + 14, 8, true, nationalMark(look, true));
+  teamBand(b, 8, 9, X0 + 1, X1 - 7);
+  // The Bren through the front plate.
+  const float pc = X1 - 5.0f;
+  cylX(t, pc - 2, pc + 7, 7.5f, 10, 0.45f, STEEL_DARK);
+  t.box(static_cast<int>(pc), 7, 11, static_cast<int>(pc) + 1, 8, 12, STEEL_DARK);
+  crewman(t, look, pc - 3, 7.5f, 7);
+  um.pivotX = pc;
+  um.pivotY = 7.5f;
+  finish(um, look, 8212, 6, 1.2f);
+  return um;
+}
+
+// Christie tanks: five big road wheels a side, no return rollers.
+UnitModel britishCrusader(const FactionLook& look, int f) {
+  const int GX = 68, GY = 24, GZ = 21;
+  UnitModel um = blank(GX, GY, GZ, true);
+  VoxelModel& b = um.body;
+  VoxelModel& t = um.turret;
+  const int X0 = 14, X1 = 54;
+  for (float y0 : {1.0f, 18.0f}) tracks(b, {X0 + 0.0f, X1 + 0.0f, y0, y0 + 5, 8, 5, 3.3f, false, false}, f);
+  b.box(X0 + 1, 6, 2, X1 - 2, 18, 8, BASE_DARK);
+  armourBox(b, X1 - 7, X1, 6, 18, 2, 8, -0.7f, 0, 0, BASE_DARK);    // stepped nose
+  b.box(X0 - 1, 0, 8, X1 + 1, 24, 9, BASE);                          // track guards
+  b.box(X0, 0, 5, X1, 1, 8, BASE);                                   // sand shields over the top run
+  b.box(X0, 23, 5, X1, 24, 8, BASE);
+  armourBox(b, X0 + 1, X1 - 2, 2, 22, 9, 12, 0.5f, 0.3f, 0.1f, BASE);  // long, low hull
+  b.box(X1 - 8, 13, 12, X1 - 4, 19, 13, BASE_LIGHT);                 // driver's hatch, offset right
+  b.box(X1 - 3, 14, 10, X1 - 2, 18, 11, STEEL_DARK);
+  for (int x = X0 + 2; x < X0 + 15; x += 2) b.box(x, 5, 12, x + 1, 19, 13, STEEL_DARK);  // engine louvres
+  b.box(X0 + 4, 9, 12, X0 + 12, 15, 14, BASE_DARK);                  // air cleaner housing
+  cylY(b, X0 - 1, 7, 1.0f, 6, 9, EXHAUST);
+  cylY(b, X0 - 1, 7, 1.0f, 15, 18, EXHAUST);
+  b.box(X0 + 18, 1, 9, X0 + 30, 2, 10, STEEL_DARK);                  // tow cable
+  headlight(b, X1, 3, 9);
+  headlight(b, X1, 20, 9);
+  stampSide(b, X0 + 16, 11, false, nationalMark(look, true));
+  stampSide(b, X0 + 16, 11, true, nationalMark(look, true));
+  // A low, many-sided turret with a broad mantlet and the 6-pounder.
+  const float tc = 34.0f;
+  armourBox(t, tc - 8, tc + 6, 4, 20, 12, 17, 0.7f, 0.5f, 0.6f, BASE);
+  roundPlan(t, tc - 1, 12, 9.5f, 8.6f, 12, 17);
+  t.box(static_cast<int>(tc) + 5, 7, 12, static_cast<int>(tc) + 8, 17, 16, BASE_DARK);   // mantlet
+  cylX(t, tc + 8, tc + 23, 12, 14.5f, 0.6f, BASE_DARK);              // 6-pdr
+  cylX(t, tc + 8, tc + 10, 9.5f, 14.5f, 0.4f, STEEL_DARK);           // Besa
+  t.box(static_cast<int>(tc) - 12, 7, 13, static_cast<int>(tc) - 8, 17, 16, BASE);       // turret bin
+  t.box(static_cast<int>(tc) - 5, 6, 17, static_cast<int>(tc) + 1, 18, 18, BASE_LIGHT);  // split hatch
+  crewman(t, look, tc - 3, 12, 17);
+  cylinder(t, tc - 6, 5, 0.5f, 17, 22, STEEL_DARK);                  // wireless aerial
+  teamBand(t, 14, 15, 0, static_cast<int>(tc) + 5);
+  um.pivotX = tc;
+  um.pivotY = 12;
+  finish(um, look, 4401, 7);
+  return um;
+}
+
+UnitModel britishCromwell(const FactionLook& look, int f) {
+  const int GX = 72, GY = 26, GZ = 24;
+  UnitModel um = blank(GX, GY, GZ, true);
+  VoxelModel& b = um.body;
+  VoxelModel& t = um.turret;
+  const int X0 = 16, X1 = 55;
+  for (float y0 : {0.0f, 21.0f}) tracks(b, {X0 + 0.0f, X1 + 0.0f, y0, y0 + 5, 10, 5, 3.6f, false, false}, f);
+  b.box(X0 + 1, 5, 2, X1 - 1, 21, 10, BASE_DARK);
+  b.box(X1 - 2, 4, 3, X1, 22, 14, BASE);                             // upright nose plate
+  b.box(X0, 0, 10, X1, 26, 15, BASE);                                // slab sides over the tracks
+  b.box(X0, 0, 10, X1, 1, 11, BASE_DARK);                            // their lower edge in shadow
+  b.box(X0, 25, 10, X1, 26, 11, BASE_DARK);
+  for (int x = X0 + 4; x < X1 - 2; x += 5)                           // bolted side panels
+    for (int y : {0, 25}) b.set(x, y, 13, STEEL_DARK);
+  b.box(X1 - 1, 15, 12, X1, 20, 13, STEEL_DARK);                     // driver's visor
+  b.box(X1 - 1, 5, 11, X1, 8, 13, STEEL);                            // hull Besa
+  cylX(b, X1, X1 + 2, 6.5f, 12, 0.45f, STEEL_DARK);
+  for (int x = X0 + 2; x < X0 + 16; x += 2) b.box(x, 4, 15, x + 1, 22, 16, STEEL_DARK);  // engine deck louvres
+  b.box(X0 - 3, 5, 9, X0, 21, 14, BASE_DARK);                        // the big exhaust cowl at the back
+  cylY(b, X0 - 2, 11, 1.1f, 7, 10, EXHAUST);
+  cylY(b, X0 - 2, 11, 1.1f, 16, 19, EXHAUST);
+  b.box(X1 - 6, 0, 15, X1 - 1, 3, 16, BASE_DARK);                    // front mudguards
+  b.box(X1 - 6, 23, 15, X1 - 1, 26, 16, BASE_DARK);
+  fenderTools(b, X0 + 18, 0, 15);
+  headlight(b, X1, 2, 13);
+  headlight(b, X1, 23, 13);
+  stampSide(b, X0 + 20, 14, false, nationalMark(look, true));
+  stampSide(b, X0 + 20, 14, true, nationalMark(look, true));
+  // A square, flat-sided turret with a bolted face plate.
+  const float tc = 35.0f;
+  t.box(static_cast<int>(tc) - 8, 5, 15, static_cast<int>(tc) + 6, 21, 21, BASE);
+  t.box(static_cast<int>(tc) + 6, 4, 15, static_cast<int>(tc) + 7, 22, 21, BASE_DARK);   // face plate, wider than the turret
+  for (int y = 5; y < 22; y += 4) t.set(static_cast<int>(tc) + 7, y, 20, STEEL_DARK);    // its bolts
+  t.box(static_cast<int>(tc) + 7, 10, 16, static_cast<int>(tc) + 9, 16, 20, BASE_DARK);  // mantlet
+  cylX(t, tc + 9, tc + 24, 13, 18, 0.8f, BASE_DARK);                 // 75 mm
+  cylX(t, tc + 24, tc + 25, 13, 18, 1.0f, BASE_DARK);
+  cylX(t, tc + 9, tc + 11, 10, 18, 0.4f, STEEL_DARK);                // coaxial Besa
+  t.box(static_cast<int>(tc) - 13, 6, 16, static_cast<int>(tc) - 8, 20, 20, BASE);       // stowage bin
+  t.box(static_cast<int>(tc) - 13, 6, 20, static_cast<int>(tc) - 8, 20, 21, CANVAS_DARK);  // tarpaulin on it
+  for (int y : {4, 21}) t.box(static_cast<int>(tc) + 2, y, 18, static_cast<int>(tc) + 4, y + 1, 20, STEEL_DARK);  // smoke dischargers
+  cylinder(t, tc - 3, 15, 2.2f, 21, 22, BASE);                       // commander's cupola
+  crewman(t, look, tc - 3, 15, 22);
+  t.box(static_cast<int>(tc) - 4, 6, 21, static_cast<int>(tc), 10, 22, BASE_LIGHT);      // loader's hatch
+  cylinder(t, tc - 7, 6, 0.5f, 21, 26, STEEL_DARK);                  // aerial
+  teamBand(t, 18, 19, 0, static_cast<int>(tc) + 6);
+  um.pivotX = tc;
+  um.pivotY = 13;
+  finish(um, look, 4502, 8);
+  return um;
+}
+
+// The Sherman hull, shared by the Firefly.
+void shermanHull(VoxelModel& b, const FactionLook& look, int X0, int X1, int f) {
+  vvss(b, static_cast<float>(X0), static_cast<float>(X1), f);
+  shermanNose(b, X0, X1);
+  armourBox(b, X1 - 15, X1, 2, 24, 9, 16, 1.7f, 0, 0.25f, BASE);    // the sloped glacis
+  armourBox(b, X0, X1 - 13, 1, 25, 9, 16, 0, 0.6f, 0.15f, BASE);    // upper hull
+  b.box(X0 - 1, 1, 9, X1 - 13, 25, 10, BASE_DARK);                   // sponson lip
+  b.box(X1 - 11, 5, 14, X1 - 7, 10, 15, BASE_LIGHT);                 // driver's hatches on the glacis
+  b.box(X1 - 11, 16, 14, X1 - 7, 21, 15, BASE_LIGHT);
+  b.box(X1 - 8, 4, 13, X1 - 6, 8, 14, STEEL);                        // bow MG
+  cylX(b, X1 - 6, X1 - 4, 6, 13.5f, 0.45f, STEEL_DARK);
+  for (int x = X0 + 2; x < X0 + 12; x += 2) b.box(x, 6, 16, x + 1, 20, 17, STEEL_DARK);  // engine deck
+  b.box(X0 - 2, 5, 6, X0, 21, 12, BASE_DARK);                        // rear plate and exhaust deflector
+  b.box(X0 + 16, 1, 16, X0 + 26, 3, 17, WOOD);                       // spare track blocks on the hull side
+  headlight(b, X1 - 3, 3, 10);
+  headlight(b, X1 - 3, 22, 10);
+  stampSide(b, X0 + 14, 14, false, nationalMark(look, true));
+  stampSide(b, X0 + 14, 14, true, nationalMark(look, true));
+}
+
+UnitModel britishFirefly(const FactionLook& look, int f) {
+  if (!look.british) return mediumTank(look, f);
+  const int GX = 96, GY = 26, GZ = 26;
+  UnitModel um = blank(GX, GY, GZ, true);
+  VoxelModel& b = um.body;
+  VoxelModel& t = um.turret;
+  const int X0 = 24, X1 = 62;
+  shermanHull(b, look, X0, X1, f);
+  // A rounded cast turret, the armoured wireless box hung on its back, and
+  // the very long 17-pounder (its muzzle half painted to hide the length).
+  const float tc = 43.0f;
+  armourBox(t, tc - 8, tc + 7, 4, 22, 16, 22, 0.4f, 0.45f, 0.45f, BASE);
+  roundPlan(t, tc, 13, 8.6f, 9.0f, 16, 22);
+  t.box(static_cast<int>(tc) - 15, 6, 16, static_cast<int>(tc) - 7, 20, 21, BASE);       // wireless box
+  t.box(static_cast<int>(tc) + 6, 8, 16, static_cast<int>(tc) + 9, 18, 21, BASE_DARK);   // mantlet
+  cylX(t, tc + 9, tc + 38, 13, 18.5f, 0.75f, BASE_DARK);             // 17-pdr
+  cylX(t, tc + 26, tc + 38, 13, 18.5f, 0.75f, MARK_WHITE);           // the light half of the countershading
+  for (int x = static_cast<int>(tc) + 27; x < static_cast<int>(tc) + 38; x += 3) cylX(t, x, x + 1, 13, 18.5f, 0.8f, BASE_DARK);
+  cylX(t, tc + 38, tc + 41, 13, 18.5f, 1.3f, BASE_DARK);             // muzzle brake
+  t.set(static_cast<int>(tc) + 39, 13, 18, STEEL_DARK);
+  cylinder(t, tc - 2, 17, 2.3f, 22, 23, BASE);                       // cupola
+  crewman(t, look, tc - 2, 17, 23);
+  t.box(static_cast<int>(tc) - 3, 6, 22, static_cast<int>(tc) + 1, 10, 23, BASE_LIGHT);
+  cylinder(t, tc - 12, 7, 0.5f, 21, 26, STEEL_DARK);                 // aerial
+  teamBand(t, 19, 20, 0, static_cast<int>(tc) + 6);
+  um.pivotX = tc;
+  um.pivotY = 13;
+  finish(um, look, 4603, 8);
+  return um;
+}
+
+UnitModel britishAchilles(const FactionLook& look, int f) {
+  const int GX = 96, GY = 26, GZ = 24;
+  UnitModel um = blank(GX, GY, GZ, true);
+  VoxelModel& b = um.body;
+  VoxelModel& t = um.turret;
+  const int X0 = 24, X1 = 62;
+  vvss(b, static_cast<float>(X0), static_cast<float>(X1), f);
+  shermanNose(b, X0, X1);
+  // The M10's angular hull: everything sloped, bolt-on armour bosses.
+  armourBox(b, X0, X1, 1, 25, 9, 15, 1.8f, 0.9f, 0.7f, BASE);
+  for (int x = X0 + 4; x < X1 - 6; x += 6)
+    for (int y : {2, 23}) b.set(x, y, 12, STEEL_DARK);
+  b.box(X1 - 12, 6, 14, X1 - 8, 11, 15, BASE_LIGHT);                 // drivers' hatches
+  b.box(X1 - 12, 15, 14, X1 - 8, 20, 15, BASE_LIGHT);
+  for (int x = X0 + 2; x < X0 + 11; x += 2) b.box(x, 7, 15, x + 1, 19, 16, STEEL_DARK);
+  b.box(X0 - 2, 6, 6, X0, 20, 11, BASE_DARK);
+  headlight(b, X1 - 3, 3, 10);
+  headlight(b, X1 - 3, 22, 10);
+  stampSide(b, X0 + 13, 13, false, nationalMark(look, true));
+  stampSide(b, X0 + 13, 13, true, nationalMark(look, true));
+  // An open-topped, five-sided turret, the counterweights hung on its back.
+  const float tc = 42.0f;
+  armourBox(t, tc - 8, tc + 7, 3, 23, 15, 21, 1.0f, 0.3f, 0.7f, BASE);
+  hollow(t, static_cast<int>(tc) - 6, 6, 16, static_cast<int>(tc) + 4, 20, 21);
+  t.box(static_cast<int>(tc) - 6, 6, 15, static_cast<int>(tc) + 4, 20, 16, BASE_DARK);
+  t.box(static_cast<int>(tc) - 13, 6, 16, static_cast<int>(tc) - 8, 20, 19, BASE_DARK);  // counterweights
+  t.box(static_cast<int>(tc) + 6, 9, 16, static_cast<int>(tc) + 10, 17, 20, BASE_DARK);  // mantlet
+  cylX(t, tc + 10, tc + 37, 13, 18, 0.75f, BASE_DARK);               // 17-pdr
+  cylX(t, tc + 37, tc + 40, 13, 18, 1.3f, BASE_DARK);
+  t.set(static_cast<int>(tc) + 38, 13, 18, STEEL_DARK);
+  crewman(t, look, tc - 2, 8, 16);
+  crewman(t, look, tc - 2, 17, 16);
+  b.box(X0 + 4, 3, 15, X0 + 12, 6, 16, CANVAS_DARK);                 // rolled tarpaulin
+  teamBand(t, 19, 20, 0, static_cast<int>(tc) + 6);
+  um.pivotX = tc;
+  um.pivotY = 13;
+  finish(um, look, 4704, 8);
+  return um;
+}
+
+UnitModel britishSexton(const FactionLook& look, int f) {
+  const int GX = 76, GY = 26, GZ = 24;
+  UnitModel um = blank(GX, GY, GZ, false);
+  VoxelModel& b = um.body;
+  const int X0 = 16, X1 = 54;
+  vvss(b, static_cast<float>(X0), static_cast<float>(X1), f);
+  shermanNose(b, X0, X1);
+  armourBox(b, X1 - 12, X1, 2, 24, 9, 14, 1.2f, 0, 0.1f, BASE);     // glacis
+  // A tall open box over the hull, the 25-pounder offset to the right.
+  b.box(X0, 1, 9, X1 - 10, 25, 18, BASE);
+  hollow(b, X0 + 1, 2, 10, X1 - 11, 24, 18);
+  b.box(X0 + 1, 2, 9, X1 - 11, 24, 10, BASE_DARK);
+  b.box(X1 - 13, 9, 10, X1 - 9, 17, 16, STEEL_DARK);                 // gun cradle
+  bar(b, X1 - 11, 13, 15, X1 + 13, 13, 18.5f, 1.0f, BASE_DARK);      // 25-pdr, elevated a little
+  bar(b, X1 + 11, 13, 18.2f, X1 + 14, 13, 18.7f, 1.5f, BASE_DARK);   // muzzle brake
+  crewman(b, look, X0 + 6, 6, 10);
+  crewman(b, look, X0 + 10, 19, 10);
+  crewman(b, look, X0 + 16, 7, 10);
+  b.box(X0 + 2, 15, 10, X0 + 7, 23, 13, WOOD);                       // ammunition boxes
+  b.box(X0, 0, 17, X1 - 10, 2, 18, CANVAS_DARK);                     // tarpaulin rolled on the rim
+  for (int x = X0 + 2; x < X0 + 9; x += 2) b.box(x, 1, 18, x + 1, 25, 19, STEEL_DARK);  // tarpaulin hoops
+  b.box(X0 - 2, 5, 6, X0, 21, 12, BASE_DARK);
+  headlight(b, X1 - 3, 3, 10);
+  headlight(b, X1 - 3, 22, 10);
+  stampSide(b, X0 + 10, 16, false, nationalMark(look, true));
+  stampSide(b, X0 + 10, 16, true, nationalMark(look, true));
+  teamBand(b, 15, 16, X0, X1 - 10);
+  finish(um, look, 4805, 7);
+  return um;
+}
+
+UnitModel britishChurchill(const FactionLook& look, int f) {
+  const int GX = 102, GY = 30, GZ = 26;
+  UnitModel um = blank(GX, GY, GZ, true);
+  VoxelModel& b = um.body;
+  VoxelModel& t = um.turret;
+  const int X0 = 23, X1 = 77;
+  // Tracks run right round the hull sides, many small wheels hidden behind
+  // the panniers; only the top run and the horns at each end show.
+  for (float y0 : {0.0f, 24.0f}) tracks(b, {X0 + 0.0f, X1 + 0.0f, y0, y0 + 6, 14, 11, 1.6f, true, true}, f);
+  for (int y0 : {0, 29}) {
+    b.box(X0 + 4, y0, 3, X1 - 4, y0 + 1, 12, BASE);                  // pannier plate
+    for (int x = X0 + 7; x < X1 - 6; x += 4) b.box(x, y0, 3, x + 2, y0 + 1, 4, STEEL_DARK);  // mud chutes
+    const int dx = (X0 + X1) / 2;
+    b.box(dx - 3, y0, 5, dx + 3, y0 + 1, 11, BASE_DARK);             // escape door
+    b.set(dx + 2, y0, 8, STEEL);
+  }
+  b.box(X0 + 2, 6, 3, X1 - 2, 24, 15, BASE_DARK);                    // hull between the tracks
+  b.box(X0 + 2, 6, 15, X1 - 2, 24, 16, BASE);                        // deck
+  b.box(X1 - 3, 6, 4, X1 - 1, 24, 15, BASE);                         // upright nose
+  b.box(X1 - 1, 16, 12, X1, 21, 13, STEEL_DARK);                     // driver's visor
+  b.box(X1 - 1, 8, 11, X1, 11, 13, STEEL);                           // Besa ball
+  cylX(b, X1, X1 + 2, 9.5f, 12, 0.45f, STEEL_DARK);
+  for (int x = X0 + 4; x < X0 + 18; x += 2) b.box(x, 8, 16, x + 1, 22, 17, STEEL_DARK);  // engine louvres
+  for (int y0 : {0, 24}) b.box(X0 + 3, y0, 14, X0 + 14, y0 + 6, 17, BASE);  // air intakes on the track tops
+  b.box(X0 - 1, 9, 6, X0 + 2, 21, 13, BASE_DARK);                    // rear plate
+  cylY(b, X0 - 1, 11, 1.0f, 10, 13, EXHAUST);
+  cylY(b, X0 - 1, 11, 1.0f, 17, 20, EXHAUST);
+  fenderTools(b, X0 + 22, 0, 15);
+  headlight(b, X1 - 1, 7, 14);
+  headlight(b, X1 - 1, 22, 14);
+  stampSide(b, X0 + 14, 11, false, nationalMark(look, true), 1);
+  stampSide(b, X0 + 14, 11, true, nationalMark(look, true), 28);
+  // The heavy turret of the Mark VII, cast, with the 75 mm.
+  const float tc = 52.0f;
+  armourBox(t, tc - 9, tc + 8, 6, 24, 16, 23, 0.25f, 0.25f, 0.3f, BASE);
+  roundPlan(t, tc, 15, 10.0f, 9.6f, 16, 23);
+  t.box(static_cast<int>(tc) + 7, 11, 17, static_cast<int>(tc) + 10, 19, 22, BASE_DARK);  // mantlet
+  cylX(t, tc + 10, tc + 25, 15, 19.5f, 0.8f, BASE_DARK);
+  cylX(t, tc + 25, tc + 26, 15, 19.5f, 1.0f, BASE_DARK);
+  cylX(t, tc + 10, tc + 12, 12, 19.5f, 0.4f, STEEL_DARK);
+  cylinder(t, tc - 3, 19, 2.4f, 23, 24, BASE);
+  crewman(t, look, tc - 3, 19, 24);
+  t.box(static_cast<int>(tc) - 4, 8, 23, static_cast<int>(tc), 12, 24, BASE_LIGHT);
+  t.box(static_cast<int>(tc) - 13, 9, 17, static_cast<int>(tc) - 9, 21, 21, BASE);       // stowage bin
+  cylinder(t, tc - 9, 8, 0.5f, 22, 26, STEEL_DARK);
+  teamBand(t, 20, 21, 0, static_cast<int>(tc) + 7);
+  um.pivotX = tc;
+  um.pivotY = 15;
+  finish(um, look, 4906, 10, 1.1f);
+  return um;
+}
+
+// A Bedford cab-forward cab: the driver sits over the engine behind a flat
+// two-pane windscreen.
+void bedfordCab(VoxelModel& b, int X1, int GY) {
+  const int y0 = 2, y1 = GY - 2;
+  b.box(X1 - 9, y0, 5, X1, y1, 14, BASE);
+  b.box(X1 - 9, y0, 14, X1, y1, 15, BASE_DARK);                      // roof
+  b.box(X1 - 1, y0 + 1, 10, X1, y1 - 1, 13, GLASS);                  // windscreen
+  b.box(X1 - 1, GY / 2, 10, X1, GY / 2 + 1, 13, BASE);               // its centre bar
+  b.box(X1 - 1, y0 + 3, 5, X1, y1 - 3, 9, STEEL_DARK);               // grille
+  b.box(X1 - 6, y0, 10, X1 - 2, y0 + 1, 13, GLASS);                  // door windows
+  b.box(X1 - 6, y1 - 1, 10, X1 - 2, y1, 13, GLASS);
+  for (int yy : {y0 - 2, y1}) {                                      // round mudguards over the front wheels
+    b.box(X1 - 8, yy, 6, X1 - 1, yy + 2, 7, BASE_DARK);
+    b.box(X1 - 7, yy, 7, X1 - 2, yy + 2, 8, BASE_DARK);
+  }
+  headlight(b, X1, y0 + 1, 7);
+  headlight(b, X1, y1 - 2, 7);
+}
+
+UnitModel britishLorry(const FactionLook& look, int f) {
+  const int GX = 50, GY = 18, GZ = 17;
+  UnitModel um = blank(GX, GY, GZ, false);
+  VoxelModel& b = um.body;
+  const int X0 = 6, X1 = 44;
+  for (float wx : {X0 + 8.0f, X1 - 5.0f})
+    for (float y0 : {0.0f, 15.0f}) truckWheel(b, wx, 3.0f, y0, y0 + 3, f);
+  b.box(X0, 3, 3, X1 - 2, 15, 5, STEEL_DARK);
+  bedfordCab(b, X1, GY);
+  // A fuel tanker body, with a rack of jerrycans behind.
+  cylX(b, X0 + 4, X1 - 10, 9, 9.5f, 4.4f, BASE_DARK);
+  b.box(X0 + 6, 7, 14, X1 - 12, 11, 15, STEEL_DARK);
+  for (int x : {X0 + 10, X0 + 20}) cylinder(b, x, 9, 1.2f, 14, 16, STEEL);
+  b.box(X0, 3, 5, X0 + 4, 15, 6, STEEL_DARK);
+  for (int y = 4; y < 14; y += 3) b.box(X0, y, 6, X0 + 3, y + 2, 10, BASE_DARK);  // jerrycans
+  teamBand(b, 6, 7, X0 + 4, X1 - 10);
+  stampSide(b, X1 - 5, 13, false, nationalMark(look, true));
+  stampSide(b, X1 - 5, 13, true, nationalMark(look, true));
+  finish(um, look, 9313, 5, 1.2f);
+  return um;
+}
+
+UnitModel britishWorkshop(const FactionLook& look, int f) {
+  const int GX = 62, GY = 22, GZ = 22;
+  UnitModel um = blank(GX, GY, GZ, false);
+  VoxelModel& b = um.body;
+  const int X0 = 6, X1 = 56;
+  for (float wx : {X0 + 6.0f, X0 + 14.0f, X1 - 6.0f})
+    for (float y0 : {0.0f, 19.0f}) truckWheel(b, wx, 3.2f, y0, y0 + 3, f);
+  b.box(X0, 3, 3, X1 - 2, 19, 6, STEEL_DARK);
+  bedfordCab(b, X1, GY);
+  // A box-bodied workshop with roll-up sides, a crane on the back.
+  b.box(X0, 2, 6, X1 - 11, 20, 16, BASE);
+  b.box(X0, 2, 16, X1 - 11, 20, 17, BASE_DARK);
+  b.box(X0 + 4, 1, 9, X1 - 15, 2, 14, CANVAS_DARK);                  // rolled side shutters
+  b.box(X0 + 4, 20, 9, X1 - 15, 21, 14, CANVAS_DARK);
+  b.box(X0 + 18, 1, 7, X0 + 22, 2, 9, WOOD);                         // fold-down steps
+  b.box(X0 + 2, 8, 17, X0 + 6, 14, 19, STEEL_DARK);                  // crane slewing ring
+  bar(b, X0 + 4, 11, 19, X1 - 14, 11, 21, 0.8f, STEEL);              // jib laid forward
+  b.box(X1 - 15, 10, 17, X1 - 14, 12, 21, STEEL_DARK);               // jib rest
+  b.box(X0 - 1, 4, 4, X0, 18, 6, STEEL_DARK);                        // outrigger
+  teamBand(b, 10, 11, X0, X1 - 11);
+  stampSide(b, X1 - 5, 13, false, nationalMark(look, true));
+  stampSide(b, X1 - 5, 13, true, nationalMark(look, true));
+  finish(um, look, 9414, 6, 1.2f);
+  return um;
 }
 
 // ---------------------------------------------------------------------------
@@ -972,6 +1437,7 @@ void addUnitModels(BakeQueue& q, SpriteCatalog& cat) {
   addUnit(q, cat, "halftrack", &halftrack, 4);
   addUnit(q, cat, "light_tank", &lightTank, 4);
   addUnit(q, cat, "tank", &mediumTank, 4);
+  addUnit(q, cat, "firefly", &britishFirefly, 4);  // the British Sherman with the 17-pounder
   addUnit(q, cat, "heavy_tank", &heavyTank, 4);
   addUnit(q, cat, "tank_destroyer", &tankDestroyer, 4);
   addUnit(q, cat, "artillery", &artillery, 4);

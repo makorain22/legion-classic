@@ -375,7 +375,15 @@ void GameScene::runGallery() {
     }
     int row = 0;
     uint8_t owner = 0;
-    for (const char* fac : {"ger", "rus", "gbr"}) {
+    // --factions narrows it to the armies named ("gbr" for a close look at one).
+    std::vector<std::string> armies{"ger", "rus", "gbr"};
+    if (!opt_.factions.empty()) {
+      armies.clear();
+      std::string f = opt_.factions + ",";
+      for (size_t a = 0, b; (b = f.find(',', a)) != std::string::npos; a = b + 1)
+        if (b > a) armies.push_back(f.substr(a, b - a));
+    }
+    for (const std::string& fac : armies) {
       std::vector<int> inf, veh;
       for (size_t t = 0; t < types_.size(); ++t) {
         const UnitTypeDef& d = types_.get(static_cast<int>(t));
