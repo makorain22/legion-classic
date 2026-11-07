@@ -144,6 +144,7 @@ struct SoldierSpec {
   int frame = 0;        // walk cycle 0..3
   bool cap = false;     // field cap instead of a helmet (snipers)
   bool smock = false;   // camouflage smock
+  bool aim = false;     // weapon up at the shoulder, pointing ahead (dug-in men firing)
 };
 // Draws one soldier facing +X with his feet centred at (ox, oy).
 void soldier(VoxelModel& m, const FactionLook& look, float ox, float oy, const SoldierSpec& s);

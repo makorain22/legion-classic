@@ -439,12 +439,13 @@ bool tutorialDigIn(Builder& b, const std::string& out) {
         objective(0, "Lay six pieces of wire in front of the trench")});
   const int wired = s.on("Wired", {fired(manned), atLeast(0, 6, b.t("gbr_wire"))},
        {done(2), highlight(0, ""),
-        hint(0, "Stand to\nHere they come. Your men fire from the trench on their own. Sandbags, also on the Defend tab, shelter "
-                "men standing beside them: put the Bren teams behind some."),
+        hint(0, "Stand to\nHere they come. Your men fire from the trench on their own.\n\nSandbags, also on the Defend tab, "
+                "are manned the same way: drag a short wall behind the trench, then right-click it (or right next to it) "
+                "with the Bren teams. Three men fit behind each piece, and the bags take half of what is "
+                "thrown at them."),
         objective(0, "Beat off the attack"), spawn(1, b.t("ger_rifleman"), east, 9), attack(1, east, front)});
   const int second = s.on("Second wave", {fired(wired, 40), atMost(1, 0)},
-       {say(0, "More of them, with a machine gun!"), spawn(1, b.t("ger_rifleman"), east, 7),
-        spawn(1, b.t("ger_mg_team"), east, 1), attack(1, east, front)});
+       {say(0, "More of them, coming on in a rush!"), spawn(1, b.t("ger_rifleman"), east, 10), attack(1, east, front)});
   s.on("Held", {fired(second, 10), atMost(1, 0)},
        {done(3), unlock(0, -1), hint(0, "Digging In: passed\nWell dug in, a few men stop many. Next: a base, and paying for it."),
         win(0)});

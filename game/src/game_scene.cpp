@@ -983,8 +983,25 @@ void GameScene::rightClick(Vec2f start, bool dragged, Vec2f end) {
                         ctrl ? kAttackRed : kSelectGreen});
     return;
   }
-  const Entity hit = pickUnit(start, false);
-  // Infantry: right-click a building or bunker to go in, a trench to man it.
+  Entity hit = pickUnit(start, false);
+  // Infantry: right-click a building or bunker to go in, a trench or a wall
+  // of sandbags to man it (on it or right next to it).
+  if (!hit.valid() || !sim_->isTrench(hit)) {
+    bool men = false;
+    for (Entity e : selection_) men = men || types_.get(reg.get<CUnit>(e).type).infantry();
+    if (men && !hit.valid()) {
+      const Vec2f g = groundAt(start);
+      const int tx = static_cast<int>(std::floor(g.x / 256.0f)), ty = static_cast<int>(std::floor(g.y / 256.0f));
+      float best = 200.0f;  // leptons from the piece's middle
+      for (int y = ty - 1; y <= ty + 1; ++y)
+        for (int x = tx - 1; x <= tx + 1; ++x) {
+          const Entity o = sim_->structureAt(x, y);
+          if (!o.valid() || !sim_->isTrench(o) || !sim_->allied(reg.get<CUnit>(o).owner, player_)) continue;
+          const float d = std::hypot(g.x - (x * 256.0f + 128), g.y - (y * 256.0f + 128));
+          if (d < best) best = d, hit = o;
+        }
+    }
+  }
   if (hit.valid()) {
     const UnitTypeDef& hd = types_.get(reg.get<CUnit>(hit).type);
     const bool shelter = hd.garrison > 0 && (reg.get<CUnit>(hit).owner >= MAX_PLAYERS || sim_->allied(reg.get<CUnit>(hit).owner, player_));
@@ -1610,6 +1627,7 @@ void GameScene::onUpdate(float dt, float alpha) {
   if (opt_.gallery) runGallery();
   if (opt_.battleDemo) runBattleDemo();
   if (opt_.orgDemo) runOrgDemo();
+  if (opt_.worksDemo) runWorksDemo();
   if (opt_.flowSelfTest) runFlowSelfTest();
   if (opt_.modsSelfTest) runModsSelfTest();
   editor_->update(dt);
@@ -1933,6 +1951,16 @@ void GameScene::drawUnits(const RectF& view) {
       }
     }
     int bodyFrame = art.body.frame(facing, anim);
+    if (const CGarrisoned* gar = reg.pool<CGarrisoned>().tryGet(e); gar && u.type < postArt_.size()) {
+      // Manning a trench or a sandbag wall: drawn dug in, up to fire when
+      // there is something to shoot at.
+      const bool bags = reg.alive(gar->building) && types_.get(reg.get<CUnit>(gar->building).type).targetable;
+      if (postArt_[u.type] & (bags ? 2 : 1)) {
+        const CCombat* cb = combats.tryGet(e);
+        const bool firing = cb && cb->target.valid();
+        bodyFrame = (bags ? bagArt_ : dugArt_)[u.type].body.frame(facing, firing ? 1 : 0);
+      }
+    }
     if (def.isStructure()) {
       // Sandbag walls and wire join up with neighbours of the same kind.
       if (auto j = art_.joined.find(def.model); j != art_.joined.end()) {

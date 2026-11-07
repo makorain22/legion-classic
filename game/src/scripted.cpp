@@ -536,4 +536,83 @@ void GameScene::runOrgDemo() {
   }
 }
 
+// Field works manned (--works-demo): for each army a trench line and a wall
+// of sandbags, held by every kind of infantry, with a target out in front.
+void GameScene::runWorksDemo() {
+  Registry& reg = sim_->registry();
+  const int32_t T = LEPTONS_PER_TILE;
+  if (frame_ == 2) {
+    Command rm;
+    rm.type = CommandType::Remove;
+    for (uint32_t i : reg.pool<CUnit>().entities()) rm.units.push_back(reg.handle(i));
+    sim_->queue(std::move(rm));
+    galleryAt_ = findLand({map_.widthLeptons() / 2, map_.heightLeptons() / 2});
+    revealMap_ = true;
+    for (uint8_t pl = 0; pl < MAX_PLAYERS; ++pl) {
+      Command ctl;
+      ctl.type = CommandType::SetController;  // nobody but the demo gives orders
+      ctl.player = pl;
+      ctl.amount = -1;
+      sim_->queue(std::move(ctl));
+      Command team;
+      team.type = CommandType::SetTeam;  // the British beside the Germans, the Soviets between
+      team.player = pl;
+      team.count = pl == 1 ? 1 : 0;
+      sim_->queue(std::move(team));
+    }
+    const Vec2i c = galleryAt_;
+    const int ct = c.x / T, cr = c.y / T;
+    Command sp;
+    sp.type = CommandType::SpawnList;
+    auto put = [&](const std::string& id, uint8_t owner, int tx, int ty, int facing) {
+      const int t = types_.find(id);
+      if (t >= 0) sp.spawns.push_back({static_cast<uint16_t>(t), owner, {tx * T + 128, ty * T + 128}, angleOfFacing(facing), -1});
+    };
+    const char* facs[3] = {"ger", "rus", "gbr"};
+    for (int f = 0; f < 3; ++f) {
+      const int y0 = cr - 6 + f * 5;
+      for (int i = 0; i < 6; ++i) put(std::string(facs[f]) + "_trench", static_cast<uint8_t>(f), ct - 8 + i, y0, 0);
+      put(std::string(facs[f]) + "_trench", static_cast<uint8_t>(f), ct - 3, y0 + 1, 0);
+      for (int i = 0; i < 6; ++i) put(std::string(facs[f]) + "_sandbags", static_cast<uint8_t>(f), ct + 1 + i, y0, 0);
+      put(std::string(facs[f]) + "_sandbags", static_cast<uint8_t>(f), ct + 6, y0 + 1, 0);
+      // Their men, standing behind; occupied two frames later.
+      const char* kinds[5] = {"_rifleman", "_mg_team", "_at_team", "_sniper", "_engineer"};
+      for (int side = 0; side < 2; ++side)
+        for (int k = 0; k < 8; ++k)
+          put(std::string(facs[f]) + kinds[k % 5], static_cast<uint8_t>(f), (side ? ct + 1 : ct - 8) + k % 6, y0 - 2, 2);
+    }
+    sim_->queue(std::move(sp));
+    centerOn({c.x - T, c.y - 2 * T});
+    if (opt_.zoom >= 2.0f) { cam_.zoomStep(+1, {cam_.viewportW() * 0.5f, cam_.viewportH() * 0.5f}); cam_.zoomStep(+1, {cam_.viewportW() * 0.5f, cam_.viewportH() * 0.5f}); }
+  }
+  if (frame_ == 4) {
+    // Every man to the work in front of him.
+    std::vector<Entity> pieces, men;
+    for (uint32_t i : reg.pool<CUnit>().entities()) {
+      const Entity h = reg.handle(i);
+      if (sim_->isTrench(h)) pieces.push_back(h);
+      else if (types_.get(reg.pool<CUnit>().get(i).type).infantry()) men.push_back(h);
+    }
+    for (Entity m : men) {
+      const CPosition& p = reg.get<CPosition>(m);
+      Entity best;
+      int32_t bd = INT32_MAX;
+      for (Entity pc : pieces) {
+        if (reg.get<CUnit>(pc).owner != reg.get<CUnit>(m).owner) continue;
+        const CPosition& q = reg.get<CPosition>(pc);
+        const int32_t d = std::abs(q.x - p.x) + std::abs(q.y - p.y);
+        if (d < bd) bd = d, best = pc;
+      }
+      if (!best.valid()) continue;
+      Command occ;
+      occ.type = CommandType::Occupy;
+      occ.player = reg.get<CUnit>(m).owner;
+      occ.units = {m};
+      occ.targetUnit = best;
+      sim_->queue(std::move(occ));
+    }
+    selection_.clear();
+  }
+}
+
 }  // namespace legion

@@ -209,13 +209,16 @@
       "cost": 5,
       "category": "fortification",
       "coverAround": 40,
+      "cover": 50,
+      "garrison": 3,
+      "blocks": ["wheeled", "tracked"],
       "autoTarget": false,
       "builtAt": "yard",
       "requires": [
         "ger_yard"
       ],
       "group": "Field works",
-      "description": "Infantry beside sandbags take less damage."
+      "description": "A low wall of bags. Infantry beside it take less damage; right-click near it with infantry to man the wall (three men a piece). Vehicles cannot cross it."
     },
     {
       "id": "ger_trench",
@@ -501,13 +504,16 @@
       "cost": 5,
       "category": "fortification",
       "coverAround": 40,
+      "cover": 50,
+      "garrison": 3,
+      "blocks": ["wheeled", "tracked"],
       "autoTarget": false,
       "builtAt": "yard",
       "requires": [
         "rus_yard"
       ],
       "group": "Field works",
-      "description": "Infantry beside sandbags take less damage."
+      "description": "A low wall of bags. Infantry beside it take less damage; right-click near it with infantry to man the wall (three men a piece). Vehicles cannot cross it."
     },
     {
       "id": "rus_trench",
@@ -1149,13 +1155,16 @@
       "cost": 5,
       "category": "fortification",
       "coverAround": 40,
+      "cover": 50,
+      "garrison": 3,
+      "blocks": ["wheeled", "tracked"],
       "autoTarget": false,
       "builtAt": "yard",
       "requires": [
         "gbr_yard"
       ],
       "group": "Field works",
-      "description": "Infantry beside sandbags take less damage."
+      "description": "A low wall of bags. Infantry beside it take less damage; right-click near it with infantry to man the wall (three men a piece). Vehicles cannot cross it."
     },
     {
       "id": "gbr_trench",

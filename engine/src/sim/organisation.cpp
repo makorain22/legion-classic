@@ -256,10 +256,52 @@ bool Simulation::inTrench(Entity u) const {
   return g && isTrench(g->building);
 }
 
-namespace {
-// Where the men of a trench piece crouch, from its centre (leptons).
-constexpr int32_t kTrenchSlots[3][2] = {{-64, -40}, {56, 8}, {-16, 68}};
-}  // namespace
+int Simulation::fieldworkMask(Entity b) const {
+  if (!reg_.alive(b) || !reg_.has<CStructure>(b)) return 0;
+  const CStructure& s = reg_.get<CStructure>(b);
+  const CUnit& u = reg_.get<CUnit>(b);
+  auto same = [&](int x, int y) {
+    const Entity o = structureAt(x, y);
+    return o.valid() && reg_.get<CUnit>(o).type == u.type && reg_.get<CUnit>(o).owner == u.owner;
+  };
+  return (same(s.tx + 1, s.ty) ? 1 : 0) | (same(s.tx, s.ty + 1) ? 2 : 0) | (same(s.tx - 1, s.ty) ? 4 : 0) |
+         (same(s.tx, s.ty - 1) ? 8 : 0);
+}
+
+Vec2i Simulation::fieldworkSlot(Entity b, size_t i) const {
+  const CPosition& bp = reg_.get<CPosition>(b);
+  const int mask = fieldworkMask(b);
+  // Points along the line's arms out from the centre, then the centre, then
+  // closer in: the men spread out along the channel or the wall.
+  static constexpr int32_t kDir[4][2] = {{1, 0}, {0, 1}, {-1, 0}, {0, -1}};
+  int32_t pts[9][2];
+  int n = 0;
+  for (int a = 0; a < 4; ++a)
+    if (mask & (1 << a)) pts[n][0] = kDir[a][0] * 92, pts[n][1] = kDir[a][1] * 92, ++n;
+  pts[n][0] = 0, pts[n][1] = 0, ++n;
+  for (int a = 0; a < 4; ++a)
+    if (mask & (1 << a)) pts[n][0] = kDir[a][0] * 46, pts[n][1] = kDir[a][1] * 46, ++n;
+  if (mask == 0) {  // a lone pit: three men round its middle
+    static constexpr int32_t kPit[3][2] = {{-34, -18}, {30, -14}, {0, 32}};
+    pts[0][0] = kPit[0][0], pts[0][1] = kPit[0][1];
+    pts[1][0] = kPit[1][0], pts[1][1] = kPit[1][1];
+    pts[2][0] = kPit[2][0], pts[2][1] = kPit[2][1];
+    n = 3;
+  }
+  const int k = static_cast<int>(i % static_cast<size_t>(std::min(n, 3)));
+  int32_t x = pts[k][0], y = pts[k][1];
+  // A trench is dug into the ground and cannot be shot at; a sandbag wall
+  // stands on it and can.
+  if (types_.get(reg_.get<CUnit>(b).type).targetable) {
+    // Behind a wall of bags: step back off it, away from the camera, so the
+    // bags stand between the men and the front.
+    const bool alongX = (mask & 5) != 0 && (x != 0 || !(mask & 10));
+    if (alongX) y -= 46;
+    else x -= 46;
+    if (mask == 0) x -= 20, y -= 20;
+  }
+  return {bp.x + x, bp.y + y};
+}
 
 int Simulation::garrisonLevel(Entity building) const {
   if (!reg_.alive(building) || !reg_.has<CUnit>(building)) return 0;
@@ -278,10 +320,7 @@ void Simulation::enterBuilding(Entity u, Entity b) {
   setOrderIdle(u);
   const CPosition& bp = reg_.get<CPosition>(b);
   Vec2i at{bp.x, bp.y};
-  if (isTrench(b)) {
-    const size_t slot = (reg_.get<CGarrison>(b).occupants.size() - 1) % 3;
-    at = {bp.x + kTrenchSlots[slot][0], bp.y + kTrenchSlots[slot][1]};
-  }
+  if (isTrench(b)) at = fieldworkSlot(b, reg_.get<CGarrison>(b).occupants.size() - 1);
   reg_.get<CPosition>(u) = {at.x, at.y};
   reg_.get<CPrevPosition>(u) = {at.x, at.y};
   CMover& m = reg_.get<CMover>(u);
@@ -380,7 +419,9 @@ void Simulation::applyOccupy(const Command& cmd) {
       COrder& o = reg_.get<COrder>(e);
       o.type = OrderType::Occupy;
       o.target = pieces[pick];
-      o.chasedAt = {tiles[pick].x * 256 + 128, tiles[pick].y * 256 + 128};
+      // Into the trench; behind the wall of bags, to the place he will hold.
+      o.chasedAt = td.targetable ? fieldworkSlot(pieces[pick], static_cast<size_t>(taken[pick] - 1))
+                                 : Vec2i{tiles[pick].x * 256 + 128, tiles[pick].y * 256 + 128};
       requestPath(e, o.chasedAt);
     }
     return;
@@ -430,7 +471,11 @@ void Simulation::stepGarrisons() {
     const int32_t gx = std::max({0, st.tx * 256 - p.x, p.x - (st.tx + st.w) * 256});
     const int32_t gy = std::max({0, st.ty * 256 - p.y, p.y - (st.ty + st.h) * 256});
     const bool trench = isTrench(o.target);
-    if (std::max(gx, gy) <= (trench ? 96 : 320)) {
+    // A wall of bags is manned from beside it as well as on it.
+    const bool bags = trench && types_.get(reg_.get<CUnit>(o.target).type).targetable;
+    const bool there = bags ? std::max(gx, gy) <= 176 || distance(p.x - o.chasedAt.x, p.y - o.chasedAt.y) <= 96
+                            : std::max(gx, gy) <= (trench ? 96 : 320);
+    if (there) {
       arrivals.push_back({u, o.target});
     } else {
       const CMover& m = reg_.get<CMover>(u);
@@ -459,8 +504,12 @@ void Simulation::stepGarrisons() {
     if (!isTrench(bh)) continue;
     const CPosition& bp = pos.get(b);
     const auto& occ = reg_.pool<CGarrison>().get(b).occupants;
+    (void)bp;
     for (size_t i = 0; i < occ.size(); ++i)
-      if (reg_.alive(occ[i])) pos.get(occ[i].index) = {bp.x + kTrenchSlots[i % 3][0], bp.y + kTrenchSlots[i % 3][1]};
+      if (reg_.alive(occ[i])) {
+        const Vec2i at = fieldworkSlot(bh, i);
+        pos.get(occ[i].index) = {at.x, at.y};
+      }
   }
   for (Entity u : evict) {
     leaveBuilding(u);

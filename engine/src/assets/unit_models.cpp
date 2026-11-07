@@ -682,6 +682,125 @@ VoxelModel corpseTwo(const FactionLook& look, int) {
   return m;
 }
 
+// ---------------------------------------------------------------------------
+// Dug-in infantry: the same men down in a trench, or kneeling behind a low
+// wall of bags, each with his own stretch of parapet in front so he reads as
+// dug in whichever way he faces. Frame 0 keeps low, frame 1 is up and firing.
+// ---------------------------------------------------------------------------
+enum class Post : uint8_t { Trench, Bags };
+
+float hashf(uint32_t a, uint32_t b) { return (hash32(a * 2654435761u ^ (b + 0x9e3779b9u)) & 0xFFFF) / 65535.0f; }
+
+// A sandbag at soldier scale (about 50 x 30 x 15 cm).
+void smallBag(VoxelModel& m, float cx, float cy, float cz, bool alongX, uint32_t seed) {
+  const float hx = alongX ? 2.6f : 1.6f, hy = alongX ? 1.6f : 2.6f, hz = 1.1f;
+  const float tone = hashf(seed, 3);
+  const uint8_t col = tone < 0.55f ? SANDBAG : tone < 0.85f ? SANDBAG_DARK : DRY_GRASS;
+  for (int z = static_cast<int>(cz - hz - 1); z <= static_cast<int>(cz + hz + 1); ++z)
+    for (int y = static_cast<int>(cy - hy - 1); y <= static_cast<int>(cy + hy + 1); ++y)
+      for (int x = static_cast<int>(cx - hx - 1); x <= static_cast<int>(cx + hx + 1); ++x) {
+        const float dx = (x + 0.5f - cx) / hx, dy = (y + 0.5f - cy) / hy, dz = (z + 0.5f - cz) / hz;
+        if (std::pow(std::abs(dx), 2.4f) + std::pow(std::abs(dy), 2.4f) + dz * dz <= 1.0f)
+          m.set(x, y, z, std::abs(dz) > 0.6f && hashf(seed + x * 7 + y, 5) < 0.3f ? static_cast<uint8_t>(SANDBAG_DARK) : col);
+      }
+}
+
+// The parapet in front of a man (or two) at x = fx, spanning y0..y1.
+void parapet(VoxelModel& m, Post post, int fx, int y0, int y1, uint32_t seed) {
+  const float mid = (y0 + y1) * 0.5f, half = (y1 - y0) * 0.5f;
+  if (post == Post::Trench) {
+    // Thrown-up earth, curving back at the ends, a few bags along the top.
+    for (int y = y0 - 2; y <= y1 + 2; ++y) {
+      const float t = std::abs(y + 0.5f - mid) / (half + 2.0f);
+      const int bend = static_cast<int>(t * t * 4.0f);
+      const int h = t > 0.85f ? 1 : 2;
+      for (int x = fx - bend; x < fx - bend + 4; ++x)
+        for (int z = 0; z < h + (x == fx - bend + 1 ? 1 : 0); ++z)
+          m.set(x, y, z, hashf(seed + x * 13 + y * 7, z) < 0.35f ? static_cast<uint8_t>(EARTH_DARK) : static_cast<uint8_t>(EARTH));
+    }
+    for (float y = static_cast<float>(y0); y <= y1; y += 5.4f) smallBag(m, fx + 1.5f, y + 1.5f, 3.0f, false, seed++);
+  } else {
+    // Three courses of bags in a shallow arc, laid in a stretcher bond.
+    for (int course = 0; course < 3; ++course)
+      for (float y = static_cast<float>(y0 - 3) + (course & 1) * 2.6f; y <= y1 + 3; y += 5.2f) {
+        const float t = std::abs(y - mid) / (half + 3.0f);
+        smallBag(m, fx + 1.6f - t * t * 4.0f, y, 1.1f + course * 2.1f, false, seed++);
+      }
+  }
+}
+
+UnitModel dugIn(const FactionLook& look, int f, Post post, Kit lead, Kit second, bool cap = false, bool smock = false) {
+  const bool pair = second != lead || lead == Kit::MachineGun;
+  const int GX = 30, GY = pair ? 24 : 16, GZ = 20;
+  UnitModel um;
+  um.body = VoxelModel(GX, GY, GZ);
+  VoxelModel& m = um.body;
+  const bool up = f == 1;
+  // How far each man sits below the ground line.
+  const int sink = post == Post::Trench ? (up ? 7 : 10) : (up ? 0 : 3);
+  const int cx = 13;  // the men's feet, front to back
+  auto place = [&](float cy, SoldierSpec s) {
+    VoxelModel man(GX, GY, 24);
+    soldier(man, look, cx, cy, s);
+    for (int z = sink; z < 24; ++z)
+      for (int y = 0; y < GY; ++y)
+        for (int x = 0; x < GX; ++x)
+          if (const uint8_t c = man.get(x, y, z)) m.set(x, y, z - sink, c);
+  };
+  SoldierSpec a;
+  a.kit = lead;
+  a.cap = cap;
+  a.smock = smock;
+  a.aim = up;
+  a.frame = 0;
+  const float leadY = pair ? GY * 0.5f - 4.5f : GY * 0.5f;
+  const int fx = cx + 4;
+  if (lead == Kit::MachineGun) {
+    // The gun lies on the parapet on its bipod; the gunner behind it, the
+    // loader beside him with a belt.
+    a.kit = Kit::Ammo;
+    a.aim = false;
+    place(leadY, a);
+    SoldierSpec b = a;
+    place(leadY + 8, b);
+    const int zg = post == Post::Trench ? 4 : 6;
+    m.box(cx + 1, static_cast<int>(leadY), zg, cx + 12, static_cast<int>(leadY) + 1, zg + 1, STEEL_DARK);  // barrel and receiver
+    m.box(cx, static_cast<int>(leadY), zg, cx + 3, static_cast<int>(leadY) + 1, zg + 1, STOCK);
+    m.box(cx + 3, static_cast<int>(leadY) - 1, zg - 1, cx + 6, static_cast<int>(leadY) + 2, zg + 1, STEEL_DARK);
+    m.set(cx + 9, static_cast<int>(leadY) - 1, zg - 1, STEEL_DARK);  // bipod
+    m.set(cx + 9, static_cast<int>(leadY) + 1, zg - 1, STEEL_DARK);
+    m.box(cx + 4, static_cast<int>(leadY) + 1, zg, cx + 5, static_cast<int>(leadY) + 4, zg + 1, BASE_LIGHT);  // the belt
+    if (up) m.set(cx + 12, static_cast<int>(leadY), zg, LAMP);  // muzzle glow
+    parapet(m, post, fx + 2, static_cast<int>(leadY) - 3, static_cast<int>(leadY) + 10, 811u + f);
+  } else {
+    place(leadY, a);
+    if (pair) {
+      SoldierSpec b;
+      b.kit = second;
+      b.aim = up;
+      place(leadY + 9, b);
+    }
+    parapet(m, post, fx + (lead == Kit::RocketTube || lead == Kit::AtRifle ? 1 : 0), static_cast<int>(leadY) - 3,
+            static_cast<int>(leadY) + (pair ? 12 : 3), 523u + static_cast<uint32_t>(lead) * 17u + f);
+  }
+  return um;
+}
+
+UnitModel dugRifleman(const FactionLook& look, int f) { return dugIn(look, f, Post::Trench, Kit::Rifle, Kit::Rifle); }
+UnitModel dugSniper(const FactionLook& look, int f) { return dugIn(look, f, Post::Trench, Kit::ScopedRifle, Kit::ScopedRifle, true, true); }
+UnitModel dugEngineer(const FactionLook& look, int f) { return dugIn(look, f, Post::Trench, Kit::Smg, Kit::Smg); }
+UnitModel dugMg(const FactionLook& look, int f) { return dugIn(look, f, Post::Trench, Kit::MachineGun, Kit::Ammo); }
+UnitModel dugAt(const FactionLook& look, int f) {
+  return dugIn(look, f, Post::Trench, look.sloped ? Kit::AtRifle : Kit::RocketTube, Kit::Rifle);
+}
+UnitModel bagRifleman(const FactionLook& look, int f) { return dugIn(look, f, Post::Bags, Kit::Rifle, Kit::Rifle); }
+UnitModel bagSniper(const FactionLook& look, int f) { return dugIn(look, f, Post::Bags, Kit::ScopedRifle, Kit::ScopedRifle, true, true); }
+UnitModel bagEngineer(const FactionLook& look, int f) { return dugIn(look, f, Post::Bags, Kit::Smg, Kit::Smg); }
+UnitModel bagMg(const FactionLook& look, int f) { return dugIn(look, f, Post::Bags, Kit::MachineGun, Kit::Ammo); }
+UnitModel bagAt(const FactionLook& look, int f) {
+  return dugIn(look, f, Post::Bags, look.sloped ? Kit::AtRifle : Kit::RocketTube, Kit::Rifle);
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -768,6 +887,22 @@ void soldier(VoxelModel& m, const FactionLook& look, float ox, float oy, const S
     m.set(X + 2 + fwd, Y - 1, za, SKIN);
     m.set(X + 2 + fwd, Y + 4, za, SKIN);
   };
+  if (s.aim && (s.kit == Kit::Rifle || s.kit == Kit::ScopedRifle || s.kit == Kit::Smg || s.kit == Kit::Ammo)) {
+    // Shouldered and laid on the target: both arms forward to the stock.
+    const int zs = zt + 5;
+    m.box(X + 1, Y - 1, zs - 1, X + 2, Y, zt + 6, tunic);
+    m.box(X + 2, Y - 1, zs - 1, X + 5, Y, zs, tunic);
+    m.set(X + 5, Y - 1, zs - 1, SKIN);
+    m.box(X + 2, Y + 3, zs - 1, X + 4, Y + 4, zs, tunic);
+    if (s.kit == Kit::Smg) {
+      m.box(X + 1, Y + 2, zs, X + 8, Y + 3, zs + 1, STEEL_DARK);
+    } else {
+      m.box(X, Y + 2, zs, X + 7, Y + 3, zs + 1, STOCK);
+      m.box(X + 7, Y + 2, zs, X + 11, Y + 3, zs + 1, STEEL_DARK);
+      if (s.kit == Kit::ScopedRifle) m.box(X + 3, Y + 2, zs + 1, X + 6, Y + 3, zs + 2, STEEL_DARK);
+    }
+    return;
+  }
   switch (s.kit) {
     case Kit::Rifle:
     case Kit::ScopedRifle:
@@ -822,6 +957,17 @@ void addUnitModels(BakeQueue& q, SpriteCatalog& cat) {
   addUnit(q, cat, "at_team", &atTeam, 4, &corpseTwo, kInfantryVoxel);
   addUnit(q, cat, "engineer", &engineer, 4, &corpseOne, kInfantryVoxel);
   addUnit(q, cat, "sniper", &sniper, 4, &corpseOne, kInfantryVoxel);
+  // The same men dug in: "<model>_dug" in a trench, "<model>_bags" behind sandbags.
+  addUnit(q, cat, "rifleman_dug", &dugRifleman, 2, nullptr, kInfantryVoxel);
+  addUnit(q, cat, "mg_team_dug", &dugMg, 2, nullptr, kInfantryVoxel);
+  addUnit(q, cat, "at_team_dug", &dugAt, 2, nullptr, kInfantryVoxel);
+  addUnit(q, cat, "engineer_dug", &dugEngineer, 2, nullptr, kInfantryVoxel);
+  addUnit(q, cat, "sniper_dug", &dugSniper, 2, nullptr, kInfantryVoxel);
+  addUnit(q, cat, "rifleman_bags", &bagRifleman, 2, nullptr, kInfantryVoxel);
+  addUnit(q, cat, "mg_team_bags", &bagMg, 2, nullptr, kInfantryVoxel);
+  addUnit(q, cat, "at_team_bags", &bagAt, 2, nullptr, kInfantryVoxel);
+  addUnit(q, cat, "engineer_bags", &bagEngineer, 2, nullptr, kInfantryVoxel);
+  addUnit(q, cat, "sniper_bags", &bagSniper, 2, nullptr, kInfantryVoxel);
   addUnit(q, cat, "scoutcar", &scoutCar, 3);
   addUnit(q, cat, "halftrack", &halftrack, 4);
   addUnit(q, cat, "light_tank", &lightTank, 4);

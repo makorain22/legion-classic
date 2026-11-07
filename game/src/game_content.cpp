@@ -125,6 +125,20 @@ bool GameScene::pickUnitArt(std::string& error) {
     }
     unitArt_.push_back(a);
   }
+  // Infantry dug in: the same men in a trench or behind sandbags, where the
+  // art has them.
+  postArt_.assign(types_.size(), 0);
+  dugArt_.assign(types_.size(), UnitArt{});
+  bagArt_.assign(types_.size(), UnitArt{});
+  for (size_t i = 0; i < types_.size(); ++i) {
+    const UnitTypeDef& t = types_.get(static_cast<int>(i));
+    if (!t.infantry()) continue;
+    UnitTypeDef v = t;
+    v.model = t.model + "_dug";
+    if (artFor(v, dugArt_[i])) postArt_[i] |= 1;
+    v.model = t.model + "_bags";
+    if (artFor(v, bagArt_[i])) postArt_[i] |= 2;
+  }
   return true;
 }
 

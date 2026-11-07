@@ -409,6 +409,29 @@ void Simulation::stepRepairs() {
     COrder& o = orders.get(ei);
     const Entity e = reg_.handle(ei);
     const CPosition& p = pos.get(ei);
+    if (const CGarrisoned* g = reg_.pool<CGarrisoned>().tryGet(ei)) {
+      // A pioneer manning a work keeps it in repair, and the pieces of the
+      // same line or the walls right round it once it is whole.
+      Entity fix = canRepair(e, g->building) ? g->building : kNullEntity;
+      if (!fix.valid() && reg_.alive(g->building) && reg_.has<CStructure>(g->building)) {
+        const CStructure& s = reg_.get<CStructure>(g->building);
+        int32_t worst = INT32_MAX;
+        for (int y = s.ty - 2; y < s.ty + s.h + 2; ++y)
+          for (int x = s.tx - 2; x < s.tx + s.w + 2; ++x) {
+            const Entity t = structureAt(x, y);
+            if (!t.valid() || t == fix || !canRepair(e, t)) continue;
+            if (types_.get(units.get(t.index).type).category != UnitCategory::Fortification && t != g->building) continue;
+            const CUnit& tu = units.get(t.index);
+            const int32_t left = tu.health * 100 / std::max(1, types_.get(tu.type).maxHealth);
+            if (left < worst) worst = left, fix = t;
+          }
+      }
+      if (fix.valid()) {
+        CUnit& t = units.get(fix.index);
+        t.health = std::min(types_.get(t.type).maxHealth, t.health + def.repair);
+      }
+      continue;
+    }
     if (o.type == OrderType::Idle && (tick_ + ei) % 15 == 0) {
       // Look for the nearest damaged friend in sight.
       Entity best;

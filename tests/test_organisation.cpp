@@ -267,6 +267,94 @@ TEST_CASE("men dig into a trench line, three to a piece, and stay until evacuate
   for (Entity m : men) CHECK_FALSE(sim.inTrench(m));
 }
 
+TEST_CASE("men man a wall of sandbags like a trench, behind the bags; tanks cannot cross it") {
+  Rules R;
+  Map map(64, 64, 303);
+  Simulation sim(map, R.types, R.weapons, 7);
+  Command c;
+  c.type = CommandType::SpawnList;
+  for (int i = 0; i < 3; ++i) c.spawns.push_back({R.t("gbr_sandbags"), 0, {(20 + i) * T + T / 2, 20 * T + T / 2}, 0, -1});
+  sim.queue(c);
+  sim.tick();
+  std::vector<Entity> pieces;
+  for (const auto& r : sim.spawnLog()) pieces.push_back(r.entity);
+  REQUIRE(pieces.size() == 3);
+  CHECK(sim.isTrench(pieces[1]));
+  CHECK(sim.fieldworkMask(pieces[1]) == (1 | 4));  // joined both ways along X
+  CHECK_FALSE(sim.map().passable(21, 20, Locomotor::Tracked));
+  CHECK(sim.map().passable(21, 20, Locomotor::Foot));
+  std::vector<Entity> men = spawnMany(sim, R.t("gbr_rifleman"), 0, {21 * T, 25 * T}, 7);
+  Command occ;
+  occ.type = CommandType::Occupy;
+  occ.player = 0;
+  occ.units = men;
+  occ.targetUnit = pieces[1];
+  sim.queue(occ);
+  for (int i = 0; i < 15 * 25; ++i) sim.tick();
+  int manned = 0;
+  for (Entity m : men) manned += sim.inTrench(m);
+  CHECK(manned == 7);
+  for (Entity p : pieces) CHECK(sim.registry().get<CGarrison>(p).occupants.size() <= 3);
+  // Behind the wall: off its line, on the far side, spread along it.
+  for (Entity p : pieces)
+    for (Entity m : sim.registry().get<CGarrison>(p).occupants) {
+      const CPosition& mp = sim.registry().get<CPosition>(m);
+      CHECK(mp.y < 20 * T + T / 2);
+      CHECK(mp.y > 20 * T - T / 2);
+    }
+  // The bags take half.
+  auto& units = sim.registry().pool<CUnit>();
+  const int32_t hp = units.get(men[0].index).health;
+  sim.debugDamage(men[0], 5000);
+  CHECK(hp - units.get(men[0].index).health == 25);
+}
+
+TEST_CASE("a pioneer manning a field work keeps it and the pieces beside it in repair") {
+  Rules R;
+  Map map(64, 64, 304);
+  Simulation sim(map, R.types, R.weapons, 8);
+  Command c;
+  c.type = CommandType::SpawnList;
+  for (int i = 0; i < 3; ++i) c.spawns.push_back({R.t("ger_sandbags"), 0, {(20 + i) * T + T / 2, 20 * T + T / 2}, 0, -1});
+  c.spawns.push_back({R.t("ger_bunker"), 0, {30 * T, 30 * T}, 0, -1});
+  sim.queue(c);
+  sim.tick();
+  std::vector<Entity> pieces;
+  for (const auto& r : sim.spawnLog()) pieces.push_back(r.entity);
+  REQUIRE(pieces.size() == 4);
+  auto& units = sim.registry().pool<CUnit>();
+  const int32_t full = R.types.get(R.t("ger_sandbags")).maxHealth;
+  sim.debugDamage(pieces[0], full * 60);  // hundredths: down to 40%
+  sim.debugDamage(pieces[2], full * 30);
+  REQUIRE(units.get(pieces[0].index).health < full);
+  std::vector<Entity> pioneer = spawnMany(sim, R.t("ger_engineer"), 0, {21 * T, 23 * T}, 1);
+  Command occ;
+  occ.type = CommandType::Occupy;
+  occ.player = 0;
+  occ.units = pioneer;
+  occ.targetUnit = pieces[1];
+  sim.queue(occ);
+  for (int i = 0; i < 15 * 60; ++i) sim.tick();
+  REQUIRE(sim.inTrench(pioneer[0]));
+  CHECK(units.get(pieces[0].index).health == full);  // the neighbours mended from where he is
+  CHECK(units.get(pieces[2].index).health == full);
+  // And a bunker he holds.
+  const Entity bunker = pieces[3];
+  const int32_t bfull = R.types.get(R.t("ger_bunker")).maxHealth;
+  sim.debugDamage(bunker, bfull * 50);
+  Command out;
+  out.type = CommandType::Unload;
+  out.player = 0;
+  out.units = pioneer;
+  sim.queue(out);
+  sim.tick();
+  occ.targetUnit = bunker;
+  sim.queue(occ);
+  for (int i = 0; i < 15 * 90; ++i) sim.tick();
+  REQUIRE(sim.registry().has<CGarrisoned>(pioneer[0]));
+  CHECK(units.get(bunker.index).health == bfull);
+}
+
 TEST_CASE("tanks and infantry bind into a battle group; vehicles alone bind by role") {
   Rules R;
   Map map(64, 64, 302);

@@ -22,7 +22,7 @@ void usage() {
            "         --offscreen --frames N --screenshot out.png --demo --fixed-dt --no-help --debug\n"
            "         --dump-atlas atlas.png --editor --open map.lmap --editor-demo --live-demo\n"
            "         --tool rules[:unit_id]|sprites[:units/tank@ger]|mods --mods-selftest\n"
-           "         --menu --ai-battle --side N --biome temperate|winter|desert|tropical|urban --gallery\n"
+           "         --menu --ai-battle --side N --biome temperate|winter|desert|tropical|urban --gallery --works-demo\n"
            "         --export-sprites DIR (write every sprite as PNG for repainting; see docs/ART_PIPELINE.md)\n"
            "         --import-blitzkrieg DATA (make the Blitzkrieg art pack from the game's Data folder)");
 }
@@ -86,6 +86,7 @@ int main(int argc, char** argv) {
     else if (a == "--gallery") opt.gallery = true;
     else if (a == "--battle-demo") opt.battleDemo = true;
     else if (a == "--org-demo") opt.orgDemo = true;
+    else if (a == "--works-demo") opt.worksDemo = true;
     else if (a == "--export-sprites") opt.exportSprites = next();
     else if (a == "--import-blitzkrieg") importDir = next();
     else if (a == "--no-art-pack") opt.noArtPack = true;

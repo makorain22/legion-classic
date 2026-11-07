@@ -350,9 +350,15 @@ class Simulation {
   int32_t groupBonus(Entity shooter) const;  // extra firepower, percent
   static int32_t echelonSize(bool vehicles, Echelon e);
   bool canGarrison(Entity unit, Entity building) const;
-  // A trench piece: men inside stay visible, fire out, and leave only when
-  // told to evacuate (not when ordered to move).
+  // A piece of a field-work line that men man: a trench or a sandbag wall.
+  // Men in it stay visible, fire out, and leave only when told to evacuate
+  // (not when ordered to move).
   bool isTrench(Entity structure) const;
+  // Where the i-th man of a trench or sandbag piece takes post (leptons):
+  // along the dug channel, or just behind the wall of bags.
+  Vec2i fieldworkSlot(Entity piece, size_t i) const;
+  // Neighbours of the same kind and side: +X 1, +Y 2, -X 4, -Y 8.
+  int fieldworkMask(Entity piece) const;
   int32_t groupStrength(const std::vector<Entity>& members, bool combined) const;
   void applyCommandBody(const Command& cmd);
   bool inTrench(Entity unit) const;

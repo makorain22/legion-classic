@@ -76,6 +76,7 @@ struct SceneOptions {
   std::string encyclopedia;      // open the encyclopedia on this unit id at start (screenshots)        // ignore content/art/blitzkrieg (compare with the built-in art)
   bool gallery = false;
   bool battleDemo = false;       // two forces fighting in the open (screenshots)
+  bool worksDemo = false;        // trenches and sandbag walls manned by every kind of infantry, for screenshots
   bool orgDemo = false;          // fireteams, platoons, a garrison and fog chips, for screenshots         // every unit lined up, for screenshots of the art
   bool economyDemo = false;     // scripted base building, for automated screenshots
   bool noBases = false;         // start with armies only, no bases (classic skirmish sandbox)
@@ -284,6 +285,7 @@ class GameScene final : public slave::Scene {
   void runGallery();
   void runBattleDemo();
   void runOrgDemo();
+  void runWorksDemo();
   slave::Vec2i galleryAt_{0, 0};
   void drawFormationPicker();
   bool formationPicker_ = false;
@@ -402,6 +404,10 @@ class GameScene final : public slave::Scene {
   std::unique_ptr<slave::MapFile> snapshot_;
   bool editorFog_ = false;
   std::vector<slave::UnitArt> unitArt_;  // by unit type index
+  // Infantry manning field works: in a trench (bit 1, dugArt_) or behind
+  // sandbags (bit 2, bagArt_), by unit type index.
+  std::vector<uint8_t> postArt_;
+  std::vector<slave::UnitArt> dugArt_, bagArt_;
   bool artPack_ = false;
   bool pickUnitArt(std::string& error);
   struct CardHit {

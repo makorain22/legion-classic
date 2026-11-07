@@ -333,7 +333,14 @@ TEST_CASE("tutorial 3, Digging In, is won by doing what the hints say") {
   REQUIRE(b.runUntil([&] { return b.fired("Manned"); }, 90));
   walls("gbr_wire", 28, 27, 36);
   REQUIRE(b.runUntil([&] { return b.fired("Wired"); }, 30));
-  b.order(CommandType::Move, b.ofType(0, "gbr_mg_team"), {23, 32});
+  // The Bren teams man a short wall of sandbags behind the trench.
+  walls("gbr_sandbags", 24, 31, 32);
+  b.runUntil([] { return false; }, 1);
+  const auto bags = b.ofType(0, "gbr_sandbags");
+  REQUIRE(bags.size() == 2);
+  b.order(CommandType::Occupy, b.ofType(0, "gbr_mg_team"), {0, 0}, bags[0]);
+  b.runUntil([] { return false; }, 25);  // machine-gun teams are slow
+  for (Entity m : b.ofType(0, "gbr_mg_team")) CHECK(b.sim->inTrench(m));
   REQUIRE(b.runUntil([&] { return b.won(); }, 420));
   CHECK_FALSE(b.sim->buildLocked(0, R.types.find("gbr_rifleman")));  // everything open again
 }
