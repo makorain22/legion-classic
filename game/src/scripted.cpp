@@ -623,4 +623,89 @@ void GameScene::runWorksDemo() {
   }
 }
 
+// The civilian buildings in rows (--town-demo), or the camera on the first
+// bridge of the map, with a column crossing it (--bridge-demo).
+void GameScene::runTownDemo() {
+  Registry& reg = sim_->registry();
+  const int32_t T = LEPTONS_PER_TILE;
+  if (frame_ != 2) {
+    if (frame_ == 3) revealMap_ = true;
+    if (frame_ == 4 && opt_.townDemo == 2) {
+      Command mv;
+      mv.type = CommandType::Move;
+      mv.player = 0;
+      for (uint32_t i : reg.pool<CUnit>().entities())
+        if (reg.pool<CUnit>().get(i).owner == 0 && !types_.get(reg.pool<CUnit>().get(i).type).isStructure())
+          mv.units.push_back(reg.handle(i));
+      mv.target = {bridgeTo_.x * T + 128, bridgeTo_.y * T + 128};
+      mv.formation = Formation::Column;
+      sim_->queue(std::move(mv));
+      selection_.clear();
+    }
+    return;
+  }
+  for (uint8_t pl = 0; pl < MAX_PLAYERS; ++pl) {
+    Command ctl;
+    ctl.type = CommandType::SetController;
+    ctl.player = pl;
+    ctl.amount = -1;
+    sim_->queue(std::move(ctl));
+  }
+  if (opt_.townDemo == 2) {
+    Entity bridge;
+    for (uint32_t i : reg.pool<CUnit>().entities())
+      if (types_.get(reg.pool<CUnit>().get(i).type).bridge) {
+        bridge = reg.handle(i);
+        break;
+      }
+    if (!bridge.valid()) return;
+    const CPosition& bp = reg.get<CPosition>(bridge);
+    // Men and a truck to walk over it: from one end of the span to the other.
+    std::vector<Vec2i> span;
+    for (int dy = -8; dy <= 8; ++dy)
+      for (int dx = -8; dx <= 8; ++dx) {
+        const Entity o = sim_->structureAt(bp.x / T + dx, bp.y / T + dy);
+        if (o.valid() && types_.get(reg.get<CUnit>(o).type).bridge) span.push_back({bp.x / T + dx, bp.y / T + dy});
+      }
+    Vec2i a = span.front(), b = span.front();
+    for (const Vec2i& t : span)
+      if (std::abs(t.x - span.front().x) + std::abs(t.y - span.front().y) > std::abs(b.x - a.x) + std::abs(b.y - a.y)) b = t;
+    const Vec2i dir{(b.x > a.x) - (b.x < a.x), (b.y > a.y) - (b.y < a.y)};
+    Command sp;
+    sp.type = CommandType::SpawnList;
+    const int rifle = types_.find("gbr_rifleman"), truck = types_.find("gbr_scout_car");
+    for (int i = 0; i < 6; ++i)
+      sp.spawns.push_back({static_cast<uint16_t>(rifle), 0,
+                           {(a.x - dir.x * (2 + i)) * T + 128 + (i % 2) * 60, (a.y - dir.y * (2 + i)) * T + 128}, 0, -1});
+    sp.spawns.push_back({static_cast<uint16_t>(truck), 0, {(a.x - dir.x * 9) * T + 128, (a.y - dir.y * 9) * T + 128}, 0, -1});
+    sim_->queue(std::move(sp));
+    galleryAt_ = {(a.x + b.x) * T / 2 + 128, (a.y + b.y) * T / 2 + 128};
+    bridgeFrom_ = a;
+    bridgeTo_ = {b.x + dir.x * 6, b.y + dir.y * 6};
+    centerOn(galleryAt_);
+    return;
+  }
+  Command rm;
+  rm.type = CommandType::Remove;
+  for (uint32_t i : reg.pool<CUnit>().entities()) rm.units.push_back(reg.handle(i));
+  sim_->queue(std::move(rm));
+  const Vec2i c = findLand({map_.widthLeptons() * 3 / 10, map_.heightLeptons() * 3 / 10});
+  galleryAt_ = c;
+  Command sp;
+  sp.type = CommandType::SpawnList;
+  int x = 0, y = 0, rowH = 0;
+  for (size_t t = 0; t < types_.size(); ++t) {
+    const UnitTypeDef& d = types_.get(static_cast<int>(t));
+    if (d.faction != "neutral" || d.bridge) continue;
+    if (x > 26) x = 0, y += rowH + 2, rowH = 0;
+    const int32_t lx = c.x + (x - 14) * T + (d.footW % 2 ? T / 2 : 0), ly = c.y + (y - 6) * T + (d.footH % 2 ? T / 2 : 0);
+    sp.spawns.push_back({static_cast<uint16_t>(t), NEUTRAL_OWNER, {lx + d.footW * T / 2, ly + d.footH * T / 2}, angleOfFacing(0), -1});
+    x += d.footW + 2;
+    rowH = std::max(rowH, d.footH);
+  }
+  sim_->queue(std::move(sp));
+  selection_.clear();
+  centerOn(c);
+}
+
 }  // namespace legion

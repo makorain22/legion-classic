@@ -8,6 +8,31 @@
   renderer read his owner from a deleted unit. A dead man now leaves the
   list at once, and the renderer checks anyway. Regression test added.
 - `--ai-battle --sides 3`: every side for itself.
+- **Men dug in look dug in.** Every kind of infantry of every army has two
+  new models: down in a trench, waist deep behind its own lip of earth, and
+  kneeling behind bags, each keeping low or up and firing. Men manning a
+  trench now stand along its channel instead of on the decal.
+- **Sandbags can be manned** like trenches: right-click a wall (or right
+  beside it) with infantry. Three men a piece, behind the bags, half damage,
+  they stay until evacuated. Vehicles can't cross sandbags; infantry climb
+  over. Tutorial 3 now teaches it with the Bren teams (and its second wave
+  no longer brings an MG 42 that out-ranged the trench).
+- **Pioneers repair what they hold:** an engineer in a bunker, tower, trench
+  or sandbag wall mends it and the field works right round it.
+- **British vehicles have their own models:** Daimler Dingo, Universal
+  Carrier, Crusader, Cromwell, Sherman Firefly (its own model, with the
+  countershaded 17-pounder), Achilles, Sexton, Churchill, and Bedford lorries
+  for the supply and construction trucks.
+- **Fifteen more civilian buildings:** half-timbered house, stone cottage,
+  corner shop, apartment block, factory, inn, terraced row, manor, town hall,
+  onion-domed church, grain silo, windmill, market stalls, courtyard villa,
+  stilt house. Villages pick them by climate; the jungle has villages now.
+- **Bridges** where roads cross rivers, stone or timber, laid level on arches
+  or trestles. Anything crosses on the deck; destroy a span and whatever is on
+  it goes into the river. Bridge pieces are in the editor with the civilian
+  buildings. Skirmish maps regenerated with the new villages and bridges.
+- Demos for screenshots: `--works-demo`, `--town-demo`, `--bridge-demo`,
+  `--gallery --factions gbr`.
 
 ## 0.9.0 – Milestone 9: Britain, sound, tutorial, campaigns (7 Nov 2026)
 

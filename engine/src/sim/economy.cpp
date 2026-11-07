@@ -49,6 +49,7 @@ bool Simulation::canPlace(int type, Vec2i o) const {
       const TileInfo& t = map_.info(x, y);
       // Fortifications may go on rougher ground than buildings; nothing goes in deep water.
       const int maxSlope = d.category == UnitCategory::Fortification ? 40 : 24;
+      if (d.bridge) continue;  // bridges go over water and down banks
       if (t.slope > maxSlope || t.waterDepth > -4) return false;
     }
   // Not on top of units (structures can't crush a squad).
@@ -111,7 +112,7 @@ uint8_t Simulation::coverAt(int tx, int ty) const {
 void Simulation::occupy(uint32_t e, const UnitTypeDef& def, Vec2i o) {
   for (int y = o.y; y < o.y + def.footH; ++y)
     for (int x = o.x; x < o.x + def.footW; ++x) {
-      map_.setBlock(x, y, static_cast<uint8_t>(Map::kOccupied | def.blocks));
+      map_.setBlock(x, y, static_cast<uint8_t>(Map::kOccupied | def.blocks | (def.bridge ? Map::kDeck : 0)));
       tileStructure_[static_cast<size_t>(y) * map_.width() + x] = e;
     }
   if (def.cover || def.coverAround) coverDirty_ = true;
@@ -128,6 +129,7 @@ void Simulation::destroyEntity(uint32_t e) {
     if (reg_.alive(g->building))
       if (CGarrison* list = reg_.pool<CGarrison>().tryGet(g->building.index)) std::erase(list->occupants, h);
   }
+  std::vector<uint32_t> sinking;
   if (const CStructure* s = reg_.pool<CStructure>().tryGet(e)) {
     for (int y = s->ty; y < s->ty + s->h; ++y)
       for (int x = s->tx; x < s->tx + s->w; ++x) {
@@ -139,8 +141,22 @@ void Simulation::destroyEntity(uint32_t e) {
       }
     const UnitTypeDef& def = types_.get(reg_.get<CUnit>(h).type);
     if (def.cover || def.coverAround) coverDirty_ = true;
+    if (def.bridge) {
+      // Whatever was on the span goes into the river with it.
+      auto& units = reg_.pool<CUnit>();
+      for (uint32_t o : units.entities()) {
+        if (o == e) continue;
+        const UnitTypeDef& od = types_.get(units.get(o).type);
+        if (od.isStructure()) continue;
+        const CPosition& op = reg_.pool<CPosition>().get(o);
+        const int tx = op.x >> LEPTON_SHIFT, ty = op.y >> LEPTON_SHIFT;
+        if (tx >= s->tx && ty >= s->ty && tx < s->tx + s->w && ty < s->ty + s->h && !map_.passable(tx, ty, od.locomotor))
+          sinking.push_back(o);
+      }
+    }
   }
   reg_.destroy(h);
+  for (uint32_t o : sinking) damage(o, types_.get(reg_.pool<CUnit>().get(o).type).maxHealth * 1000, kNullEntity);
 }
 
 void Simulation::recomputeCover() {

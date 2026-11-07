@@ -173,6 +173,7 @@ TEST_CASE("engineers mend damaged works and machines, and go looking for them") 
 }
 
 TEST_CASE("each biome has its own ground, trees and settlements") {
+  Rules R;
   std::map<Biome, Map> maps;
   for (int b = 0; b < static_cast<int>(Biome::Count); ++b) {
     Map m(128, 128);
@@ -202,16 +203,71 @@ TEST_CASE("each biome has its own ground, trees and settlements") {
   CHECK(propCount(Biome::Winter, PropKind::Tree) == 0);
   CHECK(propCount(Biome::Desert, PropKind::Palm) + propCount(Biome::Desert, PropKind::Scrub) > 20);
   CHECK(propCount(Biome::Tropical, PropKind::JungleTree) > 100);
-  CHECK(maps.at(Biome::Tropical).lots.empty());
+  // The jungle has stilt houses along its tracks (and timber bridges), nothing else.
+  for (const Map::Lot& l : maps.at(Biome::Tropical).lots) CHECK((l.kind == 29 || l.kind == Map::kWoodBridgeLot));
   CHECK(maps.at(Biome::Urban).lots.size() > maps.at(Biome::Temperate).lots.size() * 4);
   CHECK(!maps.at(Biome::Temperate).lots.empty());
-  for (const Map::Lot& l : maps.at(Biome::Desert).lots) CHECK((l.kind == 5 || l.kind == 10));  // mud-brick houses and wells
+  // Mud-brick houses, market stalls, courtyard villas, wells (and bridges).
+  for (const Map::Lot& l : maps.at(Biome::Desert).lots)
+    CHECK((l.kind == 5 || l.kind == 10 || l.kind == 27 || l.kind == 28 || l.kind == Map::kBridgeLot));
+  // Every lot names a building the rules have.
+  for (const auto& [b, m] : maps)
+    for (const Map::Lot& l : m.lots) CHECK(R.types.find(Map::lotBuildingId(l.kind)) >= 0);
 
   // Same seed, same land.
   Map again(128, 128);
   again.generate(Biome::Urban, 1944);
   CHECK(again.heights() == maps.at(Biome::Urban).heights());
   CHECK(again.lots.size() == maps.at(Biome::Urban).lots.size());
+}
+
+TEST_CASE("roads over rivers get bridges; anything crosses on one, and goes in when it falls") {
+  Rules R;
+  // A river valley: roads ford the river, and the fords get bridges.
+  Map gen(128, 128);
+  gen.generate(Biome::Temperate, 1944, static_cast<int>(MapLayout::RiverValley));
+  int pieces = 0;
+  for (const Map::Lot& l : gen.lots) pieces += l.kind == Map::kBridgeLot;
+  CHECK(pieces >= 3);
+
+  // A pool of deep water with a bridge across it.
+  Map m(32, 32, 310);
+  // Deep water across columns 12..14 (the ground lowered under it).
+  m.setWaterLevel(200);
+  for (int cy = 0; cy <= 32; ++cy)
+    for (int cx = 0; cx <= 32; ++cx) m.setCorner(cx, cy, static_cast<uint16_t>(cx >= 12 && cx <= 15 ? 100 : 230));
+  m.recomputeInfo();
+  Simulation sim(m, R.types, R.weapons, 11);
+  const int bridge = R.t("neutral_bridge");
+  CHECK(R.types.get(bridge).bridge);
+  CHECK_FALSE(m.passable(13, 16, Locomotor::Tracked));
+  Command c;
+  c.type = CommandType::SpawnList;
+  for (int x = 11; x <= 16; ++x) c.spawns.push_back({static_cast<uint16_t>(bridge), NEUTRAL_OWNER, {x * T + 128, 16 * T + 128}, 0, -1});
+  sim.queue(c);
+  sim.tick();
+  CHECK(sim.structureAt(13, 16).valid());
+  CHECK(m.passable(13, 16, Locomotor::Tracked));
+  CHECK(m.passable(13, 16, Locomotor::Foot));
+  CHECK_FALSE(m.passable(13, 15, Locomotor::Foot));  // beside the bridge it is still river
+  const Entity tank = spawn(sim, R.t("ger_medium_tank"), 0, {8 * T + 128, 16 * T + 128});
+  Command mv;
+  mv.type = CommandType::Move;
+  mv.player = 0;
+  mv.units = {tank};
+  mv.target = {13 * T + 128, 16 * T + 128};
+  sim.queue(mv);
+  for (int i = 0; i < 15 * 30; ++i) sim.tick();
+  const CPosition& tp = sim.registry().get<CPosition>(tank);
+  CHECK(tp.x / T == 13);  // out over the water on the deck
+  // Blow the span under it.
+  Command kill;
+  kill.type = CommandType::Kill;
+  kill.units = {sim.structureAt(13, 16)};
+  sim.queue(kill);
+  for (int i = 0; i < 3; ++i) sim.tick();
+  CHECK_FALSE(sim.registry().alive(tank));
+  CHECK_FALSE(m.passable(13, 16, Locomotor::Tracked));
 }
 
 TEST_CASE("civilian buildings stand neutral: ignored until someone is ordered to attack them") {

@@ -780,4 +780,469 @@ VoxelModel makeSchool(const FactionLook&) {
   return m;
 }
 
+
+// ---------------------------------------------------------------------------
+// More civilian buildings (12 voxels a tile, like the others).
+// ---------------------------------------------------------------------------
+namespace {
+
+// A steep pitched roof along X (twice as steep as tiledRoof), gables filled.
+void steepRoof(VoxelModel& m, int x0, int y0, int x1, int y1, int z, uint8_t a, uint8_t b, uint8_t gable) {
+  const int half = (y1 - y0) / 2 + 1;
+  for (int i = 0; i <= half; ++i)
+    m.box(x0 - 1, y0 - 1 + i, z + 2 * i, x1 + 1, y1 + 1 - i, z + 2 * i + 2, (i % 2) ? a : b);
+  for (int i = 0; i + 1 < half; ++i) {
+    m.box(x0, y0 + i + 1, z + 2 * i, x0 + 1, y1 - i - 1, z + 2 * i + 2, gable);
+    m.box(x1 - 1, y0 + i + 1, z + 2 * i, x1, y1 - i - 1, z + 2 * i + 2, gable);
+  }
+}
+
+// A hipped roof: slopes on all four sides up to a short ridge.
+void hippedRoof(VoxelModel& m, int x0, int y0, int x1, int y1, int z, uint8_t a, uint8_t b) {
+  for (int i = 0; x0 - 1 + i < x1 + 1 - i && y0 - 1 + i < y1 + 1 - i; ++i)
+    m.box(x0 - 1 + i, y0 - 1 + i, z + i, x1 + 1 - i, y1 + 1 - i, z + i + 1, (i % 2) ? a : b);
+}
+
+// Dark oak framing over plastered walls: posts, rails and braces, round the
+// windows (only where the wall shows).
+void timberFrame(VoxelModel& m, int x0, int y0, int x1, int y1, int z0, int z1) {
+  auto beam = [&](int x, int y, int z) {
+    const uint8_t c = m.get(x, y, z);
+    if (c == PLASTER || c == PLASTER_DARK) m.set(x, y, z, WOOD_DARK);
+  };
+  for (int z = z0; z < z1; ++z) {
+    const bool rail = z == z0 || z == z1 - 1 || z == (z0 + z1) / 2;
+    for (int x = x0; x < x1; ++x) {
+      const bool post = (x - x0) % 4 == 0 || x == x1 - 1;
+      const bool brace = ((x - x0) % 4) == ((z - z0) % 4);
+      if (rail || post || brace) beam(x, y0, z), beam(x, y1 - 1, z);
+    }
+    for (int y = y0; y < y1; ++y) {
+      const bool post = (y - y0) % 4 == 0 || y == y1 - 1;
+      const bool brace = ((y - y0) % 4) == (3 - (z - z0) % 4);
+      if (rail || post || brace) beam(x0, y, z), beam(x1 - 1, y, z);
+    }
+  }
+}
+
+}  // namespace
+
+VoxelModel makeHalfTimber(const FactionLook&) {
+  VoxelModel m(24, 24, 34);
+  houseWalls(m, 4, 6, 20, 18, 8, PLASTER, BRICK);
+  houseWalls(m, 3, 5, 21, 19, 8, PLASTER, WOOD_DARK);  // the jettied upper floor
+  for (int z = 0; z < 8; ++z)                           // ...standing on the ground floor
+    for (int y = 5; y < 19; ++y)
+      for (int x = 3; x < 21; ++x)
+        if (x < 4 || x >= 20 || y < 6 || y >= 18) m.set(x, y, z, 0);
+  houseWalls(m, 4, 6, 20, 18, 8, PLASTER, BRICK);
+  VoxelModel up(24, 24, 34);
+  houseWalls(up, 3, 5, 21, 19, 8, PLASTER, WOOD_DARK);
+  for (int z = 0; z < 8; ++z)
+    for (int y = 0; y < 24; ++y)
+      for (int x = 0; x < 24; ++x)
+        if (const uint8_t c = up.get(x, y, z)) m.set(x, y, z + 8, c);
+  timberFrame(m, 4, 6, 20, 18, 0, 8);
+  timberFrame(m, 3, 5, 21, 19, 8, 16);
+  steepRoof(m, 3, 5, 21, 19, 16, ROOF, ROOF_DARK, PLASTER);
+  chimney(m, 7, 8, 20, 30);
+  m.box(10, 19, 2, 14, 20, 3, WOOD);  // a bench by the door
+  grimeWalls(m, 111);
+  return m;
+}
+
+VoxelModel makeStoneCottage(const FactionLook&) {
+  VoxelModel m(24, 24, 22);
+  houseWalls(m, 3, 5, 21, 19, 8, ROCK, ROCK_DARK);
+  speckle(m, ROCK, ROCK_DARK, ROCK_LIGHT, 121, 26, 14);
+  // A thick thatch, rounded over the ridge and hanging low at the eaves.
+  for (int i = 0; i <= 8; ++i) {
+    const uint8_t c = (i % 3 == 0) ? DRY_DARK : DRY_GRASS;
+    m.box(2, 4 + i, 7 + i, 22, 20 - i, 8 + i, c);
+  }
+  for (int i = 0; i < 7; ++i) {
+    m.box(3, 6 + i, 8 + i, 4, 18 - i, 9 + i, ROCK);
+    m.box(20, 6 + i, 8 + i, 21, 18 - i, 9 + i, ROCK);
+  }
+  speckle(m, DRY_GRASS, DRY_DARK, DEAD_WOOD, 122, 18, 6);
+  chimney(m, 17, 11, 12, 19);
+  m.box(1, 20, 0, 23, 21, 2, ROCK_DARK);  // a dry-stone wall round the garden
+  m.box(1, 3, 0, 2, 21, 2, ROCK_DARK);
+  return m;
+}
+
+VoxelModel makeShopfront(const FactionLook&) {
+  VoxelModel m(24, 24, 32);
+  houseWalls(m, 3, 3, 21, 19, 20, PLASTER, CONCRETE_DARK, 2);
+  m.box(3, 18, 1, 21, 19, 7, BRICK);                 // the shop's front
+  for (int x = 4; x < 20; x += 5) m.box(x, 18, 2, x + 4, 19, 6, WINDOW);  // big display windows
+  m.box(10, 18, 1, 12, 19, 6, WOOD_DARK);            // shop door
+  m.box(3, 18, 7, 21, 19, 8, WOOD_DARK);             // the sign board
+  for (int x = 6; x < 18; x += 2) m.set(x, 18, 7, PLASTER);  // its painted letters
+  for (int i = 0; i < 4; ++i)                        // a striped awning sloping out over the pavement
+    for (int x = 3; x < 21; ++x) m.set(x, 19 + i, 7 - i / 2, ((x / 2) % 2) ? CANVAS : MARK_RED);
+  tiledRoof(m, 3, 3, 21, 19, 20);
+  chimney(m, 16, 6, 23, 30);
+  grimeWalls(m, 131);
+  return m;
+}
+
+VoxelModel makeApartment(const FactionLook&) {
+  VoxelModel m(24, 24, 50);
+  houseWalls(m, 2, 2, 22, 22, 40, PLASTER, CONCRETE_DARK, 4);
+  m.box(2, 2, 0, 22, 22, 4, CONCRETE);               // a stone ground floor
+  for (int x = 4; x < 20; x += 6) m.box(x, 21, 1, x + 3, 22, 4, WINDOW);
+  for (int z = 10; z < 40; z += 10)                  // balconies on the front, with railings
+    for (int x : {4, 14}) {
+      m.box(x, 22, z, x + 6, 24, z + 1, CONCRETE_DARK);
+      m.box(x, 23, z + 1, x + 6, 24, z + 3, STEEL_DARK);
+      m.box(x + 1, 23, z + 1, x + 5, 24, z + 2, 0);
+    }
+  m.box(1, 1, 40, 23, 23, 41, CONCRETE_DARK);        // cornice and a flat roof with a parapet
+  m.box(1, 1, 41, 23, 2, 43, CONCRETE);
+  m.box(1, 22, 41, 23, 23, 43, CONCRETE);
+  m.box(1, 1, 41, 2, 23, 43, CONCRETE);
+  m.box(22, 1, 41, 23, 23, 43, CONCRETE);
+  m.box(5, 5, 41, 10, 10, 46, BRICK_DARK);           // the stair head
+  cylinder(m, 16, 15, 2.6f, 41, 47, STEEL_DARK);     // a water tank
+  chimney(m, 17, 4, 41, 46);
+  grimeWalls(m, 141);
+  blast(m, 3, 12, 30, 3.0f, 142);                     // shell-scarred
+  return m;
+}
+
+VoxelModel makeBrickworks(const FactionLook&) {
+  VoxelModel m(36, 24, 58);
+  m.box(2, 4, 0, 34, 21, 11, BRICK);
+  m.box(2, 4, 0, 34, 21, 1, CONCRETE_DARK);
+  for (int x = 4; x < 32; x += 5) m.box(x, 20, 3, x + 3, 21, 8, WINDOW);   // tall iron-framed windows
+  for (int x = 4; x < 32; x += 5) m.box(x, 4, 3, x + 3, 5, 8, WINDOW);
+  m.box(14, 20, 0, 22, 21, 9, WOOD_DARK);           // the big doors
+  // A saw-tooth roof: steep glazed faces to the north, slopes to the south.
+  for (int t = 0; t < 4; ++t) {
+    const int y0 = 4 + t * 4;
+    for (int i = 0; i < 4; ++i) m.box(1, y0 + i, 11 + (3 - i) * 2, 35, y0 + i + 1, 12 + (3 - i) * 2 + 1, ROOF_DARK);
+    for (int i = 0; i < 4; ++i) m.box(1, y0, 11, 35, y0 + 1, 11 + (3 - i) * 2 + 2, i == 0 ? WINDOW : ROOF_DARK);
+    m.box(1, y0, 12, 35, y0 + 1, 18, WINDOW);
+  }
+  // The chimney, with darker bands and soot at the top.
+  for (int z = 0; z < 56; ++z) {
+    const float r = 2.8f - z * 0.012f;
+    cylinder(m, 30, 8, r, z, z + 1, (z % 9 == 8) ? BRICK_DARK : BRICK);
+  }
+  cylinder(m, 30, 8, 1.6f, 50, 56, 0);
+  cylinder(m, 30, 8, 2.9f, 53, 56, SOOT);
+  cylinder(m, 30, 8, 1.6f, 53, 56, 0);
+  m.box(3, 21, 0, 9, 24, 3, WOOD);                    // crates in the yard
+  m.box(10, 21, 0, 12, 23, 4, RUST);                  // a drum
+  grimeWalls(m, 151);
+  return m;
+}
+
+VoxelModel makeTavern(const FactionLook&) {
+  VoxelModel m(36, 24, 28);
+  houseWalls(m, 3, 5, 33, 19, 15, PLASTER, PLASTER_DARK, 2);
+  timberFrame(m, 3, 5, 33, 19, 8, 15);
+  tiledRoof(m, 3, 5, 33, 19, 15);
+  chimney(m, 7, 8, 20, 26);
+  chimney(m, 27, 13, 20, 25);
+  m.box(17, 19, 9, 18, 22, 10, STEEL_DARK);            // the sign's iron bracket
+  m.box(18, 21, 5, 21, 22, 9, WOOD);                    // the swinging sign
+  m.box(19, 21, 6, 20, 22, 8, MARK_RED);
+  for (int x : {6, 24}) {                               // tables and benches outside
+    m.box(x, 20, 2, x + 4, 22, 3, WOOD);
+    m.box(x, 22, 1, x + 4, 23, 2, WOOD_DARK);
+  }
+  cylinder(m, 30, 21, 1.2f, 0, 3, WOOD_DARK);           // barrels
+  cylinder(m, 32, 21, 1.2f, 0, 3, WOOD_DARK);
+  grimeWalls(m, 161);
+  return m;
+}
+
+VoxelModel makeTerrace(const FactionLook&) {
+  VoxelModel m(36, 24, 28);
+  const uint8_t walls[3] = {BRICK, PLASTER, PLASTER_DARK};
+  for (int k = 0; k < 3; ++k) {
+    const int x0 = 2 + k * 11;
+    houseWalls(m, x0, 5, x0 + 11, 19, 15, walls[k], k == 0 ? BRICK_DARK : CONCRETE_DARK, 2);
+    m.box(x0 + 1, 19, 0, x0 + 4, 21, 1, CONCRETE);       // front steps
+  }
+  tiledRoof(m, 2, 5, 35, 19, 15);
+  for (int k = 0; k < 4; ++k) chimney(m, 1 + k * 11, 11, 20, 26);
+  grimeWalls(m, 171);
+  return m;
+}
+
+VoxelModel makeManor(const FactionLook&) {
+  VoxelModel m(36, 24, 30);
+  houseWalls(m, 3, 5, 33, 19, 16, PLASTER, CONCRETE_DARK, 2);
+  hippedRoof(m, 3, 5, 33, 19, 16, ROOF, ROOF_DARK);
+  chimney(m, 5, 11, 18, 27);
+  chimney(m, 29, 11, 18, 27);
+  // A pillared porch with a pediment over the door.
+  for (int x : {14, 17, 20, 23}) m.box(x - 1, 19, 0, x, 22, 9, CONCRETE_LIGHT);
+  m.box(12, 19, 9, 24, 23, 10, CONCRETE);
+  for (int i = 0; i < 3; ++i) m.box(13 + i * 2, 21, 10 + i, 23 - i * 2, 23, 11 + i, CONCRETE);
+  m.box(15, 22, 0, 21, 24, 1, CONCRETE);                // steps
+  for (int x : {2, 33}) m.box(x, 21, 0, x + 1, 24, 3, PINE);  // clipped yews
+  grimeWalls(m, 181);
+  return m;
+}
+
+VoxelModel makeTownHall(const FactionLook&) {
+  VoxelModel m(36, 36, 62);
+  houseWalls(m, 3, 7, 33, 29, 16, BRICK, CONCRETE, 2);
+  m.box(3, 7, 15, 33, 29, 16, CONCRETE);                // stone band at the eaves
+  hippedRoof(m, 3, 7, 33, 29, 16, ROOF, ROOF_DARK);
+  // The clock tower rising out of the front.
+  m.box(14, 23, 0, 22, 31, 38, BRICK);
+  m.box(14, 23, 0, 22, 31, 1, CONCRETE);
+  m.box(16, 30, 1, 20, 31, 7, WOOD_DARK);               // main door
+  m.box(15, 30, 10, 21, 31, 13, WINDOW);
+  for (int z : {16, 26}) m.box(13, 22, z, 23, 32, z + 1, CONCRETE);
+  m.box(16, 30, 30, 20, 31, 34, PLASTER);               // clock faces
+  m.box(21, 25, 30, 22, 29, 34, PLASTER);
+  m.box(17, 30, 32, 19, 31, 33, MARK_BLACK);
+  m.box(18, 30, 31, 19, 31, 33, MARK_BLACK);
+  m.box(15, 24, 34, 21, 30, 38, 0);                     // open belfry
+  m.box(15, 24, 34, 16, 25, 38, BRICK);
+  m.box(20, 24, 34, 21, 25, 38, BRICK);
+  m.box(15, 29, 34, 16, 30, 38, BRICK);
+  m.box(20, 29, 34, 21, 30, 38, BRICK);
+  for (int i = 0; i < 8; ++i) m.box(13 + i, 22 + i, 38 + i * 2, 23 - i, 32 - i, 40 + i * 2, ROOF_DARK);  // spire
+  m.box(17, 26, 54, 19, 28, 59, STEEL_DARK);            // weathervane
+  m.box(16, 27, 57, 20, 28, 58, STEEL_DARK);
+  grimeWalls(m, 191);
+  return m;
+}
+
+VoxelModel makeOnionChurch(const FactionLook&) {
+  VoxelModel m(36, 36, 60);
+  for (int z = 0; z < 12; ++z) m.box(6, 11, z, 26, 25, z + 1, z % 2 ? WOOD_DARK : WOOD);  // log walls
+  for (int x = 9; x < 24; x += 5) {
+    m.box(x, 11, 4, x + 2, 12, 9, WINDOW);
+    m.box(x, 24, 4, x + 2, 25, 9, WINDOW);
+  }
+  steepRoof(m, 6, 11, 26, 25, 12, DEAD_WOOD, WOOD_DARK, WOOD);
+  // The drum and its onion dome over the middle.
+  cylinder(m, 16, 18, 3.6f, 20, 30, WOOD);
+  for (int z = 0; z < 14; ++z) {
+    const float t = z / 13.0f;
+    const float r = t < 0.45f ? 3.6f + 2.2f * std::sin(t / 0.45f * 1.5708f) : 5.8f * std::cos((t - 0.45f) / 0.55f * 1.5708f);
+    cylinder(m, 16, 18, std::max(0.6f, r), 30 + z, 31 + z, z % 3 ? PINE : PINE_DARK);
+  }
+  m.box(15, 18, 44, 17, 19, 50, STEEL_DARK);            // cross
+  m.box(14, 18, 47, 18, 19, 48, STEEL_DARK);
+  m.box(15, 18, 45, 17, 19, 46, STEEL_DARK);
+  // The bell tower at the west end, with a tent roof and a little onion.
+  for (int z = 0; z < 26; ++z) m.box(26, 13, z, 33, 23, z + 1, z % 2 ? WOOD_DARK : WOOD);
+  m.box(27, 13, 20, 32, 14, 24, 0);
+  m.box(27, 22, 20, 32, 23, 24, 0);
+  for (int i = 0; i < 5; ++i) m.box(26 + i, 13 + i, 26 + i * 2, 33 - i, 23 - i, 28 + i * 2, DEAD_WOOD);
+  dome(m, 29.5f, 18, 36, 1.8f, 1.8f, 3.0f, PINE);
+  m.box(29, 18, 39, 30, 19, 43, STEEL_DARK);
+  m.box(33, 16, 0, 34, 20, 7, WOOD_DARK);               // west door
+  for (int x = 2; x < 35; x += 3) m.box(x, 33, 0, x + 1, 34, 3, DEAD_WOOD);  // churchyard fence
+  m.box(2, 33, 1, 35, 34, 2, DEAD_WOOD);
+  weather(m, WOOD, WOOD_DARK, DEAD_WOOD, 201, 14, 6);
+  return m;
+}
+
+VoxelModel makeGrainSilo(const FactionLook&) {
+  VoxelModel m(14, 14, 54);
+  for (int z = 0; z < 44; ++z) cylinder(m, 7, 7, 5.0f, z, z + 1, (z % 8 == 7) ? CONCRETE_DARK : CONCRETE);
+  dome(m, 7, 7, 44, 5.0f, 5.0f, 3.0f, CONCRETE_DARK);
+  m.box(5, 5, 46, 10, 10, 51, CONCRETE_LIGHT);          // the head house
+  m.box(6, 9, 48, 9, 10, 50, WINDOW);
+  for (int z = 1; z < 46; z += 2) m.set(7, 12, z, STEEL_DARK);  // the ladder
+  m.box(6, 12, 0, 9, 13, 46, 0);
+  for (int z = 1; z < 46; ++z) m.set(6, 12, z, STEEL_DARK), m.set(8, 12, z, STEEL_DARK);
+  weather(m, CONCRETE, CONCRETE_DARK, RUST, 211, 10, 4);
+  return m;
+}
+
+VoxelModel makeWindmill(const FactionLook&) {
+  VoxelModel m(16, 36, 48);
+  const float cy = 18;
+  // A post mill: the timber body turns on a post over a trestle.
+  m.box(7, 17, 0, 9, 19, 14, WOOD_DARK);                // the post
+  for (int i = 0; i < 6; ++i) {                          // quarter bars
+    m.set(7 - i, 18, 6 - i, WOOD_DARK);
+    m.set(8 + i, 18, 6 - i, WOOD_DARK);
+    m.set(8, 17 - i, 6 - i, WOOD_DARK);
+    m.set(8, 18 + i, 6 - i, WOOD_DARK);
+  }
+  m.box(3, 13, 12, 13, 23, 30, WOOD);
+  for (int z = 12; z < 30; z += 2) m.box(3, 13, z, 13, 23, z + 1, WOOD_DARK);  // weatherboards
+  m.box(3, 13, 12, 13, 23, 30, 0);
+  for (int z = 12; z < 30; ++z) {
+    m.box(3, 13, z, 13, 14, z + 1, z % 2 ? WOOD_DARK : WOOD);
+    m.box(3, 22, z, 13, 23, z + 1, z % 2 ? WOOD_DARK : WOOD);
+    m.box(3, 13, z, 4, 23, z + 1, z % 2 ? WOOD_DARK : WOOD);
+    m.box(12, 13, z, 13, 23, z + 1, z % 2 ? WOOD_DARK : WOOD);
+  }
+  for (int i = 0; i < 6; ++i) m.box(2, 12 + i, 30 + i, 14, 24 - i, 31 + i, ROOF_DARK);  // curved roof
+  m.box(1, 17, 13, 3, 19, 20, WOOD_DARK);               // tail ladder
+  m.box(7, 22, 18, 9, 23, 21, WINDOW);
+  // Four sails on a stock through the front, cross-wise.
+  const float hx = 13.5f, hz = 26;
+  cylX(m, 12, 15, cy, hz, 1.0f, WOOD_DARK);
+  for (int a = 0; a < 4; ++a) {
+    const float dy = (a & 1) ? 1.0f : -1.0f, dz = (a & 2) ? 1.0f : -1.0f;
+    for (int r = 1; r < 15; ++r) {
+      const int y = static_cast<int>(cy + dy * r * 0.707f), z = static_cast<int>(hz + dz * r * 0.707f);
+      if (z < 1) continue;
+      m.set(static_cast<int>(hx), y, z, WOOD_DARK);
+      if (r > 3)                                          // the lattice and its sailcloth on one side
+        for (int w = 1; w <= 3; ++w) {
+          const int sy = static_cast<int>(cy + (dy * r - dz * w) * 0.707f), sz = static_cast<int>(hz + (dz * r + dy * w) * 0.707f);
+          if (sz >= 1 && sy >= 0 && sy < 36) m.set(static_cast<int>(hx), sy, sz, (r + w) % 3 ? CANVAS : WOOD);
+        }
+    }
+  }
+  weather(m, WOOD, WOOD_DARK, DEAD_WOOD, 221, 12, 6);
+  return m;
+}
+
+VoxelModel makeMarket(const FactionLook&) {
+  VoxelModel m(24, 24, 14);
+  m.box(1, 1, 0, 23, 23, 1, CONCRETE);                   // cobbled square
+  speckle(m, CONCRETE, ROCK_DARK, CONCRETE_LIGHT, 231, 20, 12);
+  cylinder(m, 12, 12, 2.4f, 1, 3, ROCK);                 // a pump trough in the middle
+  m.box(12, 11, 3, 13, 12, 7, STEEL_DARK);
+  const struct { int x, y; bool alongX; uint8_t a, b; } stalls[] = {
+      {3, 3, true, CANVAS, MARK_RED}, {14, 3, true, CANVAS, CANVAS_DARK}, {3, 17, true, CANVAS_DARK, CANVAS}, {14, 17, true, CANVAS, MARK_RED}};
+  for (const auto& st : stalls) {
+    for (int px : {st.x, st.x + 6}) for (int py : {st.y, st.y + 4}) m.box(px, py, 1, px + 1, py + 1, 8, WOOD_DARK);
+    m.box(st.x, st.y + 1, 1, st.x + 7, st.y + 3, 4, WOOD);  // the counter
+    for (int i = 0; i < 5; ++i)
+      for (int x = st.x - 1; x < st.x + 8; ++x) m.set(x, st.y - 1 + i, 9 - i / 2, ((x / 2) % 2) ? st.a : st.b);
+    m.box(st.x + 1, st.y + 1, 4, st.x + 3, st.y + 3, 5, LEAF);     // greens
+    m.box(st.x + 4, st.y + 1, 4, st.x + 6, st.y + 3, 5, MARK_RED);  // apples
+  }
+  m.box(19, 11, 1, 22, 14, 3, WOOD);                     // crates and a basket
+  cylinder(m, 4, 12, 1.4f, 1, 3, DRY_GRASS);
+  return m;
+}
+
+VoxelModel makeVilla(const FactionLook&) {
+  VoxelModel m(36, 36, 24);
+  // A wall round the plot, a house along two sides of a courtyard.
+  m.box(2, 2, 0, 34, 34, 7, SAND_ROCK);
+  m.box(3, 3, 0, 33, 33, 7, 0);
+  m.box(15, 33, 0, 21, 34, 6, WOOD_DARK);                // the gate
+  m.box(14, 33, 6, 22, 34, 8, SAND_ROCK_DARK);
+  m.box(3, 3, 0, 33, 14, 12, PLASTER);                   // the main wing
+  m.box(3, 3, 0, 13, 33, 12, PLASTER);                   // the side wing
+  m.box(2, 2, 12, 34, 15, 13, SAND_ROCK_DARK);           // flat roofs with parapets
+  m.box(2, 2, 12, 14, 34, 13, SAND_ROCK_DARK);
+  for (int x = 15; x < 32; x += 4) m.box(x, 13, 0, x + 2, 14, 5, 0);   // an arcade on the courtyard
+  for (int x = 15; x < 32; x += 4) m.box(x, 13, 5, x + 2, 14, 6, PLASTER_DARK);
+  for (int y = 16; y < 31; y += 5) m.box(12, y, 5, 13, y + 2, 8, WINDOW);
+  for (int x = 6; x < 32; x += 6) m.box(x, 3, 6, x + 2, 4, 9, WINDOW);
+  m.box(26, 6, 13, 32, 12, 18, PLASTER);                 // a little roof room
+  cylinder(m, 24, 24, 2.2f, 0, 2, ROCK);                 // a fountain
+  m.box(29, 28, 0, 30, 29, 9, PALM_TRUNK);               // and a palm
+  dome(m, 29.5f, 28.5f, 9, 3.5f, 3.5f, 2.0f, PALM);
+  speckle(m, PLASTER, PLASTER_DARK, SAND_ROCK, 241, 14, 8);
+  speckle(m, SAND_ROCK, SAND_ROCK_DARK, PLASTER, 242, 18, 8);
+  return m;
+}
+
+VoxelModel makeStiltHut(const FactionLook&) {
+  VoxelModel m(24, 24, 26);
+  for (int x : {5, 12, 18}) for (int y : {6, 17}) m.box(x, y, 0, x + 1, y + 1, 7, WOOD_DARK);  // the stilts
+  m.box(4, 5, 7, 20, 19, 8, DEAD_WOOD);                  // the floor
+  m.box(4, 18, 7, 20, 21, 8, DEAD_WOOD);                 // and a veranda
+  for (int z = 8; z < 14; ++z) m.box(5, 6, z, 19, 18, z + 1, z % 2 ? DRY_GRASS : DRY_DARK);  // woven walls
+  m.box(6, 7, 8, 18, 17, 14, 0);
+  m.box(11, 17, 8, 13, 18, 13, 0);                       // doorway
+  m.box(6, 17, 10, 9, 18, 12, 0);
+  m.box(15, 17, 10, 18, 18, 12, 0);
+  for (int i = 0; i <= 8; ++i) m.box(3, 3 + i, 13 + i, 21, 21 - i, 14 + i, (i % 2) ? PALM_DARK : DRY_DARK);  // a deep thatch
+  for (int i = 0; i < 6; ++i) m.box(11, 21 + i / 2, 7 - i, 13, 22 + i / 2, 8 - i, WOOD);  // ladder down
+  return m;
+}
+
+// Bridges, at 24 voxels a tile like the other field works. The deck is level
+// across the whole bridge; its top is kBridgeDeckZ voxels above the sprite's
+// foot, piers and arches (or timber trestles) reaching kBridgePierDepth below
+// the deck line, down into the water or the bank. Pieces join with their
+// neighbours; an end piece runs a ramp down to the bank.
+VoxelModel makeBridgeSpan(int mask, bool wood) {
+  constexpr int D = kBridgePierDepth, TOP = kBridgeDeckZ;
+  VoxelModel m(24, 24, TOP + 4);
+  static constexpr int kDir[4][2] = {{1, 0}, {0, 1}, {-1, 0}, {0, -1}};
+  int arms = 0;
+  for (int a = 0; a < 4; ++a) arms += (mask >> a) & 1;
+  if (mask == 0) mask = 5;
+  int ramp = -1;  // a lone end: the far side ramps down to the bank
+  if (arms == 1)
+    for (int a = 0; a < 4; ++a)
+      if (mask & (1 << a)) ramp = (a + 2) % 4;
+  const uint8_t deck = wood ? WOOD : CONCRETE, deckDark = wood ? WOOD_DARK : CONCRETE_DARK;
+  auto put = [&](int x, int y, int z, uint8_t c) {
+    if (x >= 0 && y >= 0 && x < 24 && y < 24 && z >= 0 && z < TOP + 4) m.set(x, y, z, c);
+  };
+  for (int a = 0; a < 4; ++a) {
+    const bool isRamp = a == ramp;
+    if (!(mask & (1 << a)) && !isRamp) continue;
+    const int dx = kDir[a][0], dy = kDir[a][1];
+    for (int u = 0; u <= 12; ++u)
+      for (int v = -7; v < 7; ++v) {
+        const int x = 12 + dx * u - dy * v - (dx < 0 ? 1 : 0);
+        const int y = 12 + dy * u + dx * v - (dy < 0 ? 1 : 0);
+        const int top = isRamp ? TOP - u / 2 : TOP;
+        const bool edge = v == -7 || v == 6;
+        const uint8_t dc = wood ? (((dx ? x : y) / 2) % 2 ? deck : deckDark) : (((x * 3 + y) % 7) ? deck : deckDark);
+        put(x, y, top - 1, dc);
+        put(x, y, top - 2, wood ? WOOD_DARK : ROCK);
+        if (edge) {  // parapets or rails
+          if (wood) {
+            if (u % 4 == 0) for (int z = top; z < top + 3; ++z) put(x, y, z, WOOD_DARK);
+            put(x, y, top + 2, WOOD);
+          } else {
+            put(x, y, top, ROCK);
+            put(x, y, top + 1, (u % 3) ? ROCK : ROCK_DARK);
+          }
+        }
+        if (isRamp) {
+          // The approach: solid masonry, or timber cribbing, down into the bank.
+          if (!wood) for (int z = 0; z < top - 2; ++z) put(x, y, z, z % 4 == 3 ? ROCK : ROCK_DARK);
+          else if (u % 4 == 1 && (v == -6 || v == 5)) for (int z = 0; z < top - 2; ++z) put(x, y, z, WOOD_DARK);
+          continue;
+        }
+        if (wood) {
+          // Trestles: posts at each end of the piece, braced.
+          if ((u == 2 || u == 11) && (v == -6 || v == -1 || v == 4))
+            for (int z = 0; z < TOP - 2; ++z) put(x, y, z, WOOD_DARK);
+          if ((u == 2 || u == 11) && v > -7 && v < 6)
+            for (int z : {TOP - 3, TOP - 9, TOP - 15}) put(x, y, z, WOOD_DARK);
+          if ((u == 2 || u == 11) && v > -7 && v < 6) put(x, y, std::abs((v + 7) % 8 - 4) * 3 + 2, WOOD_DARK);  // X braces
+        } else {
+          // A pier under the middle, arches springing from it to the next.
+          const float t = std::clamp((u - 3) / 9.0f, 0.0f, 1.0f);
+          const float open = u < 3 ? 0.0f : (D + 2.5f) * std::sqrt(std::max(0.0f, 1.0f - (1.0f - t) * (1.0f - t)));
+          for (int z = static_cast<int>(open); z < TOP - 2; ++z)
+            put(x, y, z, edge || u < 3 ? (z % 4 == 3 ? ROCK : ROCK_DARK) : ROCK_DARK);
+        }
+      }
+  }
+  if (!wood) {
+    // The pier's cutwaters, pointed up and down stream.
+    const bool alongX = (mask & 5) != 0;
+    for (int k = 0; k < 3; ++k)
+      for (int z = 0; z < TOP - 4; ++z) {
+        if (alongX) {
+          for (int x = 11 - k; x < 13 + k; ++x) put(x, 4 + k, z, ROCK_DARK), put(x, 19 - k, z, ROCK_DARK);
+        } else {
+          for (int y = 11 - k; y < 13 + k; ++y) put(4 + k, y, z, ROCK_DARK), put(19 - k, y, z, ROCK_DARK);
+        }
+      }
+    speckle(m, ROCK, ROCK_DARK, ROCK_LIGHT, 251u + static_cast<uint32_t>(mask), 18, 8);
+  } else {
+    weather(m, WOOD, WOOD_DARK, DEAD_WOOD, 252u + static_cast<uint32_t>(mask), 14, 6);
+  }
+  return m;
+}
 }  // namespace slave::art

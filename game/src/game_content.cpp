@@ -46,6 +46,8 @@ bool GameScene::loadRules(std::string& error) {
   rulesEditedLive_ = false;
   trenchTypes_.assign(types_.size(), false);
   for (size_t i = 0; i < types_.size(); ++i) trenchTypes_[i] = types_.get(static_cast<int>(i)).model == "trench";
+  bridgeTypes_.assign(types_.size(), false);
+  for (size_t i = 0; i < types_.size(); ++i) bridgeTypes_[i] = types_.get(static_cast<int>(i)).bridge;
   if (!order.empty()) {
     std::string list;
     for (const std::string& id : order) list += (list.empty() ? "" : ", ") + id;
@@ -164,6 +166,8 @@ bool GameScene::applyRules(const nlohmann::json (&docs)[kRuleFileCount], std::st
   rulesEditedLive_ = true;
   trenchTypes_.assign(types_.size(), false);
   for (size_t i = 0; i < types_.size(); ++i) trenchTypes_[i] = types_.get(static_cast<int>(i)).model == "trench";
+  bridgeTypes_.assign(types_.size(), false);
+  for (size_t i = 0; i < types_.size(); ++i) bridgeTypes_[i] = types_.get(static_cast<int>(i)).bridge;
   std::string err;
   pickUnitArt(err);
   if (sim_) sim_->rulesChanged();

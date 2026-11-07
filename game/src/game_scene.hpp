@@ -76,6 +76,7 @@ struct SceneOptions {
   std::string encyclopedia;      // open the encyclopedia on this unit id at start (screenshots)        // ignore content/art/blitzkrieg (compare with the built-in art)
   bool gallery = false;
   bool battleDemo = false;       // two forces fighting in the open (screenshots)
+  int townDemo = 0;              // 1: every civilian building in rows; 2: the camera on a bridge
   bool worksDemo = false;        // trenches and sandbag walls manned by every kind of infantry, for screenshots
   bool orgDemo = false;          // fireteams, platoons, a garrison and fog chips, for screenshots         // every unit lined up, for screenshots of the art
   bool economyDemo = false;     // scripted base building, for automated screenshots
@@ -157,6 +158,8 @@ class GameScene final : public slave::Scene {
   void pruneSelection();
   slave::Entity pickUnit(slave::Vec2f screenPx, bool ownOnly) const;
   slave::Vec2f unitScreenWorld(uint32_t entityIndex) const;
+  // Height the ground or a bridge deck stands at (height units) under (lx, ly).
+  float surfaceHeight(float lx, float ly) const;
   const slave::UnitArt& unitArt(int type) const { return unitArt_[static_cast<size_t>(type)]; }
   bool artPack() const { return artPack_; }  // the Blitzkrieg art pack is in use
   void openEncyclopedia(int type = -1);
@@ -275,6 +278,7 @@ class GameScene final : public slave::Scene {
   void drawStructureEffects(float dt);
   void announce(const slave::SimEvent& ev);
   void drawUnits(const slave::RectF& view);
+  void refreshBridges();  // the level each bridge is laid at, when bridges come or go
   void drawHealthBar(uint32_t entity, bool selected);
   void updateCursor();
   void spawnAt(const std::string& typeId, uint8_t player, slave::Vec2i at, int count);
@@ -286,7 +290,9 @@ class GameScene final : public slave::Scene {
   void runBattleDemo();
   void runOrgDemo();
   void runWorksDemo();
+  void runTownDemo();
   slave::Vec2i galleryAt_{0, 0};
+  slave::Vec2i bridgeFrom_{0, 0}, bridgeTo_{0, 0};  // --bridge-demo: the span's ends (tiles)
   void drawFormationPicker();
   bool formationPicker_ = false;
   float hudBottom_ = 8;
@@ -417,6 +423,9 @@ class GameScene final : public slave::Scene {
   std::vector<CardHit> cardHits_;  // unit cards drawn last frame, for clicks
   slave::Entity lastCard_;
   slave::Entity cardAt(slave::Vec2f screenPx) const;
+  std::vector<bool> bridgeTypes_;         // bridge pieces: drawn at the water line, men cross on the deck
+  std::vector<float> bridgeLevel_;        // per tile: the height a bridge there is laid at (0: none)
+  uint64_t bridgeSig_ = ~0ull;
   std::vector<bool> trenchTypes_;         // drawn as ground decals that join up
   BattleFx fx_;
 

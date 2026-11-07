@@ -87,7 +87,7 @@ struct Builder {
     const int type = t(id);
     if (type < 0) return false;
     const UnitTypeDef& d = types.get(type);
-    for (int r = 0; r < 16; ++r)
+    for (int r = 0; r < (d.bridge ? 1 : 16); ++r)  // a bridge piece goes where it is or nowhere
       for (int dy = -r; dy <= r; ++dy)
         for (int dx = -r; dx <= r; ++dx) {
           if (std::max(std::abs(dx), std::abs(dy)) != r) continue;
@@ -125,15 +125,11 @@ struct Builder {
   }
   // The generator's village plots as neutral houses, except near `keepClear` (tiles).
   void villages(const std::vector<std::tuple<int, int, int>>& keepClear) {
-    static const char* kinds[] = {"neutral_cottage", "neutral_cottage_bombed", "neutral_townhouse", "neutral_church",
-                                  "neutral_ruin",    "neutral_adobe",          "neutral_barn",      "neutral_shed",
-                                  "neutral_izba",    "neutral_warehouse",      "neutral_well",      "neutral_water_tower",
-                                  "neutral_station", "neutral_farmhouse",      "neutral_school"};
-    for (const Map::Lot& l : file.map.lots) {
+        for (const Map::Lot& l : file.map.lots) {
       bool clear = true;
       for (const auto& [x, y, r] : keepClear) clear = clear && (std::abs(l.tx - x) > r || std::abs(l.ty - y) > r);
       if (!clear) continue;
-      place(kinds[l.kind % 15], NEUTRAL_OWNER, l.tx, l.ty, static_cast<int>((l.tx * 7 + l.ty * 3) % 4) * 4, true);
+      place(Map::lotBuildingId(l.kind), NEUTRAL_OWNER, l.tx, l.ty, static_cast<int>((l.tx * 7 + l.ty * 3) % 4) * 4, true);
     }
     if (std::getenv("LEGION_DEBUG_LOTS")) std::fprintf(stderr, "lots %zu\n", file.map.lots.size());
     file.map.lots.clear();
@@ -1119,13 +1115,16 @@ void hamlets(Builder& b, Biome biome, uint64_t seed) {
   std::vector<const char*> houses, centres;
   switch (biome) {
     case Biome::Winter: houses = {"neutral_izba", "neutral_izba", "neutral_barn", "neutral_cottage", "neutral_shed"};
-      centres = {"neutral_church", "neutral_water_tower", "neutral_well"}; break;
-    case Biome::Desert: houses = {"neutral_adobe", "neutral_adobe", "neutral_shed", "neutral_ruin"};
-      centres = {"neutral_well", "neutral_warehouse"}; break;
-    case Biome::Urban: houses = {"neutral_townhouse", "neutral_ruin", "neutral_cottage_bombed", "neutral_warehouse"};
-      centres = {"neutral_station", "neutral_church", "neutral_school"}; break;
-    default: houses = {"neutral_cottage", "neutral_farmhouse", "neutral_barn", "neutral_townhouse", "neutral_shed"};
-      centres = {"neutral_church", "neutral_school", "neutral_well", "neutral_farmhouse"}; break;
+      centres = {"neutral_onion_church", "neutral_grain_silo", "neutral_well"}; break;
+    case Biome::Desert: houses = {"neutral_adobe", "neutral_adobe", "neutral_market", "neutral_shed", "neutral_ruin"};
+      centres = {"neutral_well", "neutral_villa", "neutral_warehouse"}; break;
+    case Biome::Urban: houses = {"neutral_townhouse", "neutral_shopfront", "neutral_apartment", "neutral_ruin", "neutral_cottage_bombed"};
+      centres = {"neutral_station", "neutral_town_hall", "neutral_factory", "neutral_terrace"}; break;
+    case Biome::Tropical: houses = {"neutral_stilt_hut", "neutral_stilt_hut", "neutral_shed"};
+      centres = {"neutral_stilt_hut", "neutral_warehouse"}; break;
+    default: houses = {"neutral_cottage", "neutral_half_timber", "neutral_stone_cottage", "neutral_farmhouse", "neutral_barn",
+                       "neutral_shed"};
+      centres = {"neutral_church", "neutral_tavern", "neutral_manor", "neutral_windmill", "neutral_school"}; break;
   }
   const std::vector<std::pair<int, int>> spots = {{W / 2, W / 2},           {W / 2, W * 30 / 100}, {W / 2, W * 70 / 100},
                                                   {W * 36 / 100, W / 2},    {W * 64 / 100, W / 2}, {W * 33 / 100, W * 22 / 100},

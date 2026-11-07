@@ -70,6 +70,7 @@ struct UnitTypeDef {
   std::string role;              // what it provides: "yard", "barracks", "factory", "refinery", "power"
   int32_t buildRadius = 0;       // tiles around it where the owner may build
   uint8_t cover = 0;             // % less damage for infantry standing in it (trenches)
+  bool bridge = false;           // a bridge piece: anything may cross its tile, water or not
   uint8_t coverAround = 0;       // % less damage for infantry right next to it (sandbags)
   bool autoTarget = true;        // enemies attack it of their own accord
   bool targetable = true;        // can be attacked at all

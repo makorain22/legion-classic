@@ -110,7 +110,7 @@ differences follow it.
 | Rifleman / Grenadier | Barracks | 8 / 10 | Cheap, hit 7 shots in 10. Only scratch armour: it takes about thirty of them to wear down a heavy tank. |
 | MG Team | Barracks | 40 | A heavy machine gun: shreds infantry at 6.5 tiles. |
 | AT Team | Barracks | 50 | Panzerschreck (Germany: big hit, short range) or anti-tank rifle (Russia: longer range, smaller hits). Hunts tanks from cover. |
-| Engineer (Pioneer / Sapper) | Barracks | 30 | Unarmed. Repairs friendly vehicles and buildings: right-click them; idle engineers repair anything damaged nearby. |
+| Engineer (Pioneer / Sapper) | Barracks | 30 | Unarmed. Repairs friendly vehicles and buildings: right-click them; idle engineers repair anything damaged nearby. In a bunker, tower, trench or wall of sandbags they keep it, and the field works right round it, in repair. |
 | Sniper | Barracks (needs a Watchtower) | 80 | Sees 11 tiles, kills a man with almost every shot at 9.5 tiles. |
 | Scout Car | Tank Works | 400 | Fast, sees far: spots for the guns. |
 | Half-track | Tank Works | 450 | Armoured, quick, machine gun on a pivot. |
@@ -226,7 +226,7 @@ Soldiers fight as units, as real armies do:
   (turn them off in Settings → Display, *Show enemy unit cards*). Hovering a
   soldier or vehicle shows its type, its unit and its strength.
 
-### Holding buildings, bunkers and trenches
+### Holding buildings, bunkers, trenches and sandbags
 
 - **Right-click a building or bunker** with infantry selected to send them in
   (houses, churches and ruins hold 6 to 30 men; a bunker 4; a watchtower 1).
@@ -242,7 +242,25 @@ Soldiers fight as units, as real armies do:
   trench holds **up to three men**. They spread along the whole trench line,
   drop into it and **stay there**: move orders don't pull them out. Press
   **Evacuate** (E, or the sidebar button) with them selected to climb out.
-  Men in a trench take 60 % less damage.
+  Men in a trench take 60 % less damage. They are drawn down in it, waist
+  deep behind its lip of earth, and come up to fire.
+- **Sandbags are manned the same way:** right-click a wall of sandbags (or
+  just beside it) with infantry. Three men to a piece, spread along the
+  wall, kneeling behind it; they take half damage and stay until evacuated.
+- **Pioneers (engineers) in a work keep it in repair:** a bunker, tower,
+  trench or sandbag wall they hold, and the field works right round it.
+
+### Villages, towns and bridges
+
+Skirmish maps grow villages that fit their country: half-timbered and stone
+cottages, inns, manors, windmills and town halls in the west; log houses,
+grain silos and onion-domed churches in the snow; mud-brick houses, market
+stalls and courtyard villas in the desert; terraces, corner shops, apartment
+blocks and factories in towns; stilt houses in the jungle. Every one can be
+held by infantry. Where a road crosses a river there is a **bridge** (stone,
+or timber in the snow and the jungle) beside the old ford. Anything can cross
+a bridge; it is never shot at unless you order it (force-fire), and when a
+span falls whatever is on it goes into the river.
 
 ### What you can't see: chips
 
@@ -258,7 +276,7 @@ valuable thing among them. Chips can't be shot; send someone to look.
 | | What it does |
 | --- | --- |
 | Trench | Dig a line (click, drag, release). Each piece holds three men, who take 60 % less damage and stay until evacuated (E). Wheeled vehicles can't cross it. |
-| Sandbags | A low line of sandbags; pieces join up into a wall. Infantry right beside it take 40 % less damage. Blocks everything. |
+| Sandbags | A low line of sandbags; pieces join up into a wall. Infantry right beside it take 40 % less damage; right-click it with infantry to man it (three men a piece, half damage, they stay until evacuated). Vehicles can't cross it; infantry climb over. |
 | Barbed wire | Stops infantry; vehicles drive through. |
 | Tank traps | Stop vehicles; infantry walk through. |
 | MG Bunker | A machine-gun pillbox that shreds infantry. |
@@ -338,14 +356,14 @@ These are the defaults:
 | Left drag | Box-select your units |
 | Double-click | Select all units of that type on screen |
 | Left click on a building your men hold | Select the men inside |
-| Right click | Move; on a visible enemy: attack it; on a building or bunker with infantry: go in; on a trench: man it; with engineers on a damaged friend: repair it; with a barracks or works selected: rally point |
+| Right click | Move; on a visible enemy: attack it; on a building or bunker with infantry: go in; on (or beside) a trench or sandbags: man it; with engineers on a damaged friend: repair it; with a barracks or works selected: rally point |
 | Right drag | Move into formation along the dragged front line |
 | Ctrl+right click | Choose a formation (and move or attack-move) for this order |
 | Alt+right click | Forced march (don't stop to fight) |
 | W A S D, arrow keys, screen edges | Scroll |
 | Ctrl+A, then left click (or F) | Attack-move to that point (Esc or right click cancels) |
 | Ctrl+S (or X) | Stop |
-| E (or Ctrl+E) | Evacuate: the selected men climb out of their trench |
+| E (or Ctrl+E) | Evacuate: the selected men climb out of their trench or from behind their sandbags |
 | Ctrl+D (or G) | Deploy a construction truck |
 | Ctrl+B | Bind the selection into a squad, platoon or company (vehicles: platoon, company, battalion) |
 | Ctrl+U | Disband the selected unit |
@@ -417,7 +435,7 @@ removes those units again; undoing a delete brings them back where they were.
 | Flatten | Level the ground to the height where the stroke started |
 | Roughen | Add natural unevenness |
 | Paint ground | Grass, dry grass, dirt, mud, sand, rock, snow, dirt road; edges blend naturally. Tick **Grid** (or press G) to paint whole tiles, a square the brush size wide, for exact edges |
-| Place props | Click for one tree, bush, rock, palm, snowy pine, dead tree, jungle tree, scrub, debris, sandstone, stump, log pile, haystack, crates or fence; drag to scatter. **Civilian buildings** (houses, churches, barns, the railway station, farmhouse, school...) are here too, placed one at a time; they belong to nobody |
+| Place props | Click for one tree, bush, rock, palm, snowy pine, dead tree, jungle tree, scrub, debris, sandstone, stump, log pile, haystack, crates or fence; drag to scatter. **Civilian buildings** (houses, churches, barns, the railway station, farmhouse, school, inn, manor, town hall, windmill, factory, market, stilt house...) and **bridge pieces** (stone or timber; lay them across a river tile by tile and they join up) are here too, placed one at a time; they belong to nobody |
 | Erase props | Remove props inside the brush |
 | Water level | Water fills every part of the map below this height |
 
@@ -537,7 +555,9 @@ menu; the default when started with no options), `--ai-battle` (watch two
 computer players; add `--side 1` to watch from the Soviet side, `--sides 3` for every side for itself, `--sides 4`
 for two against two, and `--factions gbr,rus` (or `ger,gbr,rus,gbr` with four
 sides) to choose who plays each side), `--gallery` (every unit and building lined up, for looking
-at the art), `--org-demo` (a platoon, an armoured platoon, a held building and
+at the art; with `--factions gbr` one army only), `--works-demo` (trenches and sandbag walls
+manned by every kind of infantry), `--town-demo` (every civilian building), `--bridge-demo`
+(with `--ai-battle --layout 0`: a column crossing a bridge), `--org-demo` (a platoon, an armoured platoon, a held building and
 fog chips), `--export-sprites folder` (write every sprite as a PNG for
 repainting; see [ART_PIPELINE.md](ART_PIPELINE.md)), `--tool rules:ger_medium_tank`,
 `--tool sprites:units/tank@ger` or `--tool mods` (open a creation tool at start),

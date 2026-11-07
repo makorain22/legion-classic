@@ -320,7 +320,7 @@ void Simulation::removeDead() {
   if (dead_.empty()) return;
   std::sort(dead_.begin(), dead_.end());
   dead_.erase(std::unique(dead_.begin(), dead_.end()), dead_.end());
-  for (uint32_t i : dead_) destroyEntity(i);
+  for (size_t k = 0; k < dead_.size(); ++k) destroyEntity(dead_[k]);  // may add men lost with a bridge
   dead_.clear();
 }
 

@@ -137,6 +137,8 @@ class Map {
   // stands here (nothing else may be built on it). Owned by the simulation:
   // never saved with the map, rebuilt from the buildings on load.
   static constexpr uint8_t kOccupied = 0x80;
+  // A bridge deck: crossable whatever the water or slope beneath it.
+  static constexpr uint8_t kDeck = 0x40;
   uint8_t block(int tx, int ty) const { return blocks_[static_cast<size_t>(ty) * width_ + tx]; }
   void setBlock(int tx, int ty, uint8_t bits) {
     blocks_[static_cast<size_t>(ty) * width_ + tx] = bits;
@@ -190,8 +192,12 @@ class Map {
     int tx = 0, ty = 0;  // footprint centre tile
     uint8_t kind = 0;    // 0 cottage, 1 bombed cottage, 2 town house, 3 church, 4 ruin, 5 adobe,
                          // 6 barn, 7 shed, 8 log house, 9 warehouse, 10 well, 11 water tower,
-                         // 12 railway station, 13 farmhouse, 14 school
+                         // 12 railway station, 13 farmhouse, 14 school, then the variants
+                         // in lotBuildingId; kBridgeLot / kWoodBridgeLot are bridge pieces
   };
+  static constexpr uint8_t kBridgeLot = 40, kWoodBridgeLot = 41;
+  // The neutral building type a lot of this kind becomes ("neutral_cottage"...).
+  static const char* lotBuildingId(uint8_t kind);
   std::vector<Lot> lots;
 
  private:

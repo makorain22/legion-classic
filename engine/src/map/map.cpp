@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 
 #include "slave/core/rng.hpp"
 
@@ -147,8 +148,9 @@ bool Map::passable(int tx, int ty, Locomotor loco) const {
   if (!inBounds(tx, ty)) return false;
   const TileInfo& t = info(tx, ty);
   const int li = static_cast<int>(loco);
-  return t.slope <= rules_.maxSlope[li] && t.waterDepth <= rules_.maxWaterDepth[li] &&
-         !(blocks_[static_cast<size_t>(ty) * width_ + tx] & (1u << li));
+  const uint8_t b = blocks_[static_cast<size_t>(ty) * width_ + tx];
+  if (b & kDeck) return !(b & (1u << li));  // on a bridge
+  return t.slope <= rules_.maxSlope[li] && t.waterDepth <= rules_.maxWaterDepth[li] && !(b & (1u << li));
 }
 
 const char* biomeName(Biome b) {
@@ -168,6 +170,20 @@ bool parseBiome(const std::string& s, Biome& out) {
   return false;
 }
 
+
+const char* Map::lotBuildingId(uint8_t kind) {
+  static const char* kinds[] = {
+      "neutral_cottage", "neutral_cottage_bombed", "neutral_townhouse", "neutral_church",   "neutral_ruin",
+      "neutral_adobe",   "neutral_barn",           "neutral_shed",      "neutral_izba",     "neutral_warehouse",
+      "neutral_well",    "neutral_water_tower",    "neutral_station",   "neutral_farmhouse", "neutral_school",
+      // 15.. the variants that stand in for the plain kinds above
+      "neutral_half_timber", "neutral_stone_cottage", "neutral_shopfront", "neutral_apartment", "neutral_factory",
+      "neutral_tavern",      "neutral_terrace",       "neutral_manor",     "neutral_town_hall", "neutral_onion_church",
+      "neutral_grain_silo",  "neutral_windmill",      "neutral_market",    "neutral_villa",     "neutral_stilt_hut"};
+  if (kind == kBridgeLot) return "neutral_bridge";
+  if (kind == kWoodBridgeLot) return "neutral_bridge_wood";
+  return kinds[kind % (sizeof kinds / sizeof kinds[0])];
+}
 
 bool Map::buildable(int tx, int ty) const {
   if (!inBounds(tx, ty)) return false;
@@ -785,7 +801,73 @@ void Map::generateTerrain(uint64_t seed, Biome b, int layoutIndex) {
   // Plots for neutral houses, kept clear of the four starting areas (west,
   // east, north, south), the oil and the water. Towns fill whole street
   // blocks; elsewhere a few hamlets sit along the roads.
-  if (b == Biome::Tropical) return;
+  // On the way out, whichever way the plots were laid: dress the plain house
+  // kinds as their local variants (by place, not by the random stream, so
+  // the rest of the map is unchanged), and bridge the rivers where roads ford.
+  struct AtEnd {
+    std::function<void()> f;
+    ~AtEnd() { f(); }
+  } atEnd{[&] {
+    for (Lot& l : lots) {
+      const uint32_t hv = hash32(static_cast<uint32_t>(l.tx) * 92821u ^ static_cast<uint32_t>(l.ty) * 68917u ^ static_cast<uint32_t>(s));
+      const uint32_t k4 = hv % 4, k3 = (hv >> 8) % 3;
+      switch (l.kind) {
+        case 0: l.kind = k4 == 1 ? 15 : k4 == 2 ? 16 : k4 == 3 && !winter ? 15 : 0; break;            // cottages
+        case 2: l.kind = k4 == 1 || k4 == 3 ? 17 : k4 == 2 && urban ? 18 : 2; break;                   // town houses
+        case 9: l.kind = (urban ? k4 < 2 : k4 == 0) ? 19 : 9; break;                                    // warehouses
+        case 14: l.kind = k3 == 1 ? 20 : k3 == 2 ? 21 : 14; break;                                      // schools
+        case 13: l.kind = k3 == 2 ? 22 : 13; break;                                                      // farms
+        case 3: l.kind = winter ? 24 : (urban || plan.centralTown) && k4 < 2 ? 23 : 3; break;           // churches
+        case 11: l.kind = winter ? 25 : !urban && k4 < 2 ? 26 : 11; break;                              // towers
+        case 5: l.kind = k4 == 1 ? 27 : 5; break;                                                        // adobe houses
+        default: break;
+      }
+    }
+    // Bridges: along each road, the tiles over a river become bridge pieces.
+    for (const Curve& road : plan.roads) {
+      // The wet tiles along the road, in order.
+      std::vector<Vec2i> wet;
+      Vec2i last{-99, -99};
+      for (int i = 0; i <= 2000; ++i) {
+        const Vec2f p = curvePoint(road, i / 2000.0f);
+        const Vec2i t{static_cast<int>(std::floor(p.x)), static_cast<int>(std::floor(p.y))};
+        if (t.x == last.x && t.y == last.y) continue;
+        last = t;
+        bool w = false;
+        for (const Curve& r : plan.rivers) w = w || curveDistance(r, {t.x + 0.5f, t.y + 0.5f}) < r.halfWidth * 1.15f + 0.4f;
+        if (w && inBounds(t.x, t.y)) wet.push_back(t);
+      }
+      // Split into spans, each joined edge to edge, with a ramp piece at
+      // each end in line with it.
+      std::vector<std::vector<Vec2i>> spans;
+      for (const Vec2i& t : wet) {
+        if (spans.empty() || std::abs(t.x - spans.back().back().x) + std::abs(t.y - spans.back().back().y) > 3) {
+          spans.push_back({t});
+          continue;
+        }
+        std::vector<Vec2i>& sp = spans.back();
+        while (sp.back().x != t.x || sp.back().y != t.y) {
+          Vec2i n = sp.back();
+          if (n.x != t.x) n.x += t.x > n.x ? 1 : -1;
+          else n.y += t.y > n.y ? 1 : -1;
+          sp.push_back(n);
+        }
+      }
+      for (std::vector<Vec2i>& sp : spans) {
+        if (sp.size() >= 2) {
+          const Vec2i a = sp[0], a1 = sp[1], z = sp.back(), z1 = sp[sp.size() - 2];
+          const Vec2i head{a.x - (a1.x - a.x), a.y - (a1.y - a.y)}, tail{z.x + (z.x - z1.x), z.y + (z.y - z1.y)};
+          if (inBounds(head.x, head.y)) sp.insert(sp.begin(), head);
+          if (inBounds(tail.x, tail.y)) sp.push_back(tail);
+        }
+        for (const Vec2i& t : sp) {
+          bool dup = false;
+          for (const Lot& l : lots) dup = dup || (l.tx == t.x && l.ty == t.y);
+          if (!dup) lots.push_back({t.x, t.y, (winter || tropical) ? kWoodBridgeLot : kBridgeLot});
+        }
+      }
+    }
+  }};
   const int homes[4][2] = {{W * 17 / 100, H / 2}, {W * 83 / 100, H / 2}, {W / 2, H * 17 / 100}, {W / 2, H * 83 / 100}};
   auto plotFree = [&](int cx, int cy, int half) {
     for (const auto& sp : homes)
@@ -827,6 +909,7 @@ void Map::generateTerrain(uint64_t seed, Biome b, int layoutIndex) {
   }
   auto houseKind = [&](bool town) -> uint8_t {
     const uint32_t pick = rng.below(100);
+    if (tropical) return 29;  // stilt huts
     if (desert) return pick < 85 ? 5 : 10;
     if (winter) return pick < 45 ? 8 : pick < 60 ? 6 : pick < 72 ? 7 : pick < 82 ? 1 : pick < 90 ? 10 : pick < 96 ? 4 : 3;
     if (town) return pick < 34 ? 2 : pick < 50 ? 0 : pick < 60 ? 14 : pick < 68 ? 12 : pick < 76 ? 9 : pick < 84 ? 3 : pick < 92 ? 11 : 1;
@@ -834,7 +917,7 @@ void Map::generateTerrain(uint64_t seed, Biome b, int layoutIndex) {
          : pick < 87 ? 13 : pick < 94 ? 4 : 3;
   };
   auto bigKind = [](uint8_t k) { return k == 9 || k == 12 || k == 13 || k == 14; };
-  if (plan.centralTown) {
+  if (plan.centralTown && !tropical) {
     // A market town round the crossroads.
     for (int k = 0; k < 90; ++k) {
       const int cx = W / 2 + static_cast<int>(rng.range(-11, 11)), cy = H / 2 + static_cast<int>(rng.range(-11, 11));
@@ -859,8 +942,12 @@ void Map::generateTerrain(uint64_t seed, Biome b, int layoutIndex) {
       if (nearRoad(cx, cy) || !plotFree(cx, cy, 1)) continue;
       uint8_t kind = houseKind(false);
       if (kind == 13 && !plotFree(cx, cy, 2)) kind = 0;
+      // Now and then a walled villa with a courtyard among the desert houses.
+      if (kind == 5 && hash32(static_cast<uint32_t>(cx * 131 + cy * 977) ^ static_cast<uint32_t>(s)) % 5 == 0 &&
+          plotFree(cx, cy, 2))
+        kind = 28;
       lots.push_back({cx, cy, kind});
-      clearProps(cx, cy, 1);
+      clearProps(cx, cy, kind == 28 ? 2 : 1);
     }
   }
 }

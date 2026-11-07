@@ -107,6 +107,8 @@ bool UnitTypeRegistry::loadJson(const nlohmann::json& doc, std::string& error) {
       d.buildRadius = u.value("buildRadius", 0);
       d.cover = static_cast<uint8_t>(std::clamp(u.value("cover", 0), 0, 90));
       d.coverAround = static_cast<uint8_t>(std::clamp(u.value("coverAround", 0), 0, 90));
+      d.bridge = u.value("bridge", false);
+      if (d.bridge && !u.contains("blocks")) d.blocks = 0;  // a road over the water
       d.autoTarget = u.value("autoTarget", true);
       d.targetable = u.value("targetable", true);
       d.hidden = u.value("hidden", false);

@@ -788,11 +788,68 @@ Vec2f GameScene::groundAt(Vec2f screenPx) const {
   return l;
 }
 
+// A bridge is laid level, as high as the higher of its banks; its deck stands
+// this far above that (the deck's voxels are 1/24 tile).
+constexpr float kUnitsPerFineVoxel = static_cast<float>(HEIGHT_UNITS_PER_TILE) / 24.0f;
+constexpr float kDeckLift = (kBridgeDeckZ - kBridgePierDepth) * kUnitsPerFineVoxel;
+
+float GameScene::surfaceHeight(float lx, float ly) const {
+  const float h = map_.heightAt(lx, ly);
+  const int tx = static_cast<int>(lx) >> LEPTON_SHIFT, ty = static_cast<int>(ly) >> LEPTON_SHIFT;
+  if (!map_.inBounds(tx, ty) || bridgeLevel_.size() != static_cast<size_t>(map_.width()) * map_.height()) return h;
+  const float level = bridgeLevel_[static_cast<size_t>(ty) * map_.width() + tx];
+  return level > 0 ? level + kDeckLift : h;
+}
+
+void GameScene::refreshBridges() {
+  Registry& reg = sim_->registry();
+  uint64_t sig = 1469598103934665603ull;
+  for (uint32_t e : reg.pool<CStructure>().entities()) {
+    const uint16_t t = reg.pool<CUnit>().get(e).type;
+    if (t < bridgeTypes_.size() && bridgeTypes_[t]) sig = (sig ^ e) * 1099511628211ull;
+  }
+  const size_t tiles = static_cast<size_t>(map_.width()) * map_.height();
+  if (sig == bridgeSig_ && bridgeLevel_.size() == tiles) return;
+  bridgeSig_ = sig;
+  bridgeLevel_.assign(tiles, 0.0f);
+  auto isBridge = [&](int x, int y) {
+    const Entity o = sim_->structureAt(x, y);
+    if (!o.valid()) return false;
+    const uint16_t t = reg.get<CUnit>(o).type;
+    return t < bridgeTypes_.size() && bridgeTypes_[t];
+  };
+  std::vector<uint8_t> seen(tiles, 0);
+  for (int y = 0; y < map_.height(); ++y)
+    for (int x = 0; x < map_.width(); ++x) {
+      if (seen[static_cast<size_t>(y) * map_.width() + x] || !isBridge(x, y)) continue;
+      // One bridge: every piece joined to this one, laid at the highest bank.
+      std::vector<Vec2i> comp, stack{{x, y}};
+      seen[static_cast<size_t>(y) * map_.width() + x] = 1;
+      float level = static_cast<float>(map_.waterLevel());
+      while (!stack.empty()) {
+        const Vec2i t = stack.back();
+        stack.pop_back();
+        comp.push_back(t);
+        level = std::max(level, map_.heightAt(t.x * 256.0f + 128, t.y * 256.0f + 128));
+        for (const Vec2i d : {Vec2i{1, 0}, Vec2i{-1, 0}, Vec2i{0, 1}, Vec2i{0, -1}}) {
+          const int nx = t.x + d.x, ny = t.y + d.y;
+          if (!map_.inBounds(nx, ny) || seen[static_cast<size_t>(ny) * map_.width() + nx] || !isBridge(nx, ny)) continue;
+          seen[static_cast<size_t>(ny) * map_.width() + nx] = 1;
+          stack.push_back({nx, ny});
+        }
+      }
+      for (const Vec2i& t : comp) bridgeLevel_[static_cast<size_t>(t.y) * map_.width() + t.x] = std::max(level, 1.0f);
+    }
+}
+
 Vec2f GameScene::unitScreenWorld(uint32_t e) const {
   Registry& reg = sim_->registry();
   const CPosition& p = reg.pool<CPosition>().get(e);
   const CPrevPosition& q = reg.pool<CPrevPosition>().get(e);
-  return groundToScreenWorld(q.x + (p.x - q.x) * alpha_, q.y + (p.y - q.y) * alpha_);
+  const float lx = q.x + (p.x - q.x) * alpha_, ly = q.y + (p.y - q.y) * alpha_;
+  Vec2f s = iso::worldToScreen(lx, ly);
+  s.y -= surfaceHeight(lx, ly) * kPxPerUnit;  // up on the deck when crossing a bridge
+  return s;
 }
 
 Vec2i GameScene::mouseWorldLeptons() const {
@@ -1628,6 +1685,7 @@ void GameScene::onUpdate(float dt, float alpha) {
   if (opt_.battleDemo) runBattleDemo();
   if (opt_.orgDemo) runOrgDemo();
   if (opt_.worksDemo) runWorksDemo();
+  if (opt_.townDemo) runTownDemo();
   if (opt_.flowSelfTest) runFlowSelfTest();
   if (opt_.modsSelfTest) runModsSelfTest();
   editor_->update(dt);
@@ -1815,6 +1873,7 @@ void GameScene::drawGroundLayer(const RectF& view) {
 // sprites: the hull, then the turret on top at its own pivot and facing.
 void GameScene::drawUnits(const RectF& view) {
   Registry& reg = sim_->registry();
+  refreshBridges();
   const bool fog = fogEnabled();
   drawList_.clear();
   uint32_t order = 0;
@@ -1925,13 +1984,24 @@ void GameScene::drawUnits(const RectF& view) {
                !sim_->vision().visible(player_, p.x >> LEPTON_SHIFT, p.y >> LEPTON_SHIFT)) {
       continue;
     }
-    const Vec2f s = unitScreenWorld(e);
+    Vec2f s = unitScreenWorld(e);
+    const bool bridge = u.type < bridgeTypes_.size() && bridgeTypes_[u.type];
+    if (bridge) {
+      // Laid level across the river, its piers reaching down into the water;
+      // drawn behind whatever crosses it.
+      const size_t ti = static_cast<size_t>(p.y >> LEPTON_SHIFT) * map_.width() + (p.x >> LEPTON_SHIFT);
+      const float level = ti < bridgeLevel_.size() && bridgeLevel_[ti] > 0 ? bridgeLevel_[ti] : static_cast<float>(map_.waterLevel());
+      s = iso::worldToScreen(static_cast<float>(p.x), static_cast<float>(p.y));
+      s.y -= (level - kBridgePierDepth * kUnitsPerFineVoxel) * kPxPerUnit;
+    }
     if (!view.contains(s)) continue;
     const CFacing& f = reg.pool<CFacing>().get(e);
     const CAnim& a = reg.pool<CAnim>().get(e);
     const UnitArt& art = unitArt_[u.type];
     // Structures sort by their front corner, so units behind them are hidden by them.
-    const int64_t depth = def.isStructure() ? iso::depthKey(p.x + def.footW * 96, p.y + def.footH * 96) - 1 : iso::depthKey(p.x, p.y);
+    const int64_t depth = bridge              ? iso::depthKey(p.x - 128, p.y - 128) - 1
+                          : def.isStructure() ? iso::depthKey(p.x + def.footW * 96, p.y + def.footH * 96) - 1
+                                              : iso::depthKey(p.x, p.y);
     const int facing = facingOf(f.angle);
     int anim = a.moving ? a.frame : 0;
     if (art.walkFrames > 0) {

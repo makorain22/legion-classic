@@ -55,6 +55,12 @@ struct EffectArt {
   int craterSmall = 0, craterLarge = 0, scorch = 0;
 };
 
+// Bridge pieces (24 voxels a tile): the deck's top stands kBridgeDeckZ voxels
+// above the sprite's foot, the piers reaching kBridgePierDepth below the
+// level a bridge is laid at.
+constexpr int kBridgeDeckZ = 22;
+constexpr int kBridgePierDepth = 16;
+
 struct SpriteCatalog {
   Image atlas;
   std::vector<AtlasFrame> frames;

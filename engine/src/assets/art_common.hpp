@@ -223,6 +223,23 @@ VoxelModel makeWaterTower(const FactionLook&);
 VoxelModel makeStation(const FactionLook&);
 VoxelModel makeFarmhouse(const FactionLook&);
 VoxelModel makeSchool(const FactionLook&);
+VoxelModel makeHalfTimber(const FactionLook&);
+VoxelModel makeStoneCottage(const FactionLook&);
+VoxelModel makeShopfront(const FactionLook&);
+VoxelModel makeApartment(const FactionLook&);
+VoxelModel makeBrickworks(const FactionLook&);
+VoxelModel makeTavern(const FactionLook&);
+VoxelModel makeTerrace(const FactionLook&);
+VoxelModel makeManor(const FactionLook&);
+VoxelModel makeTownHall(const FactionLook&);
+VoxelModel makeOnionChurch(const FactionLook&);
+VoxelModel makeGrainSilo(const FactionLook&);
+VoxelModel makeWindmill(const FactionLook&);
+VoxelModel makeMarket(const FactionLook&);
+VoxelModel makeVilla(const FactionLook&);
+VoxelModel makeStiltHut(const FactionLook&);
+// A bridge piece by neighbour mask (24 voxels a tile), stone or timber.
+VoxelModel makeBridgeSpan(int mask, bool wood);
 
 // The detailed vehicles and soldiers (unit_models.cpp).
 void addUnitModels(BakeQueue& q, SpriteCatalog& cat);

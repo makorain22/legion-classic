@@ -516,6 +516,8 @@ VoxelModel makeHowitzer(const FactionLook& look) {
 VoxelModel makeSandbagPiece(const FactionLook&) { return makeSandbagLine(5); }
 VoxelModel makeWirePiece(const FactionLook&) { return makeWireLine(5); }
 VoxelModel makeHedgehogPiece(const FactionLook&) { return makeHedgehogs(0); }
+VoxelModel makeStoneBridgePiece(const FactionLook&) { return makeBridgeSpan(5, false); }
+VoxelModel makeWoodBridgePiece(const FactionLook&) { return makeBridgeSpan(5, true); }
 
 // Bakes a structure: one view for the body, and 16 facings of its turret if any.
 void addStructure(AtlasBuilder& ab, SpriteCatalog& cat, const std::string& name, VoxelModel (*make)(const FactionLook&),
@@ -837,10 +839,13 @@ bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error, const ArtOption
   {
     // Sandbag walls and wire entanglements join up with their neighbours.
     const VoxelPalette fpal = makePalette(kFactions[0]);
-    for (const char* model : {"sandbags", "wire", "fence"}) {
+    for (const std::string model : {"sandbags", "wire", "fence", "bridge", "bridge_wood"}) {
       std::array<int, 16>& frames = cat.joined[model];
       for (int mask = 0; mask < 16; ++mask) {
-        const VoxelModel vm = model[0] == 's' ? makeSandbagLine(mask) : model[0] == 'w' ? makeWireLine(mask) : makeFenceLine(mask);
+        const VoxelModel vm = model == "sandbags" ? makeSandbagLine(mask)
+                              : model == "wire"   ? makeWireLine(mask)
+                              : model == "fence"  ? makeFenceLine(mask)
+                                                  : makeBridgeSpan(mask, model == "bridge_wood");
         BakeOptions o = unitBake(kFineStructureVoxel);
         o.pivotX = 12;
         o.pivotY = 12;
@@ -867,6 +872,23 @@ bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error, const ArtOption
   addStructure(ab, cat, "station", &makeStation);
   addStructure(ab, cat, "farmhouse", &makeFarmhouse);
   addStructure(ab, cat, "school", &makeSchool);
+  addStructure(ab, cat, "half_timber", &makeHalfTimber);
+  addStructure(ab, cat, "stone_cottage", &makeStoneCottage);
+  addStructure(ab, cat, "shopfront", &makeShopfront);
+  addStructure(ab, cat, "apartment", &makeApartment);
+  addStructure(ab, cat, "brickworks", &makeBrickworks);
+  addStructure(ab, cat, "tavern", &makeTavern);
+  addStructure(ab, cat, "terrace", &makeTerrace);
+  addStructure(ab, cat, "manor", &makeManor);
+  addStructure(ab, cat, "town_hall", &makeTownHall);
+  addStructure(ab, cat, "onion_church", &makeOnionChurch);
+  addStructure(ab, cat, "grain_silo", &makeGrainSilo);
+  addStructure(ab, cat, "windmill", &makeWindmill);
+  addStructure(ab, cat, "market", &makeMarket);
+  addStructure(ab, cat, "villa", &makeVilla);
+  addStructure(ab, cat, "stilt_hut", &makeStiltHut);
+  addStructure(ab, cat, "bridge", &makeStoneBridgePiece, nullptr, kFineStructureVoxel);
+  addStructure(ab, cat, "bridge_wood", &makeWoodBridgePiece, nullptr, kFineStructureVoxel);
   addEconomyDecals(ab, cat);
   {
     // Trenches are ground decals; their "unit art" is the lone foxhole piece.

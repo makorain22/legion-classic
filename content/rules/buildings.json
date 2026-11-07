@@ -948,6 +948,280 @@
       "description": "A two-storey village school."
     },
     {
+      "id": "neutral_half_timber",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Half-Timbered House",
+      "model": "half_timber",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 1100,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 12,
+      "description": "A tall house of oak beams and white plaster under a steep roof."
+    },
+    {
+      "id": "neutral_stone_cottage",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Stone Cottage",
+      "model": "stone_cottage",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 1300,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 10,
+      "description": "Thick fieldstone walls and a thatched roof: better cover than most."
+    },
+    {
+      "id": "neutral_shopfront",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Corner Shop",
+      "model": "shopfront",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 1200,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 14,
+      "description": "A shop on the ground floor with its awning, rooms above."
+    },
+    {
+      "id": "neutral_apartment",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Apartment Block",
+      "model": "apartment",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 2000,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 28,
+      "description": "Four storeys of flats: a fine place for snipers and machine guns."
+    },
+    {
+      "id": "neutral_factory",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Factory",
+      "model": "brickworks",
+      "footprint": [
+        3,
+        2
+      ],
+      "health": 2200,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 30,
+      "description": "A brick works with a saw-tooth roof and a tall chimney."
+    },
+    {
+      "id": "neutral_tavern",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Inn",
+      "model": "tavern",
+      "footprint": [
+        3,
+        2
+      ],
+      "health": 1200,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 16,
+      "description": "The village inn, its sign still swinging."
+    },
+    {
+      "id": "neutral_terrace",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Terraced Row",
+      "model": "terrace",
+      "footprint": [
+        3,
+        2
+      ],
+      "health": 1600,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 24,
+      "description": "Three narrow houses built wall to wall."
+    },
+    {
+      "id": "neutral_manor",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Manor House",
+      "model": "manor",
+      "footprint": [
+        3,
+        2
+      ],
+      "health": 1800,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 24,
+      "description": "A squire's house of two storeys with a pillared porch."
+    },
+    {
+      "id": "neutral_town_hall",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Town Hall",
+      "model": "town_hall",
+      "footprint": [
+        3,
+        3
+      ],
+      "health": 2600,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 32,
+      "sight": 10,
+      "description": "The town hall and its clock tower; the tower sees a long way."
+    },
+    {
+      "id": "neutral_onion_church",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Village Church",
+      "model": "onion_church",
+      "footprint": [
+        3,
+        3
+      ],
+      "health": 2400,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 30,
+      "sight": 9,
+      "description": "A wooden church under onion domes."
+    },
+    {
+      "id": "neutral_grain_silo",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Grain Silo",
+      "model": "grain_silo",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 600,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 2,
+      "sight": 12,
+      "description": "A tall concrete silo: a lookout over the steppe."
+    },
+    {
+      "id": "neutral_windmill",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Windmill",
+      "model": "windmill",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 500,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 2,
+      "sight": 11,
+      "description": "A post mill on the rise; a lookout for whoever holds it."
+    },
+    {
+      "id": "neutral_market",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Market Stalls",
+      "model": "market",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 500,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 6,
+      "description": "Awnings and stalls round a little square: little cover."
+    },
+    {
+      "id": "neutral_villa",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Courtyard Villa",
+      "model": "villa",
+      "footprint": [
+        3,
+        3
+      ],
+      "health": 1800,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 24,
+      "description": "A walled house round a shaded courtyard."
+    },
+    {
+      "id": "neutral_stilt_hut",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Stilt House",
+      "model": "stilt_hut",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 500,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 8,
+      "description": "A bamboo house raised on posts, thatched with palm."
+    },
+    {
+      "id": "neutral_bridge",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Stone Bridge",
+      "model": "bridge",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 4000,
+      "bridge": true,
+      "autoTarget": false,
+      "description": "A stone bridge on arches. Anything can cross it; destroy it (force-fire) and whatever is on it goes into the river."
+    },
+    {
+      "id": "neutral_bridge_wood",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Timber Bridge",
+      "model": "bridge_wood",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 2000,
+      "bridge": true,
+      "autoTarget": false,
+      "description": "A plank bridge on timber trestles. Anything can cross it; it burns and breaks more easily than stone."
+    },
+    {
       "id": "gbr_yard",
       "faction": "gbr",
       "armor": "structure",
