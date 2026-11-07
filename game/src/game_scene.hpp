@@ -84,7 +84,7 @@ struct SceneOptions {
   int side = -1;                // watch from this side (player number) at the start
   float speed = 1.0f;           // starting game speed (testing)
   int layout = -1;              // map layout for generated maps (-1: from the seed)
-  int sides = 2;                // --ai-battle: 2 (1v1) or 4 (2v2)
+  int sides = 2;                // --ai-battle: 2 (1v1), 3 (every side for itself) or 4 (2v2)
   bool noSound = false;         // --no-sound
   bool forceSound = false;      // --sound: sound even with --offscreen (testing)
   std::string factions;         // --ai-battle: "ger,gbr,..." per side (default Germany v Russia)

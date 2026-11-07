@@ -301,3 +301,44 @@ TEST_CASE("tanks and infantry bind into a battle group; vehicles alone bind by r
   CHECK(sim.groupOf(more[0]) != sim.groupOf(cars[0]));
   CHECK_FALSE(sim.groupOf(cars[0])->combined);
 }
+
+// Regression (0.9.0 crash, 7 Nov 2026): a man killed inside a building by the
+// guns stayed on its occupant list until the next tick, and the renderer read
+// his owner from a deleted entity between ticks (access violation on Windows).
+TEST_CASE("men killed inside a building leave its occupant list in the same tick") {
+  Rules R;
+  Map map(64, 64, 300);
+  Simulation sim(map, R.types, R.weapons, 5);
+  Command c;
+  c.type = CommandType::SpawnList;
+  c.spawns = {{R.t("neutral_townhouse"), NEUTRAL_OWNER, {20 * T, 20 * T}, 0, -1}};
+  sim.queue(c);
+  sim.tick();
+  const Entity house = sim.spawnLog().front().entity;
+  std::vector<Entity> men = spawnMany(sim, R.t("rus_rifleman"), 1, {26 * T, 20 * T}, 8);
+  Command occ;
+  occ.type = CommandType::Occupy;
+  occ.player = 1;
+  occ.units = men;
+  occ.targetUnit = house;
+  sim.queue(occ);
+  for (int i = 0; i < 15 * 20; ++i) sim.tick();
+  REQUIRE(sim.garrisonLevel(house) > 0);
+  // German machine guns and a tank shoot the house up.
+  spawnMany(sim, R.t("ger_mg_team"), 0, {25 * T, 20 * T}, 4, 120);
+  spawnMany(sim, R.t("ger_medium_tank"), 0, {25 * T, 23 * T}, 2, 300);
+  Registry& reg = sim.registry();
+  int deathsInside = 0;
+  for (int i = 0; i < 15 * 120 && reg.alive(house); ++i) {
+    const size_t before = reg.has<CGarrison>(house) ? reg.get<CGarrison>(house).occupants.size() : 0;
+    sim.tick();
+    if (!reg.has<CGarrison>(house)) continue;
+    const auto& occupants = reg.get<CGarrison>(house).occupants;
+    for (Entity m : occupants) {
+      REQUIRE(reg.alive(m));  // what the renderer and the interface read between ticks
+      REQUIRE(reg.has<CUnit>(m));
+    }
+    if (occupants.size() < before) ++deathsInside;
+  }
+  CHECK(deathsInside > 0);  // the test did kill men inside
+}

@@ -121,6 +121,13 @@ void Simulation::occupy(uint32_t e, const UnitTypeDef& def, Vec2i o) {
 void Simulation::destroyEntity(uint32_t e) {
   const Entity h = reg_.handle(e);
   if (!reg_.alive(h)) return;
+  // A man who dies inside a building leaves its occupant list now: nothing
+  // that reads the list between ticks (the renderer, the interface) may find
+  // a deleted entity on it.
+  if (const CGarrisoned* g = reg_.pool<CGarrisoned>().tryGet(e)) {
+    if (reg_.alive(g->building))
+      if (CGarrison* list = reg_.pool<CGarrison>().tryGet(g->building.index)) std::erase(list->occupants, h);
+  }
   if (const CStructure* s = reg_.pool<CStructure>().tryGet(e)) {
     for (int y = s->ty; y < s->ty + s->h; ++y)
       for (int x = s->tx; x < s->tx + s->w; ++x) {

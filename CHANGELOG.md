@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.1 – in progress (Milestone 9.1: tuning and debugging)
+
+- **Fixed a crash** in skirmish (seen in a 1v1v1 at high game speed, and
+  probably the old "2v2 crash after five minutes"): a man killed inside a
+  building stayed on its occupant list until the next tick, and the
+  renderer read his owner from a deleted unit. A dead man now leaves the
+  list at once, and the renderer checks anyway. Regression test added.
+- `--ai-battle --sides 3`: every side for itself.
+
 ## 0.9.0 – Milestone 9: Britain, sound, tutorial, campaigns (7 Nov 2026)
 
 - **Sound and music**, built for immersion and size. A new audio module in

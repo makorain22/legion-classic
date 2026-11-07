@@ -534,7 +534,7 @@ start), `--demo` (the two armies attack each other), `--no-bases` (armies only,
 no bases), `--debug` (open the debug panel), `--editor` (start with the editor
 open), `--open path\to\map.lmap` (start on a saved map), `--menu` (the main
 menu; the default when started with no options), `--ai-battle` (watch two
-computer players; add `--side 1` to watch from the Soviet side, `--sides 4`
+computer players; add `--side 1` to watch from the Soviet side, `--sides 3` for every side for itself, `--sides 4`
 for two against two, and `--factions gbr,rus` (or `ger,gbr,rus,gbr` with four
 sides) to choose who plays each side), `--gallery` (every unit and building lined up, for looking
 at the art), `--org-demo` (a platoon, an armoured platoon, a held building and

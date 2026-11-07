@@ -143,7 +143,9 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
     s.layout = opt_.layout;
     s.sides[0] = {true, opt_.side == 1 ? "rus" : "ger", opt_.flowSelfTest || opt_.monkey > 0, 2, 0, rgba8(196, 58, 44)};
     s.sides[1] = {true, "rus", false, 2, 1, rgba8(52, 96, 196)};
-    if (opt_.sides >= 4) {
+    if (opt_.sides == 3) {  // every side for itself
+      s.sides[2] = {true, "gbr", false, 2, 2, rgba8(220, 180, 40)};
+    } else if (opt_.sides >= 4) {
       s.sides[2] = {true, "ger", false, 2, 0, rgba8(220, 180, 40)};
       s.sides[3] = {true, "rus", false, 2, 1, rgba8(60, 170, 80)};
     }
@@ -1964,6 +1966,7 @@ void GameScene::drawUnits(const RectF& view) {
     const int level = sim_->garrisonLevel(bh);
     if (level == 0 || !reg.has<CStructure>(bh) || sim_->isTrench(bh)) continue;
     const CGarrison& g = reg.get<CGarrison>(bh);
+    if (g.occupants.empty() || !reg.alive(g.occupants.front())) continue;
     const uint8_t owner = reg.get<CUnit>(g.occupants.front()).owner;
     if (fog && !sim_->allied(owner, player_) && terrain_.fogAt(reg.get<CStructure>(bh).tx, reg.get<CStructure>(bh).ty) < 128) continue;
     const int bagType = types_.find(players_[owner % MAX_PLAYERS].faction + "_sandbags");
