@@ -1,0 +1,14 @@
+{
+ "id": "tutorial",
+ "title": "Basic Training",
+ "faction": "gbr",
+ "order": 0,
+ "tutorial": true,
+ "description": "Four short lessons at a training ground in England, against an opposing force in German kit: giving orders, cover and armour, digging in, and building a base.",
+ "missions": [
+  {"id": "t1", "title": "First Orders", "map": "t1_first_orders.lmap", "briefing": "t1_first_orders.md", "place": "Salisbury Plain", "date": "Spring 1946"},
+  {"id": "t2", "title": "Cover and Armour", "map": "t2_cover.lmap", "briefing": "t2_cover.md", "place": "Salisbury Plain", "date": "Spring 1946"},
+  {"id": "t3", "title": "Digging In", "map": "t3_dig_in.lmap", "briefing": "t3_dig_in.md", "place": "Salisbury Plain", "date": "Spring 1946"},
+  {"id": "t4", "title": "Base and Supply", "map": "t4_base.lmap", "briefing": "t4_base.md", "place": "Salisbury Plain", "date": "Spring 1946"}
+ ]
+}

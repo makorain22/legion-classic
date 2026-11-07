@@ -175,6 +175,9 @@ void Simulation::setOrderIdle(Entity e) {
 }
 
 void Simulation::applyCommand(const Command& cmd) {
+  // What humans do, for tutorials waiting on an order (replays count the same).
+  if (cmd.player < MAX_PLAYERS && !ai_.player(cmd.player).enabled && static_cast<size_t>(cmd.type) < 32)
+    ++ordersGiven_[cmd.player][static_cast<size_t>(cmd.type)];
   // Men inside a building come out to go anywhere; men in a trench stay
   // dug in until told to evacuate.
   std::vector<Entity> movers;

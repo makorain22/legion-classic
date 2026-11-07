@@ -25,7 +25,8 @@ class Menus {
   void captureKey(const SDL_KeyboardEvent& e);
 
  private:
-  enum class Page { None, Main, Skirmish, Scenarios, LoadGame, Replays, InGame, SaveGame, About, Settings, Mods };
+  enum class Page { None, Main, Skirmish, Scenarios, LoadGame, Replays, InGame, SaveGame, About, Settings, Mods,
+                    Campaigns, Missions, Briefing };
   struct FileEntry {
     std::string path, file, title, detail;
   };
@@ -40,6 +41,10 @@ class Menus {
   void drawAbout();
   void drawSettings();
   void drawMods();
+  void drawCampaigns();
+  void drawMissions();
+  void drawBriefing();
+  int campaignIndex(const std::string& id) const;
   void openMods();
   void refreshFiles(const std::string& dir, const char* ext, bool replays);
   bool backButton();
@@ -58,6 +63,13 @@ class Menus {
   char newModName_[64] = "";
  public:
   void showMods() { openMods(); }  // (screenshots)
+  // The campaign's mission list, or a mission's briefing (from the debriefing or the main menu).
+  void openCampaign(const std::string& id);
+  void openBriefing(const std::string& id, int mission);
+ private:
+  int campaign_ = -1, mission_ = -1;
+  std::string briefingText_;
+ public:
 };
 
 }  // namespace legion

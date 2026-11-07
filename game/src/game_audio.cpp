@@ -227,7 +227,9 @@ void GameAudio::onEvent(const SimEvent& ev, const Simulation& sim, uint8_t playe
       if (ev.owner == player && playing) play("ui_denied");
       break;
     case EventType::ScriptMessage:
-      if (playing && (ev.owner == ANY_PLAYER || ev.owner == player)) play("ui_message");
+    case EventType::Hint:
+      if (playing && (ev.owner == ANY_PLAYER || ev.owner == player) && !(ev.type == EventType::Hint && ev.text.empty()))
+        play("ui_message");
       break;
     case EventType::ObjectivesChanged:
       if (playing && (ev.owner == ANY_PLAYER || sim.allied(ev.owner, player))) play("ui_objective");

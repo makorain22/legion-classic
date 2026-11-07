@@ -1,0 +1,89 @@
+{
+ "_comment": "Skirmish maps, in the order the Skirmish page lists them. Made by tools/make_content.cpp.",
+ "maps": [
+  {
+   "biome": "temperate",
+   "description": "A slow river down the middle, two fords and a mill town on the bank.",
+   "file": "river_valley.lmap",
+   "name": "Orel Valley",
+   "size": 128
+  },
+  {
+   "biome": "temperate",
+   "description": "A river between the sides with three fords, all of them in range of the other bank.",
+   "file": "front_line.lmap",
+   "name": "The Narew Line",
+   "size": 128
+  },
+  {
+   "biome": "temperate",
+   "description": "Where two rivers meet: a fight for the tongue of land between them.",
+   "file": "confluence.lmap",
+   "name": "Two Waters",
+   "size": 128
+  },
+  {
+   "biome": "winter",
+   "description": "Lakes and narrow land between them; every causeway matters.",
+   "file": "lakeland.lmap",
+   "name": "Masurian Lakes",
+   "size": 128
+  },
+  {
+   "biome": "temperate",
+   "description": "A market town where two roads cross, open fields all round.",
+   "file": "crossroads.lmap",
+   "name": "Kursk Crossroads",
+   "size": 128
+  },
+  {
+   "biome": "temperate",
+   "description": "High ground across the middle, crossed at passes.",
+   "file": "ridge.lmap",
+   "name": "Point 112",
+   "size": 128
+  },
+  {
+   "biome": "temperate",
+   "description": "Shallow pools men can wade and causeway roads for the tanks.",
+   "file": "marshes.lmap",
+   "name": "Pripet Marshes",
+   "size": 128
+  },
+  {
+   "biome": "winter",
+   "description": "A great frozen lake in the middle: fight round it.",
+   "file": "great_lake.lmap",
+   "name": "Lake Ilmen",
+   "size": 160
+  },
+  {
+   "biome": "desert",
+   "description": "Open steppe cut by dry gullies: tank country.",
+   "file": "steppe.lmap",
+   "name": "Kalmyk Steppe",
+   "size": 160
+  },
+  {
+   "biome": "temperate",
+   "description": "Deep forest, few roads, close fighting.",
+   "file": "forest.lmap",
+   "name": "Hürtgen",
+   "size": 128
+  },
+  {
+   "biome": "winter",
+   "description": "Rolling hills and wooded valleys in the snow.",
+   "file": "hill_country.lmap",
+   "name": "Ardennes Heights",
+   "size": 128
+  },
+  {
+   "biome": "urban",
+   "description": "Two rivers and a ruined industrial town between them.",
+   "file": "twin_rivers.lmap",
+   "name": "Rhine and Ruhr",
+   "size": 128
+  }
+ ]
+}

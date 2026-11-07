@@ -6,16 +6,6 @@ and `mods` folders next to the exe.
 Windows may show a SmartScreen warning the first time because the game isn't
 code-signed yet: choose **More info → Run anyway**.
 
-## Blitzkrieg art (optional, personal use)
-
-To play with the art of Nival's Blitzkrieg, unzip the art pack you were given
-into `content/art/` (so you have `content/art/blitzkrieg/sprites.json`), or
-make it yourself from the Blitzkrieg data:
-`LegionClassic.exe --import-blitzkrieg <Blitzkrieg>/Versions/Current/Data`.
-Settings → Display switches between it and the built-in art (restart to
-apply). The pack is for non-commercial personal use only – see
-`docs/ART_PIPELINE.md`.
-
 ## The encyclopedia
 
 **K** (or F4, or the button on the sidebar, or the main menu) opens the
@@ -28,7 +18,18 @@ With the mouse over a build button, K opens that unit's page.
 The game opens on the **main menu**, over a live battle between two computer
 players on a random map.
 
-- **Skirmish.** Pick a map size, a biome (temperate, winter, desert, tropical
+- **Tutorial: Basic Training.** New to the game? Start here: four short
+  lessons (giving orders, cover and armour, digging in, building a base).
+  Hints appear at the top of the screen and the button you need glows.
+- **Campaigns.** Three missions each for Germany (*Kampfgruppe Adler*), the
+  Soviet Union (*Guards Rifle Corps*) and Britain (*The Desert Rats*). Read
+  the briefing, then Begin. Missions open one after another, and what you
+  achieve in one can help in the next (a tank that survives comes back).
+  Progress is kept in `progress.json` in the user folder; *Start again* on a
+  campaign's page forgets it.
+
+- **Skirmish.** Pick one of twelve ready-made **maps** (one for every
+  landscape, villages placed), or a new random map: then pick a map size, a biome (temperate, winter, desert, tropical
   or urban), a seed, the starting supplies and up to four sides. Each side is
   you or the computer (easy, normal or hard), Germany, Russia or Britain, on a team of
   your choice. **Landscape**: river valley, front line river, confluence,
@@ -311,6 +312,20 @@ guns and towers are built and placed like other structures.
   stay on the field as blackened wrecks; fallen soldiers stay for a while;
   shells leave craters and scorch marks.
 
+## Sound and music
+
+Sound follows your view. Fighting on screen is loud and sharp; a battle
+further off is quieter, duller and echoes; scroll toward it to hear it
+properly. When the fighting is out of view altogether you hear the front in
+the distance, guns over the hills, louder the more there is going on.
+Zooming out lifts you up: everything is a little more distant.
+
+The music follows the fighting near you: quiet pieces (with silences
+between them) while all is calm, the battle music when a fight flares up
+near the camera, back to calm after a lull. Victory and defeat have their
+own. **Settings > Sound** has volumes for the battle, orders (radio and
+whistles), music, ambience and the interface, and shows what is playing.
+
 ## Controls
 
 Every key can be changed under **Settings → Controls** (main menu or Esc).
@@ -527,4 +542,6 @@ fog chips), `--export-sprites folder` (write every sprite as a PNG for
 repainting; see [ART_PIPELINE.md](ART_PIPELINE.md)), `--tool rules:ger_medium_tank`,
 `--tool sprites:units/tank@ger` or `--tool mods` (open a creation tool at start),
 `--mods-selftest` (checks the rules editor, mods and sprite studio through the
-real game).
+real game), `--no-sound`, `--campaign gbr` or `--campaign gbr:2` (open a
+campaign, or a mission's briefing), `--mission tutorial:1` (play a mission
+straight away).

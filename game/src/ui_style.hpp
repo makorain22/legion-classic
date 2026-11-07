@@ -6,6 +6,7 @@
 #include <imgui.h>
 
 #include <functional>
+#include <string>
 
 namespace legion::ui {
 
@@ -53,6 +54,12 @@ bool iconTab(const char* id, Picto p, const char* label, ImVec2 size, bool lit, 
 // Called when a plate button or tab is clicked (the interface's click sounds).
 void setClickSound(std::function<void(bool tab)> fn);
 void clickSound(bool tab);
+// Tutorials: the interface element to make glow ("tab.train", "build:gbr_power", "order.evacuate", "minimap"...).
+void setHighlight(const std::string& id);
+// After drawing an element: a pulsing frame round it when it is the one highlighted.
+void glowIfHighlighted(const char* id);
+// The hint panel a tutorial or mission shows: a title line, then the text.
+void hintPanel(const std::string& text, float x, float y, float width);
 
 // The theme for ordinary Dear ImGui widgets drawn on the plates.
 void pushTheme();

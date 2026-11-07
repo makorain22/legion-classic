@@ -11,7 +11,7 @@ essentials. Keep both in sync when decisions change.
 | Engine | Custom C++20 engine, SDL3 + OpenGL 3.3 core, Dear ImGui for editor UI |
 | Target | Windows 10/11 64-bit PC; Linux possible later |
 | Setting | Alternate-history 1940s–1950s |
-| Factions | Germany and Russia first, United Kingdom third (`gbr`, since 0.9.0) |
+| Factions | Germany, Russia and the United Kingdom (`gbr`, since 0.9.0) |
 | Art | Gritty, realistic, Blitzkrieg-inspired; voxel-baked sprites (supersampled), replaceable by hand-drawn PNGs |
 | Facings | 16 visible facings, animations at 8–10 fps (heavy retro feel) |
 | Sidebar | Classic right sidebar, minimap on top |
@@ -120,14 +120,29 @@ recognition flash on vehicles and a roundel in the interface.
    next battle), a sprite studio (facings, animation, side colours, recolour,
    anchors, export / import into a mod), saves and replays that record their
    mods and a rules fingerprint. See docs/MODDING.md.
-9. UK faction, tutorial, campaigns (built with the editor), sound and music –
-   in progress. Done: Britain (`gbr`) – 14 units, the base under British names,
-   11 new weapons, a methodical artillery doctrine for the computer, the UI
-   theme and roundel, Brodie helmets and the recognition flash on the
-   placeholder art (German hull shapes until British voxel models are made),
-   saves renumbered by unit id. Next: sound and music, tutorial, campaigns,
-   skirmish maps.
-10. Release 1.0: balance, performance, documentation, packaging.
+9. **Britain, sound, tutorial, campaigns** – done (0.9.0):
+   - Britain (`gbr`): 14 units, the base under British names, 11 new weapons,
+     a methodical artillery doctrine for the computer, the UI theme and
+     roundel, Brodie helmets and the recognition flash on the placeholder art
+     (German hull shapes until British voxel models are made); saves
+     renumbered by unit id.
+   - Sound and music, built for immersion and size: a software mixer in the
+     engine where sound follows the camera (fade, muffle and echo with
+     distance; the far-off front rumbles when the fighting is out of view), a
+     large-hall reverb, synthesised effects and ambience, nine orchestral
+     pieces that follow the fighting near the camera.
+   - Tutorial: four lessons (orders, cover and armour, digging in, base and
+     supply) with hints, highlighted buttons and locked build options.
+   - Campaigns: a campaign format with Markdown briefings and flags carried
+     between missions; three missions each for Germany, the Soviet Union and
+     Britain; progress kept per player.
+   - Twelve ready-made skirmish maps, one per landscape.
+   **9.1 Tuning and debugging** – next: playtest Milestone 9, balance the three
+   armies and the campaign missions (AI-vs-AI batches with `--ai-battle
+   --factions ... --speed 16`, win rates, cost and strength tables),
+   performance on the large maps and on older machines, bugs, and the
+   documentation (PLAYING, modding and editor guides). Packaging the game for
+   release (installer, 1.0) waits until the tuning and debugging are finished.
 
 ## Playtest backlog (31 Oct 2026, after Milestones 6–7)
 
@@ -135,7 +150,7 @@ Taken on in 0.7.5 (hard to undo): key layout and rebinding, supply points,
 unit organisation, garrisons, infantry against armour, fog chips, editor
 palette headings, placement grid, the quick fixes.
 
-Taken on in 0.7.6: the Blitzkrieg art pack (personal use), the sidebar
+Taken on in 0.7.6 (the Blitzkrieg art pack was dropped from the plans on 7 Nov 2026; the importer stays in the code but nothing more is done with it): the Blitzkrieg art pack (personal use), the sidebar
 redesign, the encyclopedia, the Script tab, the art pass (palette, colour
 grading and vignette, long tracers, trenches over slopes, lasting corpses and
 wrecks) and more content (MG nests, howitzer emplacements, six village
@@ -157,3 +172,19 @@ expansion and field works; faction colours for the interface.
 Still open: building designs per climate for the built-in voxel art; balance
 between the doctrines (in AI-against-AI games on hard the Soviets now edge
 it); the computer fortifying its expansions as well as its main base.
+
+## Sound and music (decided 7 Nov 2026)
+
+- Immersion and grandness first. Sound follows the camera: what is in view is
+  heard in full; further away it fades, loses its high end and gets wetter,
+  so a fight across the map is a distant rumble rather than a quiet crackle.
+  Zooming out lifts the ear. Big guns carry further than rifles (each sound's
+  `range` in `content/audio/audio.json`).
+- When the fighting is away from the camera, a far-off front (guns over the
+  hills) fades in under the ambience in proportion to how much is going on.
+- Music follows the fighting near the camera: calm pieces with silences
+  between them, battle music when it flares up, back to calm after a lull of
+  about twenty seconds; the menu theme, a victory fanfare and a lament.
+- All sound is presentation only, never in the simulation, so it can't break
+  determinism. Effects are synthesised (CC0); the music is composed in
+  `tools/audio/music.py` and played by the FluidR3 GM soundfont (MIT).

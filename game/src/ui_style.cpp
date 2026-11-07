@@ -1,5 +1,6 @@
 #include "ui_style.hpp"
 
+#include <cctype>
 #include <cmath>
 #include <string>
 
@@ -13,6 +14,66 @@ namespace {
 std::function<void(bool)> gClick;
 }  // namespace
 void setClickSound(std::function<void(bool tab)> fn) { gClick = std::move(fn); }
+
+namespace {
+std::string gHighlight;
+bool sameId(const std::string& a, const char* b) {
+  size_t i = 0;
+  for (; i < a.size() && b[i]; ++i)
+    if (std::tolower(static_cast<unsigned char>(a[i])) != std::tolower(static_cast<unsigned char>(b[i]))) return false;
+  return i == a.size() && !b[i];
+}
+}  // namespace
+void setHighlight(const std::string& id) { gHighlight = id; }
+void glowIfHighlighted(const char* id) {
+  if (gHighlight.empty() || !sameId(gHighlight, id)) return;
+  ImDrawList* dl = ImGui::GetForegroundDrawList();
+  const ImVec2 a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
+  const float t = static_cast<float>(ImGui::GetTime());
+  const float pulse = 0.5f + 0.5f * std::sin(t * 5.0f);
+  const float grow = 2.0f + 3.0f * pulse;
+  const ImU32 col = IM_COL32(255, 214, 90, static_cast<int>(140 + 115 * pulse));
+  dl->AddRect(ImVec2(a.x - grow, a.y - grow), ImVec2(b.x + grow, b.y + grow), col, 3.0f, 0, 2.5f);
+  dl->AddRect(ImVec2(a.x - grow - 3, a.y - grow - 3), ImVec2(b.x + grow + 3, b.y + grow + 3),
+              IM_COL32(255, 214, 90, static_cast<int>(60 * pulse)), 4.0f, 0, 2.0f);
+  // A pointer from above, nodding down toward it.
+  const float cx = (a.x + b.x) * 0.5f, y = a.y - grow - 4 - 5 * pulse;
+  dl->AddTriangleFilled(ImVec2(cx, y), ImVec2(cx - 8, y - 12), ImVec2(cx + 8, y - 12), col);
+}
+
+void hintPanel(const std::string& text, float x, float y, float width) {
+  if (text.empty()) return;
+  const size_t nl = text.find('\n');
+  const std::string title = nl == std::string::npos ? std::string("Orders") : text.substr(0, nl);
+  const std::string body = nl == std::string::npos ? text : text.substr(nl + 1);
+  ImGui::SetNextWindowPos(ImVec2(x, y), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(ImVec2(width, 0), ImGuiCond_Always);
+  ImGui::SetNextWindowBgAlpha(0.0f);
+  ImGui::Begin("##hint", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
+                                      ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoFocusOnAppearing |
+                                      ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoInputs);
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  ImDrawListSplitter split;
+  split.Split(dl, 2);
+  split.SetCurrentChannel(dl, 1);
+  ImGui::Dummy(ImVec2(0, 22));
+  ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(kStencil));
+  ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + width - 28);
+  ImGui::Indent(6);
+  ImGui::TextUnformatted(body.c_str());
+  ImGui::Unindent(6);
+  ImGui::PopTextWrapPos();
+  ImGui::PopStyleColor();
+  ImGui::Dummy(ImVec2(0, 4));
+  const ImVec2 a = ImGui::GetWindowPos();
+  const ImVec2 b(a.x + width, ImGui::GetCursorScreenPos().y + 4);
+  split.SetCurrentChannel(dl, 0);
+  panel(dl, a, b);
+  rivets(dl, a, b);
+  sectionTitle(dl, ImVec2(a.x + 4, a.y + 4), width - 8, title.c_str());
+  split.Merge(dl);
+  ImGui::End();
+}
 void clickSound(bool tab) {
   if (gClick) gClick(tab);
 }

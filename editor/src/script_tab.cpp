@@ -174,7 +174,44 @@ bool Editor::editCondition(Condition& c) {
       ImGui::SetNextItemWidth(100);
       ch |= ImGui::InputInt("supplies", &c.value, 100, 1000);
       break;
-    case CondType::TriggerFired: ch |= triggerCombo("trigger", c.trigger); break;
+    case CondType::TriggerFired:
+      ch |= triggerCombo("trigger", c.trigger);
+      ImGui::SetNextItemWidth(100);
+      ch |= ImGui::InputInt("seconds ago", &c.value);
+      break;
+    case CondType::UnitsAtLeast:
+      ch |= playerCombo("side", c.player, false);
+      ImGui::SetNextItemWidth(100);
+      ch |= ImGui::InputInt("at least", &c.value);
+      ch |= unitCombo("of", c.unitType, true);
+      break;
+    case CondType::InCover:
+      ch |= playerCombo("side", c.player, false);
+      ImGui::SetNextItemWidth(100);
+      ch |= ImGui::InputInt("men at least", &c.value);
+      break;
+    case CondType::OrderGiven: {
+      ch |= playerCombo("side", c.player, false);
+      static const char* kOrders[] = {"any", "move", "attack_move", "attack", "stop", "produce", "place_building",
+                                      "place_walls", "sell", "deploy", "set_stance", "repair", "occupy", "unload"};
+      int cur = 0;
+      for (int i = 1; i < static_cast<int>(sizeof(kOrders) / sizeof(kOrders[0])); ++i)
+        if (orderFromId(kOrders[i]) == c.order) cur = i;
+      ImGui::SetNextItemWidth(170);
+      if (ImGui::Combo("order", &cur, kOrders, static_cast<int>(sizeof(kOrders) / sizeof(kOrders[0])))) {
+        c.order = cur == 0 ? -1 : orderFromId(kOrders[cur]);
+        ch = true;
+      }
+      ImGui::SetNextItemWidth(100);
+      ch |= ImGui::InputInt("times", &c.value);
+      break;
+    }
+    case CondType::FlagAtLeast:
+      ImGui::SetNextItemWidth(170);
+      ch |= ImGui::InputTextWithHint("##flag", "flag name", &c.text);
+      ImGui::SetNextItemWidth(100);
+      ch |= ImGui::InputInt("at least", &c.value);
+      break;
     default: break;
   }
   ImGui::Unindent();
@@ -289,6 +326,25 @@ bool Editor::editAction(Action& a) {
       ch |= playerCombo("for", a.player, true);
       ch |= areaCombo("to", a.area);
       break;
+    case ActionType::Hint:
+      ch |= playerCombo("for", a.player, true);
+      ImGui::TextDisabled("First line: the title. Empty: close the panel.");
+      ch |= ImGui::InputTextMultiline("##hint", &a.text, ImVec2(-1, 90));
+      break;
+    case ActionType::Highlight:
+      ch |= playerCombo("for", a.player, true);
+      text("tab.build, tab.defend, tab.train, tab.vehicles, build:<unit id>, order.evacuate, order.deploy, order.sell, minimap");
+      break;
+    case ActionType::LockBuild:
+    case ActionType::UnlockBuild:
+      ch |= playerCombo("side", a.player, true);
+      ch |= unitCombo("what", a.unitType, true);
+      break;
+    case ActionType::SetFlag:
+      text("flag name");
+      ImGui::SetNextItemWidth(100);
+      ch |= ImGui::InputInt("value", &a.value);
+      break;
     default: break;
   }
   ImGui::Unindent();
@@ -324,7 +380,14 @@ std::string Editor::describeCondition(const Condition& c) const {
     case CondType::Supplies: return sideName(sc, c.player) + " has $" + std::to_string(c.value) + " or more";
     case CondType::TriggerFired:
       return "trigger " + (c.trigger >= 0 && c.trigger < static_cast<int>(s.triggers.size())
-                               ? "'" + s.triggers[static_cast<size_t>(c.trigger)].name + "'" : std::string("(none)")) + " has fired";
+                               ? "'" + s.triggers[static_cast<size_t>(c.trigger)].name + "'" : std::string("(none)")) + " has fired" +
+             (c.value > 0 ? ", " + std::to_string(c.value) + " s ago" : std::string());
+    case CondType::UnitsAtLeast:
+      return sideName(sc, c.player) + " has " + std::to_string(std::max(1, c.value)) + " or more " + units(c.unitType);
+    case CondType::InCover: return sideName(sc, c.player) + " has " + std::to_string(std::max(1, c.value)) + " or more men in cover";
+    case CondType::OrderGiven:
+      return sideName(sc, c.player) + " has given " + std::to_string(std::max(1, c.value)) + " '" + orderId(c.order) + "' order(s)";
+    case CondType::FlagAtLeast: return "flag '" + c.text + "' is " + std::to_string(c.value) + " or more";
     default: return condName(c.type);
   }
 }
@@ -359,6 +422,11 @@ std::string Editor::describeAction(const Action& a) const {
     case ActionType::DisableTrigger: return "switch off trigger " + trig(a.trigger);
     case ActionType::SetComputer: return sideName(sc, a.player) + " is played by " + (a.value < 0 ? std::string("a human") : "the computer");
     case ActionType::CameraTo: return "move " + sideName(sc, a.player) + "'s view to " + area(a.area);
+    case ActionType::Hint: return a.text.empty() ? "close the hint" : "hint for " + sideName(sc, a.player) + ": \"" + a.text.substr(0, a.text.find('\n')) + "\"";
+    case ActionType::Highlight: return a.text.empty() ? "stop highlighting" : "highlight " + a.text;
+    case ActionType::LockBuild: return sideName(sc, a.player) + " can't build " + units(a.unitType);
+    case ActionType::UnlockBuild: return sideName(sc, a.player) + " can build " + units(a.unitType) + " again";
+    case ActionType::SetFlag: return "set campaign flag '" + a.text + "' to " + std::to_string(a.value);
     default: return actionName(a.type);
   }
 }

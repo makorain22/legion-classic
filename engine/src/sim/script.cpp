@@ -10,17 +10,24 @@ namespace slave {
 
 namespace {
 const char* kCondNames[] = {"Always", "Timer", "Units in area", "No units in area", "Unit count at most",
-                            "Player defeated", "Supplies at least", "Trigger fired"};
+                            "Player defeated", "Supplies at least", "Trigger fired", "Unit count at least",
+                            "Men in cover", "Order given", "Campaign flag at least"};
 const char* kCondIds[] = {"always", "timer", "units_in_area", "no_units_in_area", "unit_count_at_most",
-                          "player_defeated", "supplies", "trigger_fired"};
+                          "player_defeated", "supplies", "trigger_fired", "unit_count_at_least", "in_cover",
+                          "order_given", "flag_at_least"};
+const char* kOrderIds[] = {"move", "attack_move", "attack", "stop", "spawn", "remove", "spawn_list", "edit", "kill",
+                           "strike", "set_team", "set_stance", "produce", "place_building", "place_walls", "sell",
+                           "deploy", "harvest", "set_rally", "set_credits", "set_controller", "repair", "bind_group",
+                           "unbind_group", "occupy", "unload"};
 const char* kActionNames[] = {"Message", "Add objective", "Complete objective", "Fail objective", "Victory", "Defeat",
                               "Spawn units", "Give supplies", "Reveal area", "Attack-move units", "Move units",
                               "Change owner", "Destroy units", "Enable trigger", "Disable trigger",
-                              "Set computer player", "Move camera"};
+                              "Set computer player", "Move camera", "Show hint", "Highlight interface",
+                              "Lock building", "Unlock building", "Set campaign flag"};
 const char* kActionIds[] = {"message", "add_objective", "complete_objective", "fail_objective", "victory", "defeat",
                             "spawn_units", "give_supplies", "reveal_area", "attack_move", "move_units",
                             "change_owner", "kill_units", "enable_trigger", "disable_trigger", "set_computer",
-                            "camera_to"};
+                            "camera_to", "hint", "highlight", "lock_build", "unlock_build", "set_flag"};
 static_assert(sizeof(kCondIds) / sizeof(kCondIds[0]) == static_cast<size_t>(CondType::Count));
 static_assert(sizeof(kActionIds) / sizeof(kActionIds[0]) == static_cast<size_t>(ActionType::Count));
 
@@ -31,6 +38,11 @@ int indexOf(const char* (&ids)[N], const std::string& s) {
   return -1;
 }
 }  // namespace
+
+const char* orderId(int t) {
+  return t >= 0 && t < static_cast<int>(sizeof(kOrderIds) / sizeof(kOrderIds[0])) ? kOrderIds[t] : "any";
+}
+int orderFromId(const std::string& id) { return indexOf(kOrderIds, id); }
 
 const char* condName(CondType t) { return kCondNames[static_cast<int>(t) % static_cast<int>(CondType::Count)]; }
 const char* actionName(ActionType t) { return kActionNames[static_cast<int>(t) % static_cast<int>(ActionType::Count)]; }
@@ -48,8 +60,13 @@ nlohmann::json scriptToJson(const ScenarioScript& s, const UnitTypeRegistry* typ
     nlohmann::json tj{{"name", t.name}, {"enabled", t.enabled}, {"repeat", t.repeat}};
     auto& cs = tj["conditions"] = nlohmann::json::array();
     for (const Condition& c : t.conditions)
-      cs.push_back({{"type", kCondIds[static_cast<int>(c.type)]}, {"player", c.player}, {"area", c.area},
-                    {"value", c.value}, {"unit", typeId(c.unitType)}, {"trigger", c.trigger}});
+    {
+      nlohmann::json cj{{"type", kCondIds[static_cast<int>(c.type)]}, {"player", c.player}, {"area", c.area},
+                        {"value", c.value}, {"unit", typeId(c.unitType)}, {"trigger", c.trigger}};
+      if (c.type == CondType::OrderGiven) cj["order"] = orderId(c.order);
+      if (!c.text.empty()) cj["text"] = c.text;
+      cs.push_back(std::move(cj));
+    }
     auto& as = tj["actions"] = nlohmann::json::array();
     for (const Action& a : t.actions)
       as.push_back({{"type", kActionIds[static_cast<int>(a.type)]}, {"player", a.player}, {"player2", a.player2},
@@ -95,6 +112,8 @@ ScenarioScript scriptFromJson(const nlohmann::json& j, const UnitTypeRegistry* t
         c.value = cj.value("value", 0);
         c.unitType = cj.contains("unit") ? unitOf(cj["unit"]) : -1;
         c.trigger = cj.value("trigger", -1);
+        c.order = cj.contains("order") ? orderFromId(cj.value("order", std::string())) : -1;
+        c.text = cj.value("text", std::string());
         t.conditions.push_back(c);
       }
       for (const auto& aj : tj.value("actions", nlohmann::json::array())) {
@@ -175,7 +194,29 @@ bool Simulation::evaluate(const Condition& c, size_t trigger) const {
     case CondType::UnitCount: return countUnits(c.player, -1, c.unitType) <= c.value;
     case CondType::PlayerDefeated: return c.player < MAX_PLAYERS && players_[c.player].defeated;
     case CondType::Supplies: return c.player < MAX_PLAYERS && players_[c.player].credits >= c.value;
-    case CondType::TriggerFired: return triggerFired(c.trigger);
+    case CondType::TriggerFired:
+      if (!triggerFired(c.trigger)) return false;
+      return c.value <= 0 ||
+             tick_ >= triggerState_[static_cast<size_t>(c.trigger)].lastFire + static_cast<uint32_t>(c.value) * TICKS_PER_SECOND;
+    case CondType::UnitsAtLeast: return countUnits(c.player, -1, c.unitType) >= std::max(1, c.value);
+    case CondType::InCover: {
+      int n = 0;
+      for (uint32_t e : reg_.pool<CGarrisoned>().entities())
+        if (reg_.pool<CUnit>().has(e) && reg_.pool<CUnit>().get(e).owner == c.player) ++n;
+      return n >= std::max(1, c.value);
+    }
+    case CondType::OrderGiven: {
+      if (c.player >= MAX_PLAYERS) return false;
+      const auto& n = ordersGiven_[c.player];
+      uint32_t count = 0;
+      if (c.order < 0) {
+        for (uint32_t k : n) count += k;
+      } else if (c.order < static_cast<int>(n.size())) {
+        count = n[static_cast<size_t>(c.order)];
+      }
+      return count >= static_cast<uint32_t>(std::max(1, c.value));
+    }
+    case CondType::FlagAtLeast: return flag(c.text) >= c.value;
     default: return false;
   }
 }
@@ -279,6 +320,28 @@ void Simulation::perform(const Action& a) {
       break;
     case ActionType::CameraTo:
       event(EventType::CameraTo, a.player).at = areaCentre(a.area);
+      break;
+    case ActionType::Hint:
+    case ActionType::Highlight:
+      for (uint8_t p = 0; p < MAX_PLAYERS; ++p) {
+        if (a.player != ANY_PLAYER && p != a.player) continue;
+        (a.type == ActionType::Hint ? hints_ : highlights_)[p] = a.text;
+      }
+      event(a.type == ActionType::Hint ? EventType::Hint : EventType::Highlight, a.player).text = a.text;
+      break;
+    case ActionType::LockBuild:
+    case ActionType::UnlockBuild:
+      for (uint8_t p = 0; p < MAX_PLAYERS; ++p) {
+        if (a.player != ANY_PLAYER && p != a.player) continue;
+        auto& locks = buildLocks_[p];
+        locks.resize(types_.size(), 0);
+        const uint8_t v = a.type == ActionType::LockBuild ? 1 : 0;
+        if (a.unitType < 0) std::fill(locks.begin(), locks.end(), v);
+        else if (a.unitType < static_cast<int>(locks.size())) locks[static_cast<size_t>(a.unitType)] = v;
+      }
+      break;
+    case ActionType::SetFlag:
+      if (!a.text.empty()) flags_[a.text] = a.value;
       break;
     default:
       break;

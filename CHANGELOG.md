@@ -1,6 +1,47 @@
 # Changelog
 
-## 0.9.0 – Milestone 9: Britain, sound, tutorial, campaigns (in progress)
+## 0.9.0 – Milestone 9: Britain, sound, tutorial, campaigns (7 Nov 2026)
+
+- **Sound and music**, built for immersion and size. A new audio module in
+  the engine mixes up to 72 voices through a large-hall reverb and a limiter.
+  Sound follows the camera: fighting in view is loud and sharp; further away
+  it fades, dulls and echoes, and zooming out lifts the ear. When the battle
+  is away from the camera, a far-off front rumbles in under the ambience.
+  Every weapon has its firing and impact sound (rifles, Brens and MG 42s,
+  anti-tank weapons, small, medium and large guns, howitzers, rockets),
+  plus wrecks burning, buildings collapsing, construction, engines,
+  marching men, whistles and the radio when you give orders, and the
+  interface. Wind and birds, snow, desert, jungle or ruins by biome.
+- **Nine orchestral pieces**, composed for the game: the main theme
+  *Legion*, three calm pieces, three battle pieces, a victory fanfare and a
+  lament. The music follows the fighting near the camera, with long
+  crossfades. Settings has a Sound tab with six volumes. `--no-sound`.
+- **Tutorial: Basic Training.** Four short lessons on a training ground,
+  first on the main menu: giving orders, cover and armour, digging in, and
+  building a base. Hints appear at the top of the screen, the button you
+  need glows, and the build options open up as you go.
+- **Campaigns.** Germany (*Kampfgruppe Adler*: Kalach Crossing, The Ice
+  Road, Breakthrough on the Donets), the Soviet Union (*Guards Rifle Corps*:
+  Sokolovo, The Bridgehead, Iron Storm) and Britain (*The Desert Rats*:
+  Point 64, Operation Lantern, The Gap at Hellenthal). Each mission has a
+  briefing; missions open one after another; progress is kept in
+  `progress.json` in the user folder. What you achieve carries over: the
+  Tiger that survives Kalach comes back, the six-pounders saved at Point 64
+  turn up as Sextons later. A debriefing offers the next mission or another
+  try.
+- **Twelve skirmish maps**, one for every landscape, with villages and
+  hamlets placed, chosen from a new *Map* list in Skirmish (or a new random
+  map as before).
+- **Scripting for missions** (Script tab and `.lmap`): new conditions *Unit
+  count at least*, *Men in cover*, *Order given*, *Campaign flag at least*,
+  and *Trigger fired* can wait some seconds; new actions *Show hint*,
+  *Highlight interface*, *Lock building*, *Unlock building*, *Set campaign
+  flag*. A mission whose script declares victory is no longer won just by
+  wiping out an enemy wave. Saves are now SIM4 (SIM3 and SIM2 still load).
+- `tools/make_content.cpp` (was `make_scenarios.cpp`) builds the tutorial,
+  the campaign missions, the bundled scenario and the skirmish maps;
+  `tools/audio/` makes the sound and music. `--campaign id[:mission]` and
+  `--mission id:N` open a campaign or start a mission.
 
 - **A third army: Britain** (`gbr`). Fourteen units, mirroring the German and
   Soviet roster with British kit and its own guns: Rifleman (rapid-fire
@@ -19,9 +60,7 @@
   offer Britain. The sidebar wears service brown and stone with an RAF-style
   roundel. Placeholder art: British soldiers in Brodie helmets and
   battledress; vehicles in plain service brown with the white-red-white
-  recognition flash on the German hull shapes (British models to come). With
-  the Blitzkrieg art pack, the pack's German-side buildings stand in for
-  British ones.
+  recognition flash on the German hull shapes (British models to come).
 - **Saves carry their unit list** (meta `types`) and are renumbered by id on
   loading, so adding units (a new army, a mod) no longer breaks older saves;
   0.8.0 saves load with the British taken into account.

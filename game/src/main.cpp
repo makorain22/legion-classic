@@ -115,6 +115,8 @@ int main(int argc, char** argv) {
       opt.modsSelfTest = true;
       opt.aiBattle = true;
     } else if (a == "--tool") opt.tool = next();
+    else if (a == "--campaign") opt.campaign = next();
+    else if (a == "--mission") opt.mission = next();
     else if (a == "--biome") {
       slave::Biome b;
       if (slave::parseBiome(next(), b)) opt.biome = static_cast<int>(b);

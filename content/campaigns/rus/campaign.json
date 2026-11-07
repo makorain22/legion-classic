@@ -1,0 +1,12 @@
+{
+ "id": "rus",
+ "title": "Guards Rifle Corps",
+ "faction": "rus",
+ "order": 2,
+ "description": "The 5th Guards Rifle Division takes back what was lost: a village, a river, and finally a fortress city.",
+ "missions": [
+  {"id": "r1", "title": "Counter-stroke at Sokolovo", "map": "r1_sokolovo.lmap", "briefing": "r1_sokolovo.md", "place": "Sokolovo", "date": "August 1946"},
+  {"id": "r2", "title": "The Bridgehead", "map": "r2_bridgehead.lmap", "briefing": "r2_bridgehead.md", "place": "The Seym river", "date": "September 1946"},
+  {"id": "r3", "title": "Iron Storm", "map": "r3_iron_storm.lmap", "briefing": "r3_iron_storm.md", "place": "Kirovsk", "date": "February 1947"}
+ ]
+}

@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <ctime>
 #include <filesystem>
+#include <fstream>
 #include <nlohmann/json.hpp>
 
 #include "slave/core/rng.hpp"
@@ -108,6 +109,9 @@ void Menus::draw() {
     case Page::About: drawAbout(); break;
     case Page::Settings: drawSettings(); break;
     case Page::Mods: drawMods(); break;
+    case Page::Campaigns: drawCampaigns(); break;
+    case Page::Missions: drawMissions(); break;
+    case Page::Briefing: drawBriefing(); break;
     default: break;
   }
 }
@@ -128,6 +132,22 @@ void Menus::drawMain() {
   ImGui::Dummy(ImVec2(0, 10));
   const float w = 320;
   returnTo_ = Page::Main;
+  {
+    int tut = -1;
+    for (size_t i = 0; i < scene_.campaigns().size(); ++i)
+      if (scene_.campaigns()[i].tutorial) tut = static_cast<int>(i);
+    if (tut >= 0) {
+      const CampaignInfo& t = scene_.campaigns()[static_cast<size_t>(tut)];
+      const int won = scene_.progress().wonCount(t);
+      const std::string label = won == 0 ? "Tutorial: Basic Training" : "Tutorial (" + std::to_string(won) + " of " +
+                                                                              std::to_string(t.missions.size()) + " done)";
+      if (menuButton(label.c_str(), w)) openCampaign(t.id);
+    }
+  }
+  if (menuButton("Campaigns", w)) {
+    campaign_ = -1;
+    page_ = Page::Campaigns;
+  }
   if (menuButton("Skirmish", w)) page_ = Page::Skirmish;
   if (menuButton("Play a scenario", w)) {
     std::vector<FileEntry> builtIn;  // the ones that ship with the game, then the mods' missions
@@ -300,8 +320,30 @@ void Menus::drawMods() {
 }
 
 void Menus::drawSkirmish() {
-  centredWindow("##skirmish", ImVec2(640, 520));
+  centredWindow("##skirmish", ImVec2(640, 540));
   title("Skirmish");
+  {
+    const auto maps = scene_.skirmishMaps();
+    std::string current = "A new random map";
+    for (const auto& m : maps)
+      if (m.path == setup_.mapFile) current = m.name;
+    ImGui::SetNextItemWidth(320);
+    if (ImGui::BeginCombo("Map", current.c_str())) {
+      if (ImGui::Selectable("A new random map", setup_.mapFile.empty())) setup_.mapFile.clear();
+      for (const auto& m : maps) {
+        const std::string label = m.name + "  (" + std::to_string(m.size) + ", " + m.biome + ")";
+        if (ImGui::Selectable(label.c_str(), m.path == setup_.mapFile)) setup_.mapFile = m.path;
+        if (ImGui::IsItemHovered() && !m.description.empty()) ImGui::SetTooltip("%s", m.description.c_str());
+      }
+      ImGui::EndCombo();
+    }
+    for (const auto& m : maps)
+      if (m.path == setup_.mapFile) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s", m.description.c_str());
+      }
+  }
+  ImGui::BeginDisabled(!setup_.mapFile.empty());
   static const char* sizes[] = {"64 x 64 (small)", "128 x 128", "192 x 192", "256 x 256 (large)", "512 x 512 (huge)"};
   static const int sizeValues[] = {64, 128, 192, 256, 512};
   int sizeIndex = 1;
@@ -337,6 +379,7 @@ void Menus::drawSkirmish() {
   if (ImGui::InputInt("Map seed", &seed)) setup_.seed = static_cast<uint64_t>(std::max(0, seed));
   ImGui::SameLine();
   if (ImGui::Button("Random")) setup_.seed = hash32(static_cast<uint32_t>(std::time(nullptr))) % 100000;
+  ImGui::EndDisabled();
   ImGui::SameLine();
   ImGui::SetNextItemWidth(120);
   ImGui::InputInt("Supplies", &setup_.credits, 1000, 5000);
@@ -704,6 +747,190 @@ void Menus::drawSettings() {
     page_ = scene_.mode() == Mode::Menu ? Page::Main : Page::InGame;
   }
   ImGui::End();
+}
+
+// ---------------------------------------------------------------------------
+// Campaigns and the tutorial
+// ---------------------------------------------------------------------------
+int Menus::campaignIndex(const std::string& id) const {
+  for (size_t i = 0; i < scene_.campaigns().size(); ++i)
+    if (scene_.campaigns()[i].id == id) return static_cast<int>(i);
+  return -1;
+}
+
+void Menus::openCampaign(const std::string& id) {
+  campaign_ = campaignIndex(id);
+  if (campaign_ < 0) return;
+  // Select the first mission not yet won.
+  const CampaignInfo& c = scene_.campaigns()[static_cast<size_t>(campaign_)];
+  mission_ = 0;
+  for (size_t m = 0; m < c.missions.size(); ++m)
+    if (scene_.progress().open(c, m)) mission_ = static_cast<int>(m);
+  page_ = Page::Missions;
+  error_.clear();
+}
+
+void Menus::openBriefing(const std::string& id, int mission) {
+  campaign_ = campaignIndex(id);
+  if (campaign_ < 0) return;
+  const CampaignInfo& c = scene_.campaigns()[static_cast<size_t>(campaign_)];
+  if (mission < 0 || mission >= static_cast<int>(c.missions.size())) return;
+  mission_ = mission;
+  briefingText_.clear();
+  std::ifstream in(c.briefingPath(static_cast<size_t>(mission)));
+  if (in) briefingText_.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+  page_ = Page::Briefing;
+  error_.clear();
+}
+
+void Menus::drawCampaigns() {
+  centredWindow("##campaigns", ImVec2(640, 520));
+  title("Campaigns");
+  ImGui::TextDisabled("Each campaign follows one army through a string of battles. Missions open one after another.");
+  ImGui::Dummy(ImVec2(0, 4));
+  ImGui::BeginChild("##clist", ImVec2(0, 380));
+  for (size_t i = 0; i < scene_.campaigns().size(); ++i) {
+    const CampaignInfo& c = scene_.campaigns()[i];
+    if (c.tutorial) continue;
+    ImGui::PushID(static_cast<int>(i));
+    const ImVec2 p0 = ImGui::GetCursorScreenPos();
+    const float wdt = ImGui::GetContentRegionAvail().x;
+    const bool clicked = ImGui::InvisibleButton("##c", ImVec2(wdt, 96));
+    const bool hovered = ImGui::IsItemHovered();
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ui::setFaction(c.faction.c_str());
+    ui::panel(dl, p0, ImVec2(p0.x + wdt, p0.y + 92), false);
+    if (hovered) dl->AddRect(p0, ImVec2(p0.x + wdt, p0.y + 92), ui::kBrass, 2.0f, 0, 2.0f);
+    ui::emblem(dl, ImVec2(p0.x + 46, p0.y + 46), 56);
+    dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 1.35f, ImVec2(p0.x + 90, p0.y + 10), ui::kBrass, c.title.c_str());
+    const int won = scene_.progress().wonCount(c);
+    const std::string prog = won == static_cast<int>(c.missions.size()) ? std::string("Complete")
+                             : std::to_string(won) + " of " + std::to_string(c.missions.size()) + " missions";
+    dl->AddText(ImVec2(p0.x + wdt - ImGui::CalcTextSize(prog.c_str()).x - 12, p0.y + 12), ui::kStencilDim, prog.c_str());
+    dl->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(p0.x + 90, p0.y + 40), ui::kStencil, c.description.c_str(),
+                nullptr, wdt - 104);
+    ui::setFaction("");
+    if (clicked) openCampaign(c.id);
+    ImGui::Dummy(ImVec2(0, 4));
+    ImGui::PopID();
+  }
+  ImGui::EndChild();
+  backButton();
+  ImGui::End();
+}
+
+void Menus::drawMissions() {
+  if (campaign_ < 0 || campaign_ >= static_cast<int>(scene_.campaigns().size())) {
+    page_ = Page::Main;
+    return;
+  }
+  const CampaignInfo& c = scene_.campaigns()[static_cast<size_t>(campaign_)];
+  centredWindow("##missions", ImVec2(600, 500));
+  title(c.title.c_str());
+  ImGui::PushTextWrapPos(0);
+  ImGui::TextDisabled("%s", c.description.c_str());
+  ImGui::PopTextWrapPos();
+  ImGui::Dummy(ImVec2(0, 4));
+  if (ImGui::BeginListBox("##missionlist", ImVec2(-1, 300))) {
+    for (size_t m = 0; m < c.missions.size(); ++m) {
+      const MissionInfo& mi = c.missions[m];
+      const bool open = scene_.progress().open(c, m);
+      const bool won = scene_.progress().won(c.id, mi.id);
+      const std::string label = std::string(won ? "[x]  " : open ? "[ ]  " : "[-]  ") + std::to_string(m + 1) + ".  " +
+                                mi.title + (mi.place.empty() ? "" : "   -   " + mi.place);
+      ImGui::BeginDisabled(!open);
+      if (ImGui::Selectable(label.c_str(), mission_ == static_cast<int>(m), ImGuiSelectableFlags_AllowDoubleClick)) {
+        mission_ = static_cast<int>(m);
+        if (ImGui::IsMouseDoubleClicked(0)) openBriefing(c.id, mission_);
+      }
+      ImGui::EndDisabled();
+    }
+    ImGui::EndListBox();
+  }
+  ImGui::TextDisabled("[x] won   [ ] open   [-] win the one before to open it");
+  const bool can = mission_ >= 0 && scene_.progress().open(c, static_cast<size_t>(mission_));
+  if (menuButton("Briefing", 160, can)) openBriefing(c.id, mission_);
+  ImGui::SameLine();
+  if (menuButton("Start again", 160, scene_.progress().wonCount(c) > 0)) ImGui::OpenPopup("##reset");
+  if (ImGui::BeginPopup("##reset")) {
+    ImGui::Text("Forget the missions won in %s?", c.title.c_str());
+    if (ImGui::Button("Yes, start again")) {
+      scene_.resetProgress(c.id);
+      mission_ = 0;
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("No")) ImGui::CloseCurrentPopup();
+    ImGui::EndPopup();
+  }
+  ImGui::SameLine();
+  if (menuButton("Back", 120)) page_ = c.tutorial ? Page::Main : Page::Campaigns;
+  ImGui::End();
+}
+
+void Menus::drawBriefing() {
+  if (campaign_ < 0 || campaign_ >= static_cast<int>(scene_.campaigns().size())) {
+    page_ = Page::Main;
+    return;
+  }
+  const CampaignInfo& c = scene_.campaigns()[static_cast<size_t>(campaign_)];
+  if (mission_ < 0 || mission_ >= static_cast<int>(c.missions.size())) {
+    page_ = Page::Missions;
+    return;
+  }
+  const MissionInfo& mi = c.missions[static_cast<size_t>(mission_)];
+  ui::setFaction(c.faction.c_str());
+  centredWindow("##briefing", ImVec2(680, 580));
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  const ImVec2 top = ImGui::GetCursorScreenPos();
+  ui::emblem(dl, ImVec2(top.x + ImGui::GetContentRegionAvail().x - 30, top.y + 26), 44);
+  title((std::to_string(mission_ + 1) + ".  " + mi.title).c_str());
+  if (!mi.place.empty() || !mi.date.empty())
+    ImGui::TextDisabled("%s%s%s", mi.place.c_str(), mi.place.empty() || mi.date.empty() ? "" : "   -   ", mi.date.c_str());
+  ImGui::Separator();
+  ImGui::BeginChild("##btext", ImVec2(0, 420));
+  ImGui::PushTextWrapPos(0);
+  for (const BriefingLine& l : parseBriefing(briefingText_)) {
+    if (l.kind == BriefingLine::Title && l.text == mi.title) continue;  // already the window's title
+    switch (l.kind) {
+      case BriefingLine::Title:
+        ImGui::PushStyleColor(ImGuiCol_Text, kGold);
+        ImGui::SetWindowFontScale(1.35f);
+        ImGui::TextUnformatted(l.text.c_str());
+        ImGui::SetWindowFontScale(1.0f);
+        ImGui::PopStyleColor();
+        break;
+      case BriefingLine::Heading:
+        ImGui::Dummy(ImVec2(0, 2));
+        ImGui::TextColored(kGold, "%s", l.text.c_str());
+        break;
+      case BriefingLine::Bullet:
+        ImGui::Bullet();
+        ImGui::TextUnformatted(l.text.c_str());
+        break;
+      case BriefingLine::Quote:
+        ImGui::Indent(18);
+        ImGui::TextColored(ImVec4(0.8f, 0.78f, 0.68f, 1), "%s", l.text.c_str());
+        ImGui::Unindent(18);
+        break;
+      case BriefingLine::Gap: ImGui::Dummy(ImVec2(0, 6)); break;
+      default: ImGui::TextUnformatted(l.text.c_str()); break;
+    }
+  }
+  if (briefingText_.empty()) ImGui::TextDisabled("(no briefing)");
+  ImGui::PopTextWrapPos();
+  ImGui::EndChild();
+  if (!error_.empty()) ImGui::TextColored(ImVec4(1, 0.5f, 0.4f, 1), "%s", error_.c_str());
+  if (menuButton("Begin", 160)) {
+    if (scene_.startMission(c.id, mission_, error_)) {
+      page_ = Page::None;
+      scene_.setPaused(false);
+    }
+  }
+  ImGui::SameLine();
+  if (menuButton("Back", 120)) page_ = Page::Missions;
+  ImGui::End();
+  ui::setFaction("");
 }
 
 }  // namespace legion

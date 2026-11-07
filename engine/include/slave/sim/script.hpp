@@ -31,7 +31,11 @@ enum class CondType : uint8_t {
   UnitCount,       // `player` has at most `value` units (of `unitType`, or any) on the whole map
   PlayerDefeated,  // `player` has been defeated
   Supplies,        // `player` has at least `value` supplies
-  TriggerFired,    // trigger number `trigger` has fired
+  TriggerFired,    // trigger number `trigger` has fired, at least `value` seconds ago
+  UnitsAtLeast,    // `player` has at least `value` units (of `unitType`, or any) on the whole map
+  InCover,         // `player` has at least `value` men inside buildings, bunkers or trenches
+  OrderGiven,      // `player` (a human) has given at least `value` orders of kind `order` (move, attack...)
+  FlagAtLeast,     // campaign flag `text` is at least `value`
   Count
 };
 
@@ -53,6 +57,11 @@ enum class ActionType : uint8_t {
   DisableTrigger,   // switch trigger `trigger` off
   SetComputer,      // `player` is played by the computer (`value` = difficulty 0..2), or a human (-1)
   CameraTo,         // move `player`'s view to `area`
+  Hint,             // show `text` in `player`'s hint panel until the next hint (empty: close it)
+  Highlight,        // make the interface element `text` glow for `player` ("tab.train", "build:gbr_power", "order.evacuate"...; empty: none)
+  LockBuild,        // `player` can't build `unitType` (any = everything)
+  UnlockBuild,      // `player` can build `unitType` again (any = everything)
+  SetFlag,          // campaign flag `text` = `value` (kept by the campaign when the mission is won)
   Count
 };
 
@@ -63,7 +72,13 @@ struct Condition {
   int32_t value = 0;
   int32_t unitType = -1;  // -1 = any
   int32_t trigger = -1;
+  int32_t order = -1;     // OrderGiven: a CommandType, -1 = any order
+  std::string text;       // FlagAtLeast: the flag
 };
+
+// Orders a player can be waited for, by name (OrderGiven): "move", "attack_move", "attack", "produce"...
+const char* orderId(int commandType);
+int orderFromId(const std::string& id);
 
 struct Action {
   ActionType type = ActionType::Message;

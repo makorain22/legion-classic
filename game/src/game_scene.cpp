@@ -94,6 +94,7 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
   renderer_.setWhiteFrame(art_.white);
 
   if (!pickUnitArt(error)) return false;
+  loadCampaigns();
   // Sound: base content then each mod's audio folder (a mod's file replaces the game's).
   audio_ = std::make_unique<GameAudio>();
   if (!opt_.noSound && (!app_.offscreen() || opt_.forceSound)) {
@@ -197,6 +198,21 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
       menus_->showMods();
     }
   }
+  auto split = [](const std::string& s) {
+    const size_t c = s.find(':');
+    return std::pair<std::string, int>{s.substr(0, c), c == std::string::npos ? 0 : std::atoi(s.c_str() + c + 1)};
+  };
+  if (!opt_.campaign.empty()) {
+    const auto [id, n] = split(opt_.campaign);
+    if (n > 0) menus_->openBriefing(id, n - 1);
+    else menus_->openCampaign(id);
+  }
+  if (!opt_.mission.empty()) {
+    const auto [id, n] = split(opt_.mission);
+    std::string err;
+    if (!startMission(id, std::max(1, n) - 1, err)) SLV_WARN("--mission %s: %s", opt_.mission.c_str(), err.c_str());
+    else menus_->close();
+  }
   SLV_INFO("Map %dx%d, %zu props, %zu units", map_.width(), map_.height(), map_.props().size(), sim_->unitCount());
   return true;
 }
@@ -242,6 +258,8 @@ void GameScene::replaceWorld(MapFile&& file, bool keepCamera) {
     if (!pickUnitArt(err)) SLV_WARN("%s", err.c_str());
   }
   sim_ = std::make_unique<Simulation>(map_, types_, weapons_, opt_.seed);
+  sim_->setFlags(std::move(nextFlags_));
+  nextFlags_.clear();
   terrain_.setMap(map_);
   if (audio_) {
     audio_->setBiome(map_.biome);
@@ -1491,6 +1509,7 @@ void GameScene::announce(const SimEvent& ev) {
       if (!sim_->allied(ev.owner, player_) && players_[player_].human) banner_ = "DEFEAT";
       bannerTime_ = 8;
       if (audio_ && mode_ == Mode::Game) audio_->endOfBattle(sim_->allied(ev.owner, player_));
+      if (mode_ == Mode::Game) missionOver(sim_->allied(ev.owner, player_));
       break;
     case EventType::PlayerDefeated: {
       if (mode_ == Mode::Menu) break;
@@ -1500,9 +1519,18 @@ void GameScene::announce(const SimEvent& ev) {
       bool enemiesLeft = false;
       for (uint8_t p = 0; p < MAX_PLAYERS; ++p)
         if (players_[p].active && !sim_->allied(p, player_) && !sim_->playerState(p).defeated) enemiesLeft = true;
+      // A mission whose script declares victory decides for itself when it is won.
+      bool scripted = false;
+      for (const Trigger& t : scenario_.triggers)
+        for (const Action& a : t.actions) scripted = scripted || a.type == ActionType::Victory;
       if (ev.owner == player_) banner_ = "DEFEAT";
-      else if (!enemiesLeft && !sim_->playerState(player_).defeated) banner_ = "VICTORY";
+      else if (!enemiesLeft && !scripted && !sim_->playerState(player_).defeated) banner_ = "VICTORY";
+      else if (scripted && ev.owner != player_) {
+        banner_.clear();  // the enemy's last wave is gone, not the enemy
+        break;
+      }
       if (audio_ && mode_ == Mode::Game && (banner_ == "VICTORY" || banner_ == "DEFEAT")) audio_->endOfBattle(banner_ == "VICTORY");
+      if (mode_ == Mode::Game && (banner_ == "VICTORY" || banner_ == "DEFEAT")) missionOver(banner_ == "VICTORY");
       break;
     }
     default:
@@ -2023,9 +2051,17 @@ void GameScene::onImGui() {
   }
   drawWorldOverlays();
   drawHud();
+  // A tutorial's hint and the interface element it points at.
+  ui::setHighlight(mode_ != Mode::Menu ? sim_->highlight(player_) : std::string());
   if (mode_ == Mode::Game) sidebar_->draw();
   if (mode_ == Mode::Game) editor_->imgui();
   drawObjectives();
+  drawDebrief();
+  if (mode_ != Mode::Menu && !sim_->hint(player_).empty()) {
+    const ImGuiIO& io = ImGui::GetIO();
+    const float w = std::min(520.0f, io.DisplaySize.x - Sidebar::kWidth - 40);
+    ui::hintPanel(sim_->hint(player_), (io.DisplaySize.x - Sidebar::kWidth - w) * 0.5f, 54, w);
+  }
   encyclopedia_->draw();
   rulesEditor_->draw();
   spriteStudio_->draw();
@@ -2082,6 +2118,45 @@ void GameScene::drawFormationPicker() {
 }
 
 // Mission objectives and scenario messages, under the HUD box.
+// After a campaign mission: what next.
+void GameScene::drawDebrief() {
+  if (mode_ != Mode::Game || missionResult_ <= 0 || missionResult_ > 2 || bannerTime_ > 0 || menus_->wantsInput()) return;
+  const CampaignInfo* c = currentCampaign();
+  if (!c || missionIndex_ < 0) return;
+  const bool won = missionResult_ == 1;
+  const ImGuiIO& io = ImGui::GetIO();
+  ImGui::SetNextWindowPos(ImVec2((io.DisplaySize.x - Sidebar::kWidth) * 0.5f, io.DisplaySize.y * 0.4f), ImGuiCond_Always,
+                          ImVec2(0.5f, 0.5f));
+  ImGui::SetNextWindowSize(ImVec2(440, 0));
+  ImGui::SetNextWindowBgAlpha(0.92f);
+  ImGui::Begin("##debrief", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove);
+  ImGui::TextColored(won ? ImVec4(0.93f, 0.78f, 0.38f, 1) : ImVec4(1, 0.5f, 0.4f, 1), "%s",
+                     won ? "MISSION ACCOMPLISHED" : "MISSION FAILED");
+  ImGui::TextUnformatted(c->missions[static_cast<size_t>(missionIndex_)].title.c_str());
+  ImGui::Separator();
+  const bool last = missionIndex_ + 1 >= static_cast<int>(c->missions.size());
+  if (won && last) ImGui::TextWrapped("That was the last mission of %s.", c->title.c_str());
+  const std::string id = c->id;
+  const int next = missionIndex_ + 1;
+  if (won && !last) {
+    if (ImGui::Button(("Next: " + c->missions[static_cast<size_t>(next)].title).c_str(), ImVec2(-1, 30))) {
+      toMainMenu();
+      menus_->openBriefing(id, next);
+    }
+  }
+  if (!won && ImGui::Button("Try again", ImVec2(-1, 30))) {
+    restart();
+    ImGui::End();
+    return;
+  }
+  if (ImGui::Button(c->tutorial ? "Back to the tutorial" : "Back to the campaign", ImVec2(-1, 26))) {
+    toMainMenu();
+    menus_->openCampaign(id);
+  }
+  if (ImGui::Button("Stay on the battlefield", ImVec2(-1, 26))) missionResult_ = 3;
+  ImGui::End();
+}
+
 void GameScene::drawObjectives() {
   std::vector<const Objective*> mine;
   for (const Objective& o : sim_->objectives())

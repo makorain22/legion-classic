@@ -12,6 +12,7 @@
 #include <functional>
 
 #include "battle_fx.hpp"
+#include "campaign.hpp"
 #include "settings.hpp"
 #include "sidebar.hpp"
 #include "slave/assets/placeholder_art.hpp"
@@ -42,6 +43,7 @@ struct SkirmishSetup {
   int layout = -1;      // MapLayout, or -1: the seed picks
   int credits = 5000;
   int startLayout = 0;  // 0 teams on opposite sides (west / east), 1 fixed (W, E, N, S), 2 shuffled
+  std::string mapFile;  // a ready-made skirmish map (full path), "" = generate one from size, biome and seed
   struct Side {
     bool open = false;
     std::string faction = "ger";
@@ -93,6 +95,8 @@ struct SceneOptions {
   bool flowSelfTest = false;    // checks skirmish, save, load and replay through the real game
   bool modsSelfTest = false;    // checks the rules editor, mods and sprite studio through the real game
   std::string tool;             // open a creation tool at start: rules[:id] | sprites[:group] | mods
+  std::string campaign;         // --campaign id[:mission]: open a campaign's missions, or a mission's briefing (1-based)
+  std::string mission;          // --mission id:N: play mission N (1-based) of a campaign straight away
   int biome = 0;
 };
 
@@ -208,6 +212,19 @@ class GameScene final : public slave::Scene {
   Mode mode() const { return mode_; }
   void startSkirmish(const SkirmishSetup& s);
   bool startScenario(const std::string& path, std::string& error);  // play a .lmap
+  // Campaigns and the tutorial (campaign.hpp).
+  const std::vector<CampaignInfo>& campaigns() const { return campaigns_; }
+  struct SkirmishMapInfo {
+    std::string path, name, description, biome;
+    int size = 128;
+  };
+  // The ready-made skirmish maps (content/maps/skirmish/maps.json, then the mods').
+  std::vector<SkirmishMapInfo> skirmishMaps() const;
+  const CampaignProgress& progress() const { return progress_; }
+  bool startMission(const std::string& campaign, int mission, std::string& error);
+  const CampaignInfo* currentCampaign() const;
+  int currentMission() const { return missionIndex_; }
+  void resetProgress(const std::string& campaign);
   bool saveGame(const std::string& path, std::string& error);
   bool loadGame(const std::string& path, std::string& error);
   bool saveReplay(const std::string& path, std::string& error);
@@ -352,6 +369,15 @@ class GameScene final : public slave::Scene {
   Mode mode_ = Mode::Game;
   SkirmishSetup lastSkirmish_;
   std::string lastScenarioPath_;
+  std::vector<CampaignInfo> campaigns_;
+  CampaignProgress progress_;
+  std::string campaignId_;          // the campaign mission being played ("" = none)
+  int missionIndex_ = -1;
+  int missionResult_ = 0;           // 1 won, 2 lost (the debriefing shows once the banner is gone)
+  std::map<std::string, int32_t> nextFlags_;  // flags the next battle starts with
+  void loadCampaigns();
+  void missionOver(bool won);
+  void drawDebrief();
   slave::SaveFile replayStart_;
   bool replayValid_ = false;
   std::vector<slave::Simulation::LoggedCommand> replayLog_;

@@ -34,7 +34,26 @@ my_mod\
   art\                PNG sprites that replace the game's (same names as --export-sprites)
     sprites.json      anchors for those PNGs (optional)
   scenarios\          .lmap missions added to "Play a scenario"
+  campaigns\<id>\     a campaign: campaign.json, mission .lmap files, briefings (.md)
+  maps\skirmish\      ready-made skirmish maps and their maps.json
+  audio\              sounds and music that replace the game's (same paths as content\audio)
+                      and an audio.json to change or add sounds
 ```
+
+A campaign folder holds `campaign.json`:
+
+```json
+{"id": "my_war", "title": "My War", "faction": "gbr", "order": 10,
+ "description": "Shown on the Campaigns page.",
+ "missions": [{"id": "m1", "title": "First Day", "map": "m1.lmap", "briefing": "m1.md",
+               "place": "Normandy", "date": "June 1946"}]}
+```
+
+Missions are ordinary scenarios made in the editor (Script tab). A mission is
+won with the *Victory* action; *Set campaign flag* stores a number that later
+missions can test with *Campaign flag at least*. Briefings are Markdown: `#`
+title, `##` headings, `-` bullets, `>` quotes. A mod's campaign with the same
+id as the game's replaces it.
 
 `mod.json`:
 

@@ -3,18 +3,18 @@
 **A 2.5D isometric real-time strategy game set in a war that never ended: Europe, 1946.**
 
 Legion Classic plays like the RTS games of the late 1990s and looks like
-Blitzkrieg: build a base, run supply trucks, train fireteams and tank platoons,
+the classics of the era: build a base, run supply trucks, train fireteams and tank platoons,
 and dig in behind trenches, wire and tank traps. It runs on its own engine,
 **Slave Engine**, and has a scenario editor you can open in the middle of a
 battle and change anything, the rules included.
 
 ![A German and a Soviet force meet on a river crossing](docs/images/battle.jpg)
 
-> **Status: in development (0.9.0).** Milestones 1–8 of 10 are done: a full
-> skirmish game against the computer, the Live Scenario Editor, and the tools
-> for making mods; Milestone 9 has brought a third army, the British. Next: a
-> tutorial, campaigns, sound and music. The game is built together with Claude (Anthropic's AI); see
-> [How it is made](#how-it-is-made).
+> **Status: in development (0.9.0).** Milestones 1–9 are done: three armies,
+> skirmish against the computer, a tutorial and three short campaigns, sound
+> and an orchestral score, the Live Scenario Editor and the tools for making
+> mods. Next (9.1): tuning, balance and debugging. The game is built together
+> with Claude (Anthropic's AI); see [How it is made](#how-it-is-made).
 
 ## Features
 
@@ -22,6 +22,12 @@ battle and change anything, the rules included.
   roster: riflemen, MG and anti-tank teams, snipers, engineers, scout cars,
   half-tracks and carriers, light, medium and heavy tanks, tank destroyers,
   howitzers, rocket trucks and self-propelled guns.
+- **A tutorial and three campaigns.** Four lessons to learn the game, then
+  three missions each for Germany, the Soviet Union and Britain, with
+  briefings, and what you achieve carrying over from mission to mission.
+- **Sound that follows the camera, and an orchestral score.** A fight on
+  screen is loud and sharp; one across the map is a distant rumble. Nine
+  pieces of music, written for the game, follow the fighting near you.
 - **Real formations.** Men fight as fireteams, squads, platoons and companies;
   tanks and infantry bound together become battle groups. Each unit carries a
   NATO card with its strength.
@@ -34,7 +40,8 @@ battle and change anything, the rules included.
   stream reinforcements in; the British dig in, bring up the guns and attack
   in set pieces. All of them raid, regroup and expand.
 - **Twelve landscapes** in five climates (temperate, winter, desert, tropical,
-  urban), with river valleys, lakes, ridges, marshes and towns.
+  urban), with river valleys, lakes, ridges, marshes and towns; a ready-made
+  skirmish map for each, or a new random map from any seed.
 - **Live Scenario Editor (F2).** Sculpt terrain, place units for any side,
   call artillery, and write triggers and objectives while the battle runs.
 - **Creation tools and mods.** A rules editor changes any unit, building or
@@ -118,14 +125,6 @@ AI model, working in Claude Code. Each milestone is planned together, built,
 tested headless in the cloud, then played on Windows; the playtest notes become
 the next round of work. Commits made this way are co-authored by Claude.
 
-## Art from Blitzkrieg (optional)
-
-Nival released the data of **Blitzkrieg** (2003) for non-commercial use. The
-game can turn it into an art pack for your own use (`--import-blitzkrieg`, see
-[docs/ART_PIPELINE.md](docs/ART_PIPELINE.md)). None of that art is in this
-repository or in its builds; everything you see in the screenshots is the
-game's own voxel art.
-
 ## Licence
 
 Copyright © 2026 makorain22. All rights reserved for now: you're welcome to
@@ -135,6 +134,8 @@ keep their own licences.
 
 ## Third-party code
 
-SDL 3 (zlib), Dear ImGui (MIT), nlohmann/json (MIT), stb (public domain / MIT),
-miniz (MIT), doctest (MIT), and a glad-generated OpenGL loader (public domain /
-CC0).
+SDL 3 (zlib), Dear ImGui (MIT), nlohmann/json (MIT), stb and stb_vorbis
+(public domain / MIT), miniz (MIT), doctest (MIT), and a glad-generated OpenGL
+loader (public domain / CC0). The music is played by the FluidR3 GM soundfont
+(MIT); the sound effects are synthesised for the game (CC0). See
+[content/audio/LICENSES.md](content/audio/LICENSES.md).

@@ -11,7 +11,8 @@
 namespace slave {
 
 namespace {
-constexpr uint32_t kStateMagic = 0x53494D33;  // "SIM3": AI doctrine state (phases, raiders, guard)
+constexpr uint32_t kStateMagic = 0x53494D34;  // "SIM4": hints, build locks, orders given, campaign flags
+constexpr uint32_t kStateMagicV3 = 0x53494D33;  // "SIM3": AI doctrine state (phases, raiders, guard)
 constexpr uint32_t kStateMagicV2 = 0x53494D32;  // "SIM2": groups, garrisons, supply income
 
 template <class T>
@@ -198,6 +199,19 @@ void Simulation::saveState(ByteWriter& w) const {
 
   // Computer players.
   ai_.save(w);
+
+  // Tutorials and campaigns.
+  for (uint8_t p = 0; p < MAX_PLAYERS; ++p) {
+    w.str(hints_[p]);
+    w.str(highlights_[p]);
+    w.podVector(buildLocks_[p]);
+    w.pod(ordersGiven_[p]);
+  }
+  w.u32(static_cast<uint32_t>(flags_.size()));
+  for (const auto& [k, v] : flags_) {
+    w.str(k);
+    w.i32(v);
+  }
 }
 
 std::vector<std::string> Simulation::typeIds() const {
@@ -211,7 +225,7 @@ bool Simulation::loadState(ByteReader& r, std::string& error, const std::vector<
                            bool* remapped) {
   if (remapped) *remapped = false;
   const uint32_t magic = r.u32();
-  const int version = magic == kStateMagic ? 3 : magic == kStateMagicV2 ? 2 : 0;
+  const int version = magic == kStateMagic ? 4 : magic == kStateMagicV3 ? 3 : magic == kStateMagicV2 ? 2 : 0;
   if (version == 0) {
     error = "not a saved game state";
     return false;
@@ -342,6 +356,30 @@ bool Simulation::loadState(ByteReader& r, std::string& error, const std::vector<
   if (!ai_.load(r, version) || !r.ok()) {
     error = "saved state is damaged";
     return false;
+  }
+  for (uint8_t p = 0; p < MAX_PLAYERS; ++p) {
+    hints_[p].clear();
+    highlights_[p].clear();
+    buildLocks_[p].clear();
+    ordersGiven_[p] = {};
+  }
+  flags_.clear();
+  if (version >= 4) {
+    for (uint8_t p = 0; p < MAX_PLAYERS; ++p) {
+      hints_[p] = r.str();
+      highlights_[p] = r.str();
+      buildLocks_[p] = r.podVector<uint8_t>();
+      ordersGiven_[p] = r.pod<std::array<uint32_t, 32>>();
+    }
+    const uint32_t nf = r.u32();
+    for (uint32_t i = 0; i < nf && r.ok() && i < 10000; ++i) {
+      std::string k = r.str();
+      flags_[k] = r.i32();
+    }
+    if (!r.ok()) {
+      error = "saved state is damaged";
+      return false;
+    }
   }
   // Saved with the unit types in another order (a newer roster, other mods)?
   // Renumber by id; a type these rules don't have at all refuses the load.

@@ -1,0 +1,12 @@
+{
+ "id": "ger",
+ "title": "Kampfgruppe Adler",
+ "faction": "ger",
+ "order": 1,
+ "description": "The winter war on the Don, 1946 to 1947. A German battle group fights to hold open the road home, then to break the Soviet line.",
+ "missions": [
+  {"id": "g1", "title": "Kalach Crossing", "map": "g1_kalach.lmap", "briefing": "g1_kalach.md", "place": "Kalach on the Don", "date": "December 1946"},
+  {"id": "g2", "title": "The Ice Road", "map": "g2_ice_road.lmap", "briefing": "g2_ice_road.md", "place": "Verkhny crossroads", "date": "January 1947"},
+  {"id": "g3", "title": "Breakthrough on the Donets", "map": "g3_donets.lmap", "briefing": "g3_donets.md", "place": "The Donets ridge", "date": "June 1947"}
+ ]
+}

@@ -11,6 +11,7 @@
 // presentation turns into flashes, explosions and wrecks.
 
 #include <array>
+#include <map>
 #include <cstdint>
 #include <utility>
 #include <vector>
@@ -165,6 +166,8 @@ enum class EventType : uint8_t {
   ObjectivesChanged,
   CameraTo,         // move owner's view to `at`
   GroupFormed,      // owner bound `amount` units into a fighting unit
+  Hint,             // a script's hint for owner (`text`; empty: close the panel)
+  Highlight,        // a script highlights the interface element `text` for owner
 };
 
 struct SimEvent {
@@ -255,6 +258,20 @@ class Simulation {
 
   // --- Computer players ---------------------------------------------------------
   const SkirmishAi& ai() const { return ai_; }
+  // --- Tutorials and campaigns ----------------------------------------------------
+  const std::string& hint(uint8_t p) const { return hints_[p % MAX_PLAYERS]; }
+  const std::string& highlight(uint8_t p) const { return highlights_[p % MAX_PLAYERS]; }
+  bool buildLocked(uint8_t p, int type) const {
+    const auto& l = buildLocks_[p % MAX_PLAYERS];
+    return type >= 0 && type < static_cast<int>(l.size()) && l[static_cast<size_t>(type)];
+  }
+  int32_t flag(const std::string& name) const {
+    auto it = flags_.find(name);
+    return it == flags_.end() ? 0 : it->second;
+  }
+  const std::map<std::string, int32_t>& flags() const { return flags_; }
+  // Before a mission starts: the flags a campaign carries over from earlier missions.
+  void setFlags(std::map<std::string, int32_t> f) { flags_ = std::move(f); }
   // For the AI (and scripts): queue a command without logging it.
   void queueInternal(Command cmd) { pending_.push_back(std::move(cmd)); }
 
@@ -408,6 +425,11 @@ class Simulation {
     int32_t area;
   };
   std::vector<RevealedArea> revealed_;  // areas a script has revealed for good
+  // Tutorials and campaigns.
+  std::array<std::string, MAX_PLAYERS> hints_, highlights_;
+  std::array<std::vector<uint8_t>, MAX_PLAYERS> buildLocks_;  // by unit type: 1 = a script forbids it
+  std::array<std::array<uint32_t, 32>, MAX_PLAYERS> ordersGiven_{};  // by CommandType, human players only
+  std::map<std::string, int32_t> flags_;
   std::vector<Objective> objectives_;
   SkirmishAi ai_;
   bool recording_ = false;

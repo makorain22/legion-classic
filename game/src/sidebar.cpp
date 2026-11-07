@@ -21,6 +21,7 @@ const uint32_t kLayerColor[LAYER_COUNT] = {
     rgba8(150, 138, 108), rgba8(104, 102, 96), rgba8(212, 216, 222), rgba8(136, 122, 96),
 };
 const char* kTabNames[4] = {"Build", "Defend", "Train", "Vehicles"};
+const char* kTabIds[4] = {"build", "defend", "train", "vehicles"};
 const char* kStanceNames[3] = {"Aggressive", "Hold", "Hold fire"};
 const char* kStanceTips[3] = {
     "Fight back when shot, even on the march, and go after attackers out of reach.",
@@ -351,6 +352,7 @@ void Sidebar::drawMinimap(float width) {
 
   ImGui::InvisibleButton("##minimap", ImVec2(static_cast<float>(mw), static_cast<float>(mh)),
                          ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
+  ui::glowIfHighlighted("minimap");
   const bool hovered = ImGui::IsItemHovered();
   auto groundUnderMouse = [&]() {
     const ImVec2 mp = ImGui::GetIO().MousePos;
@@ -396,6 +398,7 @@ void Sidebar::drawProduction(float width) {
     // Flash a tab whose structure is ready to place.
     const bool ready = (i == 0 && ps.queues[0].ready) || (i == 1 && ps.queues[1].ready);
     if (ui::iconTab(kTabNames[i], pictos[i], kTabNames[i], ImVec2(tw, 50), tab_ == i, ready && tab_ != i)) tab_ = i;
+    ui::glowIfHighlighted((std::string("tab.") + kTabIds[i]).c_str());
   }
   ImGui::Dummy(ImVec2(0, 2));
   // Which types belong on this tab, under their group headings.
@@ -409,6 +412,7 @@ void Sidebar::drawProduction(float width) {
                     : (d.category == UnitCategory::Defense || d.category == UnitCategory::Fortification) ? 1
                     : d.category == UnitCategory::Infantry ? 2 : 3;
     if (tab != tab_) continue;
+    if (sim.buildLocked(me, t)) continue;  // a tutorial hasn't got this far yet
     items.push_back(t);
     if (std::find(groups.begin(), groups.end(), d.group) == groups.end()) groups.push_back(d.group);
   }
@@ -443,6 +447,7 @@ void Sidebar::drawProduction(float width) {
       ImGui::PushID(t);
       const ImVec2 p0 = ImGui::GetCursorScreenPos();
       ImGui::InvisibleButton("##cameo", ImVec2(cw - 2, ch), ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
+      ui::glowIfHighlighted(("build:" + d.id).c_str());
       const bool hovered = ImGui::IsItemHovered();
       if (hovered) hoveredType_ = t;
       const ImVec2 p1(p0.x + cw - 2, p0.y + ch);
@@ -568,7 +573,9 @@ void Sidebar::drawOrders(float width) {
   }
   for (int s = 0; s < 3; ++s) {
     if (s) ImGui::SameLine(0, 4);
-    if (ui::plateButton(kStanceNames[s], kStanceNames[s], ImVec2(bw, bh), common == s, false, !sel.empty())) {
+    const bool stanceClicked = ui::plateButton(kStanceNames[s], kStanceNames[s], ImVec2(bw, bh), common == s, false, !sel.empty());
+    ui::glowIfHighlighted((std::string("order.stance.") + kStanceNames[s]).c_str());
+    if (stanceClicked) {
       Command c;
       c.type = CommandType::SetStance;
       c.units = sel;
@@ -581,12 +588,16 @@ void Sidebar::drawOrders(float width) {
   const float fw = (width - 16) / 5.0f;
   for (int f = 0; f < 5; ++f) {
     if (f) ImGui::SameLine(0, 4);
-    if (ui::plateButton(kFormationNames[f], kFormationNames[f], ImVec2(fw, bh), static_cast<int>(formation_) == f))
+    const bool formClicked = ui::plateButton(kFormationNames[f], kFormationNames[f], ImVec2(fw, bh), static_cast<int>(formation_) == f);
+    ui::glowIfHighlighted((std::string("order.formation.") + kFormationNames[f]).c_str());
+    if (formClicked)
       formation_ = static_cast<Formation>(f);
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", kFormationTips[f]);
   }
   // Special orders.
-  if (ui::plateButton("deploy", "Deploy", ImVec2(bw, bh), false, false, !deployers.empty())) {
+  const bool deployClicked = ui::plateButton("deploy", "Deploy", ImVec2(bw, bh), false, false, !deployers.empty());
+  ui::glowIfHighlighted("order.deploy");
+  if (deployClicked) {
     Command c;
     c.type = CommandType::Deploy;
     c.units = deployers;
@@ -595,17 +606,23 @@ void Sidebar::drawOrders(float width) {
   if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
     ImGui::SetTooltip("Unfold a construction truck into a Construction Yard (Ctrl+D).");
   ImGui::SameLine(0, 4);
-  if (ui::plateButton("evacuate", "Evacuate", ImVec2(bw, bh), false, false, scene_.selectionCanEvacuate()))
+  const bool evacuateClicked = ui::plateButton("evacuate", "Evacuate", ImVec2(bw, bh), false, false, scene_.selectionCanEvacuate());
+  ui::glowIfHighlighted("order.evacuate");
+  if (evacuateClicked)
     scene_.evacuateSelection();
   if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
     ImGui::SetTooltip("Men in trenches stay dug in until evacuated; men in buildings come out too (E).");
-  if (ui::plateButton("sell", sellMode_ ? "Selling" : "Sell", ImVec2(bw, bh), sellMode_)) {
+  const bool sellClicked = ui::plateButton("sell", sellMode_ ? "Selling" : "Sell", ImVec2(bw, bh), sellMode_);
+  ui::glowIfHighlighted("order.sell");
+  if (sellClicked) {
     sellMode_ = !sellMode_;
     placeType_ = -1;
   }
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Click your structures to sell them for half their cost. Esc stops.");
   ImGui::SameLine(0, 4);
-  if (ui::plateButton("book", "Encyclopedia", ImVec2(bw * 2 + 4, bh))) scene_.openEncyclopedia(hoveredType_ >= 0 ? hoveredType_ : -1);
+  const bool encyclopediaClicked = ui::plateButton("book", "Encyclopedia", ImVec2(bw * 2 + 4, bh));
+  ui::glowIfHighlighted("order.encyclopedia");
+  if (encyclopediaClicked) scene_.openEncyclopedia(hoveredType_ >= 0 ? hoveredType_ : -1);
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Every unit and building, with its weapons and numbers (K).");
   if (!producers.empty()) ImGui::TextDisabled("Right-click the map: rally point");
 }

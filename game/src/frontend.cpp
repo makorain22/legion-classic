@@ -6,6 +6,7 @@
 #include <array>
 #include <ctime>
 #include <filesystem>
+#include <fstream>
 #include <nlohmann/json.hpp>
 
 #include "editor.hpp"
@@ -89,6 +90,10 @@ std::string GameScene::metaJson(const std::string& title) const {
   j["rules"] = rulesHash_;
   if (rulesEditedLive_) j["rulesEdited"] = true;
   if (sim_) j["types"] = sim_->typeIds();  // so a later roster can renumber the units by id
+  if (!campaignId_.empty()) {
+    j["campaign"] = campaignId_;
+    j["mission"] = missionIndex_;
+  }
   auto& sides = j["sides"] = nlohmann::json::array();
   for (uint8_t i = 0; i < MAX_PLAYERS; ++i) {
     const PlayerSetup& p = players_[i];
@@ -101,14 +106,48 @@ std::string GameScene::metaJson(const std::string& title) const {
 // ---------------------------------------------------------------------------
 // Starting games
 // ---------------------------------------------------------------------------
+std::vector<GameScene::SkirmishMapInfo> GameScene::skirmishMaps() const {
+  std::vector<SkirmishMapInfo> out;
+  for (const std::string& dir : content_.all("maps/skirmish/")) {
+    std::ifstream in(dir + "maps.json");
+    const nlohmann::json j = nlohmann::json::parse(in, nullptr, false);
+    if (j.is_discarded()) continue;
+    for (const auto& m : j.value("maps", nlohmann::json::array())) {
+      SkirmishMapInfo i;
+      i.path = dir + m.value("file", std::string());
+      i.name = m.value("name", m.value("file", std::string()));
+      i.description = m.value("description", std::string());
+      i.biome = m.value("biome", std::string());
+      i.size = m.value("size", 128);
+      auto same = std::find_if(out.begin(), out.end(), [&](const SkirmishMapInfo& o) { return o.name == i.name; });
+      if (same != out.end()) *same = i;
+      else out.push_back(i);
+    }
+  }
+  return out;
+}
+
 void GameScene::startSkirmish(const SkirmishSetup& s) {
   autosaveReplay();
   lastSkirmish_ = s;
   lastScenarioPath_.clear();
+  campaignId_.clear();
+  missionIndex_ = -1;
+  missionResult_ = 0;
   MapFile f;
-  f.map.resize(s.mapSize, s.mapSize);
-  f.map.generate(static_cast<Biome>(s.biome), s.seed, s.layout);
-  f.map.name = std::string(mapLayoutName(f.map.layout)) + " (" + biomeName(static_cast<Biome>(s.biome)) + ")";
+  bool readyMade = false;
+  if (!s.mapFile.empty()) {
+    std::string err;
+    if (loadMap(s.mapFile, f, err)) readyMade = true;
+    else SLV_WARN("Skirmish map %s: %s - making a random one instead", s.mapFile.c_str(), err.c_str());
+  }
+  if (!readyMade) {
+    f = MapFile{};
+    f.map.resize(s.mapSize, s.mapSize);
+    f.map.generate(static_cast<Biome>(s.biome), s.seed, s.layout);
+    f.map.name = std::string(mapLayoutName(f.map.layout)) + " (" + biomeName(static_cast<Biome>(s.biome)) + ")";
+  }
+  f.players.clear();
   f.players.resize(MAX_PLAYERS);
   int slot = 0;
   for (int i = 0; i < 4; ++i) {
@@ -208,6 +247,9 @@ bool GameScene::startScenario(const std::string& path, std::string& error) {
   MapFile f;
   if (!loadMap(path, f, error)) return false;
   autosaveReplay();
+  campaignId_.clear();
+  missionIndex_ = -1;
+  missionResult_ = 0;
   lastScenarioPath_ = path;
   mode_ = Mode::Game;
   revealMap_ = false;
@@ -224,6 +266,11 @@ bool GameScene::startScenario(const std::string& path, std::string& error) {
 }
 
 void GameScene::restart() {
+  if (!campaignId_.empty() && missionIndex_ >= 0) {
+    std::string err;
+    const std::string c = campaignId_;
+    if (startMission(c, missionIndex_, err)) return;
+  }
   if (!lastScenarioPath_.empty()) {
     std::string err;
     if (startScenario(lastScenarioPath_, err)) return;
@@ -251,6 +298,61 @@ void GameScene::startAttract() {
   // Start over the first base; the camera moves to the fighting once it starts.
   attractFocus_ = {static_cast<float>(players_[0].startX + map_.widthLeptons() / 8), static_cast<float>(players_[0].startY)};
   centerOn({static_cast<int32_t>(attractFocus_.x), static_cast<int32_t>(attractFocus_.y)});
+}
+
+// ---------------------------------------------------------------------------
+// Campaigns
+// ---------------------------------------------------------------------------
+void GameScene::loadCampaigns() {
+  std::string warn;
+  campaigns_ = scanCampaigns(content_.all("campaigns/"), warn);
+  if (!warn.empty()) SLV_WARN("%s", warn.c_str());
+  progress_.load(app_.userDir() + "progress.json");
+}
+
+const CampaignInfo* GameScene::currentCampaign() const {
+  for (const CampaignInfo& c : campaigns_)
+    if (c.id == campaignId_) return &c;
+  return nullptr;
+}
+
+bool GameScene::startMission(const std::string& campaign, int mission, std::string& error) {
+  const CampaignInfo* c = nullptr;
+  for (const CampaignInfo& x : campaigns_)
+    if (x.id == campaign) c = &x;
+  if (!c || mission < 0 || mission >= static_cast<int>(c->missions.size())) {
+    error = "no such mission";
+    return false;
+  }
+  // The flags earlier missions left are there from the first tick.
+  auto f = progress_.flags.find(campaign);
+  nextFlags_ = f != progress_.flags.end() ? f->second : std::map<std::string, int32_t>{};
+  const std::string path = c->mapPath(static_cast<size_t>(mission));
+  if (!startScenario(path, error)) {
+    nextFlags_.clear();
+    return false;
+  }
+  campaignId_ = campaign;
+  missionIndex_ = mission;
+  missionResult_ = 0;
+  banner_ = c->missions[static_cast<size_t>(mission)].title;
+  bannerTime_ = 4;
+  return true;
+}
+
+void GameScene::resetProgress(const std::string& campaign) {
+  progress_.done.erase(campaign);
+  progress_.flags.erase(campaign);
+  progress_.save(app_.userDir() + "progress.json");
+}
+
+void GameScene::missionOver(bool won) {
+  if (campaignId_.empty() || missionIndex_ < 0 || missionResult_ != 0) return;
+  missionResult_ = won ? 1 : 2;
+  const CampaignInfo* c = currentCampaign();
+  if (!won || !c) return;
+  progress_.recordWin(campaignId_, c->missions[static_cast<size_t>(missionIndex_)].id, sim_->flags());
+  progress_.save(app_.userDir() + "progress.json");
 }
 
 void GameScene::toMainMenu() {
@@ -333,6 +435,13 @@ bool GameScene::loadFromSave(SaveFile& f, bool replay, std::string& error) {
   if (!sameRules) {
     sim_->rulesChanged();  // the mods were edited since: bring the units in line
     showStatus("The mods have changed since this game was saved", 5);
+  }
+  campaignId_.clear();
+  missionIndex_ = -1;
+  missionResult_ = 0;
+  if (meta.is_object() && !replay && meta.contains("campaign")) {
+    campaignId_ = meta.value("campaign", std::string());
+    missionIndex_ = meta.value("mission", -1);
   }
   if (meta.is_object()) {
     player_ = static_cast<uint8_t>(meta.value("player", 0) % MAX_PLAYERS);
