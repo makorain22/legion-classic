@@ -13,6 +13,7 @@
 #include "game_scene.hpp"
 #include "menus.hpp"
 #include "slave/core/log.hpp"
+#include "slave/math/iso.hpp"
 #include "slave/sim/factions.hpp"
 
 using namespace slave;
@@ -77,7 +78,10 @@ std::string GameScene::metaJson(const std::string& title) const {
   j["tick"] = sim_ ? sim_->tickCount() : 0;
   j["player"] = player_;
   const Vec2f c = cam_.center();
-  j["camera"] = {c.x, c.y};
+  j["camera"] = {c.x, c.y};  // the classic view's centre
+  const Vec2f f = cameraFocus();
+  j["focus"] = {f.x, f.y};  // the ground the camera looks at, leptons
+  if (cam_.is3D()) j["view"] = {cam_.yaw(), cam_.pitch(), cam_.zoom()};
   j["revealMap"] = revealMap_;
   // The rules it was played with: loading needs the same mods (replays the very same rules).
   j["mods"] = content_.modIds().size() > 1
@@ -442,7 +446,19 @@ bool GameScene::loadFromSave(SaveFile& f, bool replay, std::string& error) {
   if (meta.is_object()) {
     player_ = static_cast<uint8_t>(meta.value("player", 0) % MAX_PLAYERS);
     revealMap_ = meta.value("revealMap", false);
-    if (meta.contains("camera")) cam_.setCenter({meta["camera"].at(0).get<float>(), meta["camera"].at(1).get<float>()});
+    if (meta.contains("focus") && meta["focus"].is_array() && meta["focus"].size() == 2) {
+      focusCamera({meta["focus"].at(0).get<float>(), meta["focus"].at(1).get<float>()});
+    } else if (meta.contains("camera")) {
+      // Saves from before 0.9.1 kept only the classic view's centre.
+      const Vec2f c{meta["camera"].at(0).get<float>(), meta["camera"].at(1).get<float>()};
+      if (cam_.is3D()) focusCamera(iso::screenToWorld(c));
+      else cam_.setCenter(c);
+    }
+    if (cam_.is3D() && meta.contains("view") && meta["view"].is_array() && meta["view"].size() == 3) {
+      cam_.setYaw(meta["view"].at(0).get<float>());
+      cam_.setPitch(meta["view"].at(1).get<float>());
+      cam_.setZoom3D(meta["view"].at(2).get<float>());
+    }
   }
   paused_ = false;
   speed_ = 1.0f;

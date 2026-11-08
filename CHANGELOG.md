@@ -34,6 +34,39 @@
 - Demos for screenshots: `--works-demo`, `--town-demo`, `--bridge-demo`,
   `--gallery --factions gbr`.
 
+### Milestone 9.1: the 3D renderer and free camera
+
+- **The battlefield is real 3D.** Every voxel model the game used to bake into
+  sprites (units in each frame of their animations, turrets, the fallen,
+  dug-in men, buildings, field works, bridges, trees and props) is now drawn
+  as a mesh: greedy-meshed on first use, lit by the sun with the same shading
+  the sprites had (darker near the ground, crowded corners darker, a grain
+  per voxel), team colours and markings straight from the palette, drawn
+  with GPU instancing. The sprite baker remembers which model every sprite
+  came from, so nothing in the art had to change.
+- **Shadows:** the sun casts real shadows from models and hills onto the
+  ground and onto each other (Settings > Game > Shadows).
+- **Free camera:** turn all the way round and tilt from low across the field
+  to almost straight down (middle mouse drag, or Q / R and Page Up / Page
+  Down); zoom smoothly towards the mouse; Shift + middle drag pans;
+  Backspace resets the view. Hills hide what is behind them.
+- Units turn smoothly instead of in 16 steps; vehicles lean with the slopes
+  they drive over; turrets turn on their hulls.
+- Smoke, fire, flashes and explosions are camera-facing sprites placed in the
+  world; tracers are streaks between muzzle and target; craters, scorch
+  marks, oil stains, trenches, selection rings and move markers lie on the
+  ground. Health bars, unit cards, chips and the editor's brushes stay flat
+  on the screen.
+- Picking works by casting a ray from the mouse to the ground; the minimap
+  shows the ground the camera sees.
+- Placement ghosts (sidebar and Live Scenario Editor) are see-through models.
+- Saves keep where the camera looks and how it is turned (older saves still
+  load). The menu's battle slowly circles the field.
+- **The classic 2D view stays** behind a switch: Settings > Game > 3D
+  battlefield, or `--classic`. `--yaw` and `--pitch` (degrees) start the 3D
+  view at an angle, for screenshots.
+- Replays: reveal the map with **V** (R now turns the view).
+
 ## 0.9.0 – Milestone 9: Britain, sound, tutorial, campaigns (7 Nov 2026)
 
 - **Sound and music**, built for immersion and size. A new audio module in

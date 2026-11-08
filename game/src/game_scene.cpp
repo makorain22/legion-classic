@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <chrono>
+#include <cstdlib>
 #include <ctime>
 #include <filesystem>
 #include <nlohmann/json.hpp>
@@ -90,8 +92,21 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
   if (!buildPlaceholderArt(art_, error, artOpt)) return false;
   if (!renderer_.init(error)) return false;
   if (!terrain_.init(error)) return false;
+  if (!meshes_.init(error)) return false;
+  {
+    std::string serr;
+    if (!shadow_.init(2048, serr)) SLV_WARN("No shadows: %s", serr.c_str());
+  }
   renderer_.setAtlas(art_.atlas, art_.frames);
+  frameMesh_.assign(art_.frames.size(), -2);
   renderer_.setWhiteFrame(art_.white);
+  if (std::getenv("LEGION_MESH_ALL")) {
+    const auto t0 = std::chrono::steady_clock::now();
+    for (size_t i = 0; i < art_.frames.size(); ++i) meshOf(static_cast<int>(i));
+    const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    SLV_INFO("Meshed %zu models in %.0f ms: %.1f MB, %.0fk triangles", meshes_.meshCount(), ms, meshes_.vertexBytes() / 1048576.0,
+             meshes_.vertexBytes() / 20.0 / 3.0 / 1000.0);
+  }
 
   if (!pickUnitArt(error)) return false;
   loadCampaigns();
@@ -102,8 +117,8 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
     if (!audio_->init(content_.all("audio/"), aerr)) SLV_WARN("Sound off: %s", aerr.c_str());
     ui::setClickSound([this](bool tab) { audio_->ui(tab ? "ui_tab" : "ui_click"); });
   }
-  fx_.init(&art_, &unitArt_, &types_, &weapons_,
-           [this](float lx, float ly) { return groundToScreenWorld(lx, ly); });
+  fx_.init(&art_, &unitArt_, &types_, &weapons_, [](float lx, float ly) { return iso::worldToScreen(lx, ly); },
+           [this](float lx, float ly) { return map_.heightAt(lx, ly) * kPxPerUnit; });
   if (!app_.offscreen()) {
     cursorArrow_ = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_DEFAULT);
     cursorCross_ = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_CROSSHAIR);
@@ -129,8 +144,16 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
   spriteStudio_ = std::make_unique<SpriteStudio>(*this);
 
   cam_.setViewport(app_.pixelWidth(), app_.pixelHeight());
-  if (opt_.zoom >= 2.0f) cam_.zoomStep(+1, {0, 0}), cam_.zoomStep(+1, {0, 0});
-  else if (opt_.zoom <= 0.5f) cam_.zoomStep(-1, {0, 0});
+  cam_.set3D(settings_.view3D && !opt_.classic);
+  if (cam_.is3D()) {
+    cam_.setZoom3D(opt_.zoom);
+    if (opt_.yaw > -999) cam_.setYaw(opt_.yaw * 0.01745329f);
+    if (opt_.pitch > -999) cam_.setPitch(opt_.pitch * 0.01745329f);
+  } else if (opt_.zoom >= 2.0f) {
+    cam_.zoomStep(+1, {0, 0}), cam_.zoomStep(+1, {0, 0});
+  } else if (opt_.zoom <= 0.5f) {
+    cam_.zoomStep(-1, {0, 0});
+  }
 
   speed_ = std::clamp(opt_.speed, 0.25f, 16.0f);
   if (opt_.showMenu) {
@@ -248,7 +271,7 @@ void GameScene::openEncyclopedia(int type) {
 }
 
 void GameScene::replaceWorld(MapFile&& file, bool keepCamera) {
-  const Vec2f camera = cam_.center();
+  const Vec2f camera = cam_.is3D() ? cameraFocus() : cam_.center();
   selection_.clear();
   for (auto& g : groups_) g.clear();
   markers_.clear();
@@ -320,8 +343,10 @@ void GameScene::replaceWorld(MapFile&& file, bool keepCamera) {
   }
   sim_->tick();  // apply teams, supplies and spawns
   updateCameraBounds();
-  if (keepCamera) cam_.setCenter(camera);
-  else {
+  if (keepCamera) {
+    if (cam_.is3D()) focusCamera(camera);
+    else cam_.setCenter(camera);
+  } else {
     const PlayerSetup& me = players_[player_];
     if (me.startX >= 0) centerOn({me.startX, me.startY});
     else centerOn({map_.widthLeptons() / 2, map_.heightLeptons() / 2});
@@ -439,7 +464,11 @@ void GameScene::showcaseStep(float dt) {
       }
     }
   }
-  if (showFocus_.x >= 0) {
+  if (showFocus_.x >= 0 && cam_.is3D()) {
+    const Vec2f c = cameraFocus();
+    const float k = std::min(1.0f, dt * 1.1f);
+    focusCamera({c.x + (showFocus_.x - c.x) * k, c.y + (showFocus_.y - c.y) * k});
+  } else if (showFocus_.x >= 0) {
     const Vec2f want = groundToScreenWorld(showFocus_.x, showFocus_.y);
     const Vec2f c = cam_.center();
     const float k = std::min(1.0f, dt * 1.1f);
@@ -542,6 +571,7 @@ void GameScene::monkeyStep() {
 
 void GameScene::updateCameraBounds() {
   const float w = static_cast<float>(map_.width()), h = static_cast<float>(map_.height());
+  cam_.setBounds3D({0, 0, w, h});
   const float lift = map_.maxHeight() * kPxPerUnit;
   cam_.setBounds({-h * iso::HALF_W, -lift, w * iso::HALF_W, (w + h) * iso::HALF_H});
 }
@@ -766,18 +796,40 @@ void GameScene::setupStartingArmies() {
   else centerOn({g.x + 6 * T, g.y});
 }
 
-void GameScene::centerOn(Vec2i l) { cam_.setCenter(groundToScreenWorld(static_cast<float>(l.x), static_cast<float>(l.y))); }
+void GameScene::centerOn(Vec2i l) { focusCamera({static_cast<float>(l.x), static_cast<float>(l.y)}); }
+
+void GameScene::focusCamera(Vec2f l) {
+  if (!cam_.is3D()) {
+    cam_.setCenter(groundToScreenWorld(l.x, l.y));
+    return;
+  }
+  const float h = std::max<float>(map_.heightAt(l.x, l.y), map_.waterLevel());
+  cam_.setTarget(worldPoint(l.x, l.y, h));
+}
+
+Vec2f GameScene::cameraFocus() const {
+  if (cam_.is3D()) return {cam_.target().x * 256.0f, cam_.target().y * 256.0f};
+  return groundAt({cam_.viewportW() * 0.5f, cam_.viewportH() * 0.5f});
+}
 
 // ---------------------------------------------------------------------------
 // Queries
 // ---------------------------------------------------------------------------
-Vec2f GameScene::groundToScreenWorld(float lx, float ly) const {
-  Vec2f s = iso::worldToScreen(lx, ly);
-  s.y -= map_.heightAt(lx, ly) * kPxPerUnit;
+Vec2f GameScene::groundToScreenWorld(float lx, float ly) const { return project(lx, ly, map_.heightAt(lx, ly)); }
+
+Vec2f GameScene::project(float lx, float ly, float h) const {
+  if (!cam_.is3D()) {
+    Vec2f s = iso::worldToScreen(lx, ly);
+    s.y -= h * kPxPerUnit;
+    return s;
+  }
+  Vec2f s;
+  cam_.project(worldPoint(lx, ly, h), s);
   return s;
 }
 
 Vec2f GameScene::groundAt(Vec2f screenPx) const {
+  if (cam_.is3D()) return groundAt3D(screenPx);
   // Start on flat ground, then refine using the height found there.
   const Vec2f w = cam_.screenToWorld(screenPx);
   Vec2f l = iso::screenToWorld(w);
@@ -847,9 +899,7 @@ Vec2f GameScene::unitScreenWorld(uint32_t e) const {
   const CPosition& p = reg.pool<CPosition>().get(e);
   const CPrevPosition& q = reg.pool<CPrevPosition>().get(e);
   const float lx = q.x + (p.x - q.x) * alpha_, ly = q.y + (p.y - q.y) * alpha_;
-  Vec2f s = iso::worldToScreen(lx, ly);
-  s.y -= surfaceHeight(lx, ly) * kPxPerUnit;  // up on the deck when crossing a bridge
-  return s;
+  return project(lx, ly, surfaceHeight(lx, ly));  // up on the deck when crossing a bridge
 }
 
 Vec2i GameScene::mouseWorldLeptons() const {
@@ -891,17 +941,28 @@ Entity GameScene::pickUnit(Vec2f screenPx, bool ownOnly) const {
       const bool onFoot = g.x >= st.tx * 256.0f && g.y >= st.ty * 256.0f && g.x < (st.tx + st.w) * 256.0f &&
                           g.y < (st.ty + st.h) * 256.0f;
       const Vec2f s = unitScreenWorld(e);
-      const float hw = d.footW * 12.0f, hh = d.footH * 10.0f + 18.0f;
+      // In 3D the boxes grow and shrink with the distance.
+      const float k = cam_.is3D() ? cam_.scaleAt(worldPoint(static_cast<float>(p.x), static_cast<float>(p.y), map_.heightAt(static_cast<float>(p.x), static_cast<float>(p.y)))) : 1.0f;
+      const float hw = d.footW * 12.0f * k, hh = (d.footH * 10.0f + 18.0f) * k;
       const bool onBody = d.category != UnitCategory::Fortification && std::abs(w.x - s.x) < hw && w.y < s.y && w.y > s.y - hh;
       if (!onFoot && !onBody) continue;
     } else {
       const Vec2f s = unitScreenWorld(e);
-      const float hw = std::max(7.0f, d.radius * 0.2f);
+      const float k = cam_.is3D() ? std::max(0.6f, cam_.scaleAt(worldPoint(static_cast<float>(p.x), static_cast<float>(p.y), surfaceHeight(static_cast<float>(p.x), static_cast<float>(p.y))))) : 1.0f;
+      const float hw = std::max(7.0f, d.radius * 0.2f) * k;
       const float hh = hw * 0.85f;
       if (std::abs(w.x - s.x) > hw || std::abs(w.y - (s.y - hh * 0.6f)) > hh) continue;
     }
     // Prefer units over the structure they stand in front of, then the frontmost.
-    const int64_t depth = iso::depthKey(p.x, p.y) + (d.isStructure() ? 0 : (int64_t{1} << 40));
+    int64_t depth = iso::depthKey(p.x, p.y);
+    if (cam_.is3D()) {
+      // Nearest the camera wins.
+      Vec2f px;
+      float z = 1;
+      cam_.project(worldPoint(static_cast<float>(p.x), static_cast<float>(p.y), surfaceHeight(static_cast<float>(p.x), static_cast<float>(p.y))), px, &z);
+      depth = -static_cast<int64_t>(z * 1e9);
+    }
+    depth += d.isStructure() ? 0 : (int64_t{1} << 40);
     if (depth > bestDepth) {
       bestDepth = depth;
       best = reg.handle(e);
@@ -975,7 +1036,7 @@ void GameScene::orderMove(Vec2i target, CommandType type, int formation) {
   c.forced = (SDL_GetModState() & SDL_KMOD_ALT) != 0;  // Alt: forced march, don't stop to fight
   queueOrder(std::move(c));
   orderSound(type == CommandType::AttackMove);
-  markers_.push_back({groundToScreenWorld(static_cast<float>(target.x), static_cast<float>(target.y)), 0,
+  markers_.push_back({{static_cast<float>(target.x), static_cast<float>(target.y)}, 0,
                       type == CommandType::AttackMove ? kAttackRed : kSelectGreen});
 }
 
@@ -990,7 +1051,7 @@ void GameScene::orderAttack(Entity target) {
   queueOrder(std::move(c));
   orderSound(true);
   const CPosition& p = sim_->registry().get<CPosition>(target);
-  markers_.push_back({groundToScreenWorld(static_cast<float>(p.x), static_cast<float>(p.y)), 0, kAttackRed});
+  markers_.push_back({{static_cast<float>(p.x), static_cast<float>(p.y)}, 0, kAttackRed});
 }
 
 // Right mouse button released. A click: attack an enemy under the mouse,
@@ -1036,7 +1097,7 @@ void GameScene::rightClick(Vec2f start, bool dragged, Vec2f end) {
     c.formWidth = static_cast<int32_t>(std::hypot(b.x - a.x, b.y - a.y));
     c.forced = (SDL_GetModState() & SDL_KMOD_ALT) != 0;
     queueOrder(std::move(c));
-    markers_.push_back({groundToScreenWorld(static_cast<float>(mid.x), static_cast<float>(mid.y)), 0,
+    markers_.push_back({{static_cast<float>(mid.x), static_cast<float>(mid.y)}, 0,
                         ctrl ? kAttackRed : kSelectGreen});
     return;
   }
@@ -1073,7 +1134,7 @@ void GameScene::rightClick(Vec2f start, bool dragged, Vec2f end) {
       c.targetUnit = hit;
       sim_->queue(std::move(c));
       const CPosition& hp = reg.get<CPosition>(hit);
-      markers_.push_back({groundToScreenWorld(static_cast<float>(hp.x), static_cast<float>(hp.y)), 0, rgba8(236, 200, 96)});
+      markers_.push_back({{static_cast<float>(hp.x), static_cast<float>(hp.y)}, 0, rgba8(236, 200, 96)});
       if (others.empty()) return;
       const std::vector<Entity> keep = selection_;
       selection_ = others;
@@ -1099,7 +1160,7 @@ void GameScene::rightClick(Vec2f start, bool dragged, Vec2f end) {
       c.targetUnit = hit;
       sim_->queue(std::move(c));
       const CPosition& hp = reg.get<CPosition>(hit);
-      markers_.push_back({groundToScreenWorld(static_cast<float>(hp.x), static_cast<float>(hp.y)), 0, rgba8(120, 200, 255)});
+      markers_.push_back({{static_cast<float>(hp.x), static_cast<float>(hp.y)}, 0, rgba8(120, 200, 255)});
       std::vector<Entity> others;
       for (Entity e : selection_)
         if (std::find(engineers.begin(), engineers.end(), e) == engineers.end()) others.push_back(e);
@@ -1139,7 +1200,7 @@ void GameScene::rightClick(Vec2f start, bool dragged, Vec2f end) {
     c.units = producers;
     c.target = g;
     sim_->queue(std::move(c));
-    markers_.push_back({groundToScreenWorld(static_cast<float>(g.x), static_cast<float>(g.y)), 0, rgba8(236, 200, 96)});
+    markers_.push_back({{static_cast<float>(g.x), static_cast<float>(g.y)}, 0, rgba8(236, 200, 96)});
   }
   if (!deployers.empty()) {
     Command c;
@@ -1185,7 +1246,7 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
     if (e.type == SDL_EVENT_KEY_DOWN && !uiKeys) {
       const SDL_Keycode k = e.key.key;
       if (settings_.pressed(InputAction::Menu, e.key)) menus_->openInGameMenu();
-      else if (k == SDLK_R) revealMap_ = !revealMap_;
+      else if (k == SDLK_V) revealMap_ = !revealMap_;
       else if (settings_.pressed(InputAction::Pause, e.key)) paused_ = !paused_;
       else if (settings_.pressed(InputAction::SpeedUp, e.key)) speed_ = std::min(16.0f, speed_ * 2);
       else if (settings_.pressed(InputAction::SpeedDown, e.key)) speed_ = std::max(0.25f, speed_ / 2);
@@ -1199,7 +1260,7 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
           }
         }
     }
-    if (e.type == SDL_EVENT_MOUSE_MOTION && mmbDown_) cam_.pan({-e.motion.xrel * ps, -e.motion.yrel * ps});
+    if (e.type == SDL_EVENT_MOUSE_MOTION && mmbDown_) mmbDrag(e.motion.xrel * ps, e.motion.yrel * ps);
     if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && e.button.button == SDL_BUTTON_MIDDLE) mmbDown_ = true;
     if (e.type == SDL_EVENT_MOUSE_BUTTON_UP && e.button.button == SDL_BUTTON_MIDDLE) mmbDown_ = false;
     if (e.type == SDL_EVENT_MOUSE_WHEEL && !uiMouse && e.wheel.y != 0) cam_.zoomStep(e.wheel.y > 0 ? +1 : -1, mouse_);
@@ -1212,7 +1273,7 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
 
   switch (e.type) {
     case SDL_EVENT_MOUSE_MOTION:
-      if (mmbDown_) cam_.pan({-e.motion.xrel * ps, -e.motion.yrel * ps});
+      if (mmbDown_) mmbDrag(e.motion.xrel * ps, e.motion.yrel * ps);
       if (lmbDown_ && !dragging_ && (mouse_ - dragStart_).length() > 6.0f) dragging_ = true;
       if (rmbDown_ && !rmbDragging_ && (mouse_ - rmbStart_).length() > 14.0f) rmbDragging_ = true;
       break;
@@ -1423,7 +1484,7 @@ void GameScene::orderSound(bool attack) {
 void GameScene::updateAudio(float dt) {
   if (!audio_ || !sim_) return;
   slave::audio::Listener ear;
-  const Vec2f g = iso::screenToWorld(cam_.center());
+  const Vec2f g = cam_.is3D() ? cameraFocus() : iso::screenToWorld(cam_.center());
   ear.x = g.x / LEPTONS_PER_TILE;
   ear.y = g.y / LEPTONS_PER_TILE;
   ear.zoom = cam_.zoom();
@@ -1494,6 +1555,14 @@ void GameScene::applySettings() {
     v.ambience = settings_.volAmbience;
     v.ui = settings_.volInterface;
     audio_->setVolumes(v);
+  }
+  // Switching between the 3D view and the classic one keeps looking at the same place.
+  const bool want3D = settings_.view3D && !opt_.classic;
+  if (want3D != cam_.is3D() && sim_) {
+    const Vec2f f = cameraFocus();
+    cam_.set3D(want3D);
+    updateCameraBounds();
+    focusCamera(f);
   }
 }
 
@@ -1662,6 +1731,14 @@ void GameScene::onUpdate(float dt, float alpha) {
   const bool lock = settings_.mouseLock && !inMenu;
   if (lock != app_.mouseLock()) app_.setMouseLock(lock);
   if (pan.x != 0 || pan.y != 0) cam_.pan(pan * (kScrollSpeed * settings_.scrollSpeed * dt));
+  if (!ImGui::GetIO().WantTextInput && !inMenu) cameraKeys(dt);
+  if (cam_.is3D()) {
+    // The camera rides over the ground: its target follows the height below it.
+    const Vec3f t = cam_.target();
+    const float ground = std::max<float>(map_.heightAt(t.x * 256.0f, t.y * 256.0f), map_.waterLevel()) / HEIGHT_UNITS_PER_TILE;
+    const float k = std::min(1.0f, dt * 4.0f);
+    if (std::abs(ground - t.z) > 1e-3f) cam_.setTarget({t.x, t.y, t.z + (ground - t.z) * k});
+  }
 
   ++frame_;
   updateAudio(dt);
@@ -1669,10 +1746,16 @@ void GameScene::onUpdate(float dt, float alpha) {
     // The menu's battle: drift slowly over the field; start another when it's decided.
     attractTime_ += dt;
     // Ease toward wherever the fighting is (or a base, before it starts).
-    const Vec2f want = groundToScreenWorld(attractFocus_.x, attractFocus_.y);
-    const Vec2f c = cam_.center();
     const float k = std::min(1.0f, dt * 0.4f);
-    cam_.setCenter({c.x + (want.x - c.x) * k, c.y + (want.y - c.y) * k});
+    if (cam_.is3D()) {
+      const Vec2f c = cameraFocus();
+      focusCamera({c.x + (attractFocus_.x - c.x) * k, c.y + (attractFocus_.y - c.y) * k});
+      cam_.rotate(dt * 0.035f, 0);  // and slowly circle the field
+    } else {
+      const Vec2f want = groundToScreenWorld(attractFocus_.x, attractFocus_.y);
+      const Vec2f c = cam_.center();
+      cam_.setCenter({c.x + (want.x - c.x) * k, c.y + (want.y - c.y) * k});
+    }
     if (attractTime_ > 600 || sim_->playerState(0).defeated || sim_->playerState(1).defeated) startAttract();
   }
   for (Message& m : messages_) m.age += dt;
@@ -1713,6 +1796,10 @@ void GameScene::onUpdate(float dt, float alpha) {
 // Rendering
 // ---------------------------------------------------------------------------
 void GameScene::onRender() {
+  if (cam_.is3D()) {
+    render3D();
+    return;
+  }
   glClearColor(0.05f, 0.05f, 0.045f, 1.0f);
   glClearDepth(1.0);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -1758,7 +1845,12 @@ void GameScene::onRender() {
   }
   drawUnits(view);
   fx_.drawAir(renderer_, view, fogAt);
+  drawOverlays(view, true);
+}
 
+// Health bars, order markers, the editor's and sidebar's tools, a formation
+// front being dragged, the selection box. In 3D these are flat on the screen.
+void GameScene::drawOverlays(const RectF& view, bool markers) {
   // Health bars: the selection, the unit under the mouse, and (debug) every damaged unit.
   Registry& reg = sim_->registry();
   for (Entity e : selection_) drawHealthBar(e.index, true);
@@ -1778,8 +1870,10 @@ void GameScene::onRender() {
   }
 
   for (const Marker& m : markers_) {
+    if (!markers) break;
     const uint8_t alpha = static_cast<uint8_t>(255 * (1.0f - m.age / 0.6f));
-    renderer_.sprite(art_.moveMarker, m.pos.x, m.pos.y, kWhite, (m.color & 0x00FFFFFFu) | (uint32_t(alpha) << 24));
+    const Vec2f ms = groundToScreenWorld(m.pos.x, m.pos.y);
+    renderer_.sprite(art_.moveMarker, ms.x, ms.y, kWhite, (m.color & 0x00FFFFFFu) | (uint32_t(alpha) << 24));
   }
   editor_->renderWorld(renderer_);
   sidebar_->renderWorld(renderer_);
@@ -1877,10 +1971,14 @@ void GameScene::drawUnits(const RectF& view) {
   const bool fog = fogEnabled();
   drawList_.clear();
   uint32_t order = 0;
+  const bool threeD = cam_.is3D();
   for (const Prop& p : map_.props()) {
-    const Vec2f flat = iso::worldToScreen(static_cast<float>(p.x), static_cast<float>(p.y));
-    if (flat.x < view.x0 || flat.x > view.x1 || flat.y < view.y0 || flat.y > view.y1 + 400) continue;
-    const Vec2f s = groundToScreenWorld(static_cast<float>(p.x), static_cast<float>(p.y));
+    if (!threeD) {
+      const Vec2f flat = iso::worldToScreen(static_cast<float>(p.x), static_cast<float>(p.y));
+      if (flat.x < view.x0 || flat.x > view.x1 || flat.y < view.y0 || flat.y > view.y1 + 400) continue;
+    }
+    const float ph = map_.heightAt(static_cast<float>(p.x), static_cast<float>(p.y));
+    const Vec2f s = project(static_cast<float>(p.x), static_cast<float>(p.y), ph);
     if (!view.contains(s)) continue;
     uint32_t tint = kWhite;
     if (fog) {
@@ -1891,7 +1989,8 @@ void GameScene::drawUnits(const RectF& view) {
       tint = rgba8(c, c, c);
     }
     const auto& variants = art_.props[static_cast<size_t>(p.kind)];
-    drawList_.push_back({iso::depthKey(p.x, p.y), order++, variants[p.variant % variants.size()], s.x, s.y, kWhite, tint});
+    drawList_.push_back({iso::depthKey(p.x, p.y), order++, variants[p.variant % variants.size()], s.x, s.y, kWhite, tint,
+                         static_cast<float>(p.x), static_cast<float>(p.y), ph});
   }
   // Supply points: a fenced compound with crates and fuel drums, a gate in
   // front; a depot goes up inside.
@@ -1915,8 +2014,10 @@ void GameScene::drawUnits(const RectF& view) {
           const uint8_t g = static_cast<uint8_t>(255 * k);
           tint = rgba8(g, g, g);
         }
-        const Vec2f s = groundToScreenWorld(lx, ly);
-        drawList_.push_back({iso::depthKey(static_cast<int32_t>(lx), static_cast<int32_t>(ly)), order++, frame, s.x, s.y, kWhite, tint});
+        const float gh = map_.heightAt(lx, ly);
+        const Vec2f s = project(lx, ly, gh);
+        drawList_.push_back({iso::depthKey(static_cast<int32_t>(lx), static_cast<int32_t>(ly)), order++, frame, s.x, s.y,
+                             kWhite, tint, lx, ly, gh});
       };
       for (int y = sp.y - R; y <= sp.y + R; ++y)
         for (int x = sp.x - R; x <= sp.x + R; ++x) {
@@ -1939,7 +2040,8 @@ void GameScene::drawUnits(const RectF& view) {
   }
   for (const BattleFx::Wreck& w : fx_.wrecks()) {
     if (w.bodyFrame < 0) continue;  // a burning ruin: only fire and smoke
-    const Vec2f s = groundToScreenWorld(static_cast<float>(w.lx), static_cast<float>(w.ly));
+    const float wh = map_.heightAt(static_cast<float>(w.lx), static_cast<float>(w.ly));
+    const Vec2f s = project(static_cast<float>(w.lx), static_cast<float>(w.ly), wh);
     if (!view.contains(s)) continue;
     float k = 1.0f;
     if (fog) {
@@ -1951,10 +2053,13 @@ void GameScene::drawUnits(const RectF& view) {
     const uint8_t c = static_cast<uint8_t>(std::clamp(92.0f * k, 0.0f, 255.0f));
     const uint32_t tint = rgba8(c, static_cast<uint8_t>(c * 0.92f), static_cast<uint8_t>(c * 0.85f));
     const int64_t depth = iso::depthKey(w.lx, w.ly);
-    drawList_.push_back({depth, order++, w.bodyFrame, s.x, s.y, w.team, tint});
+    drawList_.push_back({depth, order++, w.bodyFrame, s.x, s.y, w.team, tint, static_cast<float>(w.lx),
+                         static_cast<float>(w.ly), wh});
     if (w.turretFrame >= 0) {
-      const Vec2f t = groundToScreenWorld(w.lx + w.turretShift.x, w.ly + w.turretShift.y);
-      drawList_.push_back({depth, order++, w.turretFrame, t.x, t.y, w.team, tint});
+      const float tx = w.lx + w.turretShift.x, ty = w.ly + w.turretShift.y;
+      const Vec2f t = groundToScreenWorld(tx, ty);
+      // The turret sits on the hull: in 3D, at the hull's ground height.
+      drawList_.push_back({depth, order++, w.turretFrame, t.x, t.y, w.team, tint, tx, ty, wh});
     }
   }
   auto& units = reg.pool<CUnit>();
@@ -1984,16 +2089,22 @@ void GameScene::drawUnits(const RectF& view) {
                !sim_->vision().visible(player_, p.x >> LEPTON_SHIFT, p.y >> LEPTON_SHIFT)) {
       continue;
     }
-    Vec2f s = unitScreenWorld(e);
+    const CPrevPosition& prev = reg.pool<CPrevPosition>().get(e);
+    float ulx = prev.x + (p.x - prev.x) * alpha_, uly = prev.y + (p.y - prev.y) * alpha_;
+    float uh = surfaceHeight(ulx, uly);  // up on the deck when crossing a bridge
     const bool bridge = u.type < bridgeTypes_.size() && bridgeTypes_[u.type];
     if (bridge) {
       // Laid level across the river, its piers reaching down into the water;
       // drawn behind whatever crosses it.
       const size_t ti = static_cast<size_t>(p.y >> LEPTON_SHIFT) * map_.width() + (p.x >> LEPTON_SHIFT);
       const float level = ti < bridgeLevel_.size() && bridgeLevel_[ti] > 0 ? bridgeLevel_[ti] : static_cast<float>(map_.waterLevel());
-      s = iso::worldToScreen(static_cast<float>(p.x), static_cast<float>(p.y));
-      s.y -= (level - kBridgePierDepth * kUnitsPerFineVoxel) * kPxPerUnit;
+      ulx = static_cast<float>(p.x);
+      uly = static_cast<float>(p.y);
+      uh = level - kBridgePierDepth * kUnitsPerFineVoxel;
+    } else if (def.isStructure()) {
+      uh = map_.heightAt(ulx, uly);
     }
+    const Vec2f s = project(ulx, uly, uh);
     if (!view.contains(s)) continue;
     const CFacing& f = reg.pool<CFacing>().get(e);
     const CAnim& a = reg.pool<CAnim>().get(e);
@@ -2044,17 +2155,34 @@ void GameScene::drawUnits(const RectF& view) {
         bodyFrame = j->second[static_cast<size_t>(mask)];
       }
     }
-    drawList_.push_back({depth, order++, bodyFrame, s.x, s.y, teamColor(u.owner), tint});
+    DrawItem body{depth, order++, bodyFrame, s.x, s.y, teamColor(u.owner), tint, ulx, uly, uh};
+    const float hullYaw = static_cast<float>(f.angle) * (6.2831853f / ANGLE_FULL);
+    if (threeD && !def.isStructure() && art.body.facings > 1) {
+      // Units turn smoothly; vehicles lean with the slope they stand on.
+      body.yaw = hullYaw;
+      body.turned = true;
+      if (!def.infantry() && !reg.pool<CGarrisoned>().has(e)) lean(ulx, uly, hullYaw, std::max(40.0f, def.radius * 0.9f), body.pitch, body.roll);
+    }
+    drawList_.push_back(body);
     if (art.hasTurret) {
       const CTurret* t = turrets.tryGet(e);
       const int tf = t ? facingOf(t->angle) : facing;
       // The pivot turns with the hull's drawn facing, so it stays on the hull.
-      const float ang = static_cast<float>(angleOfFacing(facing)) * (6.2831853f / ANGLE_FULL);
-      const CPrevPosition& q = reg.pool<CPrevPosition>().get(e);
-      const float lx = q.x + (p.x - q.x) * alpha_ + std::cos(ang) * art.turretOffset;
-      const float ly = q.y + (p.y - q.y) * alpha_ + std::sin(ang) * art.turretOffset;
+      const float ang = threeD && !def.isStructure() ? hullYaw : static_cast<float>(angleOfFacing(facing)) * (6.2831853f / ANGLE_FULL);
+      const float lx = ulx + std::cos(ang) * art.turretOffset;
+      const float ly = uly + std::sin(ang) * art.turretOffset;
       const Vec2f ts = groundToScreenWorld(lx, ly);
-      drawList_.push_back({depth, order++, art.turret.frame(tf, 0), std::round(ts.x), std::round(ts.y), teamColor(u.owner), tint});
+      DrawItem turret{depth, order++, art.turret.frame(tf, 0), std::round(ts.x), std::round(ts.y), teamColor(u.owner), tint,
+                      lx, ly, uh};
+      if (threeD) {
+        turret.yaw = t ? static_cast<float>(t->angle) * (6.2831853f / ANGLE_FULL) : hullYaw;
+        turret.turned = true;
+        // On a leaning hull the turret rides up or down with the deck.
+        turret.pitch = body.pitch;
+        turret.roll = body.roll;
+        turret.h += std::sin(body.pitch) * art.turretOffset / 256.0f * HEIGHT_UNITS_PER_TILE;
+      }
+      drawList_.push_back(turret);
     }
   }
   // Occupied buildings are fortified: sandbags go up along the front, then a
@@ -2083,12 +2211,17 @@ void GameScene::drawUnits(const RectF& view) {
     for (const auto& [t, mask] : spots) {
       if (!map_.inBounds(t.x, t.y) || sim_->structureAt(t.x, t.y).valid()) continue;
       const float lx = t.x * 256.0f + 128, ly = t.y * 256.0f + 128;
-      const Vec2f s = groundToScreenWorld(lx, ly);
+      const float gh = map_.heightAt(lx, ly);
+      const Vec2f s = project(lx, ly, gh);
       if (!view.contains(s)) continue;
       const int frame = wall != art_.joined.end() ? wall->second[static_cast<size_t>(mask)] : bag.body.frame(0, 0);
       drawList_.push_back({iso::depthKey(static_cast<int32_t>(lx), static_cast<int32_t>(ly)), order++, frame, s.x, s.y,
-                           teamColor(owner), kWhite});
+                           teamColor(owner), kWhite, lx, ly, gh});
     }
+  }
+  if (threeD) {
+    queueItems3D();
+    return;
   }
   std::sort(drawList_.begin(), drawList_.end(), [](const DrawItem& a, const DrawItem& b) {
     return a.depth != b.depth ? a.depth < b.depth : a.order < b.order;
@@ -2107,6 +2240,18 @@ void GameScene::drawHealthBar(uint32_t e, bool selected) {
   if (def.isStructure()) {
     w = std::max(12.0f, (def.footW + def.footH) * 10.0f);
     y = std::floor(s.y) - (def.footW + def.footH) * 8.0f - 22.0f;
+  }
+  if (cam_.is3D()) {
+    // Above the model's top, sized with the distance (within reason).
+    const CPosition& p = reg.pool<CPosition>().get(e);
+    const float lx = static_cast<float>(p.x), ly = static_cast<float>(p.y);
+    const float h = def.isStructure() ? map_.heightAt(lx, ly) : surfaceHeight(lx, ly);
+    const float k = std::clamp(cam_.scaleAt(worldPoint(lx, ly, h)), 0.7f, 1.6f);
+    float tall = def.isStructure() ? 0.35f + (def.footW + def.footH) * 0.22f : big ? 0.55f : 0.42f;
+    if (const int mesh = meshOf(unitArt_[u.type].body.first); mesh >= 0) tall = meshes_.meshHeight(mesh) + 0.08f;
+    const Vec2f top = project(lx, ly, h + tall * HEIGHT_UNITS_PER_TILE);
+    w = std::floor(w * k);
+    y = std::floor(top.y) - 6.0f;
   }
   const float x = std::floor(s.x - w / 2);
   const float frac = std::clamp(static_cast<float>(u.health) / def.maxHealth, 0.0f, 1.0f);
@@ -2355,8 +2500,17 @@ void GameScene::drawHelp() {
   row("S", "Stop");
   row("Tab", "Command (and see as) the other side");
   row("Arrows / edges", "Scroll the map");
-  row("Middle drag", "Pan the map");
-  row("Mouse wheel", "Zoom 0.5x / 1x / 2x");
+  if (cam_.is3D()) {
+    row("Middle drag", "Turn and tilt the view");
+    row("Shift+middle drag", "Pan the map");
+    row("Q / R", "Turn the view");
+    row("Page Up / Down", "Tilt the view");
+    row("Backspace", "Reset the view");
+    row("Mouse wheel", "Zoom");
+  } else {
+    row("Middle drag", "Pan the map");
+    row("Mouse wheel", "Zoom 0.5x / 1x / 2x");
+  }
   row("Home", "Centre on selection");
   row("Space", "Pause");
   row("+ / -", "Game speed");
@@ -2377,6 +2531,10 @@ void GameScene::drawDebug() {
               renderer_.spritesThisFrame(), renderer_.drawCallsThisFrame());
   ImGui::Text("Map %dx%d   terrain chunks %zu/%zu   zoom %.1fx", map_.width(), map_.height(),
               terrain_.chunksDrawnLastFrame(), terrain_.chunkCount(), cam_.zoom());
+  if (cam_.is3D())
+    ImGui::Text("3D: %zu models (%.1f MB)  %zu drawn  %.0fk triangles  turn %.0f  tilt %.0f", meshes_.meshCount(),
+                meshes_.vertexBytes() / 1048576.0, meshes_.instancesLastFrame(), meshes_.trianglesLastFrame() / 1000.0,
+                cam_.yaw() * 57.2958f, cam_.pitch() * 57.2958f);
   const Vec2i m = mouseWorldLeptons();
   const int tx = m.x / LEPTONS_PER_TILE, ty = m.y / LEPTONS_PER_TILE;
   if (map_.inBounds(tx, ty)) {

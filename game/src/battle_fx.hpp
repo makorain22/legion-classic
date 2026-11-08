@@ -20,7 +20,14 @@ namespace legion {
 
 class BattleFx {
  public:
-  using ToScreen = std::function<slave::Vec2f(float lx, float ly)>;  // ground point (leptons) -> screen-world
+  // Effects move on the flat classic plane (the 2:1 projection of the ground
+  // at height 0) and remember the ground's height under them, so they can be
+  // drawn either in the classic view or placed in the 3D world.
+  using ToScreen = std::function<slave::Vec2f(float lx, float ly)>;  // ground point (leptons) -> flat classic plane
+  using HeightAt = std::function<float(float lx, float ly)>;         // ground height in classic pixels
+  // Draws a sprite that was baked from a voxel model as the model itself
+  // (3D view): false when it has no model, and the sprite is used instead.
+  using ModelSink = std::function<bool(int frame, float lx, float ly, uint32_t team, uint32_t tint)>;
   using FogAt = std::function<uint8_t(int tx, int ty)>;               // 0 unexplored .. 255 visible
 
   // A burning or burnt-out vehicle, drawn in the unit pass so it sorts with units.
@@ -36,7 +43,8 @@ class BattleFx {
   };
 
   void init(const slave::SpriteCatalog* art, const std::vector<slave::UnitArt>* unitArt,
-            const slave::UnitTypeRegistry* types, const slave::WeaponRegistry* weapons, ToScreen toScreen);
+            const slave::UnitTypeRegistry* types, const slave::WeaponRegistry* weapons, ToScreen toScreen,
+            HeightAt heightAt);
   void clear();
 
   // `visible`: whether the watching player can see where this happened.
@@ -46,7 +54,10 @@ class BattleFx {
   void emitDamage(slave::Vec2i atLeptons, int size, float severity, float dt);
 
   // Craters, scorch marks and bodies: drawn after the terrain, before units.
-  void drawGround(slave::SpriteRenderer& r, const slave::RectF& view, const FogAt& fog) const;
+  // In the 3D view (the renderer in a 3D pass) decals are laid on the ground
+  // and bodies drawn through `models` when given.
+  void drawGround(slave::SpriteRenderer& r, const slave::RectF& view, const FogAt& fog,
+                  const ModelSink& models = nullptr) const;
   // Fire, smoke, flashes and tracers: drawn after the units.
   void drawAir(slave::SpriteRenderer& r, const slave::RectF& view, const FogAt& fog) const;
 
@@ -62,18 +73,20 @@ class BattleFx {
     Kind kind = Kind::Puff;
     bool additive = false;
     int frame = 0;
-    float x = 0, y = 0, h = 0;      // screen-world ground point and height above it (px)
+    float x = 0, y = 0, h = 0;      // flat classic-plane ground point and height above the ground (px)
+    float gz = 0;                   // the ground's height there (px)
     float vx = 0, vy = 0, vh = 0;   // px per second
     float gravity = 0, drag = 0;
     float age = 0, life = 1;
     float scale0 = 1, scale1 = 1;
     float alpha0 = 1, alpha1 = 0;
     uint32_t color = slave::kWhite;  // RGB tint; alpha comes from alpha0..1
-    float x1 = 0, y1 = 0;            // tracer end
+    float x1 = 0, y1 = 0, gz1 = 0;   // tracer end (flat plane) and its height (px)
     int tx = 0, ty = 0;              // tile, for fog
   };
   struct Decal {
-    float x = 0, y = 0;
+    float x = 0, y = 0;  // flat classic plane
+    float gz = 0;        // ground height (px)
     int frame = 0;
     int animFrames = 1, animStride = 0;  // a short animation (a man falling), then the last frame stays
     float animSec = 0.1f;
@@ -92,12 +105,15 @@ class BattleFx {
   void explosion(slave::Vec2f at, int tx, int ty, float scale, bool crater, bool large);
   void addDecal(std::vector<Decal>& list, size_t cap, Decal d);
   void drawParticle(slave::SpriteRenderer& r, const Particle& p, float fogK) const;
+  void drawParticle3D(slave::SpriteRenderer& r, const Particle& p, float fogK) const;
+  float groundPx(float flatX, float flatY) const;
 
   const slave::SpriteCatalog* art_ = nullptr;
   const std::vector<slave::UnitArt>* unitArt_ = nullptr;
   const slave::UnitTypeRegistry* types_ = nullptr;
   const slave::WeaponRegistry* weapons_ = nullptr;
   ToScreen toScreen_;
+  HeightAt heightAt_;
   std::vector<Particle> particles_;
   std::vector<Decal> decals_, corpses_;
   std::vector<Wreck> wrecks_;

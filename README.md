@@ -10,10 +10,10 @@ battle and change anything, the rules included.
 
 ![A German and a Soviet force meet on a river crossing](docs/images/battle.jpg)
 
-> **Status: in development (0.9.0).** Milestones 1–9 are done: three armies,
+> **Status: in development (0.9.1).** Milestones 1–9 and 9.1 are done: three armies,
 > skirmish against the computer, a tutorial and three short campaigns, sound
-> and an orchestral score, the Live Scenario Editor and the tools for making
-> mods. Next: real 3D with a free camera (9.1), then terrain, intel, armour,
+> and an orchestral score, the Live Scenario Editor, the tools for making
+> mods, and a real 3D battlefield with a free camera. Next: terrain 2.0 (9.2), then intel, armour,
 > economy, AI, towns, campaigns and big scenarios in small milestones; tuning
 > and debugging always come last. The game is built together
 > with Claude (Anthropic's AI); see [How it is made](#how-it-is-made).

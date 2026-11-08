@@ -11,7 +11,9 @@ const char* actionLabel(InputAction a) {
                                 "Unbind unit", "Pause", "Game speed up", "Game speed down", "Centre on selection",
                                 "Command next side", "Menu", "Controls panel", "Scenario editor", "Debug panel",
                                 "Screenshot", "Game info panel", "Encyclopedia",
-                                "Evacuate (leave trenches and buildings)"};
+                                "Evacuate (leave trenches and buildings)",
+                                "Turn the view left", "Turn the view right", "Tilt the view up", "Tilt the view down",
+                                "Reset the view"};
   return names[static_cast<int>(a)];
 }
 
@@ -55,6 +57,11 @@ void Settings::resetKeys() {
   set(InputAction::ToggleInfo, {SDLK_I, 0});
   set(InputAction::Encyclopedia, {SDLK_K, 0}, {SDLK_F4, 0});
   set(InputAction::Evacuate, {SDLK_E, 0}, {SDLK_E, kModCtrl});
+  set(InputAction::RotateLeft, {SDLK_Q, 0});
+  set(InputAction::RotateRight, {SDLK_R, 0});
+  set(InputAction::TiltUp, {SDLK_PAGEUP, 0});
+  set(InputAction::TiltDown, {SDLK_PAGEDOWN, 0});
+  set(InputAction::ResetCamera, {SDLK_BACKSPACE, 0});
 }
 
 bool Settings::pressed(InputAction a, const SDL_KeyboardEvent& e) const {
@@ -90,6 +97,8 @@ bool Settings::load(const std::string& path) {
   artPack = j.value("artPack", artPack);
   showEnemyCards = j.value("showEnemyCards", showEnemyCards);
   atmosphere = j.value("atmosphere", atmosphere);
+  view3D = j.value("view3D", view3D);
+  shadows = j.value("shadows", shadows);
   if (j.contains("sound") && j["sound"].is_object()) {
     const auto& s = j["sound"];
     volMaster = s.value("master", volMaster);
@@ -129,6 +138,8 @@ bool Settings::save(const std::string& path) const {
   j["artPack"] = artPack;
   j["showEnemyCards"] = showEnemyCards;
   j["atmosphere"] = atmosphere;
+  j["view3D"] = view3D;
+  j["shadows"] = shadows;
   j["sound"] = {{"master", volMaster}, {"effects", volEffects}, {"voices", volVoices},
                 {"music", volMusic},   {"ambience", volAmbience}, {"interface", volInterface}};
   j["mods"] = mods;

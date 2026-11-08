@@ -9,6 +9,7 @@
 
 #include <array>
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 #include "slave/assets/image.hpp"
@@ -81,5 +82,28 @@ struct BakedSprite {
 };
 
 BakedSprite bakeVoxels(const VoxelModel& model, const VoxelPalette& palette, const BakeOptions& opt);
+
+// A voxel model as the 3D view draws it: the model, its colours, and how the
+// baker placed it (size of a voxel, pivot, shading). The turn is not part of
+// it: the 16 facings of a unit share one source.
+struct VoxelSource {
+  VoxelModel model;
+  VoxelPalette palette;
+  float voxelTiles = 1.0f / 16.0f;
+  float pivotX = 0, pivotY = 0;
+  float ao = 0, grain = 0;
+  bool castsShadow = true;
+};
+using VoxelSourcePtr = std::shared_ptr<const VoxelSource>;
+
+// Makes sources, sharing one when the same model is baked again in a row
+// (the facings of a unit, a structure's turret).
+class VoxelSourceCache {
+ public:
+  VoxelSourcePtr get(const VoxelModel& model, const VoxelPalette& palette, const BakeOptions& opt);
+
+ private:
+  VoxelSourcePtr last_;
+};
 
 }  // namespace slave

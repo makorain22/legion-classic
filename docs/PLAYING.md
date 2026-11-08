@@ -90,7 +90,7 @@ mid-battle.
 - **Replays.** Every game is recorded. *Save replay* in the in-game menu keeps
   it; your last game is always kept as `last_game`. A replay plays the battle
   back exactly as it happened: Play / Pause, speed 1× to 8×, **Tab** to watch
-  another side, **R** to reveal the whole map. (A game you changed with the
+  another side, **V** to reveal the whole map. (A game you changed with the
   editor while playing can't be replayed, because the editor's changes aren't
   part of the record.)
 - Saves (`.lsav`), replays (`.lrep`) and your maps (`.lmap`) live in
@@ -330,6 +330,21 @@ guns and towers are built and placed like other structures.
   stay on the field as blackened wrecks; fallen soldiers stay for a while;
   shells leave craters and scorch marks.
 
+## The 3D battlefield
+
+Since 0.9.1 the battle is drawn in real 3D. Every unit, building, tree and
+field work is its voxel model drawn as a mesh, lit by the sun and casting
+shadows on the ground and on each other; hills hide what is behind them.
+The camera turns all the way round and tilts from a low view across the field
+to almost straight down; the wheel zooms smoothly towards the mouse. Vehicles
+lean with the slopes they drive over. Smoke, fire, flashes and tracers hang
+in the air and face the camera; craters, scorch marks, oil and trenches lie
+on the ground. Unit cards, health bars and the editor's brushes stay flat on
+the screen.
+
+The old 2D view is still there: **Settings > Game > 3D battlefield** off (or
+`--classic`). Shadows can be switched off on the same page.
+
 ## Sound and music
 
 Sound follows your view. Fighting on screen is loud and sharp; a battle
@@ -372,8 +387,12 @@ These are the defaults:
 | Tab | Switch which side you command (and see) |
 | Home or C | Centre the view on the selection |
 | Sidebar minimap | Click/drag to look; right-click to send the selection; wheel or + / − to zoom (1× to 8×) |
-| Middle mouse drag | Pan |
-| Mouse wheel | Zoom 0.5× / 1× / 2× |
+| Middle mouse drag | Turn the view (sideways) and tilt it (up and down); classic view: pan |
+| Shift + middle mouse drag | Pan |
+| Q / R | Turn the view left / right |
+| Page Up / Page Down | Tilt the view up / down |
+| Backspace | Reset the view (the classic angle, zoom 1×) |
+| Mouse wheel | Zoom (towards the mouse); classic view: 0.5× / 1× / 2× |
 | Space | Pause |
 | + / − | Game speed (0.25× to 8×) |
 | I | Show / hide the game info panel |
@@ -547,7 +566,9 @@ the scenario details and its triggers, so you can share them.
 
 `--fullscreen`, `--windowed 1920x1080`, `--map 256` (map size in tiles, up to
 1024), `--seed 1234` (different random map), `--biome winter` (temperate,
-winter, desert, tropical, urban), `--zoom 2`, `--spawn 5000` (extra units at
+winter, desert, tropical, urban), `--zoom 2`, `--classic` (the old 2D sprite
+view), `--yaw 200 --pitch 35` (start with the view turned and tilted, in
+degrees), `--spawn 5000` (extra units at
 start), `--demo` (the two armies attack each other), `--no-bases` (armies only,
 no bases), `--debug` (open the debug panel), `--editor` (start with the editor
 open), `--open path\to\map.lmap` (start on a saved map), `--menu` (the main

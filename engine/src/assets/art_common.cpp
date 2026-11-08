@@ -466,6 +466,7 @@ int BakeQueue::push(VoxelModel model, const VoxelPalette& pal, BakeOptions o, co
   }
   j.pal = &palettes_.back();
   j.o = o;
+  j.source = sources_.get(j.model, pal, o);
   jobs_.push_back(std::move(j));
   return base_ + static_cast<int>(jobs_.size()) - 1;
 }
@@ -492,7 +493,8 @@ void BakeQueue::run() {
   for (unsigned t = 1; t < n; ++t) threads.emplace_back(worker);
   worker();
   for (std::thread& t : threads) t.join();
-  for (BakedSprite& s : out) {
+  for (size_t k = 0; k < out.size(); ++k) {
+    BakedSprite& s = out[k];
     // Trim empty margins: sprites are baked in the bounds of the whole voxel
     // grid, which is mostly air around a long gun or a pair of soldiers.
     const Image& img = s.image;
@@ -512,7 +514,7 @@ void BakeQueue::run() {
     Image cut(x1 - x0 + 1, y1 - y0 + 1);
     for (int y = y0; y <= y1; ++y)
       for (int x = x0; x <= x1; ++x) cut.at(x - x0, y - y0) = img.px[static_cast<size_t>(y) * img.w + x];
-    ab_.add(std::move(cut), s.anchorX - x0, s.anchorY - y0);
+    ab_.add(std::move(cut), s.anchorX - x0, s.anchorY - y0, jobs_[k].source, jobs_[k].o.yawRadians);
   }
   jobs_.clear();
   palettes_.clear();

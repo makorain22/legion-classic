@@ -34,12 +34,13 @@ float fogBrightness(uint8_t f) {
 }  // namespace
 
 void BattleFx::init(const SpriteCatalog* art, const std::vector<UnitArt>* unitArt, const UnitTypeRegistry* types,
-                    const WeaponRegistry* weapons, ToScreen toScreen) {
+                    const WeaponRegistry* weapons, ToScreen toScreen, HeightAt heightAt) {
   art_ = art;
   unitArt_ = unitArt;
   types_ = types;
   weapons_ = weapons;
   toScreen_ = std::move(toScreen);
+  heightAt_ = std::move(heightAt);
   particles_.reserve(4096);
 }
 
@@ -55,6 +56,12 @@ float BattleFx::rnd() {
   return static_cast<float>(seed_ >> 8) / 16777216.0f;
 }
 
+float BattleFx::groundPx(float x, float y) const {
+  if (!heightAt_) return 0;
+  const Vec2f l = iso::screenToWorld({x, y});
+  return heightAt_(l.x, l.y);
+}
+
 BattleFx::Particle& BattleFx::add(Kind kind, Vec2f at, int tx, int ty) {
   if (particles_.size() >= kMaxParticles) {
     // Full: recycle the oldest-looking slot instead of growing forever.
@@ -63,6 +70,7 @@ BattleFx::Particle& BattleFx::add(Kind kind, Vec2f at, int tx, int ty) {
     p.kind = kind;
     p.x = at.x;
     p.y = at.y;
+    p.gz = groundPx(at.x, at.y);
     p.tx = tx;
     p.ty = ty;
     return p;
@@ -71,6 +79,7 @@ BattleFx::Particle& BattleFx::add(Kind kind, Vec2f at, int tx, int ty) {
   p.kind = kind;
   p.x = at.x;
   p.y = at.y;
+  p.gz = groundPx(at.x, at.y);
   p.tx = tx;
   p.ty = ty;
   return p;
@@ -114,6 +123,7 @@ void BattleFx::sparks(Vec2f at, int tx, int ty, float h, int count, float speed)
 
 void BattleFx::addDecal(std::vector<Decal>& list, size_t cap, Decal d) {
   if (list.size() >= cap) list.erase(list.begin(), list.begin() + static_cast<long>(cap / 8));
+  d.gz = groundPx(d.x, d.y);
   list.push_back(d);
 }
 
@@ -187,7 +197,8 @@ void BattleFx::onEvent(const SimEvent& ev, bool visible, const std::array<uint32
         tr.additive = true;
         tr.h = gunH;
         tr.x1 = t.x;
-        tr.y1 = t.y - 5;
+        tr.y1 = t.y;
+        tr.gz1 = groundPx(t.x, t.y) + 5;
         const float px = std::hypot(tr.x1 - m.x, tr.y1 - m.y);
         tr.life = std::max(0.09f, px / 1100.0f);
         tr.alpha0 = 0.95f;
@@ -407,16 +418,26 @@ void BattleFx::update(float dt) {
   std::erase_if(wrecks_, [](const Wreck& w) { return w.age >= kWreckSeconds; });
 }
 
-void BattleFx::drawGround(SpriteRenderer& r, const RectF& view, const FogAt& fog) const {
+void BattleFx::drawGround(SpriteRenderer& r, const RectF& view, const FogAt& fog, const ModelSink& models) const {
   auto draw = [&](const Decal& d) {
-    if (!view.contains({d.x, d.y})) return;
+    const bool threeD = r.in3D();
+    if (!threeD && !view.contains({d.x, d.y - d.gz})) return;
     const uint8_t f = fog(d.tx, d.ty);
     if (f == 0) return;
     const float fade = std::clamp((d.life - d.age) / 8.0f, 0.0f, 1.0f);  // fade out over the last 8 s
     const float k = fogBrightness(f);
     const uint32_t tint = withAlpha(scaleRgb(kWhite, k), fade * d.alpha);
     const int step = d.animFrames > 1 ? std::min(d.animFrames - 1, static_cast<int>(d.age / d.animSec)) : 0;
-    r.sprite(d.frame + step * d.animStride, d.x, d.y, d.team, tint);
+    const int frame = d.frame + step * d.animStride;
+    if (!threeD) {
+      r.sprite(frame, d.x, d.y - d.gz, d.team, tint);
+      return;
+    }
+    const Vec2f l = iso::screenToWorld({d.x, d.y});
+    if (models && models(frame, l.x, l.y, d.team, tint)) return;
+    r.decal(frame, l.x, l.y, tint, d.team, 4, [&](float gx, float gy) {
+      return (heightAt_ ? heightAt_(gx, gy) : 0.0f) / iso::HEIGHT_PX_PER_TILE + 0.015f;
+    });
   };
   for (const Decal& d : decals_) draw(d);
   for (const Decal& d : corpses_) draw(d);
@@ -430,33 +451,73 @@ void BattleFx::drawParticle(SpriteRenderer& r, const Particle& p, float fogK) co
   switch (p.kind) {
     case Kind::Explosion: {
       const int i = std::min(7, static_cast<int>(t * 8));
-      r.spriteScaled(art_->effects.explosion[static_cast<size_t>(i)], p.x, p.y - p.h, scale,
+      r.spriteScaled(art_->effects.explosion[static_cast<size_t>(i)], p.x, p.y - p.gz - p.h, scale,
                      withAlpha(scaleRgb(kWhite, fogK), alpha));
       break;
     }
     case Kind::Flame: {
       const int i = static_cast<int>(p.age * 14 + p.x) & 3;
-      r.spriteScaled(art_->effects.fire[static_cast<size_t>(i)], p.x, p.y - p.h, scale, withAlpha(color, alpha));
+      r.spriteScaled(art_->effects.fire[static_cast<size_t>(i)], p.x, p.y - p.gz - p.h, scale, withAlpha(color, alpha));
       break;
     }
     case Kind::Tracer: {
       // A short bright streak travelling from the muzzle to the target.
       // A long glowing streak, about 40 px, fading towards its tail.
-      const float y0 = p.y - p.h;
-      const float len = std::max(1.0f, std::hypot(p.x1 - p.x, p.y1 - y0));
+      const float y0 = p.y - p.gz - p.h, ye = p.y1 - p.gz1;
+      const float len = std::max(1.0f, std::hypot(p.x1 - p.x, ye - y0));
       const float tail = std::min(1.0f, 42.0f / len);
       constexpr int kSteps = 22;
       for (int k = 0; k < kSteps; ++k) {
         const float f = static_cast<float>(k) / (kSteps - 1);  // 0 tail .. 1 head
         const float s = std::clamp(t * (1.0f + tail) - tail * (1.0f - f), 0.0f, 1.0f);
         if (s <= 0.0f) continue;
-        const float x = p.x + (p.x1 - p.x) * s, y = y0 + (p.y1 - y0) * s;
+        const float x = p.x + (p.x1 - p.x) * s, y = y0 + (ye - y0) * s;
         r.spriteScaled(p.frame, x, y, 0.35f + 0.5f * f, withAlpha(color, alpha * (0.15f + 0.85f * f * f)));
       }
       break;
     }
     default:
-      r.spriteScaled(p.frame, p.x, p.y - p.h, scale, withAlpha(color, alpha));
+      r.spriteScaled(p.frame, p.x, p.y - p.gz - p.h, scale, withAlpha(color, alpha));
+      break;
+  }
+}
+
+void BattleFx::drawParticle3D(SpriteRenderer& r, const Particle& p, float fogK) const {
+  const float t = std::clamp(p.age / p.life, 0.0f, 1.0f);
+  const float alpha = p.alpha0 + (p.alpha1 - p.alpha0) * t;
+  const float scale = p.scale0 + (p.scale1 - p.scale0) * t;
+  const uint32_t color = scaleRgb(p.color, p.additive ? 1.0f : fogK);
+  // A point of the flat plane plus a height in classic pixels, in world tiles.
+  auto world = [](float x, float y, float hpx) {
+    const Vec2f l = iso::screenToWorld({x, y});
+    return Vec3f{l.x / 256.0f, l.y / 256.0f, hpx / iso::HEIGHT_PX_PER_TILE};
+  };
+  constexpr float kTpp = 1.0f / 45.2548f;  // tiles per sprite pixel: the classic scale
+  const Vec3f at = world(p.x, p.y, p.gz + p.h);
+  switch (p.kind) {
+    case Kind::Explosion: {
+      const int i = std::min(7, static_cast<int>(t * 8));
+      r.billboard(art_->effects.explosion[static_cast<size_t>(i)], at, kTpp * scale, kWhite,
+                  withAlpha(scaleRgb(kWhite, fogK), alpha));
+      break;
+    }
+    case Kind::Flame: {
+      const int i = static_cast<int>(p.age * 14 + p.x) & 3;
+      r.billboard(art_->effects.fire[static_cast<size_t>(i)], at, kTpp * scale, kWhite, withAlpha(color, alpha));
+      break;
+    }
+    case Kind::Tracer: {
+      // A glowing streak about a tile long travelling from the muzzle to the target.
+      const Vec3f end = world(p.x1, p.y1, p.gz1);
+      const Vec3f d = end - at;
+      const float len = std::max(0.01f, d.length());
+      const float tail = std::min(1.0f, 0.9f / len);
+      const float head = std::clamp(t * (1.0f + tail), 0.0f, 1.0f), back = std::clamp(t * (1.0f + tail) - tail, 0.0f, 1.0f);
+      if (head > back) r.streak(p.frame, at + d * back, at + d * head, 0.035f, withAlpha(color, alpha));
+      break;
+    }
+    default:
+      r.billboard(p.frame, at, kTpp * scale, kWhite, withAlpha(color, alpha));
       break;
   }
 }
@@ -467,10 +528,11 @@ void BattleFx::drawAir(SpriteRenderer& r, const RectF& view, const FogAt& fog) c
     r.setAdditive(pass == 1);
     for (const Particle& p : particles_) {
       if (p.additive != (pass == 1)) continue;
-      if (!view.contains({p.x, p.y - p.h})) continue;
+      if (!r.in3D() && !view.contains({p.x, p.y - p.gz - p.h})) continue;
       const uint8_t f = fog(p.tx, p.ty);
       if (f < 100) continue;  // out of sight
-      drawParticle(r, p, fogBrightness(f));
+      if (r.in3D()) drawParticle3D(r, p, fogBrightness(f));
+      else drawParticle(r, p, fogBrightness(f));
     }
   }
   r.setAdditive(false);

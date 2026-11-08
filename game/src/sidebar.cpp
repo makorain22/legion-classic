@@ -192,6 +192,13 @@ bool Sidebar::onEvent(const SDL_Event& e, bool uiMouse) {
 
 void Sidebar::renderWorld(SpriteRenderer& r) {
   if (placeType_ < 0 || ImGui::GetIO().WantCaptureMouse) return;
+  if (scene_.is3D() != r.in3D()) return;  // 3D: laid on the ground in the 3D pass
+  const bool threeD = r.in3D();
+  auto ground = [&](float gx, float gy) {
+    gx = std::clamp(gx, 0.0f, scene_.map().widthLeptons() - 1.0f);
+    gy = std::clamp(gy, 0.0f, scene_.map().heightLeptons() - 1.0f);
+    return scene_.map().heightAt(gx, gy) / HEIGHT_UNITS_PER_TILE + 0.03f;
+  };
   const UnitTypeDef& d = scene_.types().get(placeType_);
   const Vec2f g = scene_.groundAt(scene_.mouse());
   std::vector<Vec2i> centres;
@@ -211,9 +218,22 @@ void Sidebar::renderWorld(SpriteRenderer& r) {
     for (int y = o.y; y < o.y + d.footH; ++y)
       for (int x = o.x; x < o.x + d.footW; ++x) {
         const bool tileOk = scene_.map().buildable(x, y);
+        const uint32_t tileTint = (ok && tileOk) ? rgba8(110, 230, 90, 170) : rgba8(240, 70, 50, 190);
+        if (threeD) {
+          r.decal(scene_.art().moveMarker, x * 256.0f + 128, y * 256.0f + 128, tileTint, kWhite, 2, ground);
+          continue;
+        }
         const Vec2f s = scene_.groundToScreenWorld(x * 256.0f + 128, y * 256.0f + 128);
-        r.sprite(scene_.art().moveMarker, s.x, s.y, kWhite, (ok && tileOk) ? rgba8(110, 230, 90, 170) : rgba8(240, 70, 50, 190));
+        r.sprite(scene_.art().moveMarker, s.x, s.y, kWhite, tileTint);
       }
+    if (threeD) {
+      scene_.ghost(art.body.frame(0, 0), static_cast<float>(c.x), static_cast<float>(c.y), scene_.teamColor(scene_.player()),
+                   ok ? rgba8(255, 255, 255, 150) : rgba8(255, 120, 100, 120));
+      if (art.hasTurret)
+        scene_.ghost(art.turret.frame(4, 0), static_cast<float>(c.x), static_cast<float>(c.y), scene_.teamColor(scene_.player()),
+                     rgba8(255, 255, 255, 150));
+      continue;
+    }
     const Vec2f s = scene_.groundToScreenWorld(static_cast<float>(c.x), static_cast<float>(c.y));
     r.sprite(art.body.frame(0, 0), s.x, s.y, scene_.teamColor(scene_.player()),
              ok ? rgba8(255, 255, 255, 150) : rgba8(255, 120, 100, 120));

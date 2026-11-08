@@ -73,6 +73,10 @@ int main(int argc, char** argv) {
     else if (a == "--map") opt.mapSize = std::max(16, std::min(1024, std::atoi(next())));
     else if (a == "--seed") opt.seed = std::strtoull(next(), nullptr, 10);
     else if (a == "--zoom") opt.zoom = static_cast<float>(std::atof(next()));
+    else if (a == "--classic") opt.classic = true;
+    else if (a == "--no-shadows") opt.noShadows = true;
+    else if (a == "--yaw") opt.yaw = static_cast<float>(std::atof(next()));
+    else if (a == "--pitch") opt.pitch = static_cast<float>(std::atof(next()));
     else if (a == "--spawn") opt.stressUnits = std::atoi(next());
     else if (a == "--demo") opt.demo = true;
     else if (a == "--no-help") opt.showHelp = false;

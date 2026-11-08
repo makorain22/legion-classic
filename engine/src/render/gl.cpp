@@ -1,5 +1,8 @@
 #include "slave/render/gl.hpp"
 
+#include <algorithm>
+#include <cstring>
+
 #include "slave/core/log.hpp"
 
 namespace slave::gl {
@@ -114,6 +117,23 @@ void TextureArray::create(const std::vector<Image>& layers) {
                     layers[i].px.data());
   applyParams(GL_TEXTURE_2D_ARRAY, {true, true, true});
   glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
+  // The ground seen at a low angle in 3D stays sharp with anisotropic filtering.
+  static const bool aniso = [] {
+    GLint n = 0;
+    glGetIntegerv(GL_NUM_EXTENSIONS, &n);
+    for (GLint i = 0; i < n; ++i) {
+      const char* e = reinterpret_cast<const char*>(glGetStringi(GL_EXTENSIONS, static_cast<GLuint>(i)));
+      if (e && (std::strcmp(e, "GL_EXT_texture_filter_anisotropic") == 0 || std::strcmp(e, "GL_ARB_texture_filter_anisotropic") == 0))
+        return true;
+    }
+    return false;
+  }();
+  if (aniso) {
+    constexpr GLenum kMaxAniso = 0x84FE, kMaxAnisoLimit = 0x84FF;  // GL_TEXTURE_MAX_ANISOTROPY(_EXT)
+    GLfloat limit = 1;
+    glGetFloatv(kMaxAnisoLimit, &limit);
+    glTexParameterf(GL_TEXTURE_2D_ARRAY, kMaxAniso, std::min(8.0f, limit));
+  }
 }
 
 void TextureArray::bind(int unit) const {

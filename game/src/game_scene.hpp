@@ -21,6 +21,8 @@
 #include "slave/map/map_io.hpp"
 #include "slave/platform/app.hpp"
 #include "slave/render/camera.hpp"
+#include "slave/render/mesh_renderer.hpp"
+#include "slave/render/shadow.hpp"
 #include "slave/render/sprite_renderer.hpp"
 #include "slave/render/terrain_renderer.hpp"
 #include "slave/sim/savefile.hpp"
@@ -100,6 +102,9 @@ struct SceneOptions {
   std::string campaign;         // --campaign id[:mission]: open a campaign's missions, or a mission's briefing (1-based)
   std::string mission;          // --mission id:N: play mission N (1-based) of a campaign straight away
   int biome = 0;
+  bool classic = false;         // --classic: the old 2D sprite view instead of 3D
+  bool noShadows = false;       // --no-shadows (testing, comparisons)
+  float yaw = -1000, pitch = -1000;  // --yaw / --pitch: starting camera angles in degrees (screenshots)
 };
 
 class GameScene final : public slave::Scene {
@@ -129,6 +134,27 @@ class GameScene final : public slave::Scene {
   slave::Vec2f mouse() const { return mouse_; }
   // Screen-world position of a ground point (leptons), lifted by its height.
   slave::Vec2f groundToScreenWorld(float lx, float ly) const;
+  // A point of the world (leptons; height in height units) on the camera's
+  // screen-world plane. In 3D that plane is the screen, so this is the pixel.
+  slave::Vec2f project(float lx, float ly, float h) const;
+  // World point (leptons, height units) -> 3D drawing space (tiles).
+  static slave::Vec3f worldPoint(float lx, float ly, float h) {
+    return {lx / 256.0f, ly / 256.0f, h / static_cast<float>(slave::HEIGHT_UNITS_PER_TILE)};
+  }
+  bool is3D() const { return cam_.is3D(); }
+  // The ground point the camera looks at (leptons), and moving the camera to look at one.
+  slave::Vec2f cameraFocus() const;
+  void focusCamera(slave::Vec2f leptons);
+  slave::MeshRenderer& meshes() { return meshes_; }
+  // The 3D model an atlas frame was baked from (-1: a painted sprite).
+  int meshOf(int frame);
+  // Turns the 3D view from the keyboard (per frame).
+  void cameraKeys(float dt);
+  // A see-through model of something about to be placed (3D view), at a
+  // ground point; turned as the frame was baked.
+  void ghost(int frame, float lx, float ly, uint32_t team, uint32_t tint);
+  // Middle mouse dragged: turn and tilt the 3D view (Shift: pan), or pan the classic one.
+  void mmbDrag(float dx, float dy);
   std::vector<slave::UnitPlacement> exportUnits();
   // New or loaded map. `keepCamera`: stay where we are (snapshot restore).
   void replaceWorld(slave::MapFile&& file, bool keepCamera = false);
@@ -252,7 +278,7 @@ class GameScene final : public slave::Scene {
 
  private:
   struct Marker {
-    slave::Vec2f pos;  // screen-world
+    slave::Vec2f pos;  // ground point, leptons
     float age = 0;
     uint32_t color = 0;
   };
@@ -263,6 +289,12 @@ class GameScene final : public slave::Scene {
     float x, y;
     uint32_t team;
     uint32_t tint;
+    // Where it stands in the world (3D view): leptons, height units, and the
+    // turn in radians when it is not the frame's own (units turn smoothly).
+    float lx = 0, ly = 0, h = 0;
+    float yaw = 0;
+    bool turned = false;
+    float pitch = 0, roll = 0;
   };
 
   slave::Vec2i mouseWorldLeptons() const;
@@ -362,6 +394,17 @@ class GameScene final : public slave::Scene {
   std::unique_ptr<slave::Simulation> sim_;
   slave::SpriteCatalog art_;
   slave::SpriteRenderer renderer_;
+  slave::MeshRenderer meshes_;
+  slave::ShadowMap shadow_;
+  std::vector<int> frameMesh_;  // atlas frame -> mesh (-2: not looked at yet)
+  std::vector<DrawItem> billboards_;  // 3D: things with no model, drawn as sprites facing the camera
+  void render3D();
+  void drawOverlays(const slave::RectF& view, bool markers);
+  void drawGround3D();
+  void drawSelection3D();
+  void queueItems3D();
+  slave::Vec2f groundAt3D(slave::Vec2f screenPx) const;
+  void lean(float lx, float ly, float yaw, float reach, float& pitch, float& roll) const;
   slave::TerrainRenderer terrain_;
   slave::Camera cam_;
   std::unique_ptr<Editor> editor_;

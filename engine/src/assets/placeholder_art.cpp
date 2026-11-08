@@ -540,13 +540,14 @@ void addStructure(AtlasBuilder& ab, SpriteCatalog& cat, const std::string& name,
     o.pivotY = body.sizeY() / 2.0f;
     o.shadowAlpha = 110;
     BakedSprite s = bakeVoxels(body, pal, o);
-    ab.add(std::move(s.image), s.anchorX, s.anchorY);
+    ab.add(std::move(s.image), s.anchorX, s.anchorY, VoxelSourceCache().get(body, pal, o), 0.0f);
     if (turret) {
       const VoxelModel t = turret(look);
       art.hasTurret = true;
       art.turretOffset = 0;
       art.turret.facings = 16;
       art.turret.first = static_cast<int>(ab.count());
+      VoxelSourceCache turretSources;
       for (int f = 0; f < 16; ++f) {
         BakeOptions to = unitBake(voxelTiles);
         to.yawRadians = static_cast<float>(f) * kTwoPi / 16.0f;
@@ -554,7 +555,7 @@ void addStructure(AtlasBuilder& ab, SpriteCatalog& cat, const std::string& name,
         to.pivotY = t.sizeY() / 2.0f;
         to.shadow = false;
         BakedSprite ts = bakeVoxels(t, pal, to);
-        ab.add(std::move(ts.image), ts.anchorX, ts.anchorY);
+        ab.add(std::move(ts.image), ts.anchorX, ts.anchorY, turretSources.get(t, pal, to), to.yawRadians);
       }
     }
     cat.units[name + "@" + look.id] = art;
@@ -851,7 +852,8 @@ bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error, const ArtOption
         o.pivotY = 12;
         o.shadowAlpha = model[0] == 's' ? 110 : 60;
         BakedSprite b = bakeVoxels(vm, fpal, o);
-        frames[static_cast<size_t>(mask)] = ab.add(std::move(b.image), b.anchorX, b.anchorY);
+        frames[static_cast<size_t>(mask)] =
+            ab.add(std::move(b.image), b.anchorX, b.anchorY, VoxelSourceCache().get(vm, fpal, o), 0.0f);
       }
     }
   }
@@ -926,7 +928,8 @@ bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error, const ArtOption
       o.quantize = false;
       o.shadowAlpha = 110;
       BakedSprite s = bakeVoxels(m, pal, o);
-      cat.props[static_cast<size_t>(p.kind)].push_back(ab.add(std::move(s.image), s.anchorX, s.anchorY));
+      cat.props[static_cast<size_t>(p.kind)].push_back(
+          ab.add(std::move(s.image), s.anchorX, s.anchorY, VoxelSourceCache().get(m, pal, o), o.yawRadians));
     }
   }
 

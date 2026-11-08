@@ -176,8 +176,11 @@ if(LEGION_BUILD_TESTS)
   # Editor logic without graphics (undo history) is tested too.
   # So is the Blitzkrieg file reader (it needs no graphics either).
   # And the sound mixer and decoders (no sound card needed).
+  # And the 3D camera and voxel meshing (pure maths, no GL calls).
   add_executable(slave_tests ${TEST_SOURCES} editor/src/history.cpp engine/src/assets/blitzkrieg.cpp
-                 engine/src/audio/mixer.cpp engine/src/audio/decode.cpp game/src/campaign.cpp)
+                 engine/src/audio/mixer.cpp engine/src/audio/decode.cpp game/src/campaign.cpp
+                 engine/src/render/camera.cpp engine/src/assets/voxel.cpp engine/src/assets/voxel_mesh.cpp
+                 engine/src/assets/image.cpp)
   target_include_directories(slave_tests PRIVATE editor/src game/src)
   target_link_libraries(slave_tests PRIVATE slave_core doctest::doctest stb)
   target_compile_definitions(slave_tests PRIVATE LEGION_CONTENT_DIR="${CMAKE_SOURCE_DIR}/content/")

@@ -475,8 +475,17 @@ void Editor::moveSelection(Vec2i delta) {
 void Editor::renderUnitGhosts(SpriteRenderer& r, Vec2f g) {
   auto ghost = [&](int type, uint8_t owner, Vec2i at, int facing, bool ok) {
     const UnitArt& art = scene_.unitArt(type);
-    const Vec2f s = scene_.groundToScreenWorld(static_cast<float>(at.x), static_cast<float>(at.y));
     const uint32_t tint = ok ? rgba8(255, 255, 255, 150) : rgba8(255, 80, 60, 150);
+    if (r.in3D()) {
+      scene_.ghost(art.body.frame(facing, 0), static_cast<float>(at.x), static_cast<float>(at.y), scene_.teamColor(owner), tint);
+      if (art.hasTurret) {
+        const float a = static_cast<float>(angleOfFacing(facing)) * (6.2831853f / ANGLE_FULL);
+        scene_.ghost(art.turret.frame(facing, 0), at.x + std::cos(a) * art.turretOffset, at.y + std::sin(a) * art.turretOffset,
+                     scene_.teamColor(owner), tint);
+      }
+      return;
+    }
+    const Vec2f s = scene_.groundToScreenWorld(static_cast<float>(at.x), static_cast<float>(at.y));
     r.sprite(art.body.frame(facing, 0), s.x, s.y, scene_.teamColor(owner), tint);
     if (art.hasTurret) {
       const float a = static_cast<float>(angleOfFacing(facing)) * (6.2831853f / ANGLE_FULL);

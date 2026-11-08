@@ -92,6 +92,7 @@ bool GameScene::reloadArt(std::string& error) {
   art_ = std::move(fresh);
   artPack_ = !o.packDirs.empty();
   renderer_.setAtlas(art_.atlas, art_.frames);
+  frameMesh_.assign(art_.frames.size(), -2);
   renderer_.setWhiteFrame(art_.white);
   std::string err;
   if (!pickUnitArt(err)) SLV_WARN("%s", err.c_str());

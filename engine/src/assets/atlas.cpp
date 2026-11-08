@@ -6,7 +6,12 @@
 namespace slave {
 
 int AtlasBuilder::add(Image image, int anchorX, int anchorY) {
-  items_.push_back({std::move(image), anchorX, anchorY});
+  items_.push_back({std::move(image), anchorX, anchorY, nullptr, 0.0f});
+  return static_cast<int>(items_.size() - 1);
+}
+
+int AtlasBuilder::add(Image image, int anchorX, int anchorY, std::shared_ptr<const VoxelSource> voxel, float yaw) {
+  items_.push_back({std::move(image), anchorX, anchorY, std::move(voxel), yaw});
   return static_cast<int>(items_.size() - 1);
 }
 
@@ -31,7 +36,8 @@ bool AtlasBuilder::build(int size, Image& atlas, std::vector<AtlasFrame>& frames
     atlas.blit(img, x, y);
     const float inv = 1.0f / static_cast<float>(size);
     frames[idx] = {x * inv,        y * inv, (x + img.w) * inv, (y + img.h) * inv,
-                   img.w,          img.h,   items_[idx].anchorX, items_[idx].anchorY};
+                   img.w,          img.h,   items_[idx].anchorX, items_[idx].anchorY,
+                   items_[idx].voxel, items_[idx].yaw};
     x += img.w + kPad;
     shelfH = std::max(shelfH, img.h);
   }

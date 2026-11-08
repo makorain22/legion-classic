@@ -177,8 +177,10 @@ class BakeQueue {
     bool ownShadow = false;
     const VoxelPalette* pal;
     BakeOptions o;
+    VoxelSourcePtr source;  // for the 3D view
   };
   AtlasBuilder& ab_;
+  VoxelSourceCache sources_;
   int base_;
   std::deque<Job> jobs_;
   std::deque<VoxelPalette> palettes_;

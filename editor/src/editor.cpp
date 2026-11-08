@@ -496,10 +496,15 @@ bool Editor::load(const std::string& path) {
 // Drawing
 // ---------------------------------------------------------------------------
 void Editor::renderWorld(SpriteRenderer& r) {
-  if (active_) renderAreas(r);
+  // In 3D this is called twice: in the 3D pass for the ghosts of units being
+  // placed, and on the screen for brushes and areas.
+  const bool ghostPass = scene_.is3D() ? r.in3D() : true;
+  const bool flatPass = !r.in3D();
+  if (active_ && flatPass) renderAreas(r);
   if (!active_ || ImGui::GetIO().WantCaptureMouse) return;
   const Vec2f c = scene_.groundAt(scene_.mouse());
-  renderUnitGhosts(r, c);
+  if (ghostPass) renderUnitGhosts(r, c);
+  if (!flatPass) return;
   if (tool_ == Tool::Area) return;
   if (tool_ == Tool::SelectUnits) return;
   if (tool_ == Tool::PlaceUnits && placeMode_ != PlaceMode::Brush) return;

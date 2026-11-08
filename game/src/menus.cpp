@@ -608,7 +608,7 @@ void Menus::drawReplayBar() {
     if (ImGui::Button(b)) scene_.setSpeed(s);
   }
   ImGui::SameLine();
-  ImGui::Checkbox("Reveal (R)", &scene_.revealMap());
+  ImGui::Checkbox("Reveal (V)", &scene_.revealMap());
   ImGui::SameLine();
   ImGui::TextDisabled("Tab: watch another side");
   ImGui::End();
@@ -678,6 +678,8 @@ void Menus::drawSettings() {
       changed |= ImGui::Checkbox("Unit cards over the other sides' units too", &st.showEnemyCards);
       changed |= ImGui::Checkbox("Chips for enemy forces detected in the fog", &st.showChips);
       changed |= ImGui::Checkbox("Atmosphere: period colour grading and a vignette", &st.atmosphere);
+      changed |= ImGui::Checkbox("3D battlefield (off: the classic 2D view)", &st.view3D);
+      if (st.view3D) changed |= ImGui::Checkbox("Shadows", &st.shadows);
       changed |= ImGui::Checkbox("Use the Blitzkrieg art pack when installed (restart to apply)", &st.artPack);
       ImGui::EndTabItem();
     }

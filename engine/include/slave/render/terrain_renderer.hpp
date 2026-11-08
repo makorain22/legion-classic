@@ -14,10 +14,13 @@
 #include <vector>
 
 #include "slave/map/map.hpp"
+#include "slave/math/mat.hpp"
 #include "slave/render/camera.hpp"
 #include "slave/render/gl.hpp"
 
 namespace slave {
+
+class ShadowMap;
 
 class TerrainRenderer {
  public:
@@ -33,6 +36,16 @@ class TerrainRenderer {
   void markWaterDirty();  // water level changed
   void update();          // applies pending rebuilds (call once per frame)
   void draw(const Camera& cam, float timeSeconds);
+  // The 3D view: the ground (opaque, writes depth), then the water on top
+  // (translucent; call after the opaque models). `shadow` may be null.
+  void draw3D(const Camera& cam, float timeSeconds, const ShadowMap* shadow);
+  void drawWater3D(const Camera& cam, float timeSeconds);
+  // The ground into a depth-only target (the sun's shadow map).
+  void drawDepth(const Mat4& viewProj);
+  // Lowest and highest ground (and water), in tiles.
+  void heightRange(float& zMin, float& zMax) const;
+  // Texture unit the terrain shader keeps for the shadow map.
+  static constexpr int kShadowUnit = 7;
 
   // Fog of war. `grid` holds Vision bits per tile (1 = visible, 2 = explored).
   // Pass nullptr to show everything. Changes fade in over a few frames.
@@ -48,10 +61,12 @@ class TerrainRenderer {
  private:
   struct Chunk;
   void buildChunk(Chunk& c);
+  bool chunkVisible(const Chunk& c, const Mat4& viewProj) const;
   void uploadSplat(int sx0, int sy0, int sx1, int sy1);
 
   const Map* map_ = nullptr;
   gl::Shader terrainShader_, waterShader_;
+  gl::Shader terrain3D_, water3D_, depth3D_;
   gl::TextureArray layers_;
   gl::Texture macro_, splat0_, splat1_, fog_;
   std::vector<uint8_t> fogTarget_, fogCur_;

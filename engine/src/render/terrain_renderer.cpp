@@ -7,6 +7,7 @@
 #include "slave/assets/ground_textures.hpp"
 #include "slave/core/log.hpp"
 #include "slave/math/iso.hpp"
+#include "slave/render/shadow.hpp"
 
 namespace slave {
 
@@ -34,7 +35,9 @@ uniform float uZoom;
 uniform float uDepthMax;
 out vec2 vTile;
 out float vExtra;
+out vec3 vWorld;
 void main() {
+  vWorld = vec3(0.0);
   vec2 s = (aScreen - uCamera) * uZoom + uHalf;
   // Distance toward the viewer: farther tiles and lower ground are deeper.
   float d = (aTile.x + aTile.y) * 0.6124 + aZ * 0.5;
@@ -45,9 +48,33 @@ void main() {
 }
 )";
 
+// The same vertices drawn through a 3D camera: aTile and aZ are the world
+// position in tiles.
+const char* k3DVertex = R"(#version 330 core
+layout(location = 0) in vec2 aScreen;
+layout(location = 1) in vec2 aTile;
+layout(location = 2) in float aZ;
+layout(location = 3) in float aExtra;
+uniform mat4 uViewProj;
+out vec2 vTile;
+out float vExtra;
+out vec3 vWorld;
+void main() {
+  vWorld = vec3(aTile, aZ);
+  gl_Position = uViewProj * vec4(vWorld, 1.0);
+  vTile = aTile;
+  vExtra = aExtra;
+}
+)";
+
 const char* kTerrainFragment = R"(#version 330 core
 in vec2 vTile;
 in float vExtra;
+in vec3 vWorld;
+uniform sampler2DShadow uShadowMap;
+uniform mat4 uShadowMat;
+uniform float uShadowOn;
+uniform float uShadowDark;
 uniform sampler2DArray uLayers;
 uniform sampler2D uSplat0;
 uniform sampler2D uSplat1;
@@ -64,6 +91,7 @@ vec3 applyFog(vec3 col, float v) {
   vec3 dim = mix(vec3(dot(col, vec3(0.30, 0.59, 0.11))), col, 0.45) * 0.48;
   return v < 0.5 ? dim * smoothstep(0.0, 0.5, v) : mix(dim, col, smoothstep(0.5, 1.0, v));
 }
+)" SLAVE_SHADOW_GLSL R"(
 void main() {
   vec2 suv = vTile / uMapSize;
   vec4 s0 = texture(uSplat0, suv);
@@ -107,6 +135,7 @@ void main() {
   // The biome's light: cold winter blue, hot desert glare, drained ruins.
   col = mix(vec3(dot(col, vec3(0.30, 0.59, 0.11))), col, uSat) * uTint;
   col *= vExtra;  // slope lighting
+  if (uShadowOn > 0.5) col *= mix(uShadowDark, 1.0, sunShadow(uShadowMap, uShadowMat, vWorld));
   col = applyFog(col, texture(uFog, vTile / uMapSize).r);
   fragColor = vec4(col, 1.0);
 }
@@ -115,6 +144,7 @@ void main() {
 const char* kWaterFragment = R"(#version 330 core
 in vec2 vTile;
 in float vExtra;  // depth in height units (64 per tile)
+in vec3 vWorld;
 uniform sampler2D uMacro;
 uniform sampler2D uFog;
 uniform vec2 uMapSize;
@@ -150,6 +180,10 @@ void main() {
   alpha = mix(1.0, alpha, smoothstep(0.0, 0.5, fog));  // the shroud is opaque
   fragColor = vec4(col, alpha);
 }
+)";
+
+const char* kDepthFragment = R"(#version 330 core
+void main() {}
 )";
 
 // How each biome tints the ground and colours its water.
@@ -199,6 +233,7 @@ void setCameraUniforms(const gl::Shader& s, const Camera& cam, float depthMax) {
 struct TerrainRenderer::Chunk {
   int cx = 0, cy = 0;
   RectF bounds;
+  float zMin = 0, zMax = 0;  // heights in tiles (3D culling)
   GLuint vao = 0, vbo = 0;
   GLuint waterVao = 0, waterVbo = 0;
   GLsizei waterVerts = 0;
@@ -220,6 +255,9 @@ TerrainRenderer::~TerrainRenderer() {
 bool TerrainRenderer::init(std::string& error) {
   if (!terrainShader_.compile(kCommonVertex, kTerrainFragment, error)) return false;
   if (!waterShader_.compile(kCommonVertex, kWaterFragment, error)) return false;
+  if (!terrain3D_.compile(k3DVertex, kTerrainFragment, error)) return false;
+  if (!water3D_.compile(k3DVertex, kWaterFragment, error)) return false;
+  if (!depth3D_.compile(k3DVertex, kDepthFragment, error)) return false;
 
   const GroundTextureSet tex = makeGroundTextures(512);
   layers_.create(tex.layers);
@@ -393,6 +431,7 @@ void TerrainRenderer::buildChunk(Chunk& c) {
 
   std::vector<Vertex> verts(static_cast<size_t>(n) * n);
   RectF b{1e9f, 1e9f, -1e9f, -1e9f};
+  float zMin = 1e9f, zMax = -1e9f;
   auto hc = [&](int x, int y) {
     return static_cast<float>(m.corner(std::clamp(x, 0, m.width()), std::clamp(y, 0, m.height())));
   };
@@ -413,6 +452,8 @@ void TerrainRenderer::buildChunk(Chunk& c) {
       b.y0 = std::min(b.y0, s.y);
       b.x1 = std::max(b.x1, s.x);
       b.y1 = std::max(b.y1, s.y);
+      zMin = std::min(zMin, h / HEIGHT_UNITS_PER_TILE);
+      zMax = std::max(zMax, h / HEIGHT_UNITS_PER_TILE);
     }
   if (!c.vao) {
     glGenVertexArrays(1, &c.vao);
@@ -455,6 +496,8 @@ void TerrainRenderer::buildChunk(Chunk& c) {
                  GL_STATIC_DRAW);
   }
   c.bounds = b;
+  c.zMin = zMin;
+  c.zMax = std::max(zMax, wl / HEIGHT_UNITS_PER_TILE);
 }
 
 void TerrainRenderer::draw(const Camera& cam, float timeSeconds) {
@@ -479,6 +522,8 @@ void TerrainRenderer::draw(const Camera& cam, float timeSeconds) {
   const BiomeLight& light = biomeLight(map_->biome);
   glUniform3f(terrainShader_.uniform("uTint"), light.tint[0], light.tint[1], light.tint[2]);
   glUniform1f(terrainShader_.uniform("uSat"), light.saturation);
+  glUniform1i(terrainShader_.uniform("uShadowMap"), kShadowUnit);
+  glUniform1f(terrainShader_.uniform("uShadowOn"), 0.0f);
   layers_.bind(0);
   splat0_.bind(1);
   splat1_.bind(2);
@@ -519,6 +564,123 @@ void TerrainRenderer::draw(const Camera& cam, float timeSeconds) {
   glDisable(GL_DEPTH_TEST);
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+}
+
+namespace {
+// True when the box lies wholly outside one side of the view.
+bool outsideView(const Mat4& vp, float x0, float y0, float z0, float x1, float y1, float z1) {
+  int out[6] = {0, 0, 0, 0, 0, 0};
+  for (int i = 0; i < 8; ++i) {
+    const Vec4f c = vp * Vec4f{(i & 1) ? x1 : x0, (i & 2) ? y1 : y0, (i & 4) ? z1 : z0, 1.0f};
+    out[0] += c.x < -c.w;
+    out[1] += c.x > c.w;
+    out[2] += c.y < -c.w;
+    out[3] += c.y > c.w;
+    out[4] += c.z < -c.w;
+    out[5] += c.z > c.w;
+  }
+  for (int k : out)
+    if (k == 8) return true;
+  return false;
+}
+}  // namespace
+
+bool TerrainRenderer::chunkVisible(const Chunk& c, const Mat4& vp) const {
+  const float x0 = static_cast<float>(c.cx * kChunk), y0 = static_cast<float>(c.cy * kChunk);
+  return !outsideView(vp, x0, y0, c.zMin - 0.1f, x0 + kChunk, y0 + kChunk, c.zMax + 0.1f);
+}
+
+void TerrainRenderer::draw3D(const Camera& cam, float timeSeconds, const ShadowMap* shadow) {
+  drawn_ = 0;
+  if (!map_) return;
+  const Mat4& vp = cam.viewProj();
+
+  glEnable(GL_DEPTH_TEST);
+  glDepthFunc(GL_LESS);
+  glDepthMask(GL_TRUE);
+  glDisable(GL_BLEND);
+
+  terrain3D_.use();
+  glUniformMatrix4fv(terrain3D_.uniform("uViewProj"), 1, GL_FALSE, vp.m);
+  glUniform1i(terrain3D_.uniform("uLayers"), 0);
+  glUniform1i(terrain3D_.uniform("uSplat0"), 1);
+  glUniform1i(terrain3D_.uniform("uSplat1"), 2);
+  glUniform1i(terrain3D_.uniform("uMacro"), 3);
+  glUniform2f(terrain3D_.uniform("uMapSize"), static_cast<float>(map_->width()), static_cast<float>(map_->height()));
+  glUniform1f(terrain3D_.uniform("uTexScale"), kTexScale);
+  glUniform1i(terrain3D_.uniform("uFog"), 4);
+  const BiomeLight& light = biomeLight(map_->biome);
+  glUniform3f(terrain3D_.uniform("uTint"), light.tint[0], light.tint[1], light.tint[2]);
+  glUniform1f(terrain3D_.uniform("uSat"), light.saturation);
+  if (shadow) shadow->setUniforms(terrain3D_, kShadowUnit, true, 0.52f);
+  else {
+    glUniform1i(terrain3D_.uniform("uShadowMap"), kShadowUnit);
+    glUniform1f(terrain3D_.uniform("uShadowOn"), 0.0f);
+  }
+  layers_.bind(0);
+  splat0_.bind(1);
+  splat1_.bind(2);
+  macro_.bind(3);
+  fog_.bind(4);
+  for (const auto& c : chunks_) {
+    if (!chunkVisible(*c, vp)) continue;
+    glBindVertexArray(c->vao);
+    glDrawElements(GL_TRIANGLES, indexCount_, GL_UNSIGNED_SHORT, nullptr);
+    ++drawn_;
+  }
+  glBindVertexArray(0);
+}
+
+void TerrainRenderer::drawWater3D(const Camera& cam, float timeSeconds) {
+  if (!map_ || map_->waterLevel() == 0) return;
+  const Mat4& vp = cam.viewProj();
+  const BiomeLight& light = biomeLight(map_->biome);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  glDepthMask(GL_FALSE);
+  glDepthFunc(GL_LEQUAL);
+  water3D_.use();
+  glUniformMatrix4fv(water3D_.uniform("uViewProj"), 1, GL_FALSE, vp.m);
+  glUniform1i(water3D_.uniform("uMacro"), 0);
+  glUniform1f(water3D_.uniform("uTime"), timeSeconds);
+  glUniform1i(water3D_.uniform("uFog"), 1);
+  glUniform3f(water3D_.uniform("uShallow"), light.shallow[0], light.shallow[1], light.shallow[2]);
+  glUniform3f(water3D_.uniform("uDeep"), light.deep[0], light.deep[1], light.deep[2]);
+  glUniform1f(water3D_.uniform("uIce"), light.ice);
+  glUniform2f(water3D_.uniform("uMapSize"), static_cast<float>(map_->width()), static_cast<float>(map_->height()));
+  macro_.bind(0);
+  fog_.bind(1);
+  for (const auto& c : chunks_) {
+    if (!c->waterVerts || !chunkVisible(*c, vp)) continue;
+    glBindVertexArray(c->waterVao);
+    glDrawArrays(GL_TRIANGLES, 0, c->waterVerts);
+  }
+  glBindVertexArray(0);
+  glDepthMask(GL_TRUE);
+}
+
+void TerrainRenderer::drawDepth(const Mat4& vp) {
+  if (!map_) return;
+  depth3D_.use();
+  glUniformMatrix4fv(depth3D_.uniform("uViewProj"), 1, GL_FALSE, vp.m);
+  for (const auto& c : chunks_) {
+    if (!chunkVisible(*c, vp)) continue;
+    glBindVertexArray(c->vao);
+    glDrawElements(GL_TRIANGLES, indexCount_, GL_UNSIGNED_SHORT, nullptr);
+  }
+  glBindVertexArray(0);
+}
+
+void TerrainRenderer::heightRange(float& zMin, float& zMax) const {
+  zMin = 0;
+  zMax = 0;
+  bool first = true;
+  for (const auto& c : chunks_) {
+    zMin = first ? c->zMin : std::min(zMin, c->zMin);
+    zMax = first ? c->zMax : std::max(zMax, c->zMax);
+    first = false;
+  }
 }
 
 }  // namespace slave

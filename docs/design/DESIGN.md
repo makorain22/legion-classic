@@ -58,7 +58,9 @@ Blitzkrieg-like: slow, deadly, combined arms.
 Gritty and realistic, in the spirit of Blitzkrieg: painted, blended terrain
 with no visible grid; muted olive, brown and grey palette; soft shadows; fine,
 weathered units with camouflage and grime and no outlines; lasting battle
-damage (craters, scorch marks, wrecks, smoke). Five biomes: temperate,
+damage (craters, scorch marks, wrecks, smoke). Since 0.9.1 the battlefield is
+real 3D: the same voxel models drawn as meshes under a sun with shadows,
+seen from any angle (the classic baked-sprite view is still a setting). Five biomes: temperate,
 winter, desert, tropical, urban. Since Milestone 7, units and buildings are
 detailed voxel models baked with ambient occlusion, camouflage and grime (see
 `docs/ART_PIPELINE.md`); any sprite can be replaced by a PNG. Germany uses
@@ -139,9 +141,19 @@ recognition flash on vehicles and a roundel in the interface.
    - Twelve ready-made skirmish maps, one per landscape.
    **Roadmap after Milestone 9** (8 Nov 2026, small milestones by choice;
    tuning and debugging is always the last, new milestones go in before it):
-   - **9.1 3D renderer and free camera** – the voxel models drawn as real 3D
-     meshes with depth and shadows; a camera that turns to any angle, tilts
-     and zooms; everything ported from the isometric view.
+   - **9.1 3D renderer and free camera** (done, 0.9.1) – the voxel models
+     drawn as real 3D meshes with depth and shadows; a camera that turns to
+     any angle, tilts and zooms; everything ported from the isometric view.
+     How it works: the sprite baker remembers the voxel model behind every
+     sprite (`AtlasFrame::voxel`), so the 3D view draws the model wherever the
+     classic view would draw the sprite. Models are greedy-meshed on first use
+     (`voxel_mesh.cpp`) into one vertex buffer and drawn instanced
+     (`MeshRenderer`) with the baker's shading worked out in the shader. The
+     sun's shadow map is fitted to the ground in view each frame. In 3D the
+     camera's "screen-world" plane is the screen itself, so the 2D overlays
+     (bars, cards, brushes) are placed at projected points unchanged. Effects
+     live on the flat classic plane plus a height, so the same particles are
+     drawn in either view. The classic 2D view stays behind a setting.
    - **9.2 Terrain 2.0** – finer ground, cliffs and overhangs, ground that
      blends round buildings, roads and wrecks; buildings level their plot and
      blend into the slope; graded roads and proper banks; bridges only between

@@ -308,3 +308,40 @@ BakedSprite bakeVoxels(const VoxelModel& model, const VoxelPalette& pal, const B
 }
 
 }  // namespace slave
+
+namespace slave {
+
+VoxelSourcePtr VoxelSourceCache::get(const VoxelModel& model, const VoxelPalette& pal, const BakeOptions& opt) {
+  auto same = [&](const VoxelSource& s) {
+    if (s.voxelTiles != opt.voxelTiles || s.pivotX != opt.pivotX || s.pivotY != opt.pivotY || s.ao != opt.ao ||
+        s.grain != opt.grain)
+      return false;
+    const VoxelModel& m = s.model;
+    if (m.sizeX() != model.sizeX() || m.sizeY() != model.sizeY() || m.sizeZ() != model.sizeZ()) return false;
+    for (int z = 0; z < m.sizeZ(); ++z)
+      for (int y = 0; y < m.sizeY(); ++y)
+        for (int x = 0; x < m.sizeX(); ++x)
+          if (m.get(x, y, z) != model.get(x, y, z)) return false;
+    for (int i = 0; i < 256; ++i) {
+      const Rgba a = s.palette.color[static_cast<size_t>(i)], b = pal.color[static_cast<size_t>(i)];
+      if (a.r != b.r || a.g != b.g || a.b != b.b || s.palette.isTeam[static_cast<size_t>(i)] != pal.isTeam[static_cast<size_t>(i)] ||
+          s.palette.teamLevel[static_cast<size_t>(i)] != pal.teamLevel[static_cast<size_t>(i)])
+        return false;
+    }
+    return true;
+  };
+  if (last_ && same(*last_)) return last_;
+  auto s = std::make_shared<VoxelSource>();
+  s->model = model;
+  s->palette = pal;
+  s->voxelTiles = opt.voxelTiles;
+  s->pivotX = opt.pivotX;
+  s->pivotY = opt.pivotY;
+  s->ao = opt.ao;
+  s->grain = opt.grain;
+  s->castsShadow = true;
+  last_ = s;
+  return s;
+}
+
+}  // namespace slave

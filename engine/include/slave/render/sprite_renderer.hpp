@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "slave/assets/atlas.hpp"
+#include "slave/math/mat.hpp"
 #include "slave/render/camera.hpp"
 #include "slave/render/gl.hpp"
 
@@ -89,6 +90,43 @@ class SpriteRenderer {
   void rect(float x, float y, float w, float h, uint32_t color);
   void rectOutline(float x, float y, float w, float h, float thickness, uint32_t color);
 
+  // --- Sprites in the 3D world --------------------------------------------------
+  // Starts a pass of sprites placed in the 3D view: depth-tested against the
+  // ground and the models, without writing depth. Ends with flush() or the
+  // next begin call.
+  void begin3D(const Camera& cam);
+  bool in3D() const { return in3D_; }
+  // A sprite facing the camera, its anchor at a world point (tiles). One
+  // sprite pixel is `tilesPerPixel` tiles across (1/45.25 = the classic scale).
+  void billboard(int frameIndex, Vec3f at, float tilesPerPixel, uint32_t team = kWhite, uint32_t tint = kWhite);
+  // A strip of a sprite as a streak between two world points (tracers),
+  // `widthTiles` wide, facing the camera.
+  void streak(int frameIndex, Vec3f a, Vec3f b, float widthTiles, uint32_t tint);
+  // A ground sprite of the classic view (drawn in its 2:1 diamond) laid back
+  // flat onto the ground: each piece of a grid goes where its pixels lay on the
+  // ground in the classic view, at height(lx, ly) tiles. (lx, ly) = anchor, leptons.
+  template <class Height>
+  void decal(int frameIndex, float lx, float ly, uint32_t tint, uint32_t team, int grid, Height&& height) {
+    const AtlasFrame& f = frames_[static_cast<size_t>(frameIndex)];
+    const float du = (f.u1 - f.u0) / grid, dv = (f.v1 - f.v0) / grid;
+    const float cw = static_cast<float>(f.w) / grid, ch = static_cast<float>(f.h) / grid;
+    auto corner = [&](int i, int j) {
+      // Sprite pixel offset from the anchor -> ground offset in leptons.
+      const float px = i * cw - f.anchorX, py = j * ch - f.anchorY;
+      const float gx = lx + (px / 32.0f + py / 16.0f) * 128.0f, gy = ly + (py / 16.0f - px / 32.0f) * 128.0f;
+      return Vertex3{gx / 256.0f, gy / 256.0f, height(gx, gy), f.u0 + i * du, f.v0 + j * dv, tint, team};
+    };
+    for (int j = 0; j < grid; ++j)
+      for (int i = 0; i < grid; ++i) {
+        const Vertex3 a = corner(i, j), b = corner(i + 1, j), c = corner(i + 1, j + 1), d = corner(i, j + 1);
+        queue3D_.insert(queue3D_.end(), {a, b, c, a, c, d});
+      }
+  }
+  // A flat quad on the ground with explicit corners (selection rings, lines).
+  void groundQuad(int frameIndex, const Vec3f corners[4], uint32_t tint);
+  // A solid quad of colour between four world points.
+  void solidQuad(const Vec3f corners[4], uint32_t color);
+
   // Builds instances for a static buffer instead of drawing now.
   SpriteInstance makeInstance(int frameIndex, float x, float y, uint32_t team = kWhite) const;
   void drawStatic(const StaticSprites& s);
@@ -103,6 +141,19 @@ class SpriteRenderer {
   void setupInstanceVao(GLuint vao, GLuint instanceVbo) const;
 
  private:
+  struct Vertex3 {
+    float x, y, z, u, v;
+    uint32_t tint, team;
+  };
+  void flush3D();
+  gl::Shader shader3D_;
+  gl::Texture atlasSmooth_;  // the same atlas, filtered: sprites in 3D are scaled freely
+  GLuint vao3D_ = 0, vbo3D_ = 0;
+  size_t capacity3D_ = 0;
+  std::vector<Vertex3> queue3D_;
+  bool in3D_ = false;
+  Vec3f camRight_, camUp_;
+
   gl::Shader shader_;
   gl::Texture atlas_;
   std::vector<AtlasFrame> frames_;

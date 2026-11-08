@@ -16,6 +16,7 @@ enum class InputAction : uint8_t {
   AttackMove, Stop, Deploy, SelectAll, BindGroup, UnbindGroup,
   Pause, SpeedUp, SpeedDown, CentreSelection, NextSide, Menu,
   Help, Editor, Debug, Screenshot, ToggleInfo, Encyclopedia, Evacuate,
+  RotateLeft, RotateRight, TiltUp, TiltDown, ResetCamera,
   Count
 };
 constexpr int ACTION_COUNT = static_cast<int>(InputAction::Count);
@@ -43,6 +44,8 @@ struct Settings {
   bool showEnemyCards = true;  // cards over the other sides' units too (when seen)
   bool showChips = true;       // chips for enemies detected in the fog
   bool atmosphere = true;      // colour grading and a vignette over the battlefield
+  bool view3D = true;          // the 3D battlefield (false: the classic 2D sprite view)
+  bool shadows = true;         // 3D: the sun's shadows
   bool artPack = true;
   // Sound: 0..1 each.
   float volMaster = 0.85f, volEffects = 1.0f, volVoices = 0.9f, volMusic = 0.6f, volAmbience = 0.8f, volInterface = 0.8f;         // use content/art/blitzkrieg when present (takes effect on restart)
