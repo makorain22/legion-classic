@@ -13,9 +13,9 @@ battle and change anything, the rules included.
 > **Status: in development (0.9.0).** Milestones 1–9 are done: three armies,
 > skirmish against the computer, a tutorial and three short campaigns, sound
 > and an orchestral score, the Live Scenario Editor and the tools for making
-> mods. Next (9.1): a terrain and camera overhaul (shaped terrain, proper
-> bridges and fords, a camera that turns to all four sides); tuning, balance and
-> debugging come last (9.2). The game is built together
+> mods. Next: real 3D with a free camera (9.1), then terrain, intel, armour,
+> economy, AI, towns, campaigns and big scenarios in small milestones; tuning
+> and debugging always come last. The game is built together
 > with Claude (Anthropic's AI); see [How it is made](#how-it-is-made).
 
 ## Features

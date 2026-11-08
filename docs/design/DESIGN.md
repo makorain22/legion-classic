@@ -137,29 +137,42 @@ recognition flash on vehicles and a roundel in the interface.
      between missions; three missions each for Germany, the Soviet Union and
      Britain; progress kept per player.
    - Twelve ready-made skirmish maps, one per landscape.
-   **9.1 Terrain and camera overhaul** – next (decided 8 Nov 2026). The
-   terrain is good enough for beta play; this makes it a real one:
-   - terrain shaped by what stands on it: buildings level their plot and blend
-     into the slope, roads are graded, banks and valleys modelled properly;
-   - bridges only where both banks stand high, laid straight across the
-     river at bank level, the ground seamless at each end; fords stay
-     passable at half speed;
-   - movement that feels the ground (slopes, fords, rough going);
-   - terrain that hides what is behind it (hills in front of units), and a
-     more three-dimensional look;
-   - a camera that turns freely to look from any side.
-   Decided with the user: the world is drawn in real 3D (the existing voxel
-   models become GPU meshes instead of baked sprites), the camera rotates
-   freely, and terrain hides what is behind it, has cliffs and overhangs,
-   and blends round buildings, roads and wrecks. The simulation stays 2D
-   with heights. The edit list from playtests rides along (see the handoff).
-   **9.2 Tuning and debugging** – always the last milestone: new milestones
-   are inserted before it and it moves down. Playtest, balance the three
-   armies and the campaign missions (AI-vs-AI batches with `--ai-battle
-   --factions ... --speed 16`, win rates, cost and strength tables),
-   performance on the large maps and on older machines, bugs, and the
-   documentation (PLAYING, modding and editor guides). Packaging the game for
-   release (installer, 1.0) waits until the tuning and debugging are finished.
+   **Roadmap after Milestone 9** (8 Nov 2026, small milestones by choice;
+   tuning and debugging is always the last, new milestones go in before it):
+   - **9.1 3D renderer and free camera** – the voxel models drawn as real 3D
+     meshes with depth and shadows; a camera that turns to any angle, tilts
+     and zooms; everything ported from the isometric view.
+   - **9.2 Terrain 2.0** – finer ground, cliffs and overhangs, ground that
+     blends round buildings, roads and wrecks; buildings level their plot and
+     blend into the slope; graded roads and proper banks; bridges only between
+     high banks, straight and seamless; fords crossable at half speed;
+     movement that feels slopes, fords and rough ground.
+   - **9.3 Intel instead of fog** – the map is always visible, but enemy
+     units and buildings show only as cards until spotted (as in R.U.S.E.);
+     nearby cards merge into one stack; scouts see twice as far and fall back
+     on their own when the enemy gets close.
+   - **9.4 Armour and artillery** – lighter armour: mediums half a heavy's
+     health, lights a quarter, heavies lowered too; heavies fall to numbers or
+     tank destroyers; longer artillery range; reverse gear.
+   - **9.5 Formations** – reworked.
+   - **9.6 Economy** – rare logistics points far from the bases: capture one
+     and a logistics office sends three-truck convoys of money to your HQ
+     (office and trucks can be destroyed); Post Office (small income, cheap
+     levy infantry: Recruits, Volkssturm, Conscripts), Logistics Warehouse
+     (middling income, supply trucks, an aura that speeds friendly fire),
+     Strategic Fuel Depot (the most income, one per construction yard).
+   - **9.7 AI** – in free-for-all it presses the nearest enemy and raids the
+     others; it binds most of its army into battle groups; it plays the new
+     economy.
+   - **9.8 Towns and villages** – compact towns, buildings stitched together
+     into streets and blocks like European towns.
+   - **9.9–9.11 Campaigns** – many more missions for Germany, the Soviet Union
+     and Britain, varied in difficulty and scale.
+   - **9.12 Big scenarios** – large stand-alone battles inspired by great
+     battles and long operations, with many units.
+   - **9.13 Tuning and debugging** – always last: playtest, balance the armies
+     and missions, performance, bugs, documentation.
+   - Parked: air power (air strikes, an air force). Later: packaging and 1.0.
 
 ## Playtest backlog (31 Oct 2026, after Milestones 6–7)
 
