@@ -119,8 +119,8 @@ recognition flash on vehicles and a roundel in the interface.
    by id, art overrides, scenarios; load order with requirements; a mod picker
    on the main menu), a rules editor with live changes into the running battle
    (type and weapon numbers kept stable, deleted types kept hidden until the
-   next battle), a sprite studio (facings, animation, side colours, recolour,
-   anchors, export / import into a mod), saves and replays that record their
+   next battle), a sprite studio (removed in 0.9.1 with the move to 3D),
+   saves and replays that record their
    mods and a rules fingerprint. See docs/MODDING.md.
 9. **Britain, sound, tutorial, campaigns** – done (0.9.0):
    - Britain (`gbr`): 14 units, the base under British names, 11 new weapons,

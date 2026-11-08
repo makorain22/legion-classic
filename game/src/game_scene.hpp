@@ -35,7 +35,6 @@ class Menus;
 class GameAudio;
 class Encyclopedia;
 class RulesEditor;
-class SpriteStudio;
 
 // A skirmish as set up in the menu.
 struct SkirmishSetup {
@@ -97,7 +96,7 @@ struct SceneOptions {
   int showcaseWarm = 15 * 60 * 5;  // ticks to fast-forward first
   int showcaseSeconds = 60;               // > 0: random clicks and keys from a human seat (crash hunting)
   bool flowSelfTest = false;    // checks skirmish, save, load and replay through the real game
-  bool modsSelfTest = false;    // checks the rules editor, mods and sprite studio through the real game
+  bool modsSelfTest = false;    // checks the rules editor and mods through the real game
   std::string tool;             // open a creation tool at start: rules[:id] | sprites[:group] | mods
   std::string campaign;         // --campaign id[:mission]: open a campaign's missions, or a mission's briefing (1-based)
   std::string mission;          // --mission id:N: play mission N (1-based) of a campaign straight away
@@ -235,7 +234,6 @@ class GameScene final : public slave::Scene {
   // The model art a type would be drawn with (false: no such model).
   bool artFor(const slave::UnitTypeDef& t, slave::UnitArt& out) const;
   RulesEditor& rulesEditor() { return *rulesEditor_; }
-  SpriteStudio& spriteStudio() { return *spriteStudio_; }
   bool creationToolOpen() const;
 
   // --- Game flow (frontend.cpp) ------------------------------------------------
@@ -384,7 +382,6 @@ class GameScene final : public slave::Scene {
   std::string rulesHash_;
   bool rulesEditedLive_ = false;  // the battle runs on rules changed in it (saves note it)
   std::unique_ptr<RulesEditor> rulesEditor_;
-  std::unique_ptr<SpriteStudio> spriteStudio_;
 
   slave::App& app_;
   SceneOptions opt_;

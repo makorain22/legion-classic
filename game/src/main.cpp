@@ -21,7 +21,7 @@ void usage() {
   SLV_INFO("Options: --windowed WxH | --fullscreen | --map N | --seed N | --zoom 0.5|1|2 | --spawn N\n"
            "         --offscreen --frames N --screenshot out.png --demo --fixed-dt --no-help --debug\n"
            "         --dump-atlas atlas.png --editor --open map.lmap --editor-demo --live-demo\n"
-           "         --tool rules[:unit_id]|sprites[:units/tank@ger]|mods --mods-selftest\n"
+           "         --tool rules[:unit_id]|mods --mods-selftest\n"
            "         --menu --ai-battle --side N --biome temperate|winter|desert|tropical|urban --gallery --works-demo --town-demo --bridge-demo\n"
            "         --export-sprites DIR (write every sprite as PNG for repainting; see docs/ART_PIPELINE.md)\n"
            "         --import-blitzkrieg DATA (make the Blitzkrieg art pack from the game's Data folder)");

@@ -9,7 +9,6 @@
 #include "game_scene.hpp"
 #include "rules_editor.hpp"
 #include "slave/core/log.hpp"
-#include "sprite_studio.hpp"
 
 using namespace slave;
 
@@ -80,7 +79,6 @@ bool GameScene::setMods(const std::vector<std::string>& enabled, std::string& er
   saveSettings();
   if (!reloadArt(error)) return false;
   rulesEditor_->reset();
-  spriteStudio_->reset();
   toMainMenu();  // a fresh battle on the new rules behind the menu
   return true;
 }
@@ -178,7 +176,7 @@ bool GameScene::applyRules(const nlohmann::json (&docs)[kRuleFileCount], std::st
 }
 
 bool GameScene::creationToolOpen() const {
-  return (rulesEditor_ && rulesEditor_->isOpen()) || (spriteStudio_ && spriteStudio_->isOpen());
+  return rulesEditor_ && rulesEditor_->isOpen();
 }
 
 }  // namespace legion
@@ -187,7 +185,7 @@ namespace legion {
 
 // --mods-selftest: the creation tools through the real game. Edits rules live,
 // saves them as a mod, switches the mod on and off, checks saves refuse the
-// wrong mods, and saves a recolour from the sprite studio.
+// wrong mods.
 void GameScene::runModsSelfTest() {
   auto check = [&](bool ok, const std::string& what) {
     if (!ok) ++selfTestFailures_;
@@ -254,17 +252,6 @@ void GameScene::runModsSelfTest() {
     check(content_.modIds().size() == 2 && content_.modIds()[1] == modId, "the mod is in the load order");
     check(!loadGame(savesDir_ + "selftest_mods.lsav", err) && err.find("made with") != std::string::npos,
           "a save made without the mod is refused: " + err);
-  }
-  if (frame_ == 16) {
-    SpriteStudio& ss = *spriteStudio_;
-    ss.open();
-    ss.select("units/tank@ger");
-    ss.setRecolour(0, 0.25f, 1.35f);
-    check(ss.saveRecolour(modId, msg), "save a recolour: " + msg);
-    check(std::filesystem::exists(userModsDir() + modId + "/art/units/tank@ger/body_f00_a0.png"), "the recoloured frames are in the mod");
-    UnitArt a;
-    check(artFor(types_.get(types_.find("ger_medium_tank")), a), "the art is rebuilt with the override");
-    check(ss.exportSet(modId, msg), "export a set for painting: " + msg);
   }
   if (frame_ == 18) {
     check(setMods({}, err), "switch the mod off: " + err);

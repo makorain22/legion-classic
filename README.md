@@ -47,8 +47,7 @@ battle and change anything, the rules included.
 - **Live Scenario Editor (F2).** Sculpt terrain, place units for any side,
   call artillery, and write triggers and objectives while the battle runs.
 - **Creation tools and mods.** A rules editor changes any unit, building or
-  weapon and the battle follows as you type. A sprite studio recolours,
-  repaints and re-anchors any sprite. Save either as a mod and switch it on
+  weapon and the battle follows as you type. Save it as a mod and switch it on
   from the main menu.
 - **Saves and replays.** The simulation is deterministic, so a replay is just
   the list of orders given.
@@ -56,7 +55,7 @@ battle and change anything, the rules included.
 | | |
 | --- | --- |
 | ![A German base in winter](docs/images/winter-base.jpg) | ![The Live Scenario Editor](docs/images/live-editor.jpg) |
-| ![The rules editor over a running battle](docs/images/rules-editor.jpg) | ![The sprite studio](docs/images/sprite-studio.jpg) |
+| ![The rules editor over a running battle](docs/images/rules-editor.jpg) | |
 
 ## Play it
 
@@ -100,7 +99,7 @@ load, replay), `--editor-selftest` and `--mods-selftest`.
 | --- | --- |
 | `engine/` | Slave Engine: the deterministic simulation (`sim/`, `core/`, `ecs/`, `map/`) and presentation (`render/`, `assets/`, `platform/`) |
 | `game/` | The game itself: battle scene, sidebar, unit cards, menus, encyclopedia |
-| `editor/` | The Live Scenario Editor, the rules editor and the sprite studio |
+| `editor/` | The Live Scenario Editor and the rules editor |
 | `content/` | All game data: unit, building and weapon rules, scenarios, art overrides |
 | `mods/` | Mods that ship with the game (an example) |
 | `tests/` | Unit tests (doctest), including determinism, combat, maps and mods |

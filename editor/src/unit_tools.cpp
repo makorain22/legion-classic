@@ -9,7 +9,6 @@
 
 #include "editor.hpp"
 #include "rules_editor.hpp"
-#include "sprite_studio.hpp"
 #include "game_scene.hpp"
 #include "slave/core/rng.hpp"
 #include "slave/math/iso.hpp"
@@ -907,11 +906,8 @@ void Editor::drawSidesTab() {
 void Editor::drawBattleTab() {
   Map& m = scene_.map();
   ImGui::SeparatorText("Creation tools");
-  const float half = (kPanelWidth - 26) * 0.5f;
-  if (ImGui::Button("Rules editor", ImVec2(half, 0))) scene_.rulesEditor().open();
+  if (ImGui::Button("Rules editor", ImVec2(-1, 0))) scene_.rulesEditor().open();
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Change units, buildings and weapons; the battle follows as you type.");
-  ImGui::SameLine();
-  if (ImGui::Button("Sprite studio", ImVec2(half, 0))) scene_.spriteStudio().open();
   ImGui::SeparatorText("Scenario");
   ImGui::SetNextItemWidth(-1);
   ImGui::InputTextWithHint("##name", "Scenario name", &m.name);

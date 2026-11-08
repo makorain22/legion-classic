@@ -70,6 +70,9 @@
   battlefield, or `--classic`. `--yaw` and `--pitch` (degrees) start the 3D
   view at an angle, for screenshots.
 - Replays: reveal the map with **V** (R now turns the view).
+- **The sprite studio is removed** (for now): play no longer uses the baked
+  sprites. Sprite overrides in mods still load for the classic view and the
+  sidebar pictures; `--export-sprites` still works.
 
 ## 0.9.0 – Milestone 9: Britain, sound, tutorial, campaigns (7 Nov 2026)
 

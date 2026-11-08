@@ -423,11 +423,7 @@ the two creation tools:
   second against each armour, speed, health per supply). Changes go into the
   battle behind the menu, or the one you are playing, as you type. **Save to
   mod** keeps them as a mod.
-- **Sprite studio**: every sprite from every side and facing, animated, in any
-  side's colours; recolour a whole set, nudge where it stands, export it for
-  painting or import your own PNGs into a mod.
-
-Both are also on the editor's **Battle** tab (F2). A mod is a folder of rule
+The rules editor is also on the editor's **Battle** tab (F2). A mod is a folder of rule
 changes, sprites and scenarios; the game ships with a small example,
 *Veteran Grenadiers*. Saved games remember their mods. Everything about making
 mods is in [MODDING.md](MODDING.md).
@@ -499,7 +495,7 @@ of it (Tab also cycles through the sides).
 
 ### Battle tab
 
-- **Creation tools**: the rules editor and the sprite studio (see
+- **Creation tools**: the rules editor (see
   [MODDING.md](MODDING.md)); rule changes take effect in this battle at once.
 - **Scenario**: name, author and a briefing / description saved with the map.
 - **Time**: pause and game speed.
@@ -581,8 +577,8 @@ manned by every kind of infantry), `--town-demo` (every civilian building), `--b
 (with `--ai-battle --layout 0`: a column crossing a bridge), `--org-demo` (a platoon, an armoured platoon, a held building and
 fog chips), `--export-sprites folder` (write every sprite as a PNG for
 repainting; see [ART_PIPELINE.md](ART_PIPELINE.md)), `--tool rules:ger_medium_tank`,
-`--tool sprites:units/tank@ger` or `--tool mods` (open a creation tool at start),
-`--mods-selftest` (checks the rules editor, mods and sprite studio through the
+or `--tool mods` (open a creation tool at start),
+`--mods-selftest` (checks the rules editor and mods through the
 real game), `--no-sound`, `--campaign gbr` or `--campaign gbr:2` (open a
 campaign, or a mission's briefing), `--mission tutorial:1` (play a mission
 straight away).

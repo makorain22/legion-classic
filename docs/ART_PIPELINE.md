@@ -60,8 +60,9 @@ effects, decals).
 
 3. **Drop them into** `content/art/`, in the same folder layout, next to the
    exe, or better, into a mod's `art/` folder, so they can be switched off
-   again (see [MODDING.md](MODDING.md); the sprite studio exports straight
-   into a mod). Copy the matching entries of `sprites.json` too if you changed a
+   again (see [MODDING.md](MODDING.md)). Since 0.9.1 repainted sprites
+   show in the classic 2D view and on the sidebar; the 3D view draws the voxel
+   models. Copy the matching entries of `sprites.json` too if you changed a
    sprite's size or want to move its anchor. The next start uses your files;
    the log says how many were replaced. Anything you don't supply keeps the
    generated art.

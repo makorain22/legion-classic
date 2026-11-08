@@ -1,7 +1,6 @@
 #include "menus.hpp"
 #include "ui_style.hpp"
 #include "rules_editor.hpp"
-#include "sprite_studio.hpp"
 #include "game_audio.hpp"
 
 #include <imgui.h>
@@ -311,9 +310,6 @@ void Menus::drawMods() {
   ImGui::SameLine();
   ImGui::TextWrapped("Units, buildings, weapons and armour: change any number, see it in the battle behind, "
                      "save it as a mod.");
-  if (menuButton("Sprite studio", 200)) scene_.spriteStudio().open();
-  ImGui::SameLine();
-  ImGui::TextWrapped("Look at every sprite from every side, repaint or recolour it, export it for painting.");
   ImGui::Dummy(ImVec2(0, 4));
   backButton();
   ImGui::End();

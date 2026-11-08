@@ -6,7 +6,7 @@ data. The game itself is never edited; mods sit on top of it and can be
 switched on and off from the main menu.
 
 You can make mods with the two **creation tools** in the game (the rules
-editor and the sprite studio) or by hand with any text editor and paint
+editor) or by hand with any text editor and paint
 program. Both make the same files.
 
 ## Where mods live
@@ -137,36 +137,13 @@ Open it from **Mods and creation tools**, or from the Live Scenario Editor
 * **Undo all changes** goes back to the rules as they were when you opened the
   editor.
 
-## The sprite studio
+## Sprites (the classic view)
 
-Open it from **Mods and creation tools** or the editor's Battle tab.
-
-* **Browse** every sprite set on the left: each unit and building per side
-  (and per climate, where the art has winter or desert paint), then props,
-  effects, ground decals and sidebar icons.
-* **Unit view**: turn it through its 16 facings (**Turn** spins it), step or
-  **Play** its animation, see a soldier **Fallen**, in any side's colour, on
-  grass, snow, sand, dark or a checkerboard, at 1× to 6×. The yellow cross is
-  the anchor: the point that stands on the unit's position.
-* **Whole sheet** shows every frame of the set; hover a frame for its file
-  name, size and anchor, click it to look at it closely.
-* **Recolour**: hue, saturation and brightness for the whole set, with
-  *Winter whitewash* and *Desert sand* to start from. Side colours are never
-  changed.
-* **Ground anchor**: nudge the set up, down and sideways, if it floats or sinks.
-* **Save recolour and anchor** writes the set, recoloured and moved, into the
-  chosen mod's `art\` folder and rebuilds the art.
-* **Export for painting** writes the set as PNG files into the mod's `art\`
-  folder (with `sprites.json`). Paint over them in any program, keeping the
-  names, then press **Reload art**.
-* **Import a PNG for this frame…** puts a picture of your own in place of the
-  frame on show.
-
-Art only shows in the game while its mod is enabled. Team colour in PNG files
-and anchors work as described in [ART_PIPELINE.md](ART_PIPELINE.md).
-
-Sprites from the Blitzkrieg art pack are licensed for personal, non-commercial
-use: keep mods made from them to yourself.
+The sprite studio was removed in 0.9.1: the battle is now drawn in 3D from the
+voxel models, so a repainted sprite only shows in the classic 2D view and on
+the sidebar's pictures. Sprite overrides in a mod's `art/` folder still load
+(see [ART_PIPELINE.md](ART_PIPELINE.md)), and `--export-sprites` still writes
+the sprites out for painting.
 
 ## Saves, replays and mods
 

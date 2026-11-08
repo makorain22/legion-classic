@@ -21,7 +21,6 @@
 #include "editor.hpp"
 #include "menus.hpp"
 #include "rules_editor.hpp"
-#include "sprite_studio.hpp"
 #include "slave/core/log.hpp"
 #include "slave/core/rng.hpp"
 #include "slave/math/iso.hpp"
@@ -141,7 +140,6 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
   menus_ = std::make_unique<Menus>(*this);
   encyclopedia_ = std::make_unique<Encyclopedia>(*this);
   rulesEditor_ = std::make_unique<RulesEditor>(*this);
-  spriteStudio_ = std::make_unique<SpriteStudio>(*this);
 
   cam_.setViewport(app_.pixelWidth(), app_.pixelHeight());
   cam_.set3D(settings_.view3D && !opt_.classic);
@@ -216,9 +214,6 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
       rulesEditor_->open();
       if (!arg.empty()) rulesEditor_->select(types_.find(arg) >= 0 && types_.get(types_.find(arg)).isStructure() ? RulesEditor::Buildings
                                              : types_.find(arg) >= 0 ? RulesEditor::Units : RulesEditor::Weapons, arg);
-    } else if (which == "sprites") {
-      spriteStudio_->open();
-      if (!arg.empty()) spriteStudio_->select(arg);
     } else if (which == "mods") {
       menus_->showMods();
     }
@@ -2279,7 +2274,6 @@ void GameScene::onImGui() {
     menus_->draw();
     encyclopedia_->draw();
     rulesEditor_->draw();
-    spriteStudio_->draw();
     return;
   }
   showCards_ = settings_.showCards;
@@ -2310,7 +2304,6 @@ void GameScene::onImGui() {
   }
   encyclopedia_->draw();
   rulesEditor_->draw();
-  spriteStudio_->draw();
   menus_->draw();
   if (bannerTime_ > 0 && !banner_.empty()) {
     const ImGuiIO& io = ImGui::GetIO();
