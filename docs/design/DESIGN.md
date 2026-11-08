@@ -137,7 +137,20 @@ recognition flash on vehicles and a roundel in the interface.
      between missions; three missions each for Germany, the Soviet Union and
      Britain; progress kept per player.
    - Twelve ready-made skirmish maps, one per landscape.
-   **9.1 Tuning and debugging** – next: playtest Milestone 9, balance the three
+   **9.1 Terrain and camera overhaul** – next (decided 8 Nov 2026). The
+   terrain is good enough for beta play; this makes it a real one:
+   - terrain shaped by what stands on it: buildings level their plot and blend
+     into the slope, roads are graded, banks and valleys modelled properly;
+   - bridges only where both banks stand high, laid straight across the
+     river at bank level, the ground seamless at each end; fords stay
+     passable at half speed;
+   - movement that feels the ground (slopes, fords, rough going);
+   - terrain that hides what is behind it (hills in front of units), and a
+     more three-dimensional look;
+   - a camera that turns to look from all four sides, as in Stronghold.
+   The edit list from playtests rides along (see the handoff).
+   **9.2 Tuning and debugging** – always the last milestone: new milestones
+   are inserted before it and it moves down. Playtest, balance the three
    armies and the campaign missions (AI-vs-AI batches with `--ai-battle
    --factions ... --speed 16`, win rates, cost and strength tables),
    performance on the large maps and on older machines, bugs, and the

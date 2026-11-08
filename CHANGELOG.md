@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.9.1 – in progress (Milestone 9.1: tuning and debugging)
+## 0.9.1 – in progress (edits after Milestone 9; Milestone 9.1: terrain and camera overhaul)
 
 - **Fixed a crash** in skirmish (seen in a 1v1v1 at high game speed, and
   probably the old "2v2 crash after five minutes"): a man killed inside a
