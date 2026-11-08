@@ -147,8 +147,12 @@ recognition flash on vehicles and a roundel in the interface.
    - movement that feels the ground (slopes, fords, rough going);
    - terrain that hides what is behind it (hills in front of units), and a
      more three-dimensional look;
-   - a camera that turns to look from all four sides, as in Stronghold.
-   The edit list from playtests rides along (see the handoff).
+   - a camera that turns freely to look from any side.
+   Decided with the user: the world is drawn in real 3D (the existing voxel
+   models become GPU meshes instead of baked sprites), the camera rotates
+   freely, and terrain hides what is behind it, has cliffs and overhangs,
+   and blends round buildings, roads and wrecks. The simulation stays 2D
+   with heights. The edit list from playtests rides along (see the handoff).
    **9.2 Tuning and debugging** – always the last milestone: new milestones
    are inserted before it and it moves down. Playtest, balance the three
    armies and the campaign missions (AI-vs-AI batches with `--ai-battle
