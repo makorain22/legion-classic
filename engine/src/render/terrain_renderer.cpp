@@ -249,6 +249,8 @@ struct TerrainRenderer::Chunk {
 TerrainRenderer::TerrainRenderer() = default;
 TerrainRenderer::~TerrainRenderer() {
   chunks_.clear();
+  if (skirtVbo_) glDeleteBuffers(1, &skirtVbo_);
+  if (skirtVao_) glDeleteVertexArrays(1, &skirtVao_);
   if (indexBuffer_) glDeleteBuffers(1, &indexBuffer_);
 }
 
@@ -416,7 +418,47 @@ void TerrainRenderer::update() {
   if (any) {
     const float maxZ = std::max<float>(map_->maxHeight(), map_->waterLevel()) / HEIGHT_UNITS_PER_TILE;
     depthMax_ = (map_->width() + map_->height()) * 0.6124f + maxZ * 0.5f + 4.0f;
+    buildSkirt();
   }
+}
+
+// The 3D view can look past the edge of the map: the ground carries on, flat
+// at the height of the edge, wearing the edge's ground textures (the splat and
+// fog lookups clamp there).
+void TerrainRenderer::buildSkirt() {
+  const Map& m = *map_;
+  const int W = m.width(), H = m.height();
+  constexpr float kReach = 160.0f;
+  auto hc = [&](int x, int y) {
+    return std::max<float>(m.corner(std::clamp(x, 0, W), std::clamp(y, 0, H)), m.waterLevel()) / HEIGHT_UNITS_PER_TILE;
+  };
+  std::vector<Vertex> v;
+  auto vert = [&](float x, float y, float z) { return Vertex{0, 0, x, y, z, 0.92f}; };
+  auto quad = [&](Vertex a, Vertex b, Vertex c, Vertex d) { v.insert(v.end(), {a, b, c, a, c, d}); };
+  for (int x = 0; x < W; ++x) {  // north (y = 0) and south (y = H) edges
+    quad(vert(x, 0, hc(x, 0)), vert(x + 1, 0, hc(x + 1, 0)), vert(x + 1, -kReach, hc(x + 1, 0)), vert(x, -kReach, hc(x, 0)));
+    quad(vert(x, H, hc(x, H)), vert(x + 1, H, hc(x + 1, H)), vert(x + 1, H + kReach, hc(x + 1, H)), vert(x, H + kReach, hc(x, H)));
+  }
+  for (int y = 0; y < H; ++y) {  // west and east
+    quad(vert(0, y, hc(0, y)), vert(0, y + 1, hc(0, y + 1)), vert(-kReach, y + 1, hc(0, y + 1)), vert(-kReach, y, hc(0, y)));
+    quad(vert(W, y, hc(W, y)), vert(W, y + 1, hc(W, y + 1)), vert(W + kReach, y + 1, hc(W, y + 1)), vert(W + kReach, y, hc(W, y)));
+  }
+  // The four corners.
+  const float corners[4][4] = {{0, 0, -1, -1}, {static_cast<float>(W), 0, 1, -1}, {0, static_cast<float>(H), -1, 1},
+                               {static_cast<float>(W), static_cast<float>(H), 1, 1}};
+  for (const auto& c : corners) {
+    const float z = hc(static_cast<int>(c[0]), static_cast<int>(c[1]));
+    quad(vert(c[0], c[1], z), vert(c[0] + c[2] * kReach, c[1], z), vert(c[0] + c[2] * kReach, c[1] + c[3] * kReach, z),
+         vert(c[0], c[1] + c[3] * kReach, z));
+  }
+  if (!skirtVao_) {
+    glGenVertexArrays(1, &skirtVao_);
+    glGenBuffers(1, &skirtVbo_);
+    setupVao(skirtVao_, skirtVbo_, 0);
+  }
+  glBindBuffer(GL_ARRAY_BUFFER, skirtVbo_);
+  glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(v.size() * sizeof(Vertex)), v.data(), GL_STATIC_DRAW);
+  skirtVerts_ = static_cast<GLsizei>(v.size());
 }
 
 void TerrainRenderer::buildChunk(Chunk& c) {
@@ -627,6 +669,10 @@ void TerrainRenderer::draw3D(const Camera& cam, float timeSeconds, const ShadowM
     glBindVertexArray(c->vao);
     glDrawElements(GL_TRIANGLES, indexCount_, GL_UNSIGNED_SHORT, nullptr);
     ++drawn_;
+  }
+  if (skirtVerts_) {
+    glBindVertexArray(skirtVao_);
+    glDrawArrays(GL_TRIANGLES, 0, skirtVerts_);
   }
   glBindVertexArray(0);
 }

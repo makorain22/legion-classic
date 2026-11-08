@@ -62,6 +62,9 @@ class TerrainRenderer {
   struct Chunk;
   void buildChunk(Chunk& c);
   bool chunkVisible(const Chunk& c, const Mat4& viewProj) const;
+  void buildSkirt();
+  GLuint skirtVao_ = 0, skirtVbo_ = 0;
+  GLsizei skirtVerts_ = 0;
   void uploadSplat(int sx0, int sy0, int sx1, int sy1);
 
   const Map* map_ = nullptr;

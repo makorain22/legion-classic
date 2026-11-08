@@ -59,6 +59,10 @@
   on the screen.
 - Picking works by casting a ray from the mouse to the ground; the minimap
   shows the ground the camera sees.
+- The ground carries on past the edge of the map, so a low view never looks
+  into a void. Far-off models use coarser meshes (a quarter and a sixteenth
+  of the triangles), ground textures are filtered for low angles, and edges
+  are smoothed with 4x multisampling where the driver offers it.
 - Placement ghosts (sidebar and Live Scenario Editor) are see-through models.
 - Saves keep where the camera looks and how it is turned (older saves still
   load). The menu's battle slowly circles the field.

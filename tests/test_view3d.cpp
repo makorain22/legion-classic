@@ -177,11 +177,11 @@ TEST_CASE("Voxel sources: a unit's facings share one model") {
   const VoxelSourcePtr s1 = cache.get(a, pal, o);
   o.yawRadians = 1.0f;  // a different facing: the same source
   const VoxelSourcePtr s2 = cache.get(a, pal, o);
-  CHECK(s1 == s2);
+  CHECK(s1.get() == s2.get());
   const VoxelSourcePtr s3 = cache.get(b, pal, o);
-  CHECK(s3 != s2);
+  CHECK(s3.get() != s2.get());
   o.pivotX = 3;  // placed differently: a new one
-  CHECK(cache.get(b, pal, o) != s3);
+  CHECK(cache.get(b, pal, o).get() != s3.get());
 }
 
 TEST_CASE("Voxel meshes: the far-off level keeps the shape and thin parts") {

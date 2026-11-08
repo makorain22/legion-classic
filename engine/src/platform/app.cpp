@@ -69,13 +69,23 @@ bool App::init(const AppConfig& cfg) {
 
   SDL_WindowFlags flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
   if (cfg.fullscreen) flags |= SDL_WINDOW_FULLSCREEN;
-  window_ = SDL_CreateWindow(cfg.title.c_str(), cfg.width, cfg.height, flags);
+  // 4x multisampling smooths the edges of the 3D models; without it if the
+  // driver can't.
+  for (int samples : {4, 0}) {
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, samples > 0 ? 1 : 0);
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, samples);
+    window_ = SDL_CreateWindow(cfg.title.c_str(), cfg.width, cfg.height, flags);
+    if (!window_) continue;
+    gl_ = SDL_GL_CreateContext(window_);
+    if (gl_ || samples == 0) break;
+    SDL_DestroyWindow(window_);
+    window_ = nullptr;
+  }
   if (!window_) {
     SLV_ERROR("SDL_CreateWindow failed: %s", SDL_GetError());
     return false;
   }
   fullscreen_ = cfg.fullscreen;
-  gl_ = SDL_GL_CreateContext(window_);
   if (!gl_) {
     SLV_ERROR("Could not create an OpenGL 3.3 context: %s", SDL_GetError());
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Legion Classic",
