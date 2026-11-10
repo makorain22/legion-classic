@@ -272,7 +272,7 @@ void Sidebar::rebuildMinimap() {
     terrainRevision_ = m.revision();
   }
   minimapPixels_ = terrainColors_;
-  // Fog: what the commanded side hasn't seen is black, what it can't see now is dim.
+  // Intel (9.3): the ground is all known; the enemy only where our side sees it.
   const bool fog = scene_.fogEnabled();
   auto toPixel = [&](int32_t lx, int32_t ly, int& px, int& py) {
     const float tx = lx / 256.0f, ty = ly / 256.0f;
@@ -280,18 +280,6 @@ void Sidebar::rebuildMinimap() {
     py = static_cast<int>((tx + ty) / (W + H) * mh);
     return px >= 0 && py >= 0 && px < mw && py < mh;
   };
-  if (fog) {
-    for (int py = 0; py < mh; ++py)
-      for (int px = 0; px < mw; ++px) {
-        const float sx = (px + 0.5f) / mw * (W + H) - H, sy = (py + 0.5f) / mh * (W + H);
-        const int tx = static_cast<int>(std::floor((sx + sy) * 0.5f)), ty = static_cast<int>(std::floor((sy - sx) * 0.5f));
-        if (!m.inBounds(tx, ty)) continue;
-        const uint8_t f = scene_.terrain().fogAt(tx, ty);
-        uint32_t& c = minimapPixels_[static_cast<size_t>(py) * mw + px];
-        if (f == 0) c = 0xFF000000u;
-        else if (f < 200) c = shade(c, 0.45f + 0.3f * f / 200.0f);
-      }
-  }
   // Units and structures.
   Registry& reg = scene_.sim().registry();
   const uint8_t me = scene_.player();
@@ -301,8 +289,10 @@ void Sidebar::rebuildMinimap() {
     const CUnit& u = units.data()[i];
     const CPosition& p = reg.pool<CPosition>().get(e);
     const bool mine = scene_.sim().allied(u.owner, me);
-    if (fog && !mine && !scene_.sim().vision().visible(me, p.x >> LEPTON_SHIFT, p.y >> LEPTON_SHIFT)) continue;
     const UnitTypeDef& d = scene_.types().get(u.type);
+    if (fog && !mine &&
+        (d.isStructure() ? !scene_.structureKnown(e) : !scene_.sim().vision().visible(me, p.x >> LEPTON_SHIFT, p.y >> LEPTON_SHIFT)))
+      continue;
     if (d.category == UnitCategory::Fortification) continue;
     int px, py;
     if (!toPixel(p.x, p.y, px, py)) continue;

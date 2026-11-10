@@ -75,6 +75,7 @@ int main(int argc, char** argv) {
     else if (a == "--zoom") opt.zoom = static_cast<float>(std::atof(next()));
     else if (a == "--classic") opt.classic = true;
     else if (a == "--no-shadows") opt.noShadows = true;
+    else if (a == "--intel") opt.intel = true;
     else if (a == "--yaw") opt.yaw = static_cast<float>(std::atof(next()));
     else if (a == "--pitch") opt.pitch = static_cast<float>(std::atof(next()));
     else if (a == "--spawn") opt.stressUnits = std::atoi(next());
@@ -93,6 +94,7 @@ int main(int argc, char** argv) {
     else if (a == "--works-demo") opt.worksDemo = true;
     else if (a == "--town-demo") opt.townDemo = 1;
     else if (a == "--bridge-demo") opt.townDemo = 2;
+    else if (a == "--cliff-demo") opt.townDemo = 3;
     else if (a == "--export-sprites") opt.exportSprites = next();
     else if (a == "--import-blitzkrieg") importDir = next();
     else if (a == "--no-art-pack") opt.noArtPack = true;

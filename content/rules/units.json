@@ -1,5 +1,5 @@
 {
-  "_comment": "Unit types. speed: leptons per tick (256 leptons = 1 tile, 15 ticks = 1 second). turnTicks: ticks per 1/16 turn (0 = instant). sight in tiles. armor: infantry, light, medium, heavy or structure. cost in supplies; buildTime in seconds at full power; builtAt: the structure role that makes it (barracks, factory); requires: structures the side must own first. capacity: oil a supply truck carries. deploysTo: the structure a construction truck unfolds into. repair: hit points per tick an engineer restores to a friendly structure. nato: the symbol on unit cards and chips (infantry, mg, antitank, engineer, sniper, recon, mech, armour, antitank_armour, artillery, hq).",
+  "_comment": "Unit types. speed: leptons per tick (256 leptons = 1 tile, 15 ticks = 1 second). turnTicks: ticks per 1/16 turn (0 = instant). sight in tiles. armor: infantry, light, medium, heavy or structure. cost in supplies; buildTime in seconds at full power; builtAt: the structure role that makes it (barracks, factory); requires: structures the side must own first. capacity: oil a supply truck carries. deploysTo: the structure a construction truck unfolds into. repair: hit points per tick an engineer restores to a friendly structure. nato: the symbol on unit cards and chips (infantry, mg, antitank, engineer, sniper, recon, mech, armour, antitank_armour, artillery, hq); recon units are scouts: they fall back by themselves when an enemy comes close.",
   "units": [
     {
       "id": "ger_rifleman",
@@ -139,7 +139,7 @@
       "animTicks": 1,
       "health": 160,
       "armor": "light",
-      "sight": 12,
+      "sight": 24,
       "weapons": [
         "mg_light"
       ],
@@ -492,7 +492,7 @@
       "animTicks": 1,
       "health": 150,
       "armor": "light",
-      "sight": 11,
+      "sight": 22,
       "weapons": [
         "mg_light"
       ],
@@ -845,7 +845,7 @@
       "animTicks": 1,
       "health": 150,
       "armor": "light",
-      "sight": 12,
+      "sight": 24,
       "weapons": [
         "mg_light"
       ],

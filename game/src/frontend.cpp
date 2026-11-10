@@ -201,8 +201,9 @@ void GameScene::startSkirmish(const SkirmishSetup& s) {
       }
       for (int i = 0; i < 4; ++i) starts[static_cast<size_t>(i)] = fixed[order[static_cast<size_t>(i)]];
     }
-    // Keep villages out of the bases.
+    // Keep villages out of the bases (bridges stay whole: half a bridge is no use).
     std::erase_if(f.map.lots, [&](const Map::Lot& l) {
+      if (l.kind == Map::kBridgeLot || l.kind == Map::kWoodBridgeLot) return false;
       for (int i = 0; i < 4; ++i)
         if (s.sides[static_cast<size_t>(i)].open && std::abs(l.tx - starts[static_cast<size_t>(i)].x) < 16 &&
             std::abs(l.ty - starts[static_cast<size_t>(i)].y) < 16)
@@ -238,7 +239,7 @@ void GameScene::startSkirmish(const SkirmishSetup& s) {
   // Nobody human: watch the computers fight.
   bool anyHuman = false;
   for (uint8_t i = 0; i < 4; ++i) anyHuman = anyHuman || (players_[i].active && players_[i].human);
-  revealMap_ = !anyHuman;
+  revealMap_ = !anyHuman && !opt_.intel;  // --intel: watch with the viewing side's intel
   beginRecording();
   showStatus("Good luck, commander.", 3);
 }

@@ -70,6 +70,66 @@
   battlefield, or `--classic`. `--yaw` and `--pitch` (degrees) start the 3D
   view at an angle, for screenshots.
 - Replays: reveal the map with **V** (R now turns the view).
+### Milestone 9.2: terrain 2.0
+
+- **Ground sets the pace.** Every tile has a speed for foot, wheels and
+  tracks: slopes slow everything (down to 65% at the steepest climb), mud
+  bogs wheels down (60%) and slows tracks and men, sand and snow slow
+  vehicles, and **fords and wading are half speed** while staying open to
+  everything. Bridges and roads are full speed. Paths weigh it: a truck goes
+  round a mud field by the road when that is quicker, and shortcuts never cut
+  back across slower ground.
+- **Smooth ground:** the 3D ground is a smooth surface through the height
+  corners, drawn at twice the old resolution, with soft normals; units,
+  decals and picking all stand on the same surface.
+- **Cliffs and overhangs:** ground too steep to climb is covered in voxel
+  rock, banded stone with a turf, snow, sand or moss cap on the crest and
+  ledges jutting out over the face below. Ridge and Hill country maps get
+  escarpments: hillsides stepping up in terraces with rock faces between
+  (never across a road).
+- **Ground blends round things:** earth, grass, snow or sand creeps up the
+  foot of buildings, wrecks, trees and rocks in a ragged line.
+- **Building plots are levelled:** a new building flattens its plot and the
+  ground round it eases into the slope (at most 14 height units per tile).
+  Buildings may now go on slightly steeper ground (30).
+- **Graded roads:** road beds are smoothed along their length, shoulders
+  eased in.
+- **River banks:** rivers sit in a cut, a short steep bank out of the water
+  and the valley above it; the bank is cut away where a road comes down to a
+  ford.
+- **Bridges (playtest edit 1):** only where both banks stand well above the
+  water, laid straight across square to the map beside the ford, the deck at
+  the higher bank's height and both ends set level into the banks with a
+  stretch of road on. Bridges near a base are no longer cut in half.
+- All bundled maps (skirmish, campaigns, tutorial, Kalach) are rebuilt with
+  the new ground. Replays from before 9.2 no longer play back the same.
+- `--cliff-demo` puts the camera on the most rock on the map.
+
+### Milestone 9.3: intel instead of fog
+
+- **No more fog of war.** The whole map is always in view: ground, woods,
+  villages, the lie of the land. What you don't see is the enemy.
+- **Intel chips (playtest edit 6, as in R.U.S.E.):** enemy forces out of
+  sight of all your units show as counters standing roughly where they are,
+  sized by roughly how many (few, some, many, a host). Within twice a unit's
+  sight a chip also shows the kind of force (its NATO symbol); further off it
+  is just a "?". Enemy buildings show as square counters until one of your
+  units has had them in sight; after that they stay on the map, dimmed while
+  out of sight, and on the minimap. Far chips are drawn smaller in 3D.
+- **Card stacks (playtest edit 3):** unit cards close together on screen
+  merge into one stack card ("5 units") with the cards behind it peeking out.
+  Hover or select a stack and it opens into a list of the cards in it;
+  clicking the stack selects all of them.
+- **Scouts (playtest edit 11):** scout cars see about twice as far as other
+  units (22 to 24 tiles). A scout standing watch that sees an armed enemy come
+  within 6 tiles falls back 5 tiles straight away from it and keeps watching
+  from there: no shooting match, and it doesn't leave the area. Orders you
+  give it are never overridden. A status note says when one falls back.
+- The editor shows everything; *Show what the player's side would know* on
+  the Battle tab shows the intel view. Saves rebuild what each side has seen
+  from its explored ground. `--intel` watches an `--ai-battle` with the
+  first side's intel instead of seeing everything.
+
 - **The sprite studio is removed** (for now): play no longer uses the baked
   sprites. Sprite overrides in mods still load for the classic view and the
   sidebar pictures; `--export-sprites` still works.

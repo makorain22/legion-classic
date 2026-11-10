@@ -26,7 +26,13 @@ TEST_CASE("height interpolation is exact at corners and linear between") {
   CHECK(m.heightAtFine(256, 0) == 200 * 256);
   CHECK(m.heightAtFine(128, 0) == 150 * 256);
   CHECK(m.heightAtFine(0, 0) == 100 * 256);
-  CHECK(m.heightAt(128.f, 0.f) == doctest::Approx(150.f));
+  CHECK(m.heightAtLinear(128.f, 0.f) == doctest::Approx(150.f));
+  // The drawn ground: exact at corners, smooth between, never past the cell's corners.
+  CHECK(m.heightAt(256.f, 0.f) == doctest::Approx(200.f));
+  CHECK(m.heightAt(0.f, 0.f) == doctest::Approx(100.f));
+  const float mid = m.heightAt(128.f, 128.f);
+  CHECK(mid >= 100.f);
+  CHECK(mid <= 200.f);
 }
 
 TEST_CASE("painting keeps layer weights summing to 255") {

@@ -56,7 +56,9 @@ Entity Simulation::spawnUnit(uint16_t type, uint8_t player, Vec2i pos, Angle fac
   if (def.isStructure()) {
     // Structures go exactly where asked, on the grid, or not at all.
     const Vec2i o = footprintOrigin(type, pos);
-    if (!canPlace(type, o)) return kNullEntity;
+    // Villages from the map stand where the map put them: their neighbours'
+    // levelled plots may have steepened the ground between them.
+    if (!canPlace(type, o, def.faction == "neutral")) return kNullEntity;
     const Entity e = reg_.create();
     const Vec2i c{o.x * 256 + def.footW * 128, o.y * 256 + def.footH * 128};
     const Angle a = angleOfFacing(facingOf(facing));
@@ -72,6 +74,7 @@ Entity Simulation::spawnUnit(uint16_t type, uint8_t player, Vec2i pos, Angle fac
     if (!def.weapons.empty()) reg_.add<CCombat>(e, {});
     if (def.turret) reg_.add<CTurret>(e, {angleOfFacing(4), 0});
     occupy(e.index, def, o);
+    levelPlot(e.index, def, o);
     SimEvent ev;
     ev.type = EventType::StructurePlaced;
     ev.owner = player;
@@ -153,6 +156,7 @@ void Simulation::tick() {
   if (tick_ % 4 == 0) stepVision();
   lap(stats_.msVision);
   stepTargeting();
+  stepScouts();
   lap(stats_.msTargeting);
   stepWeapons();
   lap(stats_.msWeapons);

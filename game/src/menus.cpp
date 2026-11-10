@@ -672,7 +672,7 @@ void Menus::drawSettings() {
       changed |= ImGui::Checkbox("Show the game info panel (I)", &st.showInfoPanel);
       changed |= ImGui::Checkbox("Unit cards over fireteams, platoons and companies", &st.showCards);
       changed |= ImGui::Checkbox("Unit cards over the other sides' units too", &st.showEnemyCards);
-      changed |= ImGui::Checkbox("Chips for enemy forces detected in the fog", &st.showChips);
+      changed |= ImGui::Checkbox("Chips for enemy forces out of sight", &st.showChips);
       changed |= ImGui::Checkbox("Atmosphere: period colour grading and a vignette", &st.atmosphere);
       changed |= ImGui::Checkbox("3D battlefield (off: the classic 2D view)", &st.view3D);
       if (st.view3D) changed |= ImGui::Checkbox("Shadows", &st.shadows);

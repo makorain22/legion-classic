@@ -90,6 +90,29 @@ int32_t Map::heightAtFine(int32_t lx, int32_t ly) const {
 }
 
 float Map::heightAt(float lx, float ly) const {
+  // The drawn ground (9.2): a smooth surface through the corner heights
+  // (Catmull-Rom across the 4 x 4 corners round the point), never rising
+  // above or dipping below the cell's own corners, so steps stay steps.
+  const float fx = std::clamp(lx / LEPTONS_PER_TILE, 0.0f, static_cast<float>(width_) - 0.001f);
+  const float fy = std::clamp(ly / LEPTONS_PER_TILE, 0.0f, static_cast<float>(height_) - 0.001f);
+  const int tx = static_cast<int>(fx), ty = static_cast<int>(fy);
+  const float ax = fx - tx, ay = fy - ty;
+  auto c = [&](int x, int y) { return static_cast<float>(corner(std::clamp(x, 0, width_), std::clamp(y, 0, height_))); };
+  // Each curve stays between its two middle points (no overshoot at a step,
+  // and neighbouring cells meet exactly along their shared edge).
+  auto cr = [](float p0, float p1, float p2, float p3, float t) {
+    const float v = p1 + 0.5f * t * (p2 - p0 + t * (2 * p0 - 5 * p1 + 4 * p2 - p3 + t * (3 * (p1 - p2) + p3 - p0)));
+    return std::clamp(v, std::min(p1, p2), std::max(p1, p2));
+  };
+  float rows[4];
+  for (int j = 0; j < 4; ++j) {
+    const int y = ty - 1 + j;
+    rows[j] = cr(c(tx - 1, y), c(tx, y), c(tx + 1, y), c(tx + 2, y), ax);
+  }
+  return cr(rows[0], rows[1], rows[2], rows[3], ay);
+}
+
+float Map::heightAtLinear(float lx, float ly) const {
   const float fx = std::clamp(lx / LEPTONS_PER_TILE, 0.0f, static_cast<float>(width_) - 0.001f);
   const float fy = std::clamp(ly / LEPTONS_PER_TILE, 0.0f, static_cast<float>(height_) - 0.001f);
   const int tx = static_cast<int>(fx), ty = static_cast<int>(fy);
@@ -141,6 +164,62 @@ void Map::recomputeInfo(int tx0, int ty0, int tx1, int ty1) {
       t.slope = static_cast<uint16_t>(std::max({a, b, c, d}) - std::min({a, b, c, d}));
       const int avg = (a + b + c + d) / 4;
       t.waterDepth = waterLevel_ ? static_cast<int16_t>(std::clamp(int(waterLevel_) - avg, -30000, 30000)) : int16_t(-30000);
+    }
+  // Speeds look at the water next door, so do one tile more each way.
+  recomputeSpeeds(tx0 - 1, ty0 - 1, tx1 + 1, ty1 + 1);
+}
+
+void Map::recomputeSpeeds(int tx0, int ty0, int tx1, int ty1) {
+  tx0 = std::max(0, tx0);
+  ty0 = std::max(0, ty0);
+  tx1 = std::min(width_ - 1, tx1);
+  ty1 = std::min(height_ - 1, ty1);
+  // Rough ground, per layer, for foot / wheeled / tracked (percent).
+  static const uint8_t kRough[LAYER_COUNT][3] = {
+      {100, 100, 100},  // grass
+      {100, 100, 100},  // dry grass
+      {100, 95, 100},   // dirt
+      {80, 60, 75},     // mud
+      {85, 75, 90},     // sand
+      {90, 85, 90},     // rock
+      {80, 75, 85},     // snow
+      {100, 100, 100},  // road
+  };
+  for (int ty = ty0; ty <= ty1; ++ty)
+    for (int tx = tx0; tx <= tx1; ++tx) {
+      TileInfo& t = info_[static_cast<size_t>(ty) * width_ + tx];
+      // The ground: the weighted mix of the tile's four splat texels.
+      int weight[LAYER_COUNT] = {};
+      for (int k = 0; k < 4; ++k) {
+        const uint8_t* w = splat(tx * SPLAT_PER_TILE + (k & 1), ty * SPLAT_PER_TILE + (k >> 1));
+        for (int l = 0; l < LAYER_COUNT; ++l) weight[l] += w[l];
+      }
+      int total = 0;
+      for (int l = 0; l < LAYER_COUNT; ++l) total += weight[l];
+      const bool road = total > 0 && weight[int(Layer::Road)] * 2 >= total;
+      // A ford: a road at the water's edge with water beside it.
+      bool wetNear = false;
+      if (waterLevel_ && t.waterDepth > -10)
+        for (int oy = -1; oy <= 1 && !wetNear; ++oy)
+          for (int ox = -1; ox <= 1 && !wetNear; ++ox) {
+            const int nx = tx + ox, ny = ty + oy;
+            if ((ox || oy) && inBounds(nx, ny) && info_[static_cast<size_t>(ny) * width_ + nx].waterDepth > 0) wetNear = true;
+          }
+      t.ford = road && wetNear;
+      for (int li = 0; li < 3; ++li) {
+        int pct = 100;
+        if (total > 0) {
+          int rough = 0;
+          for (int l = 0; l < LAYER_COUNT; ++l) rough += weight[l] * kRough[l][li];
+          pct = rough / total;
+        }
+        // Slopes: down to 65% at the steepest a locomotor can climb.
+        const int maxSlope = std::max<int>(1, rules_.maxSlope[li]);
+        pct = pct * (100 - 35 * std::min<int>(t.slope, maxSlope) / maxSlope) / 100;
+        // Wading and fords: half speed.
+        if (t.waterDepth > 0 || t.ford) pct = std::min(pct, 50);
+        t.speed[li] = static_cast<uint8_t>(std::clamp(pct, 10, 100));
+      }
     }
 }
 
@@ -227,6 +306,7 @@ MapLayout layoutForSeed(uint64_t seed) {
 
 void Map::generate(Biome b, uint64_t seed, int layout) {
   generateTerrain(seed, b, layout < 0 ? static_cast<int>(layoutForSeed(seed)) : layout);
+  recomputeInfo();  // speeds read the finished ground layers and roads
 }
 
 namespace {
@@ -305,6 +385,7 @@ struct Plan {
   std::vector<float> passes;  // along the first ridge: where it dips low enough to cross (0..1)
   std::vector<Lake> lakes;
   int32_t hillAmp = 150, hillCell = 48, baseHeight = 430;
+  int32_t escarpments = 0;  // terrace step (height units) on part of the hills, rock faces between; 0 = none
   float riverDepth = 38;
   int forestShift = 0;   // + more woods, - fewer
   int hamletScale = 3;   // hamlets per 128x128
@@ -430,6 +511,7 @@ void Map::generateTerrain(uint64_t seed, Biome b, int layoutIndex) {
         plan.roads.push_back(makeCurve(pp, {Wf + 2, pp.y + rf(-0.05f, 0.05f) * Hf}, Hf * 0.04f, 1, rng, 5));
       }
       plan.hillAmp = 120;
+      plan.escarpments = 72;
       break;
     }
     case MapLayout::Marshes:  // low, wet ground: shallow pools men can wade, causeway roads
@@ -480,6 +562,7 @@ void Map::generateTerrain(uint64_t seed, Biome b, int layoutIndex) {
     case MapLayout::HillCountry:  // rough hills and a winding river
       plan.hillAmp = 250;
       plan.hillCell = 32;
+      plan.escarpments = 96;
       riverNS(Wf * rf(0.45f, 0.55f), 0.14f);
       roadWE(Hf * rf(0.3f, 0.4f), 0.1f);
       roadWE(Hf * rf(0.6f, 0.7f), 0.1f);
@@ -523,6 +606,19 @@ void Map::generateTerrain(uint64_t seed, Biome b, int layoutIndex) {
       const int32_t n = fractal(cx, cy, plan.hillCell, s);  // 0..1023
       int32_t h = plan.baseHeight + (n - 512) * plan.hillAmp / 512;
       if (desert) h += (valueNoise(cx * 3, cy, 22, s + 77) - 512) * 30 / 512;  // dune ridges
+      if (plan.escarpments > 0) {
+        // Escarpments (9.2): on some hillsides the land steps up in terraces
+        // with a rock face between; never across a road.
+        const float rd = roadDist[static_cast<size_t>(cy) * CX + cx];
+        const float mask = smoothstep(0.52f, 0.66f, valueNoise(cx, cy, 26, s + 211) / 1023.0f) * smoothstep(3.0f, 6.0f, rd);
+        if (mask > 0) {
+          const float step = static_cast<float>(plan.escarpments);
+          const float hf = static_cast<float>(h);
+          const float lo = std::floor(hf / step) * step;
+          const float terrace = lo + smoothstep(0.8f, 0.97f, (hf - lo) / step) * step;
+          h = static_cast<int32_t>(hf + (terrace - hf) * mask);
+        }
+      }
       hill[static_cast<size_t>(cy) * CX + cx] = h;
     }
   for (int cy = 0; cy < CY; ++cy)
@@ -588,9 +684,22 @@ void Map::generateTerrain(uint64_t seed, Biome b, int layoutIndex) {
         const float bed = static_cast<float>(wl) - 4 - depth * (1.0f - waterT * waterT);
         h = std::min(h, bed);
       } else if (bank < valley) {
-        float t = bank / valley;
-        t = 1 - (1 - t) * (1 - t);  // ease-out: steepest by the water
-        h = std::min(h, static_cast<float>(wl - 4) + (h - static_cast<float>(wl - 4)) * t);
+        // A river cut into its valley: a short steep bank out of the water,
+        // then the valley easing up to the land. Where a road comes down to
+        // a ford the bank is cut away for it.
+        const float rd = roadDist[static_cast<size_t>(cy) * CX + cx];
+        const float rise = (plan.marsh ? 3.0f : 16.0f) * smoothstep(1.5f, 4.5f, rd);
+        const float base = static_cast<float>(wl - 4), bankTop = static_cast<float>(wl) + rise;
+        constexpr float kLip = 2.0f;  // tiles of steep bank
+        float hv;
+        if (bank < kLip) {
+          hv = base + (bankTop - base) * smoothstep(0.0f, kLip, bank);
+        } else {
+          float t = (bank - kLip) / (valley - kLip);
+          t = 1 - (1 - t) * (1 - t);
+          hv = bankTop + (h - bankTop) * t;
+        }
+        h = std::min(h, std::max(hv, base));
       }
       // Roads cross water on fords (and marsh on causeways).
       const float rd = roadDist[static_cast<size_t>(cy) * CX + cx];
@@ -612,6 +721,33 @@ void Map::generateTerrain(uint64_t seed, Biome b, int layoutIndex) {
         setCorner(cx, cy, static_cast<uint16_t>(sum / 12));
       }
   }
+  // Graded roads: the road bed is smoothed along its length (cut and fill),
+  // the shoulders eased into it; fords stay at the water's edge.
+  {
+    const float fordTop = static_cast<float>(wl) + (plan.marsh ? 6.0f : 3.0f);
+    for (int pass = 0; pass < 3; ++pass) {
+      const std::vector<uint16_t> src = heights_;
+      for (int cy = 2; cy < CY - 2; ++cy)
+        for (int cx = 2; cx < CX - 2; ++cx) {
+          const float rd = roadDist[static_cast<size_t>(cy) * CX + cx];
+          if (rd >= 3.0f) continue;
+          // The road's own height here: the mean of the road corners round it.
+          int32_t sum = 0, n = 0;
+          for (int oy = -2; oy <= 2; ++oy)
+            for (int ox = -2; ox <= 2; ++ox)
+              if (roadDist[static_cast<size_t>(cy + oy) * CX + cx + ox] < 1.5f) {
+                sum += src[static_cast<size_t>(cy + oy) * CX + cx + ox];
+                ++n;
+              }
+          if (!n) continue;
+          const float bed = static_cast<float>(sum) / n;
+          const float k = 1.0f - smoothstep(1.2f, 3.0f, rd);  // the bed itself, then the shoulders
+          float h = src[static_cast<size_t>(cy) * CX + cx] + (bed - src[static_cast<size_t>(cy) * CX + cx]) * k;
+          if (wl && rd < 3.0f && h < fordTop) h = std::max(h, fordTop - rd * rd * 4.0f);
+          setCorner(cx, cy, static_cast<uint16_t>(std::clamp(static_cast<int>(h + 0.5f), 0, 65535)));
+        }
+    }
+  }
   recomputeInfo();
 
   // --- Ground layers --------------------------------------------------------
@@ -620,7 +756,7 @@ void Map::generateTerrain(uint64_t seed, Biome b, int layoutIndex) {
       const float tx = (sx + 0.5f) / SPLAT_PER_TILE, ty = (sy + 0.5f) / SPLAT_PER_TILE;
       const int itx = std::min(W - 1, static_cast<int>(tx)), ity = std::min(H - 1, static_cast<int>(ty));
       float w[LAYER_COUNT] = {};
-      const float h = heightAt(tx * LEPTONS_PER_TILE, ty * LEPTONS_PER_TILE);
+      const float h = heightAtLinear(tx * LEPTONS_PER_TILE, ty * LEPTONS_PER_TILE);
       const float above = h - waterLevel_;
       const float dry = fractal(sx, sy, 40, s + 101) / 1023.0f;
       const float dirt = fractal(sx, sy, 18, s + 103) / 1023.0f;
@@ -823,48 +959,95 @@ void Map::generateTerrain(uint64_t seed, Biome b, int layoutIndex) {
         default: break;
       }
     }
-    // Bridges: along each road, the tiles over a river become bridge pieces.
+    // Bridges (9.2): beside each ford, a straight span from one high bank to
+    // the other, square to the map's grid, its deck at the height of the
+    // banks and its ends set into them; where the banks are low there is
+    // only the ford.
+    const bool wood = winter || tropical;
+    auto avgHeight = [&](int tx, int ty) {
+      return (corner(tx, ty) + corner(tx + 1, ty) + corner(tx, ty + 1) + corner(tx + 1, ty + 1)) / 4;
+    };
+    auto wetTile = [&](int tx, int ty) {
+      return avgHeight(tx, ty) < static_cast<int>(wl) + 4 ||
+             std::min({corner(tx, ty), corner(tx + 1, ty), corner(tx, ty + 1), corner(tx + 1, ty + 1)}) < wl;
+    };
+    auto taken = [&](int tx, int ty) {
+      for (const Lot& l : lots)
+        if (std::abs(l.tx - tx) <= 1 && std::abs(l.ty - ty) <= 1) return true;
+      return false;
+    };
     for (const Curve& road : plan.roads) {
-      // The wet tiles along the road, in order.
-      std::vector<Vec2i> wet;
-      Vec2i last{-99, -99};
+      // Where the road meets each river: the middle of each wet stretch.
+      std::vector<std::pair<Vec2f, Vec2f>> crossings;  // point, road direction
+      bool inWet = false;
+      float wetStart = 0;
       for (int i = 0; i <= 2000; ++i) {
-        const Vec2f p = curvePoint(road, i / 2000.0f);
-        const Vec2i t{static_cast<int>(std::floor(p.x)), static_cast<int>(std::floor(p.y))};
-        if (t.x == last.x && t.y == last.y) continue;
-        last = t;
+        const float u = i / 2000.0f;
+        const Vec2f p = curvePoint(road, u);
         bool w = false;
-        for (const Curve& r : plan.rivers) w = w || curveDistance(r, {t.x + 0.5f, t.y + 0.5f}) < r.halfWidth * 1.15f + 0.4f;
-        if (w && inBounds(t.x, t.y)) wet.push_back(t);
+        for (const Curve& r : plan.rivers) w = w || curveDistance(r, p) < r.halfWidth;
+        if (w && !inWet) wetStart = u;
+        if (!w && inWet) {
+          const float mid = (wetStart + u) * 0.5f;
+          const Vec2f a = curvePoint(road, std::max(0.0f, mid - 0.01f)), b = curvePoint(road, std::min(1.0f, mid + 0.01f));
+          crossings.push_back({curvePoint(road, mid), b - a});
+        }
+        inWet = w;
       }
-      // Split into spans, each joined edge to edge, with a ramp piece at
-      // each end in line with it.
-      std::vector<std::vector<Vec2i>> spans;
-      for (const Vec2i& t : wet) {
-        if (spans.empty() || std::abs(t.x - spans.back().back().x) + std::abs(t.y - spans.back().back().y) > 3) {
-          spans.push_back({t});
-          continue;
+      for (const auto& [at, dir] : crossings) {
+        const int cx = static_cast<int>(std::floor(at.x)), cy = static_cast<int>(std::floor(at.y));
+        // Try both axes and a few places beside the ford; keep the shortest good span.
+        std::vector<Vec2i> best;
+        for (int axis = 0; axis < 2; ++axis)
+          for (int off : {4, -4, 5, -5, 6, -6}) {
+            const int ax = axis == 0 ? 1 : 0, ay = axis == 0 ? 0 : 1;   // along the bridge
+            const int sx = cx + (axis == 0 ? 0 : off), sy = cy + (axis == 0 ? off : 0);  // beside the ford
+            if (!inBounds(sx, sy) || !wetTile(sx, sy)) continue;
+            int a = 0, b = 0;
+            while (a < 16 && inBounds(sx - ax * (a + 1), sy - ay * (a + 1)) && wetTile(sx - ax * (a + 1), sy - ay * (a + 1))) ++a;
+            while (b < 16 && inBounds(sx + ax * (b + 1), sy + ay * (b + 1)) && wetTile(sx + ax * (b + 1), sy + ay * (b + 1))) ++b;
+            const Vec2i endA{sx - ax * (a + 1), sy - ay * (a + 1)}, endB{sx + ax * (b + 1), sy + ay * (b + 1)};
+            if (a >= 16 || b >= 16 || !inBounds(endA.x, endA.y) || !inBounds(endB.x, endB.y)) continue;
+            if (endA.x < 2 || endA.y < 2 || endB.x >= W - 2 || endB.y >= H - 2) continue;
+            // Both banks must stand well above the water.
+            if (avgHeight(endA.x, endA.y) < static_cast<int>(wl) + 12 || avgHeight(endB.x, endB.y) < static_cast<int>(wl) + 12) continue;
+            std::vector<Vec2i> span;
+            bool clear = true;
+            for (int k = -a - 1; k <= b + 1 && clear; ++k) {
+              const Vec2i t{sx + ax * k, sy + ay * k};
+              clear = !taken(t.x, t.y);
+              span.push_back(t);
+            }
+            if (clear && (best.empty() || span.size() < best.size())) best = std::move(span);
+          }
+        if (best.size() < 3) continue;
+        const Vec2i endA = best.front(), endB = best.back();
+        // The deck sits at the higher bank; both ends are set level with it
+        // and the ground round them eased in, with a stretch of road on.
+        const int deck = std::max(avgHeight(endA.x, endA.y), avgHeight(endB.x, endB.y));
+        const int ax = endB.x != endA.x ? 1 : 0, ay = 1 - ax;
+        for (const Vec2i& e : {endA, endB}) {
+          const int out = (e.x == endA.x && e.y == endA.y) ? -1 : 1;
+          for (int cy2 = e.y - 2; cy2 <= e.y + 3; ++cy2)
+            for (int cx2 = e.x - 2; cx2 <= e.x + 3; ++cx2) {
+              if (cx2 < 0 || cy2 < 0 || cx2 > W || cy2 > H) continue;
+              const int d = std::max({e.x - cx2, cx2 - (e.x + 1), e.y - cy2, cy2 - (e.y + 1), 0});
+              const int h = corner(cx2, cy2);
+              // On the river side only the abutment's own corners move.
+              const int along = (cx2 - e.x) * ax + (cy2 - e.y) * ay;
+              if (d > 0 && along * out < 0) continue;
+              setCorner(cx2, cy2, static_cast<uint16_t>(std::clamp(h, deck - 16 * d, deck + 16 * d)));
+            }
+          for (int k = 0; k <= 2; ++k) {  // road onto the bridge
+            const int tx = e.x + ax * out * k, ty = e.y + ay * out * k;
+            if (!inBounds(tx, ty)) continue;
+            for (int q = 0; q < 4; ++q) {
+              uint8_t* w = splat(tx * SPLAT_PER_TILE + (q & 1), ty * SPLAT_PER_TILE + (q >> 1));
+              for (int l = 0; l < LAYER_COUNT; ++l) w[l] = l == int(Layer::Road) ? 255 : 0;
+            }
+          }
         }
-        std::vector<Vec2i>& sp = spans.back();
-        while (sp.back().x != t.x || sp.back().y != t.y) {
-          Vec2i n = sp.back();
-          if (n.x != t.x) n.x += t.x > n.x ? 1 : -1;
-          else n.y += t.y > n.y ? 1 : -1;
-          sp.push_back(n);
-        }
-      }
-      for (std::vector<Vec2i>& sp : spans) {
-        if (sp.size() >= 2) {
-          const Vec2i a = sp[0], a1 = sp[1], z = sp.back(), z1 = sp[sp.size() - 2];
-          const Vec2i head{a.x - (a1.x - a.x), a.y - (a1.y - a.y)}, tail{z.x + (z.x - z1.x), z.y + (z.y - z1.y)};
-          if (inBounds(head.x, head.y)) sp.insert(sp.begin(), head);
-          if (inBounds(tail.x, tail.y)) sp.push_back(tail);
-        }
-        for (const Vec2i& t : sp) {
-          bool dup = false;
-          for (const Lot& l : lots) dup = dup || (l.tx == t.x && l.ty == t.y);
-          if (!dup) lots.push_back({t.x, t.y, (winter || tropical) ? kWoodBridgeLot : kBridgeLot});
-        }
+        for (const Vec2i& t : best) lots.push_back({t.x, t.y, wood ? kWoodBridgeLot : kBridgeLot});
       }
     }
   }};

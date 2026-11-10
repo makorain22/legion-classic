@@ -239,9 +239,23 @@ void GameScene::drawWorldOverlays() {
 
   // --- Unit cards over bound units -------------------------------------------------------
   // A card: the NATO symbol on a small plate with the unit's name, strength
-  // and health. Clicking it selects the whole unit.
+  // and health. Clicking it selects the whole unit. Cards of units standing
+  // close together merge into one stack card (9.3); while one of them is
+  // selected, or the mouse is over the stack, it opens into a short list
+  // above it, one card per unit.
   cardHits_.clear();
   if (showCards_) {
+    struct Card {
+      Entity group;
+      ImVec2 anchor;  // above the unit's men
+      float scale;
+      std::string name, symbol;
+      Echelon echelon;
+      uint8_t owner;
+      bool mine, selected, vehicles;
+      int strength, hp, hpMax;
+    };
+    std::vector<Card> cards;
     for (uint32_t gi : reg.pool<CGroup>().entities()) {
       const CGroup& g = reg.pool<CGroup>().get(gi);
       const bool mine = sim_->allied(g.owner, player_);
@@ -269,47 +283,125 @@ void GameScene::drawWorldOverlays() {
       if (!onScreen(c)) continue;
       const float scale = (g.echelon >= Echelon::Company ? 1.45f : g.echelon >= Echelon::Platoon ? 1.3f
                            : g.echelon == Echelon::Squad ? 1.15f : 1.0f) * std::clamp(zoom, 0.8f, 1.4f);
-      const float alpha = selected ? 1.0f : 0.88f;
-      const std::string name = groupName(g);
-      char strength[24];
-      std::snprintf(strength, sizeof strength, "%zu", g.members.size());
-      const float fs = ImGui::GetFontSize();
-      const float tw = std::max(ImGui::CalcTextSize(name.c_str()).x, ImGui::CalcTextSize(strength).x + 30);
+      cards.push_back({reg.handle(gi), c, scale, groupName(g), groupSymbol(g), g.echelon, g.owner, mine, selected,
+                       g.vehicles, static_cast<int>(g.members.size()), hp, hpMax});
+    }
+    const float fs = ImGui::GetFontSize();
+    // One plate: symbol, two lines of text and a health bar.
+    auto plate = [&](ImVec2 c, float scale, const std::string& line1, const std::string& line2, const std::string& symbol,
+                     Echelon e, uint8_t owner, bool mine, bool selected, float frac, float alpha, int behind) {
+      const float tw = std::max(ImGui::CalcTextSize(line1.c_str()).x, ImGui::CalcTextSize(line2.c_str()).x + 30);
       const float symW = 30 * scale, h = std::max(22 * scale, fs * 2 + 6);
-      ImVec2 a(c.x - (symW + tw + 14) * 0.5f, c.y - h * 0.5f), b(a.x + symW + tw + 14, a.y + h);
-      // Cards of units standing close together stack instead of overlapping.
-      for (int tries = 0; tries < 6; ++tries) {
-        bool clash = false;
-        for (const CardHit& o : cardHits_)
-          if (a.x < o.x1 && b.x > o.x0 && a.y < o.y1 + 2 && b.y > o.y0 - 2) {
-            const float up = b.y - (o.y0 - 3);
-            a.y -= up;
-            b.y -= up;
-            clash = true;
-            break;
-          }
-        if (!clash) break;
+      const ImVec2 a(c.x - (symW + tw + 14) * 0.5f, c.y - h * 0.5f), b(a.x + symW + tw + 14, a.y + h);
+      const uint32_t tc = teamColor(owner);
+      // A stack: the plates behind peek out above and to the right.
+      for (int k = std::min(behind, 3); k >= 1; --k) {
+        const ImVec2 o(4.0f * k, -4.0f * k);
+        dl->AddRectFilled(ImVec2(a.x + o.x, a.y + o.y), ImVec2(b.x + o.x, b.y + o.y), IM_COL32(30, 31, 25, static_cast<int>(200 * alpha)), 3);
+        dl->AddRect(ImVec2(a.x + o.x, a.y + o.y), ImVec2(b.x + o.x, b.y + o.y), IM_COL32(150, 140, 110, static_cast<int>(170 * alpha)), 3);
       }
       const float cy = (a.y + b.y) * 0.5f;
-      // Plate.
-      const uint32_t tc = teamColor(g.owner);
       dl->AddRectFilled(ImVec2(a.x + 2, a.y + 2), ImVec2(b.x + 2, b.y + 2), IM_COL32(0, 0, 0, static_cast<int>(110 * alpha)), 3);
       dl->AddRectFilled(a, b, IM_COL32(24, 25, 20, static_cast<int>(215 * alpha)), 3);
       dl->AddRectFilled(a, ImVec2(a.x + 4, b.y), darker(tc, 1.0f, alpha), 3, ImDrawFlags_RoundCornersLeft);
       dl->AddRect(a, b, selected ? IM_COL32(236, 200, 96, 255) : IM_COL32(150, 140, 110, static_cast<int>(200 * alpha)), 3, 0,
                   selected ? 2.0f : 1.0f);
-      drawNatoSymbol(dl, ImVec2(a.x + 8 + symW * 0.5f, cy), scale * 0.95f, groupSymbol(g), g.echelon, tc, alpha, !mine);
+      drawNatoSymbol(dl, ImVec2(a.x + 8 + symW * 0.5f, cy), scale * 0.95f, symbol, e, tc, alpha, !mine);
       const float tx = a.x + symW + 12;
       dl->AddText(ImVec2(tx, a.y + 2), selected ? IM_COL32(255, 236, 160, 255) : IM_COL32(232, 226, 205, static_cast<int>(240 * alpha)),
-                  name.c_str());
-      dl->AddText(ImVec2(tx, a.y + 3 + fs), IM_COL32(180, 172, 150, static_cast<int>(230 * alpha)), strength);
-      // Health of the whole unit.
-      const float frac = hpMax > 0 ? static_cast<float>(hp) / hpMax : 0;
-      const float bx = tx + ImGui::CalcTextSize(strength).x + 6, bw = b.x - bx - 6, by = a.y + 3 + fs + fs * 0.35f;
+                  line1.c_str());
+      dl->AddText(ImVec2(tx, a.y + 3 + fs), IM_COL32(180, 172, 150, static_cast<int>(230 * alpha)), line2.c_str());
+      const float bx = tx + ImGui::CalcTextSize(line2.c_str()).x + 6, bw = b.x - bx - 6, by = a.y + 3 + fs + fs * 0.35f;
       dl->AddRectFilled(ImVec2(bx, by), ImVec2(bx + bw, by + 4), IM_COL32(10, 10, 8, 230));
       dl->AddRectFilled(ImVec2(bx, by), ImVec2(bx + bw * frac, by + 4),
                         frac > 0.6f ? IM_COL32(110, 200, 90, 255) : frac > 0.3f ? IM_COL32(230, 190, 70, 255) : IM_COL32(220, 80, 60, 255));
-      cardHits_.push_back({a.x, a.y, b.x, b.y, reg.handle(gi)});
+      return std::pair<ImVec2, ImVec2>{a, ImVec2(b.x + std::min(behind, 3) * 4.0f, b.y)};
+    };
+    // Gather cards whose places are close on screen into stacks.
+    std::vector<int> stackOf(cards.size(), -1);
+    std::vector<std::vector<int>> stacks;
+    const float near = 64.0f;
+    for (size_t i = 0; i < cards.size(); ++i) {
+      if (stackOf[i] >= 0) continue;
+      stackOf[i] = static_cast<int>(stacks.size());
+      stacks.push_back({static_cast<int>(i)});
+      for (size_t k = 0; k < stacks.back().size(); ++k) {  // grows as neighbours join
+        const Card& a = cards[static_cast<size_t>(stacks.back()[k])];
+        for (size_t j = 0; j < cards.size(); ++j) {
+          if (stackOf[j] >= 0 || cards[j].mine != a.mine) continue;
+          if (std::abs(cards[j].anchor.x - a.anchor.x) < near * 1.6f && std::abs(cards[j].anchor.y - a.anchor.y) < near * 0.6f) {
+            stackOf[j] = stackOf[i];
+            stacks.back().push_back(static_cast<int>(j));
+          }
+        }
+      }
+    }
+    const ImVec2 mouse(mouse_.x / ps, mouse_.y / ps);
+    for (std::vector<int>& st : stacks) {
+      if (st.size() == 1) {
+        const Card& c = cards[static_cast<size_t>(st[0])];
+        const auto [a, b] = plate(c.anchor, c.scale, c.name, std::to_string(c.strength), c.symbol, c.echelon, c.owner, c.mine,
+                                  c.selected, c.hpMax > 0 ? static_cast<float>(c.hp) / c.hpMax : 0.0f, c.selected ? 1.0f : 0.88f, 0);
+        cardHits_.push_back({a.x, a.y, b.x, b.y, c.group, {}});
+        continue;
+      }
+      // The biggest unit on top; the stack stands where they all are.
+      std::sort(st.begin(), st.end(), [&](int x, int y) {
+        const Card &a = cards[static_cast<size_t>(x)], &b = cards[static_cast<size_t>(y)];
+        return a.echelon != b.echelon ? a.echelon > b.echelon : a.strength > b.strength;
+      });
+      ImVec2 at(0, 0);
+      int strength = 0, hp = 0, hpMax = 0;
+      bool selected = false;
+      std::vector<Entity> groups;
+      for (int i : st) {
+        const Card& c = cards[static_cast<size_t>(i)];
+        at.x += c.anchor.x / st.size();
+        at.y = std::min(at.y == 0 ? 1e9f : at.y, c.anchor.y);
+        strength += c.strength;
+        hp += c.hp;
+        hpMax += c.hpMax;
+        selected = selected || c.selected;
+        groups.push_back(c.group);
+      }
+      const Card& top = cards[static_cast<size_t>(st[0])];
+      char line1[48], line2[24];
+      std::snprintf(line1, sizeof line1, "%zu units", st.size());
+      std::snprintf(line2, sizeof line2, "%d", strength);
+      const auto [a, b] = plate(at, top.scale, line1, line2, top.symbol, top.echelon, top.owner, top.mine, selected,
+                                hpMax > 0 ? static_cast<float>(hp) / hpMax : 0.0f, selected ? 1.0f : 0.9f, static_cast<int>(st.size()) - 1);
+      // Open while the mouse is on it, or on the list it opened last frame.
+      const bool hover = (mouse.x >= a.x && mouse.x <= b.x + 4 && mouse.y >= a.y - 8 && mouse.y <= b.y) ||
+                         (openStack_ == top.group && mouse.x >= openArea_[0] && mouse.x <= openArea_[2] &&
+                          mouse.y >= openArea_[1] && mouse.y <= openArea_[3]);
+      cardHits_.push_back({a.x, a.y, b.x, b.y, top.group, groups});
+      if (openStack_ == top.group && !hover) openStack_ = kNullEntity;
+      if (!selected && !hover) continue;
+      float area[4] = {a.x, a.y, b.x + 4, b.y};
+      // Opened: which units are in it, one card each, in a short column above.
+      constexpr size_t kShow = 8;
+      float y = a.y - 8;
+      for (size_t k = 0; k < st.size() && k < kShow; ++k) {
+        const Card& c = cards[static_cast<size_t>(st[k])];
+        const float h = std::max(22 * 0.9f, fs * 2 + 6);
+        const ImVec2 cc(at.x, y - h * 0.5f);
+        const auto [ca, cb] = plate(cc, 0.9f, c.name, std::to_string(c.strength), c.symbol, c.echelon, c.owner, c.mine, c.selected,
+                                    c.hpMax > 0 ? static_cast<float>(c.hp) / c.hpMax : 0.0f, 0.97f, 0);
+        cardHits_.push_back({ca.x, ca.y, cb.x, cb.y, c.group, {}});
+        area[0] = std::min(area[0], ca.x);
+        area[1] = std::min(area[1], ca.y);
+        area[2] = std::max(area[2], cb.x);
+        y = ca.y - 3;
+      }
+      if (hover) {
+        openStack_ = top.group;
+        std::copy(area, area + 4, openArea_);
+      }
+      if (st.size() > kShow) {
+        char more[32];
+        std::snprintf(more, sizeof more, "+%zu more", st.size() - kShow);
+        dl->AddText(ImVec2(at.x - ImGui::CalcTextSize(more).x / 2, y - fs - 2), IM_COL32(232, 226, 205, 230), more);
+      }
     }
   }
 
@@ -331,79 +423,6 @@ void GameScene::drawWorldOverlays() {
       ImGui::TextDisabled("Holds %zu of %d infantry", gs ? gs->occupants.size() : size_t{0}, d.garrison);
     }
     ImGui::EndTooltip();
-  }
-}
-
-// Every so often: which ground our side can hear and glimpse beyond its sight
-// (twice each unit's sight), and the enemy forces there, gathered into chips
-// by area. A chip's size says roughly how many; its symbol, the most valuable
-// thing among them.
-void GameScene::drawChips(ImDrawList* dl, const std::function<ImVec2(Vec2f)>& toScreen) {
-  Registry& reg = sim_->registry();
-  constexpr int kCell = 4;    // detection grid, tiles
-  constexpr int kBucket = 7;  // chip gathering area, tiles
-  const int gw = map_.width() / kCell + 1, gh = map_.height() / kCell + 1;
-  if (--chipTimer_ <= 0 || static_cast<int>(detect_.size()) != gw * gh) {
-    chipTimer_ = 15;
-    detect_.assign(static_cast<size_t>(gw) * gh, 0);
-    auto& units = reg.pool<CUnit>();
-    for (uint32_t e : units.entities()) {
-      const CUnit& u = units.get(e);
-      if (u.owner >= MAX_PLAYERS || !sim_->allied(u.owner, player_)) continue;
-      const UnitTypeDef& d = types_.get(u.type);
-      if (d.category == UnitCategory::Fortification) continue;
-      const CPosition& p = reg.pool<CPosition>().get(e);
-      const int r = (d.sight * 2 / LEPTONS_PER_TILE) / kCell + 1;
-      const int cx = (p.x >> LEPTON_SHIFT) / kCell, cy = (p.y >> LEPTON_SHIFT) / kCell;
-      for (int y = std::max(0, cy - r); y <= std::min(gh - 1, cy + r); ++y)
-        for (int x = std::max(0, cx - r); x <= std::min(gw - 1, cx + r); ++x)
-          if ((x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r) detect_[static_cast<size_t>(y) * gw + x] = 1;
-    }
-    chips_.clear();
-    std::map<std::pair<int, int>, Chip> buckets;
-    for (uint32_t e : units.entities()) {
-      const CUnit& u = units.get(e);
-      if (u.owner >= MAX_PLAYERS || sim_->allied(u.owner, player_) || u.health <= 0) continue;
-      const UnitTypeDef& d = types_.get(u.type);
-      if (d.isStructure()) continue;  // buildings are remembered on the map once seen
-      const CPosition& p = reg.pool<CPosition>().get(e);
-      const int tx = p.x >> LEPTON_SHIFT, ty = p.y >> LEPTON_SHIFT;
-      if (sim_->vision().visible(player_, tx, ty)) continue;  // seen: drawn as itself
-      if (!detect_[static_cast<size_t>(ty / kCell) * gw + tx / kCell]) continue;
-      Chip& c = buckets[{tx / kBucket, ty / kBucket}];
-      c.x += p.x;
-      c.y += p.y;
-      ++c.count;
-      c.owner = u.owner;
-      if (d.cost > c.bestCost) {
-        c.bestCost = d.cost;
-        c.nato = d.nato;
-      }
-    }
-    for (auto& [key, c] : buckets) {
-      c.x /= c.count;
-      c.y /= c.count;
-      chips_.push_back(c);
-    }
-  }
-  for (const Chip& c : chips_) {
-    const ImVec2 s = toScreen(groundToScreenWorld(static_cast<float>(c.x), static_cast<float>(c.y)));
-    // Rough size only: a handful, a platoon or so, a company, more.
-    const float r = c.count < 5 ? 12.0f : c.count < 20 ? 16.0f : c.count < 100 ? 21.0f : 27.0f;
-    const uint32_t team = teamColor(c.owner);
-    // A stack of chips, like counters on a war-room table.
-    const int layers = c.count < 5 ? 1 : c.count < 20 ? 2 : c.count < 100 ? 3 : 4;
-    for (int i = layers - 1; i >= 0; --i) {
-      const ImVec2 at(s.x, s.y - i * 3.0f);
-      dl->AddEllipseFilled(ImVec2(at.x, at.y + 2), ImVec2(r, r * 0.55f), IM_COL32(0, 0, 0, 120));
-      dl->AddEllipseFilled(at, ImVec2(r, r * 0.55f), darker(team, i == 0 ? 0.75f : 0.5f, 0.92f));
-      dl->AddEllipse(at, ImVec2(r, r * 0.55f), IM_COL32(230, 220, 190, 200), 0, 0, 1.5f);
-    }
-    const ImVec2 top(s.x, s.y - (layers - 1) * 3.0f);
-    drawNatoSymbol(dl, top, r / 18.0f, c.nato, Echelon::None, team, 1.0f, true);
-    const char* q = c.count < 5 ? "?" : c.count < 20 ? "??" : c.count < 100 ? "???" : "????";
-    const ImVec2 ts = ImGui::CalcTextSize(q);
-    dl->AddText(ImVec2(top.x - ts.x / 2, top.y + r * 0.55f + 1), IM_COL32(235, 225, 195, 220), q);
   }
 }
 

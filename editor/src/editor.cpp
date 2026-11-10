@@ -419,7 +419,7 @@ void Editor::afterTerrainEdit(int tx0, int ty0, int tx1, int ty1, bool heights, 
     m.recomputeInfo(tx0, ty0, tx1, ty1);
     scene_.terrain().markHeightsDirty(tx0, ty0, tx1, ty1);
   }
-  (void)splat;
+  if (splat) m.recomputeSpeeds(tx0, ty0, tx1, ty1);  // mud and roads change how fast units go
 }
 
 void Editor::applyRegion(const History::Region& r) {

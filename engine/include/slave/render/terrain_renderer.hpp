@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "slave/map/map.hpp"
@@ -25,6 +26,9 @@ class ShadowMap;
 class TerrainRenderer {
  public:
   static constexpr int kChunk = 32;
+  // Ground vertices per tile edge (9.2): the smooth surface of Map::heightAt
+  // is sampled twice per tile.
+  static constexpr int kSub = 2;
 
   TerrainRenderer();
   ~TerrainRenderer();
@@ -44,6 +48,17 @@ class TerrainRenderer {
   void drawDepth(const Mat4& viewProj);
   // Lowest and highest ground (and water), in tiles.
   void heightRange(float& zMin, float& zMax) const;
+  // Chunks (index = cy * chunksX + cx) whose ground was (re)built since the
+  // last call: things laid on the ground (rock faces) follow them.
+  std::vector<int> takeRebuiltChunks() { return std::exchange(rebuilt_, {}); }
+  int chunksX() const { return chunksX_; }
+  int chunksY() const { return chunksY_; }
+  // For shaders that paint the ground over other things (models' feet):
+  // binds the ground textures from `firstUnit` (layers, splat 0, splat 1,
+  // macro) and sets uLayers, uSplat0, uSplat1, uMacro, uMapSize, uTexScale,
+  // uTint and uSat on the shader in use.
+  void bindGround(const gl::Shader& s, int firstUnit) const;
+  bool hasMap() const { return map_ != nullptr; }
   // Texture unit the terrain shader keeps for the shadow map.
   static constexpr int kShadowUnit = 7;
 
@@ -63,6 +78,7 @@ class TerrainRenderer {
   void buildChunk(Chunk& c);
   bool chunkVisible(const Chunk& c, const Mat4& viewProj) const;
   void buildSkirt();
+  std::vector<int> rebuilt_;
   GLuint skirtVao_ = 0, skirtVbo_ = 0;
   GLsizei skirtVerts_ = 0;
   void uploadSplat(int sx0, int sy0, int sx1, int sy1);

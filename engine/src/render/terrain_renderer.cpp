@@ -265,11 +265,11 @@ bool TerrainRenderer::init(std::string& error) {
   layers_.create(tex.layers);
   macro_.create(tex.macro, {true, true, true});
 
-  // Every chunk shares one index buffer: a 32 x 32 grid of quads.
+  // Every chunk shares one index buffer: a (32 x kSub)^2 grid of quads.
   std::vector<uint16_t> idx;
-  const int n = kChunk + 1;
-  for (int y = 0; y < kChunk; ++y)
-    for (int x = 0; x < kChunk; ++x) {
+  const int G = kChunk * kSub, n = G + 1;
+  for (int y = 0; y < G; ++y)
+    for (int x = 0; x < G; ++x) {
       const uint16_t a = static_cast<uint16_t>(y * n + x), b = static_cast<uint16_t>(a + 1);
       const uint16_t c = static_cast<uint16_t>(a + n), d = static_cast<uint16_t>(c + 1);
       // Alternate the split diagonal so lighting has no directional bias.
@@ -356,8 +356,9 @@ uint8_t TerrainRenderer::fogAt(int tx, int ty) const {
 void TerrainRenderer::markHeightsDirty(int tx0, int ty0, int tx1, int ty1) {
   if (!map_) return;
   // Neighbouring chunks too: lighting at a chunk edge uses the next corners.
-  const int c0x = std::max(0, (tx0 - 1) / kChunk), c0y = std::max(0, (ty0 - 1) / kChunk);
-  const int c1x = std::min(chunksX_ - 1, (tx1 + 1) / kChunk), c1y = std::min(chunksY_ - 1, (ty1 + 1) / kChunk);
+  // (and the smooth surface reaches two corners out).
+  const int c0x = std::max(0, (tx0 - 3) / kChunk), c0y = std::max(0, (ty0 - 3) / kChunk);
+  const int c1x = std::min(chunksX_ - 1, (tx1 + 3) / kChunk), c1y = std::min(chunksY_ - 1, (ty1 + 3) / kChunk);
   for (int cy = c0y; cy <= c1y; ++cy)
     for (int cx = c0x; cx <= c1x; ++cx) chunks_[static_cast<size_t>(cy) * chunksX_ + cx]->dirty = true;
 }
@@ -463,7 +464,8 @@ void TerrainRenderer::buildSkirt() {
 
 void TerrainRenderer::buildChunk(Chunk& c) {
   const Map& m = *map_;
-  const int n = kChunk + 1;
+  rebuilt_.push_back(c.cy * chunksX_ + c.cx);
+  const int n = kChunk * kSub + 1;
   const int x0 = c.cx * kChunk, y0 = c.cy * kChunk;
 
   // Light from the upper left, matching the sprites.
@@ -477,19 +479,26 @@ void TerrainRenderer::buildChunk(Chunk& c) {
   auto hc = [&](int x, int y) {
     return static_cast<float>(m.corner(std::clamp(x, 0, m.width()), std::clamp(y, 0, m.height())));
   };
+  // The smooth ground, in height units, at a point in tiles.
+  auto hs = [&](float tx, float ty) {
+    return m.heightAt(std::clamp(tx, 0.0f, static_cast<float>(m.width())) * LEPTONS_PER_TILE,
+                      std::clamp(ty, 0.0f, static_cast<float>(m.height())) * LEPTONS_PER_TILE);
+  };
   for (int y = 0; y < n; ++y)
     for (int x = 0; x < n; ++x) {
-      const int tx = x0 + x, ty = y0 + y;
-      const float h = hc(tx, ty);
-      Vec2f s = iso::worldToScreen(static_cast<float>(tx * LEPTONS_PER_TILE), static_cast<float>(ty * LEPTONS_PER_TILE));
+      const float tx = x0 + static_cast<float>(x) / kSub, ty = y0 + static_cast<float>(y) / kSub;
+      // Corners themselves come straight from the map (heightAt clamps just inside it).
+      const bool onCorner = x % kSub == 0 && y % kSub == 0;
+      const float h = onCorner ? hc(x0 + x / kSub, y0 + y / kSub) : hs(tx, ty);
+      Vec2f s = iso::worldToScreen(tx * LEPTONS_PER_TILE, ty * LEPTONS_PER_TILE);
       s.y -= h * kPxPerUnit;
-      const float dx = (hc(tx + 1, ty) - hc(tx - 1, ty)) / (2.0f * HEIGHT_UNITS_PER_TILE);
-      const float dy = (hc(tx, ty + 1) - hc(tx, ty - 1)) / (2.0f * HEIGHT_UNITS_PER_TILE);
+      // Normal from the smooth surface half a tile either side.
+      const float dx = (hs(tx + 0.5f, ty) - hs(tx - 0.5f, ty)) / HEIGHT_UNITS_PER_TILE;
+      const float dy = (hs(tx, ty + 0.5f) - hs(tx, ty - 0.5f)) / HEIGHT_UNITS_PER_TILE;
       const float nl = std::sqrt(dx * dx + dy * dy + 1.0f);
       const float lambert = (-dx * Lx - dy * Ly + Lz) / nl;
       const float light = std::clamp(1.0f + (lambert - Lz) * 1.9f, 0.42f, 1.35f);
-      verts[static_cast<size_t>(y) * n + x] = {s.x, s.y, static_cast<float>(tx), static_cast<float>(ty),
-                                               h / HEIGHT_UNITS_PER_TILE, light};
+      verts[static_cast<size_t>(y) * n + x] = {s.x, s.y, tx, ty, h / HEIGHT_UNITS_PER_TILE, light};
       b.x0 = std::min(b.x0, s.x);
       b.y0 = std::min(b.y0, s.y);
       b.x1 = std::max(b.x1, s.x);
@@ -675,6 +684,24 @@ void TerrainRenderer::draw3D(const Camera& cam, float timeSeconds, const ShadowM
     glDrawArrays(GL_TRIANGLES, 0, skirtVerts_);
   }
   glBindVertexArray(0);
+}
+
+void TerrainRenderer::bindGround(const gl::Shader& s, int u) const {
+  if (!map_) return;
+  layers_.bind(u);
+  splat0_.bind(u + 1);
+  splat1_.bind(u + 2);
+  macro_.bind(u + 3);
+  glUniform1i(s.uniform("uLayers"), u);
+  glUniform1i(s.uniform("uSplat0"), u + 1);
+  glUniform1i(s.uniform("uSplat1"), u + 2);
+  glUniform1i(s.uniform("uMacro"), u + 3);
+  glUniform2f(s.uniform("uMapSize"), static_cast<float>(map_->width()), static_cast<float>(map_->height()));
+  glUniform1f(s.uniform("uTexScale"), kTexScale);
+  const BiomeLight& light = biomeLight(map_->biome);
+  glUniform3f(s.uniform("uTint"), light.tint[0], light.tint[1], light.tint[2]);
+  glUniform1f(s.uniform("uSat"), light.saturation);
+  glActiveTexture(GL_TEXTURE0);
 }
 
 void TerrainRenderer::drawWater3D(const Camera& cam, float timeSeconds) {

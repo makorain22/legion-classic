@@ -22,6 +22,7 @@
 namespace slave {
 
 class ShadowMap;
+class TerrainRenderer;
 
 struct MeshInstance {
   Vec3f pos;               // where the model's pivot stands, in tiles
@@ -30,6 +31,7 @@ struct MeshInstance {
   uint32_t team = 0xFFFFFFFFu;  // RGBA8 team colour
   float scale = 1.0f;      // on top of the model's own voxel size
   float pitch = 0, roll = 0;  // lean, radians (vehicles on slopes)
+  float blend = 0;         // tiles: the ground creeps this far up the model's foot (buildings, wrecks)
 };
 
 class MeshRenderer {
@@ -43,6 +45,10 @@ class MeshRenderer {
 
   // The mesh for a voxel model, built on first use. -1 for a null source.
   int meshFor(const VoxelSourcePtr& source);
+  // A mesh with its own buffer, for geometry that is rebuilt (rock faces
+  // on the terrain): make one, then set (and later replace) its vertices.
+  int createOwnedMesh();
+  void setOwnedMesh(int mesh, const std::vector<MeshVertex>& verts, float voxelTiles, float ao, float grain);
   // Height of a mesh's model in tiles (for bars and pick boxes), and its
   // footprint radius in tiles.
   float meshHeight(int mesh) const { return mesh >= 0 ? meshes_[static_cast<size_t>(mesh)].height : 0; }
@@ -52,6 +58,8 @@ class MeshRenderer {
   // Far-off models are drawn from coarser meshes: after setView, add() picks
   // the detail by how many pixels a voxel covers there.
   void setView(const Camera& cam) { view_ = &cam; }
+  // The ground whose textures creep over models' feet (null: none).
+  void setGround(const TerrainRenderer* t) { ground_ = t; }
   void add(int mesh, const MeshInstance& inst);
 
   // Colour grade, as for sprites: rgb tint and saturation.
@@ -79,11 +87,12 @@ class MeshRenderer {
     float height = 0, radius = 0;
     bool castsShadow = true;
     int coarser = -1;  // the same model at half the resolution (-1: none)
+    GLuint ownVao = 0, ownVbo = 0;  // owned meshes keep their own buffer
   };
   struct GpuInstance {
     float x, y, z, yaw;
     float pivotX, pivotY, scale, ao;
-    float grain, pitch, roll, pad;
+    float grain, pitch, roll, blend;
     uint32_t tint, team;
   };
   struct Queued {
@@ -91,6 +100,7 @@ class MeshRenderer {
     GpuInstance inst;
   };
   void upload(const std::vector<MeshVertex>& verts, Mesh& m);
+  void setupVertexAttribs(GLuint vbo) const;
   void prepare();  // sorts the queue and uploads instance data
   void drawBatches(const gl::Shader& s, bool shadowPass);
 
@@ -105,6 +115,7 @@ class MeshRenderer {
   std::vector<std::pair<int, std::pair<size_t, size_t>>> batches_;  // mesh, first instance, count
   bool prepared_ = false;
   const Camera* view_ = nullptr;
+  const TerrainRenderer* ground_ = nullptr;
   float grade_[4] = {1, 1, 1, 1};
   size_t drawnInstances_ = 0, drawnTriangles_ = 0;
 };

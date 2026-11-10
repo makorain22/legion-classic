@@ -165,7 +165,10 @@ void Simulation::stepMovement() {
           return;
         }
 
-        if (dist <= static_cast<uint32_t>(def.speed)) {
+        // The ground underfoot sets the pace (slopes, mud, fords).
+        const int32_t speed =
+            std::max<int32_t>(1, def.speed * map_.speedPercent(pos.x >> LEPTON_SHIFT, pos.y >> LEPTON_SHIFT, def.locomotor) / 100);
+        if (dist <= static_cast<uint32_t>(speed)) {
           pos.x = wp.x;
           pos.y = wp.y;
           anim.moving = dist > 0;
@@ -196,8 +199,8 @@ void Simulation::stepMovement() {
           }
         }
 
-        const int32_t nx = pos.x + static_cast<int32_t>(static_cast<int64_t>(dx) * def.speed / dist);
-        const int32_t ny = pos.y + static_cast<int32_t>(static_cast<int64_t>(dy) * def.speed / dist);
+        const int32_t nx = pos.x + static_cast<int32_t>(static_cast<int64_t>(dx) * speed / dist);
+        const int32_t ny = pos.y + static_cast<int32_t>(static_cast<int64_t>(dy) * speed / dist);
         const int ctx = pos.x >> LEPTON_SHIFT, cty = pos.y >> LEPTON_SHIFT;
         const int ntx = nx >> LEPTON_SHIFT, nty = ny >> LEPTON_SHIFT;
         if ((ntx != ctx || nty != cty) && !map_.passable(ntx, nty, def.locomotor)) {

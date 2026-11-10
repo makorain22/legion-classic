@@ -71,7 +71,7 @@ void Simulation::reactToFire(uint32_t ei, CCombat& c, CUnit& u, const CPosition&
   if (tick_ - c.hurtTick > 30 || !reg_.alive(attacker) || !reg_.has<CUnit>(attacker)) return;
   if (o.forced || u.stance != Stance::Aggressive || o.type == OrderType::Attack || o.type == OrderType::Harvest) return;
   const UnitTypeDef& def = types_.get(u.type);
-  if (def.speed <= 0) return;
+  if (def.speed <= 0 || def.scout) return;  // scouts fall back instead (stepScouts)
   const CPosition& ap = reg_.get<CPosition>(attacker);
   if (o.type == OrderType::Move) {
     o.type = OrderType::AttackMove;  // same destination, but fight on the way

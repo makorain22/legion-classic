@@ -961,7 +961,7 @@ void Editor::drawBattleTab() {
   }
 
   ImGui::SeparatorText("View");
-  ImGui::Checkbox("Show the fog of war while editing", &scene_.editorShowsFog());
+  ImGui::Checkbox("Show what the player's side would know (intel) while editing", &scene_.editorShowsFog());
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("See the battlefield as the side you command sees it.");
   if (ImGui::Button("Clear wrecks, bodies and craters")) scene_.fx().clear();
 

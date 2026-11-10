@@ -39,7 +39,7 @@ Vec2i Simulation::footprintOrigin(int type, Vec2i centre) const {
   return {(centre.x - d.footW * 128 + 128) >> LEPTON_SHIFT, (centre.y - d.footH * 128 + 128) >> LEPTON_SHIFT};
 }
 
-bool Simulation::canPlace(int type, Vec2i o) const {
+bool Simulation::canPlace(int type, Vec2i o, bool anySlope) const {
   const UnitTypeDef& d = types_.get(type);
   if (!d.isStructure()) return false;
   if (d.role == "depot" && supplyPointFor(type, o) < 0) return false;  // depots go on free supply points
@@ -48,9 +48,10 @@ bool Simulation::canPlace(int type, Vec2i o) const {
       if (!map_.inBounds(x, y) || (map_.block(x, y) & Map::kOccupied)) return false;
       const TileInfo& t = map_.info(x, y);
       // Fortifications may go on rougher ground than buildings; nothing goes in deep water.
-      const int maxSlope = d.category == UnitCategory::Fortification ? 40 : 24;
+      // (Buildings level their plot, so a little more slope than they once allowed is fine.)
+      const int maxSlope = d.category == UnitCategory::Fortification ? 40 : 30;
       if (d.bridge) continue;  // bridges go over water and down banks
-      if (t.slope > maxSlope || t.waterDepth > -4) return false;
+      if ((t.slope > maxSlope && !anySlope) || t.waterDepth > -4) return false;
     }
   // Not on top of units (structures can't crush a squad).
   auto& units = reg_.pool<CUnit>();
@@ -116,6 +117,49 @@ void Simulation::occupy(uint32_t e, const UnitTypeDef& def, Vec2i o) {
       tileStructure_[static_cast<size_t>(y) * map_.width() + x] = e;
     }
   if (def.cover || def.coverAround) coverDirty_ = true;
+}
+
+void Simulation::levelPlot(uint32_t e, const UnitTypeDef& def, Vec2i o) {
+  // Bridges keep their banks; trenches, wire and sandbags follow the ground.
+  if (def.bridge || (def.category == UnitCategory::Fortification && def.footW * def.footH < 2)) return;
+  const int x1 = o.x + def.footW, y1 = o.y + def.footH;  // corner range of the plot
+  // A corner is left alone if it touches another building's tile (its plot is set).
+  auto foreign = [&](int cx, int cy) {
+    for (int ty = cy - 1; ty <= cy; ++ty)
+      for (int tx = cx - 1; tx <= cx; ++tx) {
+        if (!map_.inBounds(tx, ty)) continue;
+        const uint32_t s = tileStructure_[static_cast<size_t>(ty) * map_.width() + tx];
+        if (s != UINT32_MAX && s != e) return true;
+      }
+    return false;
+  };
+  int sum = 0, n = 0;
+  for (int cy = o.y; cy <= y1; ++cy)
+    for (int cx = o.x; cx <= x1; ++cx) {
+      sum += map_.corner(cx, cy);
+      ++n;
+    }
+  const int level = (sum + n / 2) / n;
+  // The plot itself is flat; round it, the ground may slope at most
+  // kSkirt height units per tile away from it (so placing again changes nothing).
+  constexpr int kSkirt = 14, kReach = 3;
+  bool changed = false;
+  for (int cy = o.y - kReach; cy <= y1 + kReach; ++cy)
+    for (int cx = o.x - kReach; cx <= x1 + kReach; ++cx) {
+      if (cx < 0 || cy < 0 || cx > map_.width() || cy > map_.height() || foreign(cx, cy)) continue;
+      const int d = std::max({o.x - cx, cx - x1, o.y - cy, cy - y1, 0});
+      const int h = map_.corner(cx, cy);
+      if (d > 0 && map_.waterLevel() && h < map_.waterLevel()) continue;  // leave the river bed alone
+      const int want = std::clamp(h, level - kSkirt * d, level + kSkirt * d);
+      if (want != h) {
+        map_.setCorner(cx, cy, static_cast<uint16_t>(want));
+        changed = true;
+      }
+    }
+  if (!changed) return;
+  const Map::TileRect r{o.x - kReach - 1, o.y - kReach - 1, x1 + kReach, y1 + kReach};
+  map_.recomputeInfo(r.x0, r.y0, r.x1, r.y1);
+  map_.noteHeightEdit(r);
 }
 
 // Removes an entity, freeing its tiles if it is a structure.

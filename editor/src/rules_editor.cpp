@@ -45,7 +45,7 @@ const std::vector<Field>& fieldsFor(RulesEditor::Kind k) {
       {"group", F::Text, "Sidebar group", "Heading it is listed under in the sidebar and encyclopedia."},
       {"description", F::Long, "Description", "A line or two for the encyclopedia."},
       {"model", F::Model, "Model", "The art it is drawn with (any built-in or art-pack model)."},
-      {"nato", F::Enum, "NATO symbol", "Symbol on unit cards and fog chips.", 0, 0, 0,
+      {"nato", F::Enum, "NATO symbol", "Symbol on unit cards and intel chips. Recon units are scouts: left standing, they fall back from an enemy that comes close.", 0, 0, 0,
        {"infantry", "mg", "antitank", "engineer", "sniper", "recon", "mech", "armour", "antitank_armour", "artillery", "hq"}},
       {"category", F::Enum, "Category", "Where it is built. Left out: worked out from the locomotor.", 0, 0, 0,
        {"infantry", "vehicle", "building", "defense", "fortification"}},

@@ -154,12 +154,24 @@ recognition flash on vehicles and a roundel in the interface.
      (bars, cards, brushes) are placed at projected points unchanged. Effects
      live on the flat classic plane plus a height, so the same particles are
      drawn in either view. The classic 2D view stays behind a setting.
-   - **9.2 Terrain 2.0** – finer ground, cliffs and overhangs, ground that
+   - **9.2 Terrain 2.0** (done, 0.9.1): per-tile speeds (`TileInfo::speed`,
+     `Map::speedPercent`) in movement and path costs; the drawn ground is a
+     clamped Catmull-Rom surface (`Map::heightAt`; the generator keeps
+     `heightAtLinear`); rock faces (`rock_faces.cpp`) on tiles of slope ≥ 41;
+     ground blending in the model shader; `Simulation::levelPlot`; graded
+     roads, cut banks, escarpments and straight bridges in the generator.
+     Originally: – finer ground, cliffs and overhangs, ground that
      blends round buildings, roads and wrecks; buildings level their plot and
      blend into the slope; graded roads and proper banks; bridges only between
      high banks, straight and seamless; fords crossable at half speed;
      movement that feels slopes, fords and rough ground.
-   - **9.3 Intel instead of fog** – the map is always visible, but enemy
+   - **9.3 Intel instead of fog** (done, 0.9.1): terrain fog off;
+     `GameScene::intelAt` (vision only), `structureKnown` / `spotted_` (enemy
+     buildings remembered once seen, rebuilt from explored ground on load or
+     side change); chips in `intel.cpp` (8-tile buckets for units, 16 for
+     buildings, identified within 2x sight); card stacks in `unit_cards.cpp`;
+     `UnitTypeDef::scout` (NATO "recon") and `Simulation::stepScouts`
+     (`scouts.cpp`, every 6 ticks, idle scouts only). Originally: – the map is always visible, but enemy
      units and buildings show only as cards until spotted (as in R.U.S.E.);
      nearby cards merge into one stack; scouts see twice as far and fall back
      on their own when the enemy gets close.

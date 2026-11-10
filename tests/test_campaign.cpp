@@ -333,8 +333,27 @@ TEST_CASE("tutorial 3, Digging In, is won by doing what the hints say") {
   REQUIRE(b.runUntil([&] { return b.fired("Manned"); }, 90));
   walls("gbr_wire", 28, 27, 36);
   REQUIRE(b.runUntil([&] { return b.fired("Wired"); }, 30));
-  // The Bren teams man a short wall of sandbags behind the trench.
-  walls("gbr_sandbags", 24, 31, 32);
+  // The Bren teams man a short wall of sandbags behind the trench (two
+  // tiles nobody is standing on: men walking up may be in the way).
+  auto clear = [&](int x, int y) {
+    Registry& reg = b.sim->registry();
+    for (uint32_t e : reg.pool<CUnit>().entities()) {
+      const CPosition& p = reg.pool<CPosition>().get(e);
+      if (p.x / 256 == x && p.y / 256 == y) return false;
+    }
+    return true;
+  };
+  int bx = 24, by = 31;
+  for (int x : {24, 23}) {
+    for (int y = 30; y <= 35; ++y)
+      if (clear(x, y) && clear(x, y + 1)) {
+        bx = x;
+        by = y;
+        break;
+      }
+    if (clear(bx, by) && clear(bx, by + 1)) break;
+  }
+  walls("gbr_sandbags", bx, by, by + 1);
   b.runUntil([] { return false; }, 1);
   const auto bags = b.ofType(0, "gbr_sandbags");
   REQUIRE(bags.size() == 2);

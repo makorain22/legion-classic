@@ -30,7 +30,8 @@ class Pathfinder {
   uint32_t region(int tx, int ty, Locomotor loco) const;
 
   // True if a unit can drive in a straight line from a to b (leptons).
-  bool lineClear(Vec2i a, Vec2i b, Locomotor loco) const;
+  // With minSpeed, the line must also stay on ground at least that fast (percent).
+  bool lineClear(Vec2i a, Vec2i b, Locomotor loco, int minSpeed = 0) const;
 
   // The reachable point nearest to `to` for a unit at `from` (leptons). Returns
   // `to` itself when it is reachable.

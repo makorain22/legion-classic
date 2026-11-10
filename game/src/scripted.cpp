@@ -651,6 +651,24 @@ void GameScene::runTownDemo() {
     ctl.amount = -1;
     sim_->queue(std::move(ctl));
   }
+  if (opt_.townDemo == 3) {
+    // The camera on the most rock on the map (for screenshots of cliffs).
+    int best = -1;
+    Vec2i at{0, 0};
+    for (int ty = 2; ty < map_.height() - 2; ++ty)
+      for (int tx = 2; tx < map_.width() - 2; ++tx) {
+        int n = 0;
+        for (int oy = -3; oy <= 3; ++oy)
+          for (int ox = -3; ox <= 3; ++ox) n += map_.info(tx + ox, ty + oy).slope >= 41;
+        if (n > best) {
+          best = n;
+          at = {tx, ty};
+        }
+      }
+    revealMap_ = true;
+    centerOn({at.x * T + 128, at.y * T + 128});
+    return;
+  }
   if (opt_.townDemo == 2) {
     Entity bridge;
     for (uint32_t i : reg.pool<CUnit>().entities())

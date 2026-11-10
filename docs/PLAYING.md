@@ -322,10 +322,22 @@ guns and towers are built and placed like other structures.
   then left-click the ground, or pick it in the Ctrl+right-click menu) advances to a point and
   stops to fight anything met on the way. A plain move ignores the enemy
   (tanks still shoot on the move with their turrets; infantry don't).
-- **Fog of war.** Black ground has never been seen; dimmed ground was seen
-  before but isn't watched now. Enemy units are only shown where your units
-  can see them, and they can only be shot when seen. **Tab** switches the side
-  you command and the side whose view you see.
+- **Intel.** The whole map is always in view; the enemy isn't. Enemy units
+  are shown only where one of your units can see them, and can only be shot
+  when seen. Out of sight, their forces show as **chips**: counters standing
+  roughly where they are, bigger the more there are (few, some, many, a host).
+  A chip near your units (within twice their sight) shows what kind of force
+  it is; further off it is just a "?". Enemy buildings are square counters
+  until one of your units has seen them; then they stay on the map, dimmed
+  while nobody is watching. **Tab** switches the side you command and the
+  side whose view you see.
+- **Card stacks.** Unit cards close together merge into one stack card
+  ("5 units"). Hover over it or select it to open the list of cards inside;
+  click it to select them all.
+- **Scouts** (scout cars) see about twice as far as anything else. Left
+  standing, a scout falls back a few tiles by itself when an armed enemy comes
+  within 6 tiles, and keeps watching from there. Give it orders and it goes
+  where it is told.
 - **Aftermath.** Destroyed vehicles burn and smoke for about 20 seconds and
   stay on the field as blackened wrecks; fallen soldiers stay for a while;
   shells leave craters and scorch marks.
@@ -341,6 +353,13 @@ lean with the slopes they drive over. Smoke, fire, flashes and tracers hang
 in the air and face the camera; craters, scorch marks, oil and trenches lie
 on the ground. Unit cards, health bars and the editor's brushes stay flat on
 the screen.
+
+The ground matters too (Milestone 9.2): slopes slow everything,
+mud bogs down wheels, sand and snow slow vehicles, and fords and wading are
+half speed (bridges and roads are full speed). Ground too steep to climb is
+rock: cliffs, some with overhanging ledges. New buildings level their plot.
+Bridges stand only where both banks are high, straight across beside the
+ford.
 
 The old 2D view is still there: **Settings > Game > 3D battlefield** off (or
 `--classic`). Shadows can be switched off on the same page.
@@ -406,7 +425,7 @@ These are the defaults:
 **Settings → Display** sets the frame rate limit (30 to 240, or unlimited;
 144 by default), vsync, whether the mouse is kept inside the window while you
 play (on by default, so edge scrolling always works), edge scrolling, scroll
-speed, the info panel, unit cards (and whether enemy cards show) and fog
+speed, the info panel, unit cards (and whether enemy cards show) and intel
 chips. The sidebar wears your side's colours: field grey for the Germans,
 khaki for the Soviets, service brown and stone (with the roundel) for the British.
 
@@ -433,8 +452,9 @@ mods is in [MODDING.md](MODDING.md).
 The editor opens as a panel on the left while the battle keeps running. Build
 a scenario, drop in armies, set them fighting, and change anything while they
 fight. Press Space (or untick *Paused* on the Battle tab) to freeze time. The
-editor shows the whole map; tick *Show the fog of war while editing* on the
-Battle tab to see what the side you command sees.
+editor shows everything; tick *Show what the player's side would know
+(intel) while editing* on the Battle tab to see what the side you command
+knows.
 
 Every change to terrain and units goes into one undo history (100 steps):
 **Ctrl+Z** undoes, **Ctrl+Y** redoes, even mid-battle. Undoing a placement
@@ -575,7 +595,7 @@ sides) to choose who plays each side), `--gallery` (every unit and building line
 at the art; with `--factions gbr` one army only), `--works-demo` (trenches and sandbag walls
 manned by every kind of infantry), `--town-demo` (every civilian building), `--bridge-demo`
 (with `--ai-battle --layout 0`: a column crossing a bridge), `--org-demo` (a platoon, an armoured platoon, a held building and
-fog chips), `--export-sprites folder` (write every sprite as a PNG for
+intel chips), `--intel` (with `--ai-battle`: watch with the first side's intel), `--export-sprites folder` (write every sprite as a PNG for
 repainting; see [ART_PIPELINE.md](ART_PIPELINE.md)), `--tool rules:ger_medium_tank`,
 or `--tool mods` (open a creation tool at start),
 `--mods-selftest` (checks the rules editor and mods through the

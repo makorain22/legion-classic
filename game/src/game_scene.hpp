@@ -5,6 +5,7 @@
 #include <array>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <imgui.h>
@@ -77,7 +78,7 @@ struct SceneOptions {
   std::string encyclopedia;      // open the encyclopedia on this unit id at start (screenshots)        // ignore content/art/blitzkrieg (compare with the built-in art)
   bool gallery = false;
   bool battleDemo = false;       // two forces fighting in the open (screenshots)
-  int townDemo = 0;              // 1: every civilian building in rows; 2: the camera on a bridge
+  int townDemo = 0;              // 1: every civilian building in rows; 2: the camera on a bridge; 3: on the steepest rock
   bool worksDemo = false;        // trenches and sandbag walls manned by every kind of infantry, for screenshots
   bool orgDemo = false;          // fireteams, platoons, a garrison and fog chips, for screenshots         // every unit lined up, for screenshots of the art
   bool economyDemo = false;     // scripted base building, for automated screenshots
@@ -103,6 +104,7 @@ struct SceneOptions {
   int biome = 0;
   bool classic = false;         // --classic: the old 2D sprite view instead of 3D
   bool noShadows = false;       // --no-shadows (testing, comparisons)
+  bool intel = false;           // --intel: an AI battle seen with the viewing side's intel (no reveal)
   float yaw = -1000, pitch = -1000;  // --yaw / --pitch: starting camera angles in degrees (screenshots)
 };
 
@@ -202,7 +204,10 @@ class GameScene final : public slave::Scene {
   bool& editorShowsFog() { return editorFog_; }
   void centerOn(slave::Vec2i leptons);
   void orderMove(slave::Vec2i target, slave::CommandType type = slave::CommandType::Move, int formation = -1);
+  // Intel is on (9.3): the enemy shows only where our side sees it.
   bool fogEnabled() const;
+  // An enemy building our side has seen (ours, allies' and villages: always).
+  bool structureKnown(uint32_t e) const;
   Sidebar& sidebar() { return *sidebar_; }
   void setPaused(bool p) { paused_ = p; }
   float speed() const { return speed_; }
@@ -293,6 +298,7 @@ class GameScene final : public slave::Scene {
     float yaw = 0;
     bool turned = false;
     float pitch = 0, roll = 0;
+    float blend = 0;  // 3D: tiles of ground creeping up its foot
   };
 
   slave::Vec2i mouseWorldLeptons() const;
@@ -341,7 +347,18 @@ class GameScene final : public slave::Scene {
     uint8_t owner = 0;
     int32_t bestCost = -1;
     std::string nato;
+    bool identified = false;  // within earshot of our side: the kind of force is known
+    bool structures = false;  // buildings not yet seen
   };
+  // Intel (9.3): the whole map is in view; the enemy shows only where our
+  // side sees it, as chips elsewhere. Enemy buildings, once seen, stay on
+  // the map (dimmed while out of sight).
+  std::unordered_map<uint32_t, uint32_t> spotted_;  // structure entity index -> handle generation
+  int64_t lastScoutNote_ = -100000;                 // frame of the last "scout falling back" note
+  uint8_t spottedFor_ = 255;                        // the side the memory belongs to
+  void updateIntel();
+  // 255 where our side sees now, 0 elsewhere (or 255 everywhere with intel off).
+  uint8_t intelAt(int tx, int ty) const;
   std::vector<Chip> chips_;
   std::vector<uint8_t> detect_;
   int chipTimer_ = 0;
@@ -395,6 +412,9 @@ class GameScene final : public slave::Scene {
   slave::ShadowMap shadow_;
   std::vector<int> frameMesh_;  // atlas frame -> mesh (-2: not looked at yet)
   std::vector<DrawItem> billboards_;  // 3D: things with no model, drawn as sprites facing the camera
+  std::vector<int> rockMesh_;            // per terrain chunk: its rock faces (owned mesh, reused)
+  std::vector<slave::Vec3f> rockOrigin_;
+  void updateRockFaces();
   void render3D();
   void drawOverlays(const slave::RectF& view, bool markers);
   void drawGround3D();
@@ -459,10 +479,15 @@ class GameScene final : public slave::Scene {
   struct CardHit {
     float x0, y0, x1, y1;
     slave::Entity group;
+    std::vector<slave::Entity> stack;  // a stack card: every group in it (9.3)
   };
   std::vector<CardHit> cardHits_;  // unit cards drawn last frame, for clicks
+  slave::Entity openStack_;        // the stack card opened by the mouse, and the area it covers open
+  float openArea_[4] = {0, 0, 0, 0};
   slave::Entity lastCard_;
   slave::Entity cardAt(slave::Vec2f screenPx) const;
+  // The groups behind the card under the mouse (several for a stack card).
+  std::vector<slave::Entity> cardGroupsAt(slave::Vec2f screenPx) const;
   std::vector<bool> bridgeTypes_;         // bridge pieces: drawn at the water line, men cross on the deck
   std::vector<float> bridgeLevel_;        // per tile: the height a bridge there is laid at (0: none)
   uint64_t bridgeSig_ = ~0ull;

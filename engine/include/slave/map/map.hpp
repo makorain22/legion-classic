@@ -13,6 +13,7 @@
 #include <array>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "slave/math/vec.hpp"
@@ -53,6 +54,11 @@ struct Prop {
 struct TileInfo {
   uint16_t slope = 0;     // max - min corner height, in height units
   int16_t waterDepth = 0; // water level - average height (positive = under water)
+  // How fast each locomotor (foot, wheeled, tracked) crosses the tile, in
+  // percent of its full speed: slopes, mud, sand and snow slow it, wading and
+  // fords halve it (Milestone 9.2).
+  uint8_t speed[3] = {100, 100, 100};
+  bool ford = false;      // a road crossing water at ground level
 };
 
 // Movement rules (Milestone 3 moves these to data files per unit type).
@@ -98,12 +104,22 @@ class Map {
   void setCorner(int cx, int cy, uint16_t h) { heights_[static_cast<size_t>(cy) * cornersX() + cx] = h; }
   std::vector<uint16_t>& heights() { return heights_; }
   const std::vector<uint16_t>& heights() const { return heights_; }
+  // Ground the simulation reshaped (a building's plot): tile rectangles,
+  // inclusive, for the renderer to pick up. Never saved.
+  struct TileRect {
+    int x0, y0, x1, y1;
+  };
+  void noteHeightEdit(TileRect r) { heightEdits_.push_back(r); }
+  std::vector<TileRect> takeHeightEdits() { return std::exchange(heightEdits_, {}); }
   uint16_t maxHeight() const;
 
   // Height under a point, in height units x 256 (sub-unit precision). Deterministic.
   int32_t heightAtFine(int32_t lx, int32_t ly) const;
   // Same, as a float in height units (for rendering only).
   float heightAt(float lx, float ly) const;
+  // Straight between the corners (what heightAt was before 9.2): the
+  // generator decides on this, so maps come out as they always did.
+  float heightAtLinear(float lx, float ly) const;
 
   // --- Ground layers (splat) ----------------------------------------------
   int splatW() const { return width_ * SPLAT_PER_TILE; }
@@ -127,7 +143,15 @@ class Map {
   const TileInfo& info(int tx, int ty) const { return info_[static_cast<size_t>(ty) * width_ + tx]; }
   void recomputeInfo() { recomputeInfo(0, 0, width_ - 1, height_ - 1); }
   void recomputeInfo(int tx0, int ty0, int tx1, int ty1);  // inclusive tile range
+  // Just the speeds (after painting the ground layers).
+  void recomputeSpeeds(int tx0, int ty0, int tx1, int ty1);
   bool passable(int tx, int ty, Locomotor loco) const;
+  // Percent of full speed on this tile (1..100); bridge decks are full speed.
+  int speedPercent(int tx, int ty, Locomotor loco) const {
+    if (!inBounds(tx, ty)) return 100;
+    if (blocks_[static_cast<size_t>(ty) * width_ + tx] & kDeck) return 100;
+    return info(tx, ty).speed[static_cast<int>(loco)];
+  }
   TerrainRules& rules() { return rules_; }
   // Increases whenever terrain passability may have changed (editor, load).
   uint32_t revision() const { return revision_; }
@@ -203,6 +227,7 @@ class Map {
  private:
   int width_ = 0, height_ = 0;
   std::vector<uint16_t> heights_;
+  std::vector<TileRect> heightEdits_;
   std::vector<uint8_t> splat_;
   std::vector<TileInfo> info_;
   std::vector<uint8_t> blocks_;

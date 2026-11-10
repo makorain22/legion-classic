@@ -35,8 +35,9 @@ battle and change anything, the rules included.
   NATO card with its strength.
 - **Cover that matters.** Garrison houses and bunkers, put three men in each
   piece of trench, and hit tanks in the side or rear.
-- **Fog of war with chips.** Enemies you have spotted but can't see show as
-  chips sized by their strength.
+- **Intel instead of fog.** The whole map is always in view; enemy forces
+  out of sight show as chips sized by their strength, buildings as counters
+  until scouted. Scouts see twice as far and keep their distance.
 - **A computer player with a doctrine per side.** The Germans fortify in depth
   and attack with combined arms; the Soviets mass infantry and artillery and
   stream reinforcements in; the British dig in, bring up the guns and attack

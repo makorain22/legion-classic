@@ -740,6 +740,20 @@ Entity GameScene::cardAt(Vec2f screenPx) const {
   return kNullEntity;
 }
 
+std::vector<Entity> GameScene::cardGroupsAt(Vec2f screenPx) const {
+  const float ps = app_.pixelScale();
+  const float x = screenPx.x / ps, y = screenPx.y / ps;
+  Registry& reg = sim_->registry();
+  for (auto it = cardHits_.rbegin(); it != cardHits_.rend(); ++it) {
+    if (x < it->x0 || x > it->x1 || y < it->y0 || y > it->y1) continue;
+    std::vector<Entity> out;
+    for (Entity g : it->stack.empty() ? std::vector<Entity>{it->group} : it->stack)
+      if (reg.alive(g) && reg.has<CGroup>(g) && selectableOwner(reg.get<CGroup>(g).owner)) out.push_back(g);
+    if (!out.empty()) return out;
+  }
+  return {};
+}
+
 void GameScene::bindSelection() {
   pruneSelection();
   if (selection_.size() < 2) return;
@@ -1316,9 +1330,10 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
           // A unit card: the whole bound unit (double-click: and look at it).
           const uint64_t now = SDL_GetTicks();
           if (!add) selection_.clear();
-          for (Entity m : sim_->registry().get<CGroup>(card).members)
-            if (sim_->registry().alive(m) && std::find(selection_.begin(), selection_.end(), m) == selection_.end())
-              selection_.push_back(m);
+          for (Entity g : cardGroupsAt(mouse_))  // a stack card: every unit in it
+            for (Entity m : sim_->registry().get<CGroup>(g).members)
+              if (sim_->registry().alive(m) && std::find(selection_.begin(), selection_.end(), m) == selection_.end())
+                selection_.push_back(m);
           if (card == lastCard_ && now - lastClickMs_ < 350 && !selection_.empty())
             centerOn({sim_->registry().get<CPosition>(selection_.front()).x, sim_->registry().get<CPosition>(selection_.front()).y});
           lastCard_ = card;
@@ -1634,6 +1649,13 @@ void GameScene::announce(const SimEvent& ev) {
       else showStatus("Can't build " + d.name + " there", 2.5f);
       break;
     }
+    case EventType::ScoutFallsBack:
+      // Once in a while, not for every scout every time.
+      if (ev.owner == player_ && mode_ == Mode::Game && frame_ - lastScoutNote_ > 600) {
+        lastScoutNote_ = frame_;
+        showStatus("Scout falling back: enemy close", 2.5f);
+      }
+      break;
     case EventType::ScriptMessage:
       if (ev.owner == ANY_PLAYER || ev.owner == player_) messages_.push_back({ev.text, 0});
       break;
@@ -1770,9 +1792,13 @@ void GameScene::onUpdate(float dt, float alpha) {
   sidebar_->update(dt);
   drawStructureEffects(dt * timeScale());
   if (bannerTime_ > 0) bannerTime_ -= dt;
+  // Ground the battle reshaped (levelled building plots).
+  for (const Map::TileRect& r : map_.takeHeightEdits()) terrain_.markHeightsDirty(r.x0, r.y0, r.x1, r.y1);
   terrain_.update();
-  if (fogEnabled()) terrain_.setFog(&sim_->vision().grid(player_), sim_->vision().revision() * 16u + player_);
-  else terrain_.setFog(nullptr, 0);
+  updateRockFaces();
+  // Intel instead of fog (9.3): the ground is never darkened.
+  terrain_.setFog(nullptr, 0);
+  updateIntel();
   terrain_.updateFog(dt);
   fx_.update(dt * timeScale());
   hovered_ = app_.offscreen() || ImGui::GetIO().WantCaptureMouse ? Entity{} : pickUnit(mouse_, false);
@@ -1819,7 +1845,7 @@ void GameScene::onRender() {
 
   const RectF view = cam_.visibleWorld(120);
   const bool fog = fogEnabled();
-  const BattleFx::FogAt fogAt = [&](int tx, int ty) -> uint8_t { return fog ? terrain_.fogAt(tx, ty) : 255; };
+  const BattleFx::FogAt fogAt = [&](int tx, int ty) -> uint8_t { return fog ? intelAt(tx, ty) : 255; };
 
   drawGroundLayer(view);
   fx_.drawGround(renderer_, view, fogAt);
@@ -1937,7 +1963,7 @@ void GameScene::drawGroundLayer(const RectF& view) {
     if (u.type >= trenchTypes_.size() || !trenchTypes_[u.type]) continue;
     const CStructure& st = reg.pool<CStructure>().get(e);
     if (st.tx < tx0 || st.tx > tx1 || st.ty < ty0 || st.ty > ty1) continue;
-    if (fog && !sim_->allied(u.owner, player_) && terrain_.fogAt(st.tx, st.ty) == 0) continue;
+    if (fog && !structureKnown(e)) continue;
     auto isTrench = [&](int x, int y) {
       const Entity o = sim_->structureAt(x, y);
       return o.valid() && trenchTypes_[reg.get<CUnit>(o).type];
@@ -1986,6 +2012,7 @@ void GameScene::drawUnits(const RectF& view) {
     const auto& variants = art_.props[static_cast<size_t>(p.kind)];
     drawList_.push_back({iso::depthKey(p.x, p.y), order++, variants[p.variant % variants.size()], s.x, s.y, kWhite, tint,
                          static_cast<float>(p.x), static_cast<float>(p.y), ph});
+    drawList_.back().blend = 0.06f;  // grass round the trunk or stone
   }
   // Supply points: a fenced compound with crates and fuel drums, a gate in
   // front; a depot goes up inside.
@@ -2050,6 +2077,7 @@ void GameScene::drawUnits(const RectF& view) {
     const int64_t depth = iso::depthKey(w.lx, w.ly);
     drawList_.push_back({depth, order++, w.bodyFrame, s.x, s.y, w.team, tint, static_cast<float>(w.lx),
                          static_cast<float>(w.ly), wh});
+    drawList_.back().blend = 0.07f;  // a wreck settles into the ground
     if (w.turretFrame >= 0) {
       const float tx = w.lx + w.turretShift.x, ty = w.ly + w.turretShift.y;
       const Vec2f t = groundToScreenWorld(tx, ty);
@@ -2069,13 +2097,10 @@ void GameScene::drawUnits(const RectF& view) {
     uint32_t tint = kWhite;
     if (def.isStructure()) {
       if (u.type < trenchTypes_.size() && trenchTypes_[u.type]) continue;  // drawn on the ground layer
-      // Enemy structures stay on the map once seen (dimmed when out of sight).
-      if (fog && !sim_->allied(u.owner, player_)) {
-        const uint8_t fv = terrain_.fogAt(p.x >> LEPTON_SHIFT, p.y >> LEPTON_SHIFT);
-        if (fv == 0) continue;
-        const float k = fv < 128 ? 0.48f * fv / 128.0f : 0.48f + 0.52f * (fv - 128) / 127.0f;
-        const uint8_t c = static_cast<uint8_t>(255 * k);
-        tint = rgba8(c, c, c);
+      // Enemy structures show once our side has seen them (dimmed while out of sight).
+      if (fog && !sim_->allied(u.owner, player_) && u.owner < MAX_PLAYERS) {
+        if (!structureKnown(e)) continue;
+        if (!sim_->vision().visible(player_, p.x >> LEPTON_SHIFT, p.y >> LEPTON_SHIFT)) tint = rgba8(170, 170, 170);
       }
       // Fade in as it goes up.
       const uint32_t age = sim_->tickCount() - reg.pool<CStructure>().get(e).builtTick;
@@ -2151,6 +2176,7 @@ void GameScene::drawUnits(const RectF& view) {
       }
     }
     DrawItem body{depth, order++, bodyFrame, s.x, s.y, teamColor(u.owner), tint, ulx, uly, uh};
+    if (def.isStructure() && !bridge) body.blend = def.footW * def.footH >= 2 ? 0.14f : 0.07f;  // set into the ground
     const float hullYaw = static_cast<float>(f.angle) * (6.2831853f / ANGLE_FULL);
     if (threeD && !def.isStructure() && art.body.facings > 1) {
       // Units turn smoothly; vehicles lean with the slope they stand on.
@@ -2189,7 +2215,7 @@ void GameScene::drawUnits(const RectF& view) {
     const CGarrison& g = reg.get<CGarrison>(bh);
     if (g.occupants.empty() || !reg.alive(g.occupants.front())) continue;
     const uint8_t owner = reg.get<CUnit>(g.occupants.front()).owner;
-    if (fog && !sim_->allied(owner, player_) && terrain_.fogAt(reg.get<CStructure>(bh).tx, reg.get<CStructure>(bh).ty) < 128) continue;
+    if (fog && !sim_->allied(owner, player_) && !sim_->vision().visible(player_, reg.get<CStructure>(bh).tx, reg.get<CStructure>(bh).ty)) continue;
     const int bagType = types_.find(players_[owner % MAX_PLAYERS].faction + "_sandbags");
     if (bagType < 0) continue;
     const UnitArt& bag = unitArt_[static_cast<size_t>(bagType)];

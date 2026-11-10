@@ -6,6 +6,7 @@
 
 #include "slave/assets/voxel_mesh.hpp"
 #include "slave/render/shadow.hpp"
+#include "slave/render/terrain_renderer.hpp"
 
 namespace slave {
 
@@ -17,7 +18,7 @@ layout(location = 1) in uvec4 aInfo;   // normal, occlusion x2, team level x100,
 layout(location = 2) in vec4 aColor;
 layout(location = 3) in vec4 iPosYaw;
 layout(location = 4) in vec4 iPivot;   // pivot x, y, scale (tiles per voxel), ambient occlusion
-layout(location = 5) in vec4 iMisc;    // grain, pitch, roll
+layout(location = 5) in vec4 iMisc;    // grain, pitch, roll, ground blend (tiles)
 layout(location = 6) in vec4 iTint;
 layout(location = 7) in vec4 iTeam;
 uniform mat4 uViewProj;
@@ -29,6 +30,8 @@ out vec4 vTint;
 out vec3 vTeam;
 flat out uvec4 vInfo;
 flat out vec2 vShade;  // ambient occlusion, grain
+out float vLocalZ;     // height above the model's foot, tiles
+flat out float vBlend;
 const vec3 kNormals[6] = vec3[6](vec3(1, 0, 0), vec3(-1, 0, 0), vec3(0, 1, 0), vec3(0, -1, 0), vec3(0, 0, 1), vec3(0, 0, -1));
 mat3 orient() {
   float cy = cos(iPosYaw.w), sy = sin(iPosYaw.w);
@@ -51,6 +54,8 @@ void main() {
   vTeam = iTeam.rgb;
   vInfo = aInfo;
   vShade = vec2(iPivot.w, iMisc.x);
+  vLocalZ = aPos.z * iPivot.z;
+  vBlend = iMisc.w;
 }
 )";
 
@@ -63,7 +68,18 @@ in vec4 vTint;
 in vec3 vTeam;
 flat in uvec4 vInfo;
 flat in vec2 vShade;
+in float vLocalZ;
+flat in float vBlend;
 uniform vec3 uLight;
+uniform float uGroundOn;
+uniform sampler2DArray uLayers;
+uniform sampler2D uSplat0;
+uniform sampler2D uSplat1;
+uniform sampler2D uMacro;
+uniform vec2 uMapSize;
+uniform float uTexScale;
+uniform vec3 uTint;
+uniform float uSat;
 uniform vec4 uGrade;
 uniform sampler2DShadow uShadowMap;
 uniform mat4 uShadowMat;
@@ -72,6 +88,23 @@ uniform float uShadowDark;
 out vec4 fragColor;
 const vec3 kNormals[6] = vec3[6](vec3(1, 0, 0), vec3(-1, 0, 0), vec3(0, 1, 0), vec3(0, -1, 0), vec3(0, 0, 1), vec3(0, 0, -1));
 )" SLAVE_SHADOW_GLSL R"(
+// The ground's colour at a point (the terrain shader's mix, simplified).
+vec3 groundColour(vec2 tile) {
+  vec2 suv = tile / uMapSize;
+  vec4 s0 = texture(uSplat0, suv);
+  vec4 s1 = texture(uSplat1, suv);
+  float w[8] = float[8](s0.r, s0.g, s0.b, s0.a, s1.r, s1.g, s1.b, s1.a);
+  vec3 col = vec3(0.0);
+  float total = 0.0;
+  for (int i = 0; i < 8; ++i)
+    if (w[i] > 0.02) {
+      col += texture(uLayers, vec3(tile * uTexScale, float(i))).rgb * w[i];
+      total += w[i];
+    }
+  col /= max(total, 1e-4);
+  col *= 0.78 + 0.34 * texture(uMacro, tile / 29.0).r;
+  return mix(vec3(dot(col, vec3(0.30, 0.59, 0.11))), col, uSat) * uTint;
+}
 float bayer4(vec2 p) {
   int x = int(mod(p.x, 4.0)), y = int(mod(p.y, 4.0));
   int m[16] = int[16](0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5);
@@ -102,6 +135,14 @@ void main() {
   } else {
     col = vColor.rgb * shade;
   }
+  if (uGroundOn > 0.5 && vBlend > 0.0) {
+    // The ground creeps up the foot of buildings, wrecks and trees in a
+    // ragged line: earth, grass, snow or sand, whatever lies there.
+    float n = texture(uMacro, vWorld.xy * 1.7).r;
+    float reach = vBlend * (0.45 + 1.1 * n);
+    float k = 1.0 - smoothstep(reach * 0.55, reach, vLocalZ);
+    if (k > 0.0) col = mix(col, groundColour(vWorld.xy) * (0.62 + 0.4 * lambert * sun), k * 0.9);
+  }
   col *= vTint.rgb;
   col = mix(vec3(dot(col, vec3(0.30, 0.59, 0.11))), col, uGrade.a) * uGrade.rgb;
   fragColor = vec4(col, 1.0);
@@ -117,6 +158,10 @@ constexpr int kShadowUnit = 7;
 }  // namespace
 
 MeshRenderer::~MeshRenderer() {
+  for (Mesh& m : meshes_) {
+    if (m.ownVbo) glDeleteBuffers(1, &m.ownVbo);
+    if (m.ownVao) glDeleteVertexArrays(1, &m.ownVao);
+  }
   if (vbo_) glDeleteBuffers(1, &vbo_);
   if (instanceVbo_) glDeleteBuffers(1, &instanceVbo_);
   if (vao_) glDeleteVertexArrays(1, &vao_);
@@ -181,6 +226,47 @@ void MeshRenderer::upload(const std::vector<MeshVertex>& verts, Mesh& m) {
   vertexCount_ += verts.size();
 }
 
+void MeshRenderer::setupVertexAttribs(GLuint vbo) const {
+  glBindBuffer(GL_ARRAY_BUFFER, vbo);
+  const GLsizei vs = sizeof(MeshVertex);
+  glEnableVertexAttribArray(0);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, vs, reinterpret_cast<void*>(offsetof(MeshVertex, x)));
+  glEnableVertexAttribArray(1);
+  glVertexAttribIPointer(1, 4, GL_UNSIGNED_BYTE, vs, reinterpret_cast<void*>(offsetof(MeshVertex, normal)));
+  glEnableVertexAttribArray(2);
+  glVertexAttribPointer(2, 4, GL_UNSIGNED_BYTE, GL_TRUE, vs, reinterpret_cast<void*>(offsetof(MeshVertex, r)));
+  for (GLuint loc = 3; loc <= 7; ++loc) {
+    glEnableVertexAttribArray(loc);
+    glVertexAttribDivisor(loc, 1);
+  }
+}
+
+int MeshRenderer::createOwnedMesh() {
+  Mesh m;
+  glGenVertexArrays(1, &m.ownVao);
+  glGenBuffers(1, &m.ownVbo);
+  glBindVertexArray(m.ownVao);
+  setupVertexAttribs(m.ownVbo);
+  glBindVertexArray(0);
+  meshes_.push_back(m);
+  return static_cast<int>(meshes_.size() - 1);
+}
+
+void MeshRenderer::setOwnedMesh(int id, const std::vector<MeshVertex>& verts, float voxelTiles, float ao, float grain) {
+  if (id < 0 || id >= static_cast<int>(meshes_.size())) return;
+  Mesh& m = meshes_[static_cast<size_t>(id)];
+  if (!m.ownVbo) return;
+  m.first = 0;
+  m.count = static_cast<GLsizei>(verts.size());
+  m.voxelTiles = voxelTiles;
+  m.ao = ao;
+  m.grain = grain;
+  m.pivotX = m.pivotY = 0;
+  glBindBuffer(GL_ARRAY_BUFFER, m.ownVbo);
+  glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(verts.size() * sizeof(MeshVertex)), verts.empty() ? nullptr : verts.data(),
+               GL_STATIC_DRAW);
+}
+
 int MeshRenderer::meshFor(const VoxelSourcePtr& source) {
   if (!source) return -1;
   if (auto it = bySource_.find(source.get()); it != bySource_.end()) return it->second;
@@ -243,7 +329,7 @@ void MeshRenderer::add(int mesh, const MeshInstance& in) {
   Queued q;
   q.mesh = mesh;
   q.inst = {in.pos.x, in.pos.y, in.pos.z, in.yaw, m.pivotX, m.pivotY, m.voxelTiles * in.scale, m.ao,
-            m.grain, in.pitch, in.roll, 0.0f, in.tint, in.team};
+            m.grain, in.pitch, in.roll, in.blend, in.tint, in.team};
   queue_.push_back(q);
   prepared_ = false;
 }
@@ -269,12 +355,18 @@ void MeshRenderer::prepare() {
 }
 
 void MeshRenderer::drawBatches(const gl::Shader&, bool shadowPass) {
-  glBindVertexArray(vao_);
   glBindBuffer(GL_ARRAY_BUFFER, instanceVbo_);
   const GLsizei is = sizeof(GpuInstance);
+  GLuint bound = 0;
   for (const auto& [mesh, range] : batches_) {
     const Mesh& m = meshes_[static_cast<size_t>(mesh)];
     if (shadowPass && !m.castsShadow) continue;
+    const GLuint want = m.ownVao ? m.ownVao : vao_;
+    if (want != bound) {
+      glBindVertexArray(want);
+      glBindBuffer(GL_ARRAY_BUFFER, instanceVbo_);
+      bound = want;
+    }
     const size_t base = range.first * sizeof(GpuInstance);
     glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, is, reinterpret_cast<void*>(base + offsetof(GpuInstance, x)));
     glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, is, reinterpret_cast<void*>(base + offsetof(GpuInstance, pivotX)));
@@ -304,6 +396,13 @@ void MeshRenderer::draw(const Camera& cam, const ShadowMap* shadow) {
   const Vec3f L = sunDirection();
   glUniform3f(shader_.uniform("uLight"), L.x, L.y, L.z);
   glUniform4f(shader_.uniform("uGrade"), grade_[0], grade_[1], grade_[2], grade_[3]);
+  // Every sampler keeps its own unit, used or not (two sampler types on one unit is an error).
+  glUniform1i(shader_.uniform("uLayers"), 8);
+  glUniform1i(shader_.uniform("uSplat0"), 9);
+  glUniform1i(shader_.uniform("uSplat1"), 10);
+  glUniform1i(shader_.uniform("uMacro"), 11);
+  glUniform1f(shader_.uniform("uGroundOn"), ground_ && ground_->hasMap() ? 1.0f : 0.0f);
+  if (ground_ && ground_->hasMap()) ground_->bindGround(shader_, 8);
   if (shadow) shadow->setUniforms(shader_, kShadowUnit, true, 0.55f);
   else {
     glUniform1i(shader_.uniform("uShadowMap"), kShadowUnit);

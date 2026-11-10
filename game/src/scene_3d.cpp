@@ -14,6 +14,7 @@
 #include "game_scene.hpp"
 #include "slave/core/rng.hpp"
 #include "slave/math/iso.hpp"
+#include "slave/render/rock_faces.hpp"
 
 using namespace slave;
 
@@ -131,6 +132,30 @@ void GameScene::ghost(int frame, float lx, float ly, uint32_t team, uint32_t tin
   meshes_.add(mesh, in);
 }
 
+// Rock faces follow the ground: rebuilt with each terrain chunk.
+void GameScene::updateRockFaces() {
+  const std::vector<int> chunks = terrain_.takeRebuiltChunks();
+  if (chunks.empty()) return;
+  const int count = terrain_.chunksX() * terrain_.chunksY();
+  if (static_cast<int>(rockMesh_.size()) < count) {
+    rockMesh_.resize(static_cast<size_t>(count), -1);
+    rockOrigin_.resize(static_cast<size_t>(count));
+  }
+  for (size_t i = static_cast<size_t>(count); i < rockMesh_.size(); ++i)  // a smaller map than before
+    if (rockMesh_[i] >= 0) meshes_.setOwnedMesh(rockMesh_[i], {}, 0.125f, 0, 0);
+  constexpr int C = TerrainRenderer::kChunk;
+  for (int ci : chunks) {
+    if (ci < 0 || ci >= count) continue;
+    const int cx = ci % terrain_.chunksX(), cy = ci / terrain_.chunksX();
+    const RockMesh r = buildRockFaces(map_, cx * C, cy * C, cx * C + C - 1, cy * C + C - 1);
+    int& mesh = rockMesh_[static_cast<size_t>(ci)];
+    if (mesh < 0 && r.verts.empty()) continue;
+    if (mesh < 0) mesh = meshes_.createOwnedMesh();
+    meshes_.setOwnedMesh(mesh, r.verts, 1.0f / kRockVoxelsPerTile, 0.45f, 0.22f);
+    rockOrigin_[static_cast<size_t>(ci)] = r.origin;
+  }
+}
+
 int GameScene::meshOf(int frame) {
   if (frame < 0 || frame >= static_cast<int>(frameMesh_.size())) return -1;
   int& m = frameMesh_[static_cast<size_t>(frame)];
@@ -158,6 +183,7 @@ void GameScene::queueItems3D() {
     in.team = d.team;
     in.pitch = d.pitch;
     in.roll = d.roll;
+    in.blend = d.blend;
     meshes_.add(mesh, in);
   }
 }
@@ -206,7 +232,7 @@ void GameScene::drawGround3D() {
     if (u.type >= trenchTypes_.size() || !trenchTypes_[u.type]) continue;
     const CStructure& st = reg.pool<CStructure>().get(e);
     if (st.tx < tx0 || st.tx > tx1 || st.ty < ty0 || st.ty > ty1) continue;
-    if (fog && !sim_->allied(u.owner, player_) && terrain_.fogAt(st.tx, st.ty) == 0) continue;
+    if (fog && !structureKnown(e)) continue;
     auto isTrench = [&](int x, int y) {
       const Entity o = sim_->structureAt(x, y);
       return o.valid() && trenchTypes_[reg.get<CUnit>(o).type];
@@ -283,13 +309,20 @@ void GameScene::render3D() {
   }
   const RectF view = cam_.visibleWorld(160);
   const bool fog = fogEnabled();
-  const BattleFx::FogAt fogAt = [&](int tx, int ty) -> uint8_t { return fog ? terrain_.fogAt(tx, ty) : 255; };
+  const BattleFx::FogAt fogAt = [&](int tx, int ty) -> uint8_t { return fog ? intelAt(tx, ty) : 255; };
 
   // Everything standing on the field, as models.
   meshes_.clear();
   meshes_.setView(cam_);
+  meshes_.setGround(&terrain_);
   billboards_.clear();
   drawUnits(view);
+  for (size_t i = 0; i < rockMesh_.size() && i < static_cast<size_t>(terrain_.chunksX() * terrain_.chunksY()); ++i)
+    if (rockMesh_[i] >= 0) {
+      MeshInstance in;
+      in.pos = rockOrigin_[i];
+      meshes_.add(rockMesh_[i], in);
+    }
 
   // The sun's shadows: the ground and the models seen from the sun.
   const bool shadows = settings_.shadows && shadow_.ready() && !opt_.noShadows;

@@ -57,6 +57,7 @@ struct UnitTypeDef {
   std::string freeUnitId;    // a refinery comes with a supply truck
   int freeUnit = -1;
   std::string nato;          // map symbol for unit cards and chips ("infantry", "armour"...)
+  bool scout = false;        // reconnaissance ("nato": "recon"): falls back from enemies that come close
   int32_t garrison = 0;      // structures: infantry it can hold
   int32_t income = 0;        // supplies per minute it earns (a depot on a supply point; a yard's trickle)
   int32_t repair = 0;        // engineers: hit points restored per tick to friendly machines and works

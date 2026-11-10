@@ -128,7 +128,7 @@ struct Builder {
         for (const Map::Lot& l : file.map.lots) {
       bool clear = true;
       for (const auto& [x, y, r] : keepClear) clear = clear && (std::abs(l.tx - x) > r || std::abs(l.ty - y) > r);
-      if (!clear) continue;
+      if (!clear && l.kind != Map::kBridgeLot && l.kind != Map::kWoodBridgeLot) continue;  // bridges stay whole
       place(Map::lotBuildingId(l.kind), NEUTRAL_OWNER, l.tx, l.ty, static_cast<int>((l.tx * 7 + l.ty * 3) % 4) * 4, true);
     }
     if (std::getenv("LEGION_DEBUG_LOTS")) std::fprintf(stderr, "lots %zu\n", file.map.lots.size());

@@ -74,6 +74,7 @@ bool UnitTypeRegistry::loadJson(const nlohmann::json& doc, std::string& error) {
       d.repair = u.value("repair", 0);
       d.garrison = u.value("garrison", 0);
       d.nato = u.value("nato", std::string());
+      d.scout = d.nato == "recon";
       d.income = u.value("income", 0);
       d.aiWeight = u.value("aiWeight", 1);
       d.group = u.value("group", std::string());

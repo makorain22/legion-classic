@@ -87,7 +87,7 @@ uint32_t Pathfinder::region(int tx, int ty, Locomotor loco) const {
   return i < reg.size() ? reg[i] : 0;
 }
 
-bool Pathfinder::lineClear(Vec2i a, Vec2i b, Locomotor loco) const {
+bool Pathfinder::lineClear(Vec2i a, Vec2i b, Locomotor loco, int minSpeed) const {
   const int64_t dx = b.x - a.x, dy = b.y - a.y;
   const int64_t len = std::max(std::abs(dx), std::abs(dy));
   const int64_t steps = std::max<int64_t>(1, len / 64);
@@ -98,6 +98,7 @@ bool Pathfinder::lineClear(Vec2i a, Vec2i b, Locomotor loco) const {
     const int tx = x >> LEPTON_SHIFT, ty = y >> LEPTON_SHIFT;
     if (tx == px && ty == py) continue;
     if (!map_.passable(tx, ty, loco)) return false;
+    if (minSpeed > 0 && map_.speedPercent(tx, ty, loco) < minSpeed) return false;
     // Moving diagonally between tiles: both side tiles must be open too.
     if (tx != px && ty != py && (!map_.passable(tx, py, loco) || !map_.passable(px, ty, loco))) return false;
     px = tx;
@@ -148,7 +149,10 @@ bool Pathfinder::findPath(Vec2i from, Vec2i to, Locomotor loco, std::vector<Vec2
   const int sx = std::clamp(from.x >> LEPTON_SHIFT, 0, W - 1), sy = std::clamp(from.y >> LEPTON_SHIFT, 0, H - 1);
   const int gx = goal.x >> LEPTON_SHIFT, gy = goal.y >> LEPTON_SHIFT;
   if (goal == from) return false;
-  if ((sx == gx && sy == gy) || lineClear(from, goal, loco)) {
+  // Straight there when nothing is in the way and the line crosses no ground
+  // slower than where it starts and ends (else A* weighs going round).
+  const int ends = std::min(map_.speedPercent(sx, sy, loco), map_.speedPercent(gx, gy, loco));
+  if ((sx == gx && sy == gy) || lineClear(from, goal, loco, ends)) {
     out.push_back(goal);
     return true;
   }
@@ -204,7 +208,9 @@ bool Pathfinder::findPath(Vec2i from, Vec2i to, Locomotor loco, std::vector<Vec2
       const size_t ni = static_cast<size_t>(ny) * W + nx;
       visit(ni);
       if (closed_[ni]) continue;
-      const uint32_t g = gScore_[cur.node] + kCost[d] + (edge_[static_cast<size_t>(loco)][ni] ? kEdgeCost : 0);
+      // Slow ground costs more: the step's cost over the speed there.
+      const uint32_t step = kCost[d] * 100u / static_cast<uint32_t>(map_.speedPercent(nx, ny, loco));
+      const uint32_t g = gScore_[cur.node] + step + (edge_[static_cast<size_t>(loco)][ni] ? kEdgeCost : 0);
       if (g >= gScore_[ni]) continue;
       gScore_[ni] = g;
       parent_[ni] = cur.node;
@@ -232,8 +238,16 @@ void Pathfinder::smooth(Vec2i from, std::vector<Vec2i>& path, Locomotor loco) co
   while (i < path.size()) {
     size_t pick = i;
     const size_t limit = std::min(path.size() - 1, i + 32);
+    // A shortcut may not cross slower ground than the path it replaces (else
+    // it would cut back through the mud the path went round).
+    int slowest[33];
+    int low = map_.speedPercent(cur.x >> LEPTON_SHIFT, cur.y >> LEPTON_SHIFT, loco);
+    for (size_t j = i; j <= limit; ++j) {
+      low = std::min(low, map_.speedPercent(path[j].x >> LEPTON_SHIFT, path[j].y >> LEPTON_SHIFT, loco));
+      slowest[j - i] = low;
+    }
     for (size_t j = limit; j > i; --j)
-      if (lineClear(cur, path[j], loco)) {
+      if (lineClear(cur, path[j], loco, slowest[j - i])) {
         pick = j;
         break;
       }

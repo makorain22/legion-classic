@@ -168,6 +168,7 @@ enum class EventType : uint8_t {
   GroupFormed,      // owner bound `amount` units into a fighting unit
   Hint,             // a script's hint for owner (`text`; empty: close the panel)
   Highlight,        // a script highlights the interface element `text` for owner
+  ScoutFallsBack,   // owner's scout pulled back to `at` from an enemy that came close
 };
 
 struct SimEvent {
@@ -227,7 +228,7 @@ class Simulation {
   // Top-left tile of a structure whose footprint is centred on `centre`.
   Vec2i footprintOrigin(int type, Vec2i centre) const;
   // Ground is clear for this structure (terrain, other structures, units).
-  bool canPlace(int type, Vec2i origin) const;
+  bool canPlace(int type, Vec2i origin, bool anySlope = false) const;
   // Within building range of the player's own structures.
   bool inBuildRange(uint8_t player, int type, Vec2i origin) const;
   // The player owns what this type requires, and something that can make it.
@@ -333,6 +334,8 @@ class Simulation {
 
   // economy and structures (economy.cpp)
   void occupy(uint32_t e, const UnitTypeDef& def, Vec2i origin);
+  // Levels a new building's plot and eases the ground round it into the slope.
+  void levelPlot(uint32_t e, const UnitTypeDef& def, Vec2i origin);
   void destroyEntity(uint32_t e);
   void recomputeCover();
   void stepEconomy();
@@ -394,6 +397,8 @@ class Simulation {
 
   // combat (combat.cpp)
   void stepTargeting();
+  // Scouts fall back a few tiles from enemies that come close (9.3).
+  void stepScouts();
   void stepWeapons();
   void stepProjectiles();
   void impact(int weapon, uint8_t owner, Vec2i at, Entity directTarget, Vec2i from, Entity shooter);
