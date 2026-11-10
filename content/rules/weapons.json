@@ -1,30 +1,59 @@
 {
-  "_comment": "Weapons and warheads. range and splash are in tiles; cooldown in ticks (15 per second); speed in leptons per tick (256 = 1 tile). Warhead values are percent damage against each armour class; 'facing' is percent damage by the side of a vehicle that is struck (front / side / rear), so flanking pays. accuracy is the percent chance an instant-hit weapon hits (rifles miss 30% of the time: green troops). A gun's 'vsInfantry' names the round it switches to against soldiers. burst: shells fired at once per shot (rocket salvoes), scattered over burstSpread tiles. sound / impact (presentation only): the firing sound and the sound where it lands, names from content/audio/audio.json; left out, they are chosen by the kind of weapon and its warhead.",
+  "_comment": "Weapons and warheads. range and splash are in tiles; cooldown in ticks (15 per second); speed in leptons per tick (256 = 1 tile). Warhead values are percent damage against each armour class; armour-piercing rounds come in three weights (ap_light: 37-45 mm and anti-tank rifles, ap: 57-76 mm and rocket teams, ap_heavy: 85 mm and up, long 75s and 17-pounders) and only the heavy ones go through a heavy tank's front at full effect; 'facing' is percent damage by the side of a vehicle that is struck (front / side / rear), so flanking pays. accuracy is the percent chance an instant-hit weapon hits (rifles miss 30% of the time: green troops). A gun's 'vsInfantry' names the round it switches to against soldiers. burst: shells fired at once per shot (rocket salvoes), scattered over burstSpread tiles. sound / impact (presentation only): the firing sound and the sound where it lands, names from content/audio/audio.json; left out, they are chosen by the kind of weapon and its warhead.",
   "warheads": {
     "bullet": {
       "infantry": 100,
-      "light": 30,
-      "medium": 7,
-      "heavy": 5,
+      "soft": 22,
+      "light": 4,
+      "medium": 3,
+      "heavy": 3,
       "structure": 3
+    },
+    "ap_light": {
+      "infantry": 25,
+      "soft": 100,
+      "light": 100,
+      "medium": 60,
+      "heavy": 25,
+      "facing": {
+        "front": 100,
+        "side": 150,
+        "rear": 250
+      },
+      "structure": 25
     },
     "ap": {
       "infantry": 25,
-      "light": 90,
+      "soft": 90,
+      "light": 100,
+      "medium": 100,
+      "heavy": 55,
+      "facing": {
+        "front": 100,
+        "side": 150,
+        "rear": 250
+      },
+      "structure": 35
+    },
+    "ap_heavy": {
+      "infantry": 25,
+      "soft": 90,
+      "light": 100,
       "medium": 100,
       "heavy": 100,
       "facing": {
         "front": 100,
-        "side": 160,
-        "rear": 450
+        "side": 150,
+        "rear": 250
       },
       "structure": 35
     },
     "he": {
       "infantry": 100,
-      "light": 70,
-      "medium": 30,
-      "heavy": 15,
+      "soft": 70,
+      "light": 30,
+      "medium": 22,
+      "heavy": 12,
       "facing": {
         "front": 100,
         "side": 120,
@@ -73,7 +102,7 @@
     {
       "id": "cannon_at",
       "name": "Anti-tank gun",
-      "warhead": "ap",
+      "warhead": "ap_heavy",
       "damage": 150,
       "range": 9.0,
       "cooldown": 55,
@@ -89,7 +118,7 @@
       "warhead": "ap",
       "damage": 110,
       "range": 10.0,
-      "cooldown": 50,
+      "cooldown": 46,
       "projectile": "shell",
       "speed": 190,
       "splash": 0.3,
@@ -103,7 +132,7 @@
       "warhead": "he",
       "damage": 85,
       "range": 9.0,
-      "cooldown": 50,
+      "cooldown": 46,
       "projectile": "shell",
       "speed": 170,
       "splash": 0.9,
@@ -179,7 +208,7 @@
       "id": "panzerschreck",
       "name": "Rocket launcher",
       "warhead": "ap",
-      "damage": 130,
+      "damage": 100,
       "range": 4.5,
       "cooldown": 70,
       "projectile": "shell",
@@ -191,7 +220,7 @@
     {
       "id": "at_rifle",
       "name": "Anti-tank rifle",
-      "warhead": "ap",
+      "warhead": "ap_light",
       "damage": 48,
       "range": 6.0,
       "cooldown": 30,
@@ -203,7 +232,7 @@
     {
       "id": "cannon_37",
       "name": "37 mm gun",
-      "warhead": "ap",
+      "warhead": "ap_light",
       "damage": 55,
       "range": 7.5,
       "cooldown": 28,
@@ -230,7 +259,7 @@
     {
       "id": "cannon_45",
       "name": "45 mm gun",
-      "warhead": "ap",
+      "warhead": "ap_light",
       "damage": 60,
       "range": 7.5,
       "cooldown": 30,
@@ -257,7 +286,7 @@
     {
       "id": "cannon_88",
       "name": "88 mm gun",
-      "warhead": "ap",
+      "warhead": "ap_heavy",
       "damage": 210,
       "range": 11.5,
       "cooldown": 70,
@@ -285,7 +314,7 @@
     {
       "id": "cannon_122",
       "name": "122 mm gun",
-      "warhead": "ap",
+      "warhead": "ap_heavy",
       "damage": 250,
       "range": 10.5,
       "cooldown": 90,
@@ -313,7 +342,7 @@
     {
       "id": "cannon_75l70",
       "name": "75 mm long gun",
-      "warhead": "ap",
+      "warhead": "ap_heavy",
       "damage": 175,
       "range": 11.0,
       "cooldown": 55,
@@ -327,7 +356,7 @@
     {
       "id": "cannon_85",
       "name": "85 mm gun",
-      "warhead": "ap",
+      "warhead": "ap_heavy",
       "damage": 170,
       "range": 10.5,
       "cooldown": 55,
@@ -343,7 +372,7 @@
       "name": "105 mm howitzer",
       "warhead": "he",
       "damage": 160,
-      "range": 18.0,
+      "range": 28.0,
       "cooldown": 95,
       "projectile": "shell",
       "speed": 120,
@@ -357,7 +386,7 @@
       "name": "Rocket salvo",
       "warhead": "he",
       "damage": 85,
-      "range": 16.0,
+      "range": 24.0,
       "cooldown": 160,
       "projectile": "shell",
       "speed": 150,
@@ -385,7 +414,7 @@
       "name": "150 mm howitzer",
       "warhead": "he",
       "damage": 220,
-      "range": 22.0,
+      "range": 36.0,
       "cooldown": 120,
       "projectile": "shell",
       "speed": 120,
@@ -399,7 +428,7 @@
       "name": "122 mm gun-howitzer",
       "warhead": "he",
       "damage": 200,
-      "range": 21.0,
+      "range": 34.0,
       "cooldown": 110,
       "projectile": "shell",
       "speed": 125,
@@ -436,7 +465,7 @@
       "id": "piat",
       "name": "PIAT",
       "warhead": "ap",
-      "damage": 120,
+      "damage": 95,
       "range": 4.0,
       "cooldown": 75,
       "projectile": "shell",
@@ -502,7 +531,7 @@
     {
       "id": "cannon_17pdr",
       "name": "17-pounder gun",
-      "warhead": "ap",
+      "warhead": "ap_heavy",
       "damage": 190,
       "range": 11.0,
       "cooldown": 60,
@@ -531,7 +560,7 @@
       "name": "25-pounder gun-howitzer",
       "warhead": "he",
       "damage": 125,
-      "range": 17.0,
+      "range": 26.0,
       "cooldown": 62,
       "projectile": "shell",
       "speed": 130,
@@ -545,7 +574,7 @@
       "name": "5.5-inch medium gun",
       "warhead": "he",
       "damage": 210,
-      "range": 24.0,
+      "range": 38.0,
       "cooldown": 115,
       "projectile": "shell",
       "speed": 130,

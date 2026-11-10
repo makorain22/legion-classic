@@ -9,7 +9,32 @@ namespace {
 constexpr int kPathBudgetPerTick = 60000;  // A* node expansions per tick, all units together
 constexpr int kStuckCheckTicks = 30;
 constexpr int kChaseReplanTicks = 15;
+// Reverse gear (9.4): a vehicle sent a short way to its rear backs up instead
+// of turning round, so its front armour (and its gun) stay towards the enemy.
+constexpr int32_t kReverseShort = 5 * LEPTONS_PER_TILE;     // any move this short
+constexpr int32_t kReverseContact = 12 * LEPTONS_PER_TILE;  // while in contact (shooting or being shot at)
+constexpr int32_t kReverseSpeed = 60;                       // percent of the forward speed
+constexpr uint32_t kContactTicks = 5 * 15;
 }  // namespace
+
+// How far (leptons) this unit will back up rather than turn round: 0 for men
+// and anything that turns on the spot.
+int32_t Simulation::reverseReach(uint32_t ei, const UnitTypeDef& def) const {
+  if (def.locomotor == Locomotor::Foot || def.turnTicks <= 0 || def.speed <= 0) return 0;
+  const CCombat* c = reg_.pool<CCombat>().tryGet(ei);
+  const bool contact = c && (c->target.valid() || (c->hurtTick != 0 && tick_ - c->hurtTick < kContactTicks));
+  return contact ? kReverseContact : kReverseShort;
+}
+
+bool Simulation::wouldReverse(Entity e, Vec2i to) const {
+  if (!reg_.alive(e) || !reg_.has<CUnit>(e)) return false;
+  const UnitTypeDef& def = types_.get(reg_.get<CUnit>(e).type);
+  const CPosition& p = reg_.get<CPosition>(e);
+  const int32_t reach = reverseReach(e.index, def);
+  if (reach <= 0 || (to.x == p.x && to.y == p.y)) return false;
+  return distance(to.x - p.x, to.y - p.y) <= static_cast<uint32_t>(reach) &&
+         std::abs(angleDelta(reg_.get<CFacing>(e).angle, atan2Angle(to.y - p.y, to.x - p.x))) > ANGLE_FULL * 5 / 16;
+}
 
 void Simulation::requestPath(Entity e, Vec2i goal) {
   if (types_.get(reg_.get<CUnit>(e).type).speed <= 0) return;  // structures stay put
@@ -165,9 +190,24 @@ void Simulation::stepMovement() {
           return;
         }
 
+        // Reverse gear: the way to go lies behind the hull and the trip is short.
+        // Judged afresh every tick; it holds steady because backing up keeps the
+        // waypoint astern, just as driving forward keeps it ahead.
+        Angle desired = atan2Angle(dy, dx);
+        bool reverse = false;
+        if (dist > 0 && std::abs(angleDelta(facing.angle, desired)) > ANGLE_FULL * 5 / 16) {
+          const int32_t limit = reverseReach(ei, def);
+          int64_t left = dist;
+          for (size_t i = m.index + 1; i < m.path.size() && left <= limit; ++i)
+            left += distance(m.path[i].x - m.path[i - 1].x, m.path[i].y - m.path[i - 1].y);
+          reverse = left <= limit;
+        }
+        if (reverse) desired = static_cast<Angle>((desired + ANGLE_FULL / 2) & ANGLE_MASK);
+
         // The ground underfoot sets the pace (slopes, mud, fords).
-        const int32_t speed =
-            std::max<int32_t>(1, def.speed * map_.speedPercent(pos.x >> LEPTON_SHIFT, pos.y >> LEPTON_SHIFT, def.locomotor) / 100);
+        const int32_t speed = std::max<int32_t>(
+            1, def.speed * map_.speedPercent(pos.x >> LEPTON_SHIFT, pos.y >> LEPTON_SHIFT, def.locomotor) / 100 *
+                   (reverse ? kReverseSpeed : 100) / 100);
         if (dist <= static_cast<uint32_t>(speed)) {
           pos.x = wp.x;
           pos.y = wp.y;
@@ -182,7 +222,6 @@ void Simulation::stepMovement() {
         }
 
         // Turn in visible 1/16 steps before driving, like the classics.
-        const Angle desired = atan2Angle(dy, dx);
         const int32_t want = facingOf(desired), have = facingOf(facing.angle);
         if (want != have) {
           if (def.turnTicks == 0) {

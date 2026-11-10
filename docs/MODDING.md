@@ -104,6 +104,18 @@ The game checks the merged rules when it loads them: an unknown weapon, a
 duplicate id. A broken mod never stops the game starting: the mods are switched
 off for that run and the Mods page says why.
 
+## Armour classes (changed in 0.9.1, Milestone 9.4)
+
+A unit's `armor` is one of `infantry`, `soft` (cars, carriers, lorries,
+self-propelled guns), `light`, `medium`, `heavy` (tanks by weight; casemate
+tank destroyers are `heavy`) or `structure`. Each warhead gives a percentage
+against each. `soft` is new: before 9.4 cars were `light`, light tanks
+`medium` and medium tanks `heavy`. A mod written for the old classes still
+loads (a warhead without a `soft` column uses its `light` one for soft
+vehicles), but its units keep the class they name, so check them against the
+new meanings. Armour-piercing guns now use one of three warheads: `ap_light`,
+`ap` or `ap_heavy`.
+
 ## The rules editor
 
 Open it from **Mods and creation tools**, or from the Live Scenario Editor

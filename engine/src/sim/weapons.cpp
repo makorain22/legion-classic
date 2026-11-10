@@ -9,6 +9,7 @@ namespace slave {
 
 bool parseArmor(const std::string& s, ArmorClass& out) {
   if (s == "infantry") out = ArmorClass::Infantry;
+  else if (s == "soft") out = ArmorClass::Soft;
   else if (s == "light") out = ArmorClass::Light;
   else if (s == "medium") out = ArmorClass::Medium;
   else if (s == "heavy") out = ArmorClass::Heavy;
@@ -26,8 +27,10 @@ bool WeaponRegistry::loadJson(const nlohmann::json& doc, std::string& error) {
     for (const auto& [id, w] : doc.at("warheads").items()) {
       WarheadDef d;
       d.id = id;
-      static const char* names[ARMOR_COUNT] = {"infantry", "light", "medium", "heavy", "structure"};
+      static const char* names[ARMOR_COUNT] = {"infantry", "soft", "light", "medium", "heavy", "structure"};
       for (int a = 0; a < ARMOR_COUNT; ++a) d.versus[static_cast<size_t>(a)] = w.value(names[a], 100);
+      // Rules from before 9.4 had no "soft" column: cars and carriers were "light".
+      if (!w.contains("soft")) d.versus[static_cast<size_t>(ArmorClass::Soft)] = w.value("light", 100);
       if (w.contains("facing")) {
         const auto& f = w["facing"];
         d.facing = {f.value("front", 100), f.value("side", 100), f.value("rear", 100)};

@@ -44,7 +44,9 @@ Blitzkrieg-like: slow, deadly, combined arms.
   tanks; dedicated anti-tank units come later.
 - Tanks outrange everything, kill infantry with HE and vehicles with AP, and
   will be expensive (costs arrive with the economy in Milestone 5).
-- Armour has front / side / rear values; a rear hit can kill a tank outright.
+- Armour has front / side / rear values (since 9.4: side 1.5x, rear 2.5x;
+  a medium tank has half a heavy's health, a light tank a quarter, and only
+  heavy guns pierce a heavy tank's front in full).
 - Units see less far than tanks can shoot; scouts spot for the guns.
 - Unit scale: true to life (soldier a third of a tile tall, medium tank a
   little over a tile long) so battles read as big.
@@ -175,9 +177,16 @@ recognition flash on vehicles and a roundel in the interface.
      units and buildings show only as cards until spotted (as in R.U.S.E.);
      nearby cards merge into one stack; scouts see twice as far and fall back
      on their own when the enemy gets close.
-   - **9.4 Armour and artillery** – lighter armour: mediums half a heavy's
-     health, lights a quarter, heavies lowered too; heavies fall to numbers or
-     tank destroyers; longer artillery range; reverse gear.
+   - **9.4 Armour and artillery** – done (10 Nov): the health scale (heavy
+     640–720, medium half, light a quarter; table in the changelog); a fourth
+     vehicle armour class (`soft` / `light` / `medium` / `heavy`,
+     `ArmorClass` in `weapons.hpp`); three AP warheads (`ap_light`, `ap`,
+     `ap_heavy`) so only heavy guns pierce heavy armour in full; shell blast
+     measured from a vehicle's hull (`impact()` in `combat.cpp`), which
+     ended most "aimed" shells doing nothing; side 1.5x / rear 2.5x;
+     artillery 24–38 tiles; reverse gear (`reverseReach`, `wouldReverse`,
+     stateless test in `stepMovement`: waypoint more than 112° off the bow
+     and the path no longer than 5 tiles, 12 in contact).
    - **9.5 Formations** – reworked.
    - **9.6 Economy** – rare logistics points far from the bases: capture one
      and a logistics office sends three-truck convoys of money to your HQ

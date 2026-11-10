@@ -525,7 +525,8 @@ void Simulation::orderMove(const std::vector<Entity>& units, Vec2i target, Order
       o = COrder{};
       o.type = type;
       o.goal = slot;
-      o.faceTo = facing;
+      // A vehicle backing up a short way keeps the facing it has (its front to the enemy).
+      o.faceTo = (cmd.formFacing < 0 && wouldReverse(e, slot)) ? -1 : facing;
       o.forced = cmd.forced;
       if (auto* c = reg_.tryGet<CCombat>(e)) c->target = kNullEntity;
       reg_.get<CMover>(e).repaths = 0;

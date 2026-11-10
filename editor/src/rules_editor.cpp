@@ -55,7 +55,7 @@ const std::vector<Field>& fieldsFor(RulesEditor::Kind k) {
       {"radius", F::Int, "Radius", "Size for selection and spacing, in leptons.", 96, 8, 512},
       {"animTicks", F::Int, "Animation", "Ticks per walk / drive frame.", 2, 1, 30},
       {"health", F::Int, "Health", "Hit points.", 100, 1, 100000, {}, "Combat"},
-      {"armor", F::Enum, "Armour", "Which column of the warhead table hits it.", 0, 0, 0, {"infantry", "light", "medium", "heavy", "structure"}},
+      {"armor", F::Enum, "Armour", "Which column of the warhead table hits it.", 0, 0, 0, {"infantry", "soft", "light", "medium", "heavy", "structure"}},
       {"sight", F::Float, "Sight", "In tiles.", 7, 0, 40},
       {"weapons", F::WeaponList, "Weapons", "Up to two."},
       {"turret", F::Turret, "Turret", "Weapons on a turret that turns on its own (ticks per 1/16 turn)."},
@@ -91,7 +91,7 @@ const std::vector<Field>& fieldsFor(RulesEditor::Kind k) {
       {"autoTarget", F::Bool, "Attacked unasked", "Enemies attack it of their own accord.", 1},
       {"targetable", F::Bool, "Can be attacked", "Off for things like wire that only blocks.", 1},
       {"health", F::Int, "Health", "Hit points.", 100, 1, 100000, {}, "Combat"},
-      {"armor", F::Enum, "Armour", "Which column of the warhead table hits it.", 0, 0, 0, {"structure", "heavy", "medium", "light", "infantry"}},
+      {"armor", F::Enum, "Armour", "Which column of the warhead table hits it.", 0, 0, 0, {"structure", "heavy", "medium", "light", "soft", "infantry"}},
       {"sight", F::Float, "Sight", "In tiles.", 4, 0, 40},
       {"weapons", F::WeaponList, "Weapons", "Defences: up to two."},
       {"turret", F::Turret, "Turret", "A gun that turns on its own."},
@@ -122,9 +122,10 @@ const std::vector<Field>& fieldsFor(RulesEditor::Kind k) {
   };
   static const std::vector<Field> warheads = {
       {"infantry", F::Int, "vs infantry", "% damage.", 100, 0, 1000, {}, "Damage by armour"},
-      {"light", F::Int, "vs light", "% damage (scout cars, half-tracks).", 100, 0, 1000},
+      {"soft", F::Int, "vs soft", "% damage (scout cars, half-tracks, lorries, self-propelled guns).", 100, 0, 1000},
+      {"light", F::Int, "vs light", "% damage (light tanks).", 100, 0, 1000},
       {"medium", F::Int, "vs medium", "% damage (medium tanks).", 100, 0, 1000},
-      {"heavy", F::Int, "vs heavy", "% damage (heavy tanks).", 100, 0, 1000},
+      {"heavy", F::Int, "vs heavy", "% damage (heavy tanks, casemate tank destroyers).", 100, 0, 1000},
       {"structure", F::Int, "vs structures", "% damage.", 100, 0, 1000},
       {"facing", F::Facing, "By side struck", "% damage to vehicles by the side hit: front / side / rear.", 0, 0, 0, {}, "Flanking"},
   };
@@ -137,7 +138,7 @@ const std::vector<Field>& fieldsFor(RulesEditor::Kind k) {
 }
 
 const char* kKindNames[] = {"Units", "Buildings", "Weapons", "Warheads"};
-const char* kArmour[] = {"infantry", "light", "medium", "heavy", "structure"};
+const char* kArmour[] = {"infantry", "soft", "light", "medium", "heavy", "structure"};
 
 int fileOf(RulesEditor::Kind k) { return k == RulesEditor::Units ? 1 : k == RulesEditor::Buildings ? 2 : 0; }
 
@@ -383,7 +384,7 @@ void RulesEditor::newEntry(bool copy) {
   } else if (kind_ == Weapons) {
     fresh = {{"warhead", "bullet"}, {"damage", 10}, {"range", 5.0}, {"cooldown", 15}};
   } else {
-    fresh = {{"infantry", 100}, {"light", 100}, {"medium", 100}, {"heavy", 100}, {"structure", 100}};
+    fresh = {{"infantry", 100}, {"soft", 100}, {"light", 100}, {"medium", 100}, {"heavy", 100}, {"structure", 100}};
   }
   if (kind_ == Warheads) {
     listOf(kind_)[id] = fresh;
@@ -774,16 +775,16 @@ void RulesEditor::drawFacts(const json& e) {
     const json wh = warheads.contains(w.value("warhead", std::string())) ? warheads[w.value("warhead", std::string())] : json::object();
     const double perSecond = 15.0 / std::max(1.0, num(w, "cooldown", 15)) * std::max(1.0, num(w, "burst", 1)) *
                              (w.value("projectile", std::string("instant")) == "instant" ? num(w, "accuracy", 100) / 100.0 : 1.0);
-    for (int a = 0; a < 5; ++a) {
+    for (int a = 0; a < 6; ++a) {
       ImGui::TableNextColumn();
       ImGui::Text("%.1f", num(w, "damage", 0) * num(wh, kArmour[a], 100) / 100.0 * perSecond);
     }
   };
   auto dpsTable = [&](const std::vector<const json*>& list) {
     if (list.empty()) return;
-    if (ImGui::BeginTable("##dps", 6, ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_SizingStretchProp)) {
+    if (ImGui::BeginTable("##dps", 7, ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_SizingStretchProp)) {
       ImGui::TableSetupColumn("Damage / s", ImGuiTableColumnFlags_WidthStretch, 2.6f);
-      for (const char* a : {"Inf", "Lt", "Med", "Hvy", "Bldg"}) ImGui::TableSetupColumn(a, ImGuiTableColumnFlags_WidthStretch, 1.0f);
+      for (const char* a : {"Inf", "Soft", "Lt", "Med", "Hvy", "Bldg"}) ImGui::TableSetupColumn(a, ImGuiTableColumnFlags_WidthStretch, 1.0f);
       ImGui::TableHeadersRow();
       for (const json* w : list) {
         ImGui::TableNextRow();

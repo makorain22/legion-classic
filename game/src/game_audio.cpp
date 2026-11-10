@@ -199,7 +199,7 @@ void GameAudio::onEvent(const SimEvent& ev, const Simulation& sim, uint8_t playe
       std::string s = w.impact;
       if (s.empty()) {
         if (wh == "he") s = w.damage >= 150 ? "explosion_large" : w.damage >= 70 ? "explosion_medium" : "explosion_small";
-        else if (wh == "ap") s = ev.hit ? "armour_hit" : "ricochet";
+        else if (wh.rfind("ap", 0) == 0) s = ev.hit ? "armour_hit" : "ricochet";
         else if (!ev.hit && std::uniform_int_distribution<int>(0, 7)(rng_) == 0) s = "ricochet";
       }
       if (!s.empty()) play(s, at);

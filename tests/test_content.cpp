@@ -93,7 +93,7 @@ TEST_CASE("the British: the same base, their own guns") {
   auto best = [&](const char* id, bool ap) {
     int32_t d = 0;
     for (int w : R.types.get(R.t(id)).weapons)
-      if ((R.weapons.warhead(R.weapons.get(w).warhead).id == "ap") == ap) d = std::max(d, R.weapons.get(w).damage);
+      if ((R.weapons.warhead(R.weapons.get(w).warhead).id.rfind("ap", 0) == 0) == ap) d = std::max(d, R.weapons.get(w).damage);
     return d;
   };
   // The Firefly and the Achilles carry the 17-pounder: the hardest British punch against armour.

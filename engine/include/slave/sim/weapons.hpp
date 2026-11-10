@@ -14,7 +14,9 @@
 
 namespace slave {
 
-enum class ArmorClass : uint8_t { Infantry = 0, Light, Medium, Heavy, Structure, Count };
+// Soft: cars, carriers, lorries and self-propelled guns (bullets hurt them).
+// Light / Medium / Heavy: light, medium and heavy tanks (casemate tank destroyers count as heavy).
+enum class ArmorClass : uint8_t { Infantry = 0, Soft, Light, Medium, Heavy, Structure, Count };
 constexpr int ARMOR_COUNT = static_cast<int>(ArmorClass::Count);
 bool parseArmor(const std::string& s, ArmorClass& out);
 
@@ -26,7 +28,7 @@ enum class HitSide : uint8_t { Front = 0, Side, Rear };
 
 struct WarheadDef {
   std::string id;
-  std::array<int32_t, ARMOR_COUNT> versus{100, 100, 100, 100, 100};  // percent
+  std::array<int32_t, ARMOR_COUNT> versus{100, 100, 100, 100, 100, 100};  // percent
   // Percent damage by side struck, against vehicles only (infantry has no "rear armour").
   std::array<int32_t, 3> facing{100, 100, 100};
 };

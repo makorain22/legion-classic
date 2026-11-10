@@ -109,16 +109,16 @@ differences follow it.
 | --- | --- | --- | --- |
 | Rifleman / Grenadier | Barracks | 8 / 10 | Cheap, hit 7 shots in 10. Only scratch armour: it takes about thirty of them to wear down a heavy tank. |
 | MG Team | Barracks | 40 | A heavy machine gun: shreds infantry at 6.5 tiles. |
-| AT Team | Barracks | 50 | Panzerschreck (Germany: big hit, short range) or anti-tank rifle (Russia: longer range, smaller hits). Hunts tanks from cover. |
+| AT Team | Barracks | 50 | Panzerschreck (Germany: big hit, short range) or anti-tank rifle (Russia: longer range, small hits that only bite on light armour and flanks). Hunts tanks from cover. |
 | Engineer (Pioneer / Sapper) | Barracks | 30 | Unarmed. Repairs friendly vehicles and buildings: right-click them; idle engineers repair anything damaged nearby. In a bunker, tower, trench or wall of sandbags they keep it, and the field works right round it, in repair. |
 | Sniper | Barracks (needs a Watchtower) | 80 | Sees 11 tiles, kills a man with almost every shot at 9.5 tiles. |
-| Scout Car | Tank Works | 400 | Fast, sees far: spots for the guns. |
-| Half-track | Tank Works | 450 | Armoured, quick, machine gun on a pivot. |
-| Light Tank | Tank Works | 550 | 37 / 45 mm gun. Fast and cheap; loses to anything heavier. |
-| Medium Tank | Tank Works (needs a Supply Depot) | 850 / 900 | The backbone: 75 / 76 mm gun, HE against infantry. |
-| Tank Destroyer | Tank Works (needs a Supply Depot) | 1100 | No turret, heavy frontal armour, a long gun that out-ranges tanks. Must turn to fire. |
-| Artillery | Tank Works (needs a Watchtower) | 1200 | Germany: 105 mm howitzer (18 tiles). Russia: rocket truck firing salvoes of 8 rockets (16 tiles) that blanket an area. Needs spotters. |
-| Heavy Tank | Tank Works (needs a Supply Depot and a Watchtower) | 2000 | 88 / 122 mm gun at 10.5–11.5 tiles, armour that shrugs off light guns. |
+| Scout Car | Tank Works | 400 | Fast, sees far: spots for the guns. Thin-skinned (80 hit points). |
+| Half-track | Tank Works | 450 | Quick, machine gun on a pivot; proof against rifles for a while, not against any gun. |
+| Light Tank | Tank Works | 550 | 37 / 45 mm gun. Fast and cheap, a quarter of a heavy tank's health; its gun does little to a medium tank's front and next to nothing to a heavy's. |
+| Medium Tank | Tank Works (needs a Supply Depot) | 850 / 900 | The backbone: 75 / 76 mm gun, HE against infantry. Half a heavy tank's health; needs numbers or a flank against a heavy. |
+| Tank Destroyer | Tank Works (needs a Supply Depot) | 1100 | No turret, heavy armour, a long gun that goes through a heavy tank's front. Must turn to fire. Two of them beat a heavy tank. |
+| Artillery | Tank Works (needs a Watchtower) | 1200 | Germany: 105 mm howitzer (28 tiles). Russia: rocket truck firing salvoes of 8 rockets (24 tiles) that blanket an area. Needs spotters; dies to anything that reaches it. |
+| Heavy Tank | Tank Works (needs a Supply Depot and a Watchtower) | 2000 | 88 / 122 mm gun at 10.5–11.5 tiles, armour that shrugs off light guns and blunts medium ones: it falls to numbers, to tank destroyers, or to a shot from behind. |
 | Construction Truck | Tank Works | 3000 | Unfolds into a new Construction Yard. |
 
 **The British** build the same base under their own names (Drill Hall, Tank
@@ -137,11 +137,11 @@ Slit Trench, Dannert Wire, Anti-Tank Cubes) and field:
 | Cromwell | Medium Tank | 850 | Fast, with a dual-purpose 75 mm: good HE, weaker AP than the German 75. |
 | Sherman Firefly | Tanks (needs a Supply Dump and an Observation Post) | 1150 | A Sherman with the 17-pounder: the British answer to heavy tanks. |
 | Achilles | Tank Destroyer | 1050 | The 17-pounder in an open turret on a fast, thin hull. |
-| Sexton | Artillery | 1100 | A 25-pounder: 17 tiles, fires every 4 s (the German 105 every 6.3 s). |
-| Churchill | Heavy Tank | 1800 | The toughest thing on tracks (1150 hit points), very slow, only a 75 mm gun. |
+| Sexton | Artillery | 1100 | A 25-pounder: 26 tiles, fires every 4 s (the German 105 every 6.3 s). |
+| Churchill | Heavy Tank | 1800 | The toughest thing on tracks (720 hit points), very slow, only a 75 mm gun. |
 | Construction Lorry | Construction Truck | 3000 | Unfolds into a Construction Yard. |
 
-The British *Medium Gun Emplacement* mounts a 5.5-inch gun: 24 tiles, the
+The British *Medium Gun Emplacement* mounts a 5.5-inch gun: 38 tiles, the
 longest reach on the field.
 
 ### Biomes, villages and towns
@@ -310,12 +310,26 @@ guns and towers are built and placed like other structures.
   firefights take time. Tanks outrange everything (about 10 tiles) and hit
   hard: armour-piercing shells against vehicles, and high-explosive shells with
   a wide blast against infantry, so infantry without armour support gets
-  crushed. Shells fly, scatter at long range and can miss.
-- **Front, side and rear armour.** A shell into a tank's flank does about 1.6×
-  damage; one into its rear does 4.5×, enough to knock out a medium tank in a
-  single hit. Flanking pays.
+  crushed. Shells fly and scatter with distance: one that lands on a
+  vehicle's hull hits it in full, a near miss does less, a long shot may do
+  nothing. Closing the range pays.
+- **Armour on one scale.** A medium tank has half its army's heavy tank's
+  health, a light tank a quarter. Guns come in three weights: light guns (37
+  and 45 mm, anti-tank rifles) do a quarter of their damage to a heavy tank's
+  front; medium guns (75 and 76 mm, the 6-pounder, rocket teams) about half;
+  heavy guns (88 and 122 mm, tank destroyers, the 17-pounder, anti-tank gun
+  pits) go through in full. A heavy tank beats two mediums head on: bring
+  four, bring tank destroyers, or get behind it.
+- **Front, side and rear armour.** A shell into a tank's flank does 1.5×
+  damage; one into its rear does 2.5×. Flanking pays.
+- **Reverse gear.** Order a vehicle a short way to its rear (up to 5 tiles;
+  up to 12 while it is in a fight) and it backs up, slower than it drives,
+  keeping its front armour and its gun towards the enemy. Order it further
+  and it turns round.
+- **Artillery** reaches 24–28 tiles (emplaced guns 34–38), far beyond its
+  own sight: it fires at whatever your side can see.
 - **Spotting.** Tanks see about 8 tiles, less than their gun range; scout cars
-  see 11–12. Every unit shoots at whatever its side (and its allies) can see,
+  see 22–24. Every unit shoots at whatever its side (and its allies) can see,
   so put scouts forward to let the tanks fire at full range.
 - **Orders.** Right-click an enemy to attack it: your units drive into range,
   chase it if it moves, and stop when it dies. **Attack-move** (press **Ctrl+A** or **F**,

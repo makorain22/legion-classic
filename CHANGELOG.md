@@ -134,6 +134,44 @@
   sprites. Sprite overrides in mods still load for the classic view and the
   sidebar pictures; `--export-sprites` still works.
 
+### Milestone 9.4: armour and artillery
+
+- **Armour is lighter, on one scale.** In every army a medium tank has half
+  its heavy tank's health and a light tank a quarter, and the heavies came
+  down too: German Heavy Tank 640 (was 950), Breakthrough Tank 680 (1000),
+  Churchill 720 (1150); mediums 320 / 340 / 360 (Firefly 360); lights 160 /
+  170 / 180. Tank destroyers 300 (Achilles 240), half-tracks 130 (Universal
+  Carrier 110), scout cars 80, self-propelled artillery 120, construction
+  trucks 400.
+- **Four kinds of vehicle armour** instead of three: *soft* (cars, carriers,
+  lorries, self-propelled guns: bullets hurt them), *light*, *medium* and
+  *heavy* (heavy tanks and the casemate tank destroyers). Units now carry the
+  class their name says.
+- **Three weights of armour-piercing shot.** Light guns (37 and 45 mm,
+  anti-tank rifles) do a quarter of their damage to a heavy tank's front and
+  60% to a medium; medium guns (75 and 76 mm, the 6-pounder, Panzerschreck
+  and PIAT) do 55% to a heavy; only the heavy guns (88 and 122 mm, the long
+  75, the 85 mm, the 17-pounder and the anti-tank gun pits) go through at
+  full weight. A heavy tank beats two medium tanks head on and falls to
+  four, to a pair of tank destroyers, or to anything that gets behind it.
+- **Shells hit what they land on.** A shell's blast is now measured from a
+  vehicle's hull instead of its centre point, so a round that lands on a
+  tank hits it. Before, about two shells in three aimed at a tank eight
+  tiles off did nothing, which is most of why armour felt so hard to kill.
+  Long shots still scatter and lose force; closing the range pays.
+- Side hits now count 1.5 times and rear hits 2.5 times (were 1.6 and 4.5):
+  with the lighter armour a flank shot still decides a duel without ending
+  it in one round. Panzerschreck 100 damage (was 130), PIAT 95 (was 120);
+  the German 75 mm fires as fast as the Soviet 76.
+- **Artillery reaches half as far again:** 105 mm howitzer 28 tiles (was
+  18), rocket truck 24 (16), Sexton 26 (17); the emplaced 150 mm 36 (22),
+  122 mm 34 (21) and 5.5-inch 38 (24). It still needs someone to see the
+  target, and scouts now see far enough to do it.
+- **Reverse gear.** A vehicle sent a short way to its rear (up to 5 tiles, or
+  up to 12 while it is shooting or being shot at) backs up at 60% speed
+  instead of turning round, so its front armour and its gun stay on the
+  enemy. Further than that it turns and drives.
+
 ## 0.9.0 – Milestone 9: Britain, sound, tutorial, campaigns (7 Nov 2026)
 
 - **Sound and music**, built for immersion and size. A new audio module in

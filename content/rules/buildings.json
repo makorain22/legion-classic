@@ -211,7 +211,10 @@
       "coverAround": 40,
       "cover": 50,
       "garrison": 3,
-      "blocks": ["wheeled", "tracked"],
+      "blocks": [
+        "wheeled",
+        "tracked"
+      ],
       "autoTarget": false,
       "builtAt": "yard",
       "requires": [
@@ -506,7 +509,10 @@
       "coverAround": 40,
       "cover": 50,
       "garrison": 3,
-      "blocks": ["wheeled", "tracked"],
+      "blocks": [
+        "wheeled",
+        "tracked"
+      ],
       "autoTarget": false,
       "builtAt": "yard",
       "requires": [
@@ -1431,7 +1437,10 @@
       "coverAround": 40,
       "cover": 50,
       "garrison": 3,
-      "blocks": ["wheeled", "tracked"],
+      "blocks": [
+        "wheeled",
+        "tracked"
+      ],
       "autoTarget": false,
       "builtAt": "yard",
       "requires": [

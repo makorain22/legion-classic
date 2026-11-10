@@ -48,7 +48,7 @@ bool UnitTypeRegistry::loadJson(const nlohmann::json& doc, std::string& error) {
       d.radius = u.value("radius", d.radius);
       d.animTicks = u.value("animTicks", d.animTicks);
       d.maxHealth = u.value("health", d.maxHealth);
-      if (!parseArmor(u.value("armor", std::string("light")), d.armor)) {
+      if (!parseArmor(u.value("armor", std::string("soft")), d.armor)) {
         error = "unit '" + d.id + "': unknown armor";
         return false;
       }

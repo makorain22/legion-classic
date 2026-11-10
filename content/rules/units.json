@@ -1,5 +1,5 @@
 {
-  "_comment": "Unit types. speed: leptons per tick (256 leptons = 1 tile, 15 ticks = 1 second). turnTicks: ticks per 1/16 turn (0 = instant). sight in tiles. armor: infantry, light, medium, heavy or structure. cost in supplies; buildTime in seconds at full power; builtAt: the structure role that makes it (barracks, factory); requires: structures the side must own first. capacity: oil a supply truck carries. deploysTo: the structure a construction truck unfolds into. repair: hit points per tick an engineer restores to a friendly structure. nato: the symbol on unit cards and chips (infantry, mg, antitank, engineer, sniper, recon, mech, armour, antitank_armour, artillery, hq); recon units are scouts: they fall back by themselves when an enemy comes close.",
+  "_comment": "Unit types. speed: leptons per tick (256 leptons = 1 tile, 15 ticks = 1 second). turnTicks: ticks per 1/16 turn (0 = instant). sight in tiles. armor: infantry, soft (cars, carriers, lorries, self-propelled guns: bullets hurt them), light (light tanks), medium (medium tanks), heavy (heavy tanks and casemate tank destroyers) or structure. Health scale: a medium tank has half its army's heavy tank, a light tank a quarter. cost in supplies; buildTime in seconds at full power; builtAt: the structure role that makes it (barracks, factory); requires: structures the side must own first. capacity: oil a supply truck carries. deploysTo: the structure a construction truck unfolds into. repair: hit points per tick an engineer restores to a friendly structure. nato: the symbol on unit cards and chips (infantry, mg, antitank, engineer, sniper, recon, mech, armour, antitank_armour, artillery, hq); recon units are scouts: they fall back by themselves when an enemy comes close.",
   "units": [
     {
       "id": "ger_rifleman",
@@ -137,8 +137,8 @@
       "turnTicks": 1,
       "radius": 82,
       "animTicks": 1,
-      "health": 160,
-      "armor": "light",
+      "health": 80,
+      "armor": "soft",
       "sight": 24,
       "weapons": [
         "mg_light"
@@ -165,8 +165,8 @@
       "turnTicks": 1,
       "radius": 90,
       "animTicks": 2,
-      "health": 260,
-      "armor": "light",
+      "health": 130,
+      "armor": "soft",
       "sight": 8,
       "weapons": [
         "mg_light"
@@ -193,8 +193,8 @@
       "turnTicks": 1,
       "radius": 88,
       "animTicks": 2,
-      "health": 300,
-      "armor": "medium",
+      "health": 160,
+      "armor": "light",
       "sight": 8,
       "weapons": [
         "cannon_37",
@@ -222,8 +222,8 @@
       "turnTicks": 2,
       "radius": 100,
       "animTicks": 2,
-      "health": 420,
-      "armor": "heavy",
+      "health": 320,
+      "armor": "medium",
       "sight": 8,
       "weapons": [
         "cannon_75",
@@ -253,8 +253,8 @@
       "turnTicks": 2,
       "radius": 90,
       "animTicks": 2,
-      "health": 800,
-      "armor": "light",
+      "health": 400,
+      "armor": "soft",
       "sight": 5,
       "cost": 3000,
       "buildTime": 30,
@@ -278,7 +278,7 @@
       "turnTicks": 2,
       "radius": 104,
       "animTicks": 2,
-      "health": 480,
+      "health": 300,
       "armor": "heavy",
       "sight": 7,
       "weapons": [
@@ -305,8 +305,8 @@
       "turnTicks": 2,
       "radius": 96,
       "animTicks": 2,
-      "health": 220,
-      "armor": "light",
+      "health": 120,
+      "armor": "soft",
       "sight": 5,
       "weapons": [
         "howitzer_105"
@@ -332,7 +332,7 @@
       "turnTicks": 3,
       "radius": 118,
       "animTicks": 2,
-      "health": 950,
+      "health": 640,
       "armor": "heavy",
       "sight": 8,
       "weapons": [
@@ -490,8 +490,8 @@
       "turnTicks": 1,
       "radius": 82,
       "animTicks": 1,
-      "health": 150,
-      "armor": "light",
+      "health": 80,
+      "armor": "soft",
       "sight": 22,
       "weapons": [
         "mg_light"
@@ -518,8 +518,8 @@
       "turnTicks": 1,
       "radius": 90,
       "animTicks": 2,
-      "health": 260,
-      "armor": "light",
+      "health": 130,
+      "armor": "soft",
       "sight": 8,
       "weapons": [
         "mg_light"
@@ -546,8 +546,8 @@
       "turnTicks": 1,
       "radius": 88,
       "animTicks": 2,
-      "health": 300,
-      "armor": "medium",
+      "health": 170,
+      "armor": "light",
       "sight": 8,
       "weapons": [
         "cannon_45",
@@ -575,8 +575,8 @@
       "turnTicks": 2,
       "radius": 100,
       "animTicks": 2,
-      "health": 400,
-      "armor": "heavy",
+      "health": 340,
+      "armor": "medium",
       "sight": 8,
       "weapons": [
         "cannon_76",
@@ -606,8 +606,8 @@
       "turnTicks": 2,
       "radius": 90,
       "animTicks": 2,
-      "health": 800,
-      "armor": "light",
+      "health": 400,
+      "armor": "soft",
       "sight": 5,
       "cost": 3000,
       "buildTime": 30,
@@ -631,7 +631,7 @@
       "turnTicks": 2,
       "radius": 104,
       "animTicks": 2,
-      "health": 480,
+      "health": 300,
       "armor": "heavy",
       "sight": 7,
       "weapons": [
@@ -658,8 +658,8 @@
       "turnTicks": 2,
       "radius": 96,
       "animTicks": 2,
-      "health": 220,
-      "armor": "light",
+      "health": 120,
+      "armor": "soft",
       "sight": 5,
       "weapons": [
         "rocket_salvo"
@@ -685,7 +685,7 @@
       "turnTicks": 3,
       "radius": 118,
       "animTicks": 2,
-      "health": 1000,
+      "health": 680,
       "armor": "heavy",
       "sight": 8,
       "weapons": [
@@ -843,8 +843,8 @@
       "turnTicks": 1,
       "radius": 82,
       "animTicks": 1,
-      "health": 150,
-      "armor": "light",
+      "health": 80,
+      "armor": "soft",
       "sight": 24,
       "weapons": [
         "mg_light"
@@ -871,8 +871,8 @@
       "turnTicks": 1,
       "radius": 90,
       "animTicks": 2,
-      "health": 220,
-      "armor": "light",
+      "health": 110,
+      "armor": "soft",
       "sight": 8,
       "weapons": [
         "mg_light"
@@ -899,8 +899,8 @@
       "turnTicks": 1,
       "radius": 88,
       "animTicks": 2,
-      "health": 320,
-      "armor": "medium",
+      "health": 180,
+      "armor": "light",
       "sight": 8,
       "weapons": [
         "cannon_6pdr",
@@ -928,8 +928,8 @@
       "turnTicks": 2,
       "radius": 100,
       "animTicks": 2,
-      "health": 400,
-      "armor": "heavy",
+      "health": 360,
+      "armor": "medium",
       "sight": 8,
       "weapons": [
         "cannon_75qf",
@@ -959,8 +959,8 @@
       "turnTicks": 2,
       "radius": 90,
       "animTicks": 2,
-      "health": 800,
-      "armor": "light",
+      "health": 400,
+      "armor": "soft",
       "sight": 5,
       "cost": 3000,
       "buildTime": 30,
@@ -984,7 +984,7 @@
       "turnTicks": 2,
       "radius": 104,
       "animTicks": 2,
-      "health": 380,
+      "health": 240,
       "armor": "medium",
       "sight": 7,
       "weapons": [
@@ -1011,8 +1011,8 @@
       "turnTicks": 2,
       "radius": 96,
       "animTicks": 2,
-      "health": 240,
-      "armor": "light",
+      "health": 120,
+      "armor": "soft",
       "sight": 5,
       "weapons": [
         "howitzer_25pdr"
@@ -1038,8 +1038,8 @@
       "turnTicks": 2,
       "radius": 100,
       "animTicks": 2,
-      "health": 430,
-      "armor": "heavy",
+      "health": 360,
+      "armor": "medium",
       "sight": 8,
       "weapons": [
         "cannon_17pdr",
@@ -1070,7 +1070,7 @@
       "turnTicks": 3,
       "radius": 118,
       "animTicks": 2,
-      "health": 1150,
+      "health": 720,
       "armor": "heavy",
       "sight": 8,
       "weapons": [

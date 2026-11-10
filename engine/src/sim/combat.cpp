@@ -233,11 +233,18 @@ void Simulation::impact(int weapon, uint8_t owner, Vec2i at, Entity directTarget
   }
   if (wd.splash > 0) {
     // Full damage at the centre, half at the edge; own units take half.
-    spatial_.query(at.x, at.y, wd.splash, [&](uint32_t o) {
+    // A vehicle is a big target: the blast is measured from its hull, not its
+    // centre, so a shell that lands on a tank hits it in full (9.4). Men are
+    // points, as before.
+    constexpr int32_t kHullReach = 64;
+    spatial_.query(at.x, at.y, wd.splash + kHullReach, [&](uint32_t o) {
       const CUnit& v = units.get(o);
-      if (v.health <= 0 || types_.get(v.type).isStructure()) return;
+      const UnitTypeDef& vd = types_.get(v.type);
+      if (v.health <= 0 || vd.isStructure()) return;
       const CPosition& q = pos.get(o);
-      const uint32_t d = distance(q.x - at.x, q.y - at.y);
+      uint32_t d = distance(q.x - at.x, q.y - at.y);
+      const uint32_t hull = vd.infantry() ? 0u : static_cast<uint32_t>(std::min(vd.radius / 2, kHullReach));
+      d = d > hull ? d - hull : 0;
       if (d > static_cast<uint32_t>(wd.splash)) return;
       int32_t dmg = static_cast<int32_t>(static_cast<int64_t>(weapons_.damageCenti(weapon, types_.get(v.type).armor, sideOf(o))) *
                                          bonus / 100 * (wd.splash * 2 - static_cast<int32_t>(d)) / (wd.splash * 2));

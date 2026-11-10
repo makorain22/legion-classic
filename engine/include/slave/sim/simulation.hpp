@@ -304,6 +304,9 @@ class Simulation {
   // same commands must always produce the same hash.
   uint64_t stateHash();
 
+  // Reverse gear: would this vehicle back up to `to` (a short way to its rear)
+  // instead of turning round? Farther when it is in contact with the enemy.
+  bool wouldReverse(Entity e, Vec2i to) const;
   size_t unitCount() { return reg_.pool<CUnit>().size(); }
   int32_t maxRange(const UnitTypeDef& def) const;
 
@@ -325,6 +328,7 @@ class Simulation {
   // movement (movement.cpp)
   void requestPath(Entity e, Vec2i goal);
   void setPath(Entity e, std::vector<Vec2i> path);
+  int32_t reverseReach(uint32_t ei, const UnitTypeDef& def) const;
   void processPathQueue();
   void stepOrders();
   void stepMovement();

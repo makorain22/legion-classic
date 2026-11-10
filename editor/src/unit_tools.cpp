@@ -29,7 +29,7 @@ uint32_t fromImVec(const ImVec4& v) {
   return ch(v.x) | (ch(v.y) << 8) | (ch(v.z) << 16) | 0xFF000000u;
 }
 const char* kOrderNames[] = {"Idle", "Moving", "Attack-moving", "Attacking"};
-const char* kArmorNames[] = {"infantry", "light", "medium", "heavy", "structure"};
+const char* kArmorNames[] = {"infantry", "soft", "light", "medium", "heavy", "structure"};
 Rng& toolRng() {
   static Rng rng(0x5CE7A510);  // presentation-side randomness; the sim receives exact positions
   return rng;

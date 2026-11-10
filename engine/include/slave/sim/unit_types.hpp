@@ -36,7 +36,7 @@ struct UnitTypeDef {
   int32_t radius = 96;      // selection / spacing radius in leptons
   int32_t animTicks = 2;    // ticks per animation frame while moving
   int32_t maxHealth = 100;
-  ArmorClass armor = ArmorClass::Light;
+  ArmorClass armor = ArmorClass::Soft;
   int32_t sight = 7 * 256;  // leptons
   std::vector<std::string> weaponIds;
   std::vector<int> weapons;  // resolved indices into WeaponRegistry
