@@ -142,12 +142,16 @@ void Simulation::bindUnits(const std::vector<Entity>& units, uint8_t owner) {
     if (std::find(roles.begin(), roles.end(), r) == roles.end()) roles.push_back(r);
   }
   std::sort(roles.begin(), roles.end());
+  std::vector<Entity> rest;  // kinds too few to make a unit of their own
   for (const std::string& r : roles) {
     std::vector<Entity> picked;
     for (Entity e : machines)
       if (types_.get(reg_.get<CUnit>(e).type).nato == r) picked.push_back(e);
-    bind(picked, true, false);
+    if (!bind(picked, true, false)) rest.insert(rest.end(), picked.begin(), picked.end());
   }
+  // ...make one mixed unit together if there are enough of them (a raiding
+  // party of cars, half-tracks and light tanks, say).
+  if (rest.size() > 1) bind(rest, true, false);
 }
 
 // Drops the dead and the departed; demotes a unit worn down past its size;

@@ -811,6 +811,8 @@ void GameScene::runBench() {
     int captured = 0;        // logistics points taken
     int lostMen = 0, lostVehicles = 0, lostStructures = 0;
     int64_t boundTicks = 0, armyTicks = 0;  // unit-ticks in a bound unit / in the army (sampled once a second)
+    int64_t unitTicks = 0;                  // ... in a unit bigger than a fireteam (squad, platoon, battle group...)
+    int64_t bonusTicks = 0;                 // ... times the firepower bonus (percent) the unit gives
     int64_t fireOn[MAX_PLAYERS] = {};       // shots fired at ground held by each other side
   };
   std::array<Tally, MAX_PLAYERS> tally{};
@@ -851,12 +853,41 @@ void GameScene::runBench() {
       for (uint8_t q = 0; q < MAX_PLAYERS; ++q)
         if (q != p && players_[q].active) fire += " >" + std::to_string(q) + ":" + std::to_string(t.fireOn[q]);
       std::printf("  %u %s%s $%-6d +%-4d/min  yards %d post %d wh %d fuel %d other %d works %d | offices %d trucks %d convoys $%lld (taken %d) |"
-                  " army %d men %d veh (%d scouts), bound %d%% now, %d%% so far | wave %zu phase %d waves %u raiders %zu capture %zu |"
+                  " army %d men %d veh (%d scouts), bound %d%% now, %d%% so far (%d%% above fireteam, bonus +%d.%d%%) | main enemy %d, raids %u (now on %d) | wave %zu phase %d waves %u raiders %zu capture %zu |"
                   " lost %d men %d veh %d bld | fire%s\n",
                   p, players_[p].faction.c_str(), ps.defeated ? " DEFEATED" : "", ps.credits, ps.incomePerMinute, yards, posts, wh, fuel, other, fort,
                   offices, trucks, static_cast<long long>(t.convoy), t.captured, men, veh, scouts, men + veh ? bound * 100 / (men + veh) : 0,
-                  t.armyTicks ? static_cast<int>(t.boundTicks * 100 / t.armyTicks) : 0, ai.wave.size(), ai.phase, ai.waves, ai.raiders.size(),
+                  t.armyTicks ? static_cast<int>(t.boundTicks * 100 / t.armyTicks) : 0,
+                  t.armyTicks ? static_cast<int>(t.unitTicks * 100 / t.armyTicks) : 0,
+                  t.armyTicks ? static_cast<int>(t.bonusTicks / t.armyTicks) : 0,
+                  t.armyTicks ? static_cast<int>(t.bonusTicks * 10 / t.armyTicks % 10) : 0,
+                  ai.mainEnemy < MAX_PLAYERS ? ai.mainEnemy : -1, ai.raids, ai.raidEnemy < MAX_PLAYERS ? ai.raidEnemy : -1, ai.wave.size(), ai.phase, ai.waves, ai.raiders.size(),
                   ai.capture.size(), t.lostMen, t.lostVehicles, t.lostStructures, fire.c_str());
+      if (std::getenv("LEGION_BENCH_WAVE") && !ai.wave.empty()) {
+        // Where the main force is and what its members are doing.
+        int64_t x = 0, y = 0;
+        int orders[8] = {}, inFormation = 0, garrisoned = 0, withTarget = 0;
+        int32_t minX = INT32_MAX, maxX = INT32_MIN, minY = INT32_MAX, maxY = INT32_MIN;
+        for (Entity e : ai.wave) {
+          if (!reg.alive(e)) continue;
+          const CPosition& c = reg.get<CPosition>(e);
+          x += c.x;
+          y += c.y;
+          minX = std::min(minX, c.x), maxX = std::max(maxX, c.x), minY = std::min(minY, c.y), maxY = std::max(maxY, c.y);
+          ++orders[static_cast<int>(reg.get<COrder>(e).type) & 7];
+          if (const CFormationMember* fm = reg.tryGet<CFormationMember>(e)) inFormation += fm->formation.valid() && reg.alive(fm->formation);
+          garrisoned += reg.has<CGarrisoned>(e);
+          if (const CCombat* w = reg.tryGet<CCombat>(e)) withTarget += w->target.valid();
+        }
+        const int64_t n = static_cast<int64_t>(ai.wave.size());
+        int formations = 0;
+        for (uint32_t fe : reg.pool<CFormation>().entities()) formations += reg.pool<CFormation>().get(fe).owner == p;
+        std::printf("      wave at %lld,%lld (spread %d x %d tiles) -> target %d,%d flank %d,%d | idle %d move %d amove %d attack %d occupy %d |"
+                    " in formation %d (%d formations), garrisoned %d, firing %d | base %d,%d enemy %d,%d\n",
+                    static_cast<long long>(x / n / T), static_cast<long long>(y / n / T), (maxX - minX) / T, (maxY - minY) / T, ai.waveTarget.x / T,
+                    ai.waveTarget.y / T, ai.flank.x / T, ai.flank.y / T, orders[0], orders[1], orders[2], orders[3], orders[6], inFormation, formations,
+                    garrisoned, withTarget, ai.base.x / T, ai.base.y / T, ai.enemyAt.x / T, ai.enemyAt.y / T);
+      }
     }
     std::fflush(stdout);
   };
@@ -896,7 +927,10 @@ void GameScene::runBench() {
         const UnitTypeDef& d = types_.get(u.type);
         if (d.isStructure() || d.weapons.empty() || d.capacity > 0) continue;
         ++tally[u.owner].armyTicks;
-        tally[u.owner].boundTicks += sim_->groupOf(reg.handle(e)) != nullptr;
+        const CGroup* g = sim_->groupOf(reg.handle(e));
+        tally[u.owner].boundTicks += g != nullptr;
+        tally[u.owner].unitTicks += g && (g->combined || g->echelon > Echelon::Fireteam);
+        tally[u.owner].bonusTicks += sim_->groupBonus(reg.handle(e));
       }
     if (i % (120 * TICKS_PER_SECOND) == 0 || i == total) report(i);
     int standing = 0;

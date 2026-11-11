@@ -565,6 +565,22 @@ void Simulation::stepEconomy() {
   if (tick_ % 15 == 0) checkDefeat();
 }
 
+// How fast a line works, in halves of the normal speed: every further
+// building of the kind that does the work (a second barracks, tank works,
+// construction yard...) adds half again, up to three times the speed with
+// five of them.
+int32_t Simulation::lineSpeed(uint8_t player, int type) const {
+  const std::string& role = types_.get(type).builtAt;
+  if (role.empty()) return 2;
+  auto& units = reg_.pool<CUnit>();
+  int32_t n = 0;
+  for (uint32_t e : reg_.pool<CStructure>().entities()) {
+    const CUnit& u = units.get(e);
+    n += u.owner == player && u.health > 0 && types_.get(u.type).role == role;
+  }
+  return 2 + std::clamp(n - 1, 0, 4);
+}
+
 void Simulation::stepProduction(uint8_t pl) {
   PlayerState& ps = players_[pl];
   for (ProductionQueue& q : ps.queues) {
@@ -575,22 +591,28 @@ void Simulation::stepProduction(uint8_t pl) {
     // Short of power, work goes at half speed.
     if (ps.lowPower() && (tick_ & 1)) continue;
     const int32_t total = std::max(1, d.buildTime);
-    const int32_t due = static_cast<int32_t>(static_cast<int64_t>(d.cost) * (q.progress + 1) / total) - q.paid;
-    if (due > ps.credits) continue;  // out of supplies: production stalls
-    ps.credits -= due;
-    q.paid += due;
-    if (++q.progress < total) continue;
-    SimEvent ev;
-    ev.type = EventType::UnitReady;
-    ev.owner = pl;
-    ev.unitType = type;
-    events_.push_back(ev);
-    if (d.isStructure()) {
-      q.ready = true;  // waits for the player to place it
-    } else {
-      q.items.erase(q.items.begin());
-      q.progress = q.paid = 0;
-      completeUnit(pl, type);
+    // More buildings on the job: more steps a tick (a half is every other turn).
+    const int32_t halves = lineSpeed(pl, type);
+    const int32_t steps = halves / 2 + ((halves & 1) && ((tick_ >> 1) & 1) ? 1 : 0);
+    for (int32_t step = 0; step < steps; ++step) {
+      const int32_t due = static_cast<int32_t>(static_cast<int64_t>(d.cost) * (q.progress + 1) / total) - q.paid;
+      if (due > ps.credits) break;  // out of supplies: production stalls
+      ps.credits -= due;
+      q.paid += due;
+      if (++q.progress < total) continue;
+      SimEvent ev;
+      ev.type = EventType::UnitReady;
+      ev.owner = pl;
+      ev.unitType = type;
+      events_.push_back(ev);
+      if (d.isStructure()) {
+        q.ready = true;  // waits for the player to place it
+      } else {
+        q.items.erase(q.items.begin());
+        q.progress = q.paid = 0;
+        completeUnit(pl, type);
+      }
+      break;  // the next order starts on the next tick
     }
   }
 }

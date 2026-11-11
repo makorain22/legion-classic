@@ -253,6 +253,51 @@
 - The sidebar's building plates fit beside the scrollbar, and a name too
   long for its plate goes on two lines.
 
+### Milestone 9.7: the computer player
+
+- **Every side for itself (playtest edit 4).** With more than one enemy the
+  computer takes the nearest as its **main enemy** and keeps its main force
+  on that one until it is beaten, then turns on the next nearest. Its
+  **raiding parties take the other sides in turn**, a different one each
+  time they set out, so nobody is left alone. Before, both its main force
+  and its raiders went for whoever was nearest.
+- **It fights in bound units (playtest edit 5).** The force gathering at its
+  staging point is bound as it gathers; an attack goes in as **battle groups
+  of about sixty**, tanks and infantry shared out among them; reinforcements
+  come up as units of their own, in proper batches; raiders, the home guard
+  and the parties sent for logistics points are bound too. In test battles
+  80 to 90% of its army now stands in a squad, platoon or battle group (it
+  was under half, the rest in the fireteams men form by themselves) and the
+  average firepower bonus is about 8% (was 5 to 6%).
+- **Its attacks arrive.** Each battle group marches as its own formation,
+  side by side on a front of up to forty tiles, instead of the whole army as
+  one body hundreds strong that formed up again every time its target
+  shifted and never got there. The main force now sees a target through
+  until it is down, and judges where its front is by its leading half, not
+  by reinforcements still on the road. Three-sided test games that stood
+  undecided after half an hour now mostly end within it.
+- **Raiders** go out five or six strong (enough to bind into an armoured
+  platoon), go for logistics offices first, then post offices, warehouses
+  and fuel depots, and shoot up supply trucks they catch in the open.
+- **A scout on watch:** the computer (not on easy) keeps one scout car out
+  in front, moving between four watch points every minute or so and falling
+  back when the enemy comes close. Its guns shell what the scout sees.
+- **More buildings, faster lines.** Every further Barracks, Tank Works,
+  Construction Yard, Post Office or Logistics Warehouse speeds the line it
+  works on by half, up to three times the speed with five; prices stay the
+  same. With the new economy a side could earn far more than one line could
+  spend (the computer sat on tens of thousands); now income turns into
+  armies. The computer adds works and barracks when its money piles up. A
+  button's tooltip shows the speed its line is working at.
+- **Binding:** vehicles of kinds too few to make a unit of their own now
+  bind into one mixed platoon (two scout cars, two half-tracks and a light
+  tank, say).
+- Saved games are format SIM7; older saves still load.
+- `--bench N` plays an `--ai-battle` for N game minutes without drawing and
+  prints what each side did every two minutes (income, convoys, army, how
+  much of it is bound, whom it fired on); thirty minutes take a few seconds.
+  `--ffa` makes every side its own team (`--sides 3` or `4`).
+
 ## 0.9.0 – Milestone 9: Britain, sound, tutorial, campaigns (7 Nov 2026)
 
 - **Sound and music**, built for immersion and size. A new audio module in

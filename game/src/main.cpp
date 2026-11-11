@@ -23,7 +23,7 @@ void usage() {
            "         --dump-atlas atlas.png --editor --open map.lmap --editor-demo --live-demo\n"
            "         --tool rules[:unit_id]|mods --mods-selftest\n"
            "         --menu --ai-battle --side N --biome temperate|winter|desert|tropical|urban --gallery --works-demo --formation-demo --town-demo --bridge-demo --logistics-demo\n"
-           "         --bench MINUTES (an --ai-battle played without drawing; prints what each side did)\n"
+           "         --ffa (every side for itself) --bench MINUTES (an --ai-battle played without drawing; prints what each side did)\n"
            "         --export-sprites DIR (write every sprite as PNG for repainting; see docs/ART_PIPELINE.md)\n"
            "         --import-blitzkrieg DATA (make the Blitzkrieg art pack from the game's Data folder)");
 }
@@ -77,6 +77,7 @@ int main(int argc, char** argv) {
     else if (a == "--classic") opt.classic = true;
     else if (a == "--no-shadows") opt.noShadows = true;
     else if (a == "--intel") opt.intel = true;
+    else if (a == "--ffa") opt.ffa = true;
     else if (a == "--bench") {
       opt.bench = std::max(1, std::atoi(next()));
       opt.aiBattle = true;

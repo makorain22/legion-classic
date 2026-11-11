@@ -11,7 +11,8 @@
 namespace slave {
 
 namespace {
-constexpr uint32_t kStateMagic = 0x53494D36;  // "SIM6": logistics points
+constexpr uint32_t kStateMagic = 0x53494D37;  // "SIM7": the computer's main enemy, raid rotation and scout
+constexpr uint32_t kStateMagicV6 = 0x53494D36;  // "SIM6": logistics points
 constexpr uint32_t kStateMagicV5 = 0x53494D35;  // "SIM5": formations
 constexpr uint32_t kStateMagicV4 = 0x53494D34;  // "SIM4": hints, build locks, orders given, campaign flags
 constexpr uint32_t kStateMagicV3 = 0x53494D33;  // "SIM3": AI doctrine state (phases, raiders, guard)
@@ -258,7 +259,7 @@ bool Simulation::loadState(ByteReader& r, std::string& error, const std::vector<
                            bool* remapped) {
   if (remapped) *remapped = false;
   const uint32_t magic = r.u32();
-  const int version = magic == kStateMagic ? 6 : magic == kStateMagicV5 ? 5 : magic == kStateMagicV4 ? 4 : magic == kStateMagicV3 ? 3 : magic == kStateMagicV2 ? 2 : 0;
+  const int version = magic == kStateMagic ? 7 : magic == kStateMagicV6 ? 6 : magic == kStateMagicV5 ? 5 : magic == kStateMagicV4 ? 4 : magic == kStateMagicV3 ? 3 : magic == kStateMagicV2 ? 2 : 0;
   if (version == 0) {
     error = "not a saved game state";
     return false;

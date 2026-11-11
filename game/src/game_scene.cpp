@@ -170,6 +170,8 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
       s.sides[2] = {true, "ger", false, 2, 0, rgba8(220, 180, 40)};
       s.sides[3] = {true, "rus", false, 2, 1, rgba8(60, 170, 80)};
     }
+    if (opt_.ffa)  // --ffa: every side for itself (four of them with --sides 4)
+      for (size_t i = 0; i < s.sides.size(); ++i) s.sides[i].team = static_cast<int>(i);
     // --factions gbr,rus[,ger,gbr]: who plays each side.
     {
       size_t i = 0, at = 0;

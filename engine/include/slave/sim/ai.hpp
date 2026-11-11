@@ -12,12 +12,19 @@
 // feed reinforcements into an attack as it goes and lean on rocket
 // artillery.
 //
+// With several enemies (a free-for-all) it picks the nearest as its main
+// enemy and sends the main force against that one, while its raiding parties
+// take the others in turn, so nobody is left in peace. Whatever it fields it
+// binds into units - battle groups, platoons, squads - for the firepower
+// that brings, and binds again as reinforcements come up.
+//
 // Its forces:
 //   - the main force gathers in front of the base, binds into a unit and
 //     attacks, often by a flanking route; when it is badly hurt it falls
 //     back a little to regroup and dig in rather than running home;
-//   - raiders - fast cars and light tanks - hunt enemy logistics offices and
-//     stragglers, hopping from target to target;
+//   - raiders - fast cars and light tanks - hunt enemy logistics offices,
+//     supply trucks and stragglers, hopping from target to target;
+//   - a scout stands watch out in front and moves from post to post;
 //   - a home guard mans the base's trenches and bunkers;
 //   - damaged vehicles go home for repairs on their own.
 // It keeps expanding: post offices, warehouses and a fuel depot behind its
@@ -69,6 +76,15 @@ struct AiPlayer {
   std::vector<Entity> capture;  // the party sent to take a logistics point
   Vec2i captureTarget{-1, -1};  // that point (leptons)
   uint32_t captureReady = 0;    // next party not before this tick
+  // Added with save version 7 (9.7: the main enemy, raids on the others, scouts).
+  uint8_t mainEnemy = 0xFF;     // the side its main force goes for: the nearest one still standing (0xFF: none)
+  uint8_t raidEnemy = 0xFF;     // the side its raiders are after this time
+  uint32_t raids = 0;           // raiding parties sent out so far: they take the other enemies in turn
+  Entity scout;                 // the scout posted out in front to watch
+  uint8_t scoutPost = 0;        // which of its watch points it is on
+  uint32_t scoutTick = 0;       // when it was sent there
+  // Not saved: worked out afresh every time it thinks.
+  Vec2i enemyAt{-1, -1};        // where the main enemy stands (the middle of its buildings)
 };
 
 class SkirmishAi {

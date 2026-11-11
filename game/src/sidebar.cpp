@@ -567,6 +567,14 @@ void Sidebar::drawProduction(float width) {
         if (d.auraFireRate) ImGui::Text("Friends within %d tiles fire %d%% faster", d.auraRadius / 256, d.auraFireRate);
         if (d.perYard) ImGui::Text("%d for each Construction Yard", d.perYard);
         if (d.capacity) ImGui::Text("Brings %d supplies a trip", d.capacity);
+        {
+          // Further buildings of the kind that does the work speed the line up.
+          const int32_t halves = sim.lineSpeed(me, t);
+          if (halves > 2) ImGui::TextColored(ImVec4(0.75f, 0.9f, 0.6f, 1), "Line working at %d.%dx speed", halves / 2, halves % 2 ? 5 : 0);
+          const std::string& r = d.role;
+          if (d.isStructure() && (r == "barracks" || r == "factory" || r == "yard" || r == "post" || r == "warehouse"))
+            ImGui::TextDisabled("Each further one speeds up what it builds\nby half (three times as fast with five).");
+        }
         if (!d.isStructure()) ImGui::Text("%d hp, %s", d.maxHealth, d.infantry() ? "infantry" : "vehicle");
         for (int w : d.weapons) ImGui::BulletText("%s", scene_.weapons().get(w).name.c_str());
         if (d.cover) ImGui::Text("Infantry inside take %d%% less damage", d.cover);

@@ -416,6 +416,9 @@ class Simulation {
   int officeTrucks(Entity office) const;  // supply trucks working for it
   // How many more of this type the player may have (per-yard limits); INT32_MAX = no limit.
   int32_t roomFor(uint8_t player, int type) const;
+  // How fast `player`'s line builds this type, in halves of the normal speed
+  // (2 = normal; every further building of the kind that builds it adds one, up to 6).
+  int32_t lineSpeed(uint8_t player, int type) const;
   // Percent faster a unit of `owner` at (x, y) fires: the best friendly aura over it.
   int32_t fireRateBonus(uint8_t owner, int32_t x, int32_t y) const;
   // Tests and tools: hurt a unit as a weapon would (hundredths of a hit point).

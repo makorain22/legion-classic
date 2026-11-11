@@ -70,17 +70,38 @@ gives ordinary orders. Each side fights to **its own doctrine**:
   sooner to save lives (it regroups at 40% of its strength, the others at 30%).
   Bren teams and carriers are its favourite light kit.
 
-Its forces move all the time. The **main force** gathers in front of the base,
-binds into a unit and attacks, often round a flank; when it is badly hurt it
-falls back a few hundred metres, takes cover in buildings and trenches, and
-goes again, rather than running home. **Raiders** (scout cars, half-tracks and
-light tanks) hunt the weakest-defended enemy logistics offices and stragglers.
-A **home guard** mans the base's trenches and bunkers, and damaged vehicles go
-home for repairs. It keeps **expanding**: post offices, warehouses and a fuel
+Its forces move all the time. The **main force** gathers in front of the base
+and attacks, often round a flank; when it is badly hurt it falls back a few
+hundred metres, takes cover in buildings and trenches, and goes again, rather
+than running home. Once it has picked a building to go for it sees that
+through. **Raiders** (five or six scout cars, half-tracks and light tanks)
+hunt the weakest-defended enemy logistics offices, then post offices,
+warehouses and fuel depots, and shoot up any supply truck they catch on the
+road. A **scout car** stands watch out in front and moves from post to post
+(halfway to the enemy, by the nearest logistics point that isn't its own, out
+on either flank), falling back when the enemy comes close; what it sees, the
+guns can shell. A **home guard** mans the base's trenches and bunkers, and
+damaged vehicles go home for repairs.
+
+**It fights in bound units.** Whatever stands at its gathering point is bound
+into units as it gathers; an attack goes in as battle groups of about sixty,
+tanks and infantry shared out among them, each marching as its own formation
+side by side on a broad front; reinforcements come up as units of their own,
+never in dribs and drabs; raiders, the home guard and the parties sent for
+logistics points are bound too. Expect most of its army to carry the
+firepower bonus of a squad, platoon or battle group.
+
+**With several enemies** (every side for itself) it takes the **nearest as its
+main enemy** and keeps the main force on that one until it is beaten, then
+turns on the next nearest. Meanwhile its **raiding parties take the other
+sides in turn**, a different one each time they set out, so nobody is left in
+peace. It keeps **expanding**: post offices, warehouses and a fuel
 depot behind its headquarters, a **party of infantry sent to take the nearest
 free logistics point** (and an MG nest beside each office it wins), lost
 supply trucks replaced, and later a second Construction Yard on a quieter
-part of the map, which lets it build more of each. **Easy** thinks slowly and attacks with small
+part of the map, which lets it build more of each. When money piles up
+faster than it can spend it, it puts up more Tank Works and Barracks to speed
+its lines. **Easy** thinks slowly and attacks with small
 forces; **hard** thinks fast, fortifies more and attacks sooner and harder.
 You can hand any side to the computer in the editor's Sides tab, even
 mid-battle.
@@ -215,6 +236,15 @@ grey on the minimap.
   Station, the Logistics Warehouse a Post Office, the Tank Works and the Fuel
   Depot a Warehouse, and so on (hover a greyed-out button to see what's
   missing).
+- **More buildings, faster lines.** Each line (structures, defences, infantry,
+  vehicles) builds one thing at a time, but **every further building of the
+  kind that does the work speeds it up by half**: a second Barracks trains
+  infantry one and a half times as fast, a third twice as fast, and so on up
+  to three times the speed with five. The same goes for Tank Works
+  (vehicles), Construction Yards (structures and defences), Post Offices
+  (levies) and Logistics Warehouses (supply trucks). The price of what is
+  built doesn't change: this is how a big income is turned into a big army.
+  Hover a button to see the speed its line is working at.
 - **Training.** The **Train** and **Vehicles** tabs queue infantry at the Barracks
   and vehicles at the Tank Works. Infantry are cheap: a Grenadier costs $10.
   Click for one man, **Shift-click for a fireteam of five**; right-click
@@ -239,7 +269,9 @@ Soldiers fight as units, as real armies do:
   **Ctrl+B**: 10 or more make a squad, 20 a platoon, 100 a company. Vehicles
   bind the same way: 5 make an armoured platoon, 15 a company, 50 a battalion,
   named for what they are (reconnaissance, tank destroyer, artillery battery,
-  mechanised...). **Tanks and infantry bound together** make a combined unit:
+  mechanised...); kinds too few to make a unit of their own are put together
+  in one mixed unit (two scout cars, two half-tracks and a light tank make a
+  platoon). **Tanks and infantry bound together** make a combined unit:
   a mechanised platoon, a battle group or an armoured regiment (a vehicle
   counts as four men towards its size), and it fights harder still.
   **Ctrl+U** disbands the selected unit.

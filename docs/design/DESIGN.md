@@ -222,7 +222,26 @@ recognition flash on vehicles and a roundel in the interface.
      levy infantry: Recruits, Volkssturm, Conscripts), Logistics Warehouse
      (middling income, supply trucks, an aura that speeds friendly fire),
      Strategic Fuel Depot (the most income, one per construction yard).
-   - **9.7 AI** – in free-for-all it presses the nearest enemy and raids the
+   - **9.7 AI** – done (11 Nov), `engine/src/sim/ai.cpp`. `AiPlayer::
+     mainEnemy` is the nearest hostile side still standing (kept until it has
+     nothing left; `toward` and the main force's targets follow it; the
+     building it is going for stays the target until it is down);
+     `raidEnemy` rotates through the other sides, one per raiding party
+     (`raids`). Raiders (5-6, bound; mixed vehicle kinds now bind into one
+     platoon) score offices, then income buildings, and attack supply trucks
+     in sight. Binding: `bindGroups` splits a force into battle groups of
+     about sixty (men and vehicles dealt out from flank to flank),
+     `keepBound` rebinds when 15-30% stand outside a proper unit,
+     `orderUnits` gives each bound unit its own formation on a front across
+     the way to the target, `frontOf` is the middle of the half nearest the
+     enemy. One scout (`scout`, `scoutPost`) moves between four watch points
+     every 75 s. Production: `Simulation::lineSpeed` - every further
+     building of the kind that builds a thing speeds its line by half (3x
+     with five); the AI adds works and barracks when it has over 5000 to
+     spare. Saves are SIM7. `--bench N` (with `--ai-battle`, `--sides`,
+     `--ffa`, `--factions`) plays a battle without drawing and prints what
+     each side did: the tool for 9.13's balance runs. The design as the user
+     gave it: in free-for-all it presses the nearest enemy and raids the
      others; it binds most of its army into battle groups; it plays the new
      economy.
    - **9.8 Towns and villages** – compact towns, buildings stitched together

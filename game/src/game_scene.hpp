@@ -106,6 +106,7 @@ struct SceneOptions {
   bool classic = false;         // --classic: the old 2D sprite view instead of 3D
   bool noShadows = false;       // --no-shadows (testing, comparisons)
   bool intel = false;           // --intel: an AI battle seen with the viewing side's intel (no reveal)
+  bool ffa = false;             // --ffa: an --ai-battle with every side for itself
   int bench = 0;                // --bench N: play an --ai-battle for N game minutes without drawing, print a report, quit
   float yaw = -1000, pitch = -1000;  // --yaw / --pitch: starting camera angles in degrees (screenshots)
 };
