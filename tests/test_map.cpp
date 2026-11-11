@@ -104,7 +104,7 @@ TEST_CASE("map files round-trip exactly") {
   CHECK(f.map.heights() == m.heights());
   CHECK(f.map.splatData() == m.splatData());
   CHECK(f.map.oilData() == m.oilData());
-  CHECK(m.supplyPoints.size() >= 8);
+  CHECK(m.supplyPoints.size() >= 2);
   CHECK(f.map.supplyPoints == m.supplyPoints);
   CHECK(f.map.waterLevel() == m.waterLevel());
   CHECK(f.map.props().size() == m.props().size());

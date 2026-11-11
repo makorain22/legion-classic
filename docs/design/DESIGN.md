@@ -202,7 +202,21 @@ recognition flash on vehicles and a roundel in the interface.
      off its route. `COrder::faceTo` survives arrival as the post facing.
      Spacing: men 150 leptons; vehicles 3 radii abreast, 4 nose to tail.
      Saves are SIM5 (SIM4 and older still load).
-   - **9.6 Economy** – rare logistics points far from the bases: capture one
+   - **9.6 Economy** – done (11 Nov), `engine/src/sim/logistics.cpp`. The
+     map's `supplyPoints` are logistics points (generator: `(W+H)/80` of
+     them, 2..12, at least 30% of the map's short side from every home and
+     22% apart, mirrored pairs, own RNG stream). `stepPoints` (every 3
+     ticks): armed non-structure units within 3.5 tiles hold a point for
+     their side when no enemy is there; 12 s (`kCaptureTicks`) raises the
+     faction's `role: office` structure (anyone standing in its footprint is
+     moved aside first), which spawns its `freeUnit` x `convoy` trucks.
+     `stepConvoys` runs `CHarvester` (Seek, ToOffice, Loading 12 s, ToYard,
+     Unloading 2 s; pays the truck's `capacity`). Rules: `perYard`
+     (`roomFor`, checked in `canProduce` and on placing), `aura {radius,
+     fireRate}` (`fireRateBonus`, applied to weapon cooldowns with a
+     dithered rounding), builtAt `post` / `warehouse`. Events
+     `PointCaptured`, `ConvoyArrived`. Saves are SIM6 (point states; the
+     AI's capture party). The design as the user gave it: rare logistics points far from the bases: capture one
      and a logistics office sends three-truck convoys of money to your HQ
      (office and trucks can be destroyed); Post Office (small income, cheap
      levy infantry: Recruits, Volkssturm, Conscripts), Logistics Warehouse

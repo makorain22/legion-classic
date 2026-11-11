@@ -896,34 +896,63 @@ void Map::generateTerrain(uint64_t seed, Biome b, int layoutIndex) {
       }
     }
 
-  // --- Supply points ---------------------------------------------------------
-  // Two beside each starting area, more out in the middle to fight over.
-  // Symmetric, so no side starts with an advantage.
+  // --- Logistics points -------------------------------------------------------
+  // A few, scattered at random, far from every starting area and from each
+  // other: the side that holds one gets an office there and convoys of money
+  // from it (9.6). Each has a twin mirrored through the middle of the map, so
+  // in a duel neither side has them nearer; an odd one lies near the middle.
+  // Placed with their own random stream, so the rest of the map is the same
+  // whatever happens here.
   std::fill(oil_.begin(), oil_.end(), uint8_t{0});
   supplyPoints.clear();
-  const struct { int fx, fy; } sites[] = {
-      {17, 38}, {17, 62}, {83, 38}, {83, 62},  // west and east homes
-      {38, 17}, {62, 17}, {38, 83}, {62, 83},  // north and south homes
-      {50, 50}, {32, 30}, {68, 70}, {32, 70}, {68, 30},  // contested
-  };
-  for (const auto& site : sites) {
-    const int ox = W * site.fx / 100, oy = H * site.fy / 100;
-    int cx = ox, cy = oy;
-    bool found = false;
-    for (int tries = 0; tries < 120 && !found; ++tries) {
-      bool ok = true;
-      for (int y = cy - 2; y <= cy + 2 && ok; ++y)
-        for (int x = cx - 2; x <= cx + 2 && ok; ++x)
-          ok = inBounds(x, y) && info(x, y).waterDepth < -16 && info(x, y).slope < 20;
-      if (ok) {
-        found = true;
-        break;
+  {
+    Rng prng(seed ^ 0x9E3779B97F4A7C15ULL);
+    const int S = std::min(W, H);
+    const int count = std::clamp((W + H) / 80, 2, 12);
+    const int homeAt[4][2] = {{W * 17 / 100, H / 2}, {W * 83 / 100, H / 2}, {W / 2, H * 17 / 100}, {W / 2, H * 83 / 100}};
+    auto flat = [&](int cx, int cy) {
+      for (int y = cy - 2; y <= cy + 2; ++y)
+        for (int x = cx - 2; x <= cx + 2; ++x)
+          if (!inBounds(x, y) || info(x, y).waterDepth >= -16 || info(x, y).slope >= 20) return false;
+      return cx >= 6 && cy >= 6 && cx < W - 6 && cy < H - 6;
+    };
+    for (int relax = 0; relax < 3 && static_cast<int>(supplyPoints.size()) < count; ++relax) {
+      const int fromHome = S * (30 - relax * 6) / 100, apart = S * (22 - relax * 5) / 100;
+      auto good = [&](int cx, int cy) {
+        if (!flat(cx, cy)) return false;
+        for (const auto& h : homeAt)
+          if ((cx - h[0]) * (cx - h[0]) + (cy - h[1]) * (cy - h[1]) < fromHome * fromHome) return false;
+        for (const Vec2i& sp : supplyPoints)
+          if ((cx - sp.x) * (cx - sp.x) + (cy - sp.y) * (cy - sp.y) < apart * apart) return false;
+        return true;
+      };
+      // Near `want`, the first good spot in widening rings.
+      auto near = [&](Vec2i want, int reach, Vec2i& out) {
+        for (int r = 0; r <= reach; ++r)
+          for (int dy = -r; dy <= r; ++dy)
+            for (int dx = -r; dx <= r; ++dx) {
+              if (std::max(std::abs(dx), std::abs(dy)) != r || !good(want.x + dx, want.y + dy)) continue;
+              out = {want.x + dx, want.y + dy};
+              return true;
+            }
+        return false;
+      };
+      if (count % 2 == 1 && supplyPoints.empty()) {
+        Vec2i c;
+        if (near({W / 2 + static_cast<int>(prng.range(-S / 12, S / 12)), H / 2 + static_cast<int>(prng.range(-S / 12, S / 12))}, S / 8, c))
+          supplyPoints.push_back(c);
       }
-      const int r = 3 + tries / 3;  // look further out as it goes (a lake in the way)
-      cx = std::clamp(ox + static_cast<int>(rng.range(-r, r)), 3, W - 4);
-      cy = std::clamp(oy + static_cast<int>(rng.range(-r, r)), 3, H - 4);
+      for (int tries = 0; tries < 600 && static_cast<int>(supplyPoints.size()) + 1 < count + (count % 2 == 1 && supplyPoints.empty() ? 1 : 0); ++tries) {
+        const Vec2i a{static_cast<int>(prng.range(W * 8 / 100, W * 92 / 100)), static_cast<int>(prng.range(H * 8 / 100, H * 92 / 100))};
+        if (!good(a.x, a.y)) continue;
+        supplyPoints.push_back(a);
+        Vec2i twin;
+        if (near({W - 1 - a.x, H - 1 - a.y}, 5, twin)) supplyPoints.push_back(twin);
+        else supplyPoints.pop_back();
+      }
     }
-    if (found) supplyPoints.push_back({cx, cy});
+    // Always in the same order, whatever order they were found in.
+    std::sort(supplyPoints.begin(), supplyPoints.end(), [](Vec2i a, Vec2i b) { return a.y != b.y ? a.y < b.y : a.x < b.x; });
   }
   // Clear trees off the sites so they can be seen and built on.
   std::erase_if(props_, [&](const Prop& p) {

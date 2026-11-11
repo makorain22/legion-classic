@@ -378,10 +378,7 @@ TEST_CASE("tutorial 4, Base and Supply, is won by doing what the hints say") {
   const Vec2i yard{yp.x / 256, yp.y / 256};
   REQUIRE(b.build("gbr_power", {yard.x - 5, yard.y - 4}));
   REQUIRE(b.runUntil([&] { return b.fired("Power"); }, 10));
-  Vec2i sp = b.f.map.supplyPoints.front();
-  for (const Vec2i& p : b.f.map.supplyPoints)
-    if (std::abs(p.x - yard.x) + std::abs(p.y - yard.y) < std::abs(sp.x - yard.x) + std::abs(sp.y - yard.y)) sp = p;
-  REQUIRE(b.build("gbr_depot", sp));
+  REQUIRE(b.build("gbr_post", {yard.x - 5, yard.y + 3}));
   REQUIRE(b.runUntil([&] { return b.fired("Depot"); }, 10));
   REQUIRE(b.build("gbr_barracks", {yard.x + 5, yard.y + 3}));
   Command train;
@@ -391,7 +388,15 @@ TEST_CASE("tutorial 4, Base and Supply, is won by doing what the hints say") {
   train.amount = 10;
   b.sim->queue(train);
   REQUIRE(b.runUntil([&] { return b.fired("Riflemen"); }, 120));
-  REQUIRE(b.build("gbr_factory", {yard.x + 1, yard.y + 8}, 240));
+  REQUIRE(b.build("gbr_warehouse", {yard.x - 1, yard.y + 8}));
+  REQUIRE(b.runUntil([&] { return b.fired("Warehouse"); }, 10));
+  // The riflemen go and stand on the logistics point: the office goes up and the lorries start.
+  REQUIRE(b.f.map.supplyPoints.size() == 1);
+  const Vec2i sp = b.f.map.supplyPoints.front();
+  b.order(CommandType::Move, b.ofType(0, "gbr_rifleman"), sp);
+  REQUIRE(b.runUntil([&] { return b.fired("Office"); }, 120));
+  CHECK(b.ofType(0, "gbr_supply_truck").size() == 3);
+  REQUIRE(b.build("gbr_factory", {yard.x + 6, yard.y + 9}, 240));
   Command tank = train;
   tank.unitType = static_cast<uint16_t>(R.types.find("gbr_medium_tank"));
   tank.amount = 3;

@@ -134,6 +134,15 @@ struct Builder {
     if (std::getenv("LEGION_DEBUG_LOTS")) std::fprintf(stderr, "lots %zu\n", file.map.lots.size());
     file.map.lots.clear();
   }
+  // A base's income: post office, logistics warehouse and fuel depot behind
+  // the headquarters at (x, y), away from (awayX, awayY).
+  void income(const std::string& faction, uint8_t owner, int x, int y, int awayX, int awayY) {
+    const int dx = x > awayX ? 1 : -1, dy = y > awayY ? 1 : -1;
+    const bool wide = std::abs(x - awayX) >= std::abs(y - awayY);
+    place(faction + "_post", owner, x + (wide ? dx * 7 : -6), y + (wide ? -6 : dy * 7));
+    place(faction + "_warehouse", owner, x + (wide ? dx * 8 : 0), y + (wide ? 0 : dy * 8));
+    place(faction + "_depot", owner, x + (wide ? dx * 7 : 6), y + (wide ? 7 : dy * 8));
+  }
   Vec2i nearestSupply(int x, int y) const {
     Vec2i best = file.map.supplyPoints.empty() ? Vec2i{x, y} : file.map.supplyPoints.front();
     for (const Vec2i& p : file.map.supplyPoints)
@@ -451,12 +460,13 @@ bool tutorialDigIn(Builder& b, const std::string& out) {
 
 bool tutorialBase(Builder& b, const std::string& out) {
   const uint64_t seed = findSeed(96, Biome::Temperate, static_cast<int>(MapLayout::Crossroads), 401,
-                                 rect(8, 40, 26, 56) + rect(70, 14, 84, 26));
+                                 rect(8, 40, 26, 56) + rect(70, 14, 84, 26) + rect(36, 44, 44, 52));
   b.start(96, Biome::Temperate, seed, static_cast<int>(MapLayout::Crossroads), "Basic Training: Base and Supply",
           "Building a base, supplies, and an attack.");
   b.side(0, "Training Company", "gbr", kKhaki, 0, true, 4000, 16, 48);
   b.side(1, "Opposing Force", "ger", kRed, 1, true, 0, 78, 20);
-  b.villages({{16, 48, 14}, {78, 20, 12}});
+  b.file.map.supplyPoints = {{40, 48}};  // one logistics point, a short march east of the yard
+  b.villages({{16, 48, 14}, {78, 20, 12}, {40, 48, 6}});
   b.place("gbr_mcv", 0, 16, 48, 0);
   b.squad("gbr_rifleman", 0, 20, 52, 4, 0);
   b.place("ger_barracks", 1, 78, 18);
@@ -467,7 +477,7 @@ bool tutorialBase(Builder& b, const std::string& out) {
   b.place("ger_mg_team", 1, 72, 26, 8);
 
   Script s;
-  const int outpost = s.area("Outpost", 66, 10, 90, 30);
+  const int outpost = s.area("Outpost", 66, 10, 90, 30), point = s.area("Logistics point", 35, 43, 45, 53);
   const int start = s.on("Start", {always()},
        {lock(0, -1), highlight(0, "order.deploy"),
         hint(0, "Building a base\nEverything starts with the Construction Lorry. Select it, drive it onto open, level ground "
@@ -480,31 +490,48 @@ bool tutorialBase(Builder& b, const std::string& out) {
                 "speed."),
         objective(0, "Build a power station")});
   const int power = s.on("Power", {fired(yard), atLeast(0, 1, b.t("gbr_power"))},
-       {done(1), unlock(0, b.t("gbr_depot")), highlight(0, "build:gbr_depot"),
-        hint(0, "Supply\nSupplies pay for everything. A Supply Dump earns them every minute, but only standing on a supply "
-                "point: the stacks of crates on the ground. There is one near your yard: build a Supply Dump and place it "
-                "on it."),
-        objective(0, "Build a supply dump on a supply point")});
-  const int depot = s.on("Depot", {fired(power), atLeast(0, 1, b.t("gbr_depot"))},
+       {done(1), unlock(0, b.t("gbr_post")), highlight(0, "build:gbr_post"),
+        hint(0, "Supply\nSupplies pay for everything, and three buildings earn them every minute: the Post Office a little, "
+                "the Logistics Warehouse more, the Strategic Fuel Depot most. Each construction yard allows three post "
+                "offices, two warehouses and one fuel depot. Start with a Post Office: build one and place it near the yard."),
+        objective(0, "Build a post office")});
+  const int depot = s.on("Depot", {fired(power), atLeast(0, 1, b.t("gbr_post"))},
        {done(2), unlock(0, b.t("gbr_barracks")), unlock(0, b.t("gbr_rifleman")), unlock(0, b.t("gbr_mg_team")),
-        unlock(0, b.t("gbr_at_team")), unlock(0, b.t("gbr_engineer")), highlight(0, "build:gbr_barracks"),
-        hint(0, "Barracks\nBuild a Drill Hall. Then open the Train tab and click Rifleman: each click trains one man, "
+        unlock(0, b.t("gbr_at_team")), unlock(0, b.t("gbr_engineer")), unlock(0, b.t("gbr_recruit")),
+        highlight(0, "build:gbr_barracks"),
+        hint(0, "Barracks\nThe post office also calls up Recruits: cheap levy infantry, weak unless massed. Proper soldiers "
+                "come from a Drill Hall: build one. Then open the Train tab and click Rifleman: each click trains one man, "
                 "right-click takes one off the order. Train ten."),
         objective(0, "Train ten riflemen")});
   s.on("Train tab", {fired(depot), atLeast(0, 1, b.t("gbr_barracks"))}, {highlight(0, "tab.train")});
   const int men = s.on("Riflemen", {fired(depot), atLeast(0, 14, b.t("gbr_rifleman"))},
-       {done(3), unlock(0, b.t("gbr_factory")), unlock(0, b.t("gbr_scout_car")), unlock(0, b.t("gbr_halftrack")),
+       {done(3), unlock(0, b.t("gbr_warehouse")), unlock(0, b.t("gbr_supply_truck")), highlight(0, "build:gbr_warehouse"),
+        hint(0, "Logistics\nA Logistics Warehouse earns twice what a post office does, keeps the ammunition coming (friendly "
+                "units near it fire a little faster) and builds supply lorries. Tanks need one behind them. Build a "
+                "Logistics Warehouse."),
+        objective(0, "Build a logistics warehouse")});
+  const int warehouse = s.on("Warehouse", {fired(men), atLeast(0, 1, b.t("gbr_warehouse"))},
+       {done(4), highlight(0, "minimap"), reveal(0, point),
+        hint(0, "Logistics points\nThe real money is out on the map. The gold square on the minimap, east of here, is a "
+                "logistics point. Send your riflemen to stand on it: hold it alone for twelve seconds and a Logistics "
+                "Office goes up, with three lorries that carry money back to your yard. Offices and lorries can be "
+                "destroyed, yours and the enemy's alike."),
+        objective(0, "Take the logistics point")});
+  const int office = s.on("Office", {fired(warehouse), atLeast(0, 1, b.t("gbr_office"))},
+       {done(5), unlock(0, b.t("gbr_factory")), unlock(0, b.t("gbr_scout_car")), unlock(0, b.t("gbr_halftrack")),
         unlock(0, b.t("gbr_light_tank")), unlock(0, b.t("gbr_medium_tank")), highlight(0, "build:gbr_factory"),
-        hint(0, "Armour\nA Tank Workshop builds vehicles. Build one, then open the Vehicles tab and build a Cromwell."),
+        hint(0, "Armour\nThe lorries are on their way: watch for the figures over your yard as they pay in. A lorry you "
+                "lose is replaced from the warehouse. Now a Tank Workshop: build one, then open the Vehicles tab and "
+                "build a Cromwell."),
         objective(0, "Build a Cromwell")});
-  s.on("Vehicles tab", {fired(men), atLeast(0, 1, b.t("gbr_factory"))}, {highlight(0, "tab.vehicles")});
-  const int cromwell = s.on("Cromwell", {fired(men), atLeast(0, 1, b.t("gbr_medium_tank"))},
-       {done(4), unlock(0, -1), highlight(0, ""),
+  s.on("Vehicles tab", {fired(office), atLeast(0, 1, b.t("gbr_factory"))}, {highlight(0, "tab.vehicles")});
+  const int cromwell = s.on("Cromwell", {fired(office), atLeast(0, 1, b.t("gbr_medium_tank"))},
+       {done(6), unlock(0, -1), highlight(0, ""),
         hint(0, "Take the outpost\nScouts have found an enemy outpost to the north-east. Gather your force and attack-move "
                 "on it (A, then click). Engineers mend damaged tanks: take some along."),
         objective(0, "Destroy the enemy outpost"), reveal(0, outpost)});
   s.on("Outpost taken", {fired(cromwell), noneIn(1, outpost)},
-       {done(5), hint(0, "Basic Training complete\nYou are ready to command. The campaigns are waiting."), win(0)});
+       {done(7), hint(0, "Basic Training complete\nYou are ready to command. The campaigns are waiting."), win(0)});
   s.on("Lost", {atMost(0, 0)}, {lose(0)});
   return b.save(out, &s.s);
 }
@@ -580,17 +607,7 @@ bool kalach(Builder& b, const std::string& out) {
                             {5, 7, "rus_barracks"}, {-1, 12, "rus_factory"}, {-10, -2, "rus_bunker"}, {-10, 3, "rus_atgun"}})
     b.place(id, 1, bx + dx, by + dy);
   b.squad("rus_rifleman", 1, bx - 8, by, 6, 8);
-  // Supply depots on the supply points nearest each side's start.
-  auto nearestPoint = [&](int x, int y) {
-    Vec2i best = b.file.map.supplyPoints.front();
-    for (const Vec2i& p : b.file.map.supplyPoints)
-      if (std::abs(p.x - x) + std::abs(p.y - y) < std::abs(best.x - x) + std::abs(best.y - y)) best = p;
-    return best;
-  };
-  {
-    const Vec2i sp = nearestPoint(bx, by);
-    b.place("rus_depot", 1, sp.x, sp.y);
-  }
+  b.income("rus", 1, bx, by, 64, 64);
 
   // Kampfgruppe Adler, in the west.
   const int gx = 14, gy = 64;
@@ -615,7 +632,7 @@ bool kalach(Builder& b, const std::string& out) {
   brief.actions = {msg(0, "Kampfgruppe Adler: take the crossroads village before the Soviets reinforce it."),
                    objective(0, "Take the village at the crossroads"),
                    objective(0, "Destroy the Soviet base"),
-                   msg(0, "Deploy the construction truck to build a base, and a supply depot on a supply point for income. "
+                   msg(0, "Deploy the construction truck to build a base, with a post office and a warehouse for income. "
                           "Infantry can hold the village houses: right-click a house with them selected.")};
   Trigger taken;
   taken.name = "Village taken";
@@ -694,10 +711,7 @@ bool gerIceRoad(Builder& b, const std::string& out) {
   for (auto [dx, dy, id] : {std::tuple{0, 0, "ger_yard"}, {-5, -6, "ger_power"}, {-5, 6, "ger_power"}, {5, 7, "ger_barracks"},
                             {1, 12, "ger_factory"}})
     b.place(id, 0, bx + dx, by + dy);
-  {
-    const Vec2i sp = b.nearestSupply(bx, by);
-    b.place("ger_depot", 0, sp.x, sp.y);
-  }
+  b.income("ger", 0, bx, by, 64, 64);
   // The crossroads: a hamlet, dug in.
   const int cx = 42, cy = 64;
   for (auto [dx, dy, id] : {std::tuple{-3, -5, "neutral_izba"}, {3, 5, "neutral_izba"}, {-4, 5, "neutral_barn"}, {4, -4, "neutral_cottage_bombed"}})
@@ -716,10 +730,7 @@ bool gerIceRoad(Builder& b, const std::string& out) {
   for (auto [dx, dy, id] : {std::tuple{0, 0, "rus_yard"}, {-6, -6, "rus_power"}, {-6, 6, "rus_power"}, {5, 7, "rus_barracks"},
                             {-1, 12, "rus_factory"}, {-10, 0, "rus_bunker"}})
     b.place(id, 1, rx + dx, ry + dy);
-  {
-    const Vec2i sp = b.nearestSupply(rx, ry);
-    b.place("rus_depot", 1, sp.x, sp.y);
-  }
+  b.income("rus", 1, rx, ry, 64, 64);
   b.squad("rus_rifleman", 1, rx - 8, ry, 8, 8);
 
   Script s;
@@ -772,10 +783,7 @@ bool gerDonets(Builder& b, const std::string& out) {
                             {-1, 12, "rus_factory"}, {-12, -4, "rus_bunker"}, {-12, 4, "rus_bunker"}, {-12, 0, "rus_atgun"},
                             {4, -8, "rus_howitzer_pit"}})
     b.place(id, 1, rx + dx, ry + dy);
-  {
-    const Vec2i sp = b.nearestSupply(rx, ry);
-    b.place("rus_depot", 1, sp.x, sp.y);
-  }
+  b.income("rus", 1, rx, ry, 64, 64);
   // The ridge line: trenches and wire across the middle.
   b.line("rus_trench", 1, 74, 52, 74, 76);
   b.line("rus_wire", 1, 70, 54, 70, 74);
@@ -869,10 +877,7 @@ bool rusBridgehead(Builder& b, const std::string& out) {
   for (auto [dx, dy, id] : {std::tuple{0, 0, "ger_yard"}, {-6, -6, "ger_power"}, {5, 7, "ger_barracks"}, {-1, 12, "ger_factory"},
                             {-12, 0, "ger_bunker"}})
     b.place(id, 1, gx + dx, gy + dy);
-  {
-    const Vec2i sp = b.nearestSupply(gx, gy);
-    b.place("ger_depot", 1, sp.x, sp.y);
-  }
+  b.income("ger", 1, gx, gy, 64, 64);
   b.squad("ger_rifleman", 1, 82, 62, 8, 8);
   b.squad("ger_mg_team", 1, 84, 66, 2, 8);
 
@@ -918,10 +923,7 @@ bool rusIronStorm(Builder& b, const std::string& out) {
                             {-1, 12, "ger_factory"}, {-12, -5, "ger_bunker"}, {-12, 5, "ger_bunker"}, {-12, 0, "ger_atgun"},
                             {-10, -10, "ger_howitzer_pit"}, {-10, 10, "ger_mg_nest"}, {4, -9, "ger_tower"}})
     b.place(id, 1, gx + dx, gy + dy);
-  {
-    const Vec2i sp = b.nearestSupply(gx, gy);
-    b.place("ger_depot", 1, sp.x, sp.y);
-  }
+  b.income("ger", 1, gx, gy, 64, 64);
   b.line("ger_trench", 1, gx - 16, gy - 10, gx - 16, gy + 10);
   b.line("ger_wire", 1, gx - 19, gy - 10, gx - 19, gy + 10);
   b.line("ger_traps", 1, gx - 21, gy - 6, gx - 21, gy + 6);
@@ -1005,7 +1007,7 @@ bool gbrRaid(Builder& b, const std::string& out) {
   b.place("gbr_engineer", 0, 8, 72);
   const std::vector<std::pair<int, int>> dumps = {{64, 24}, {104, 64}, {74, 100}};
   for (auto [x, y] : dumps) {
-    b.place("ger_depot", 1, x, y);
+    b.place("ger_office", 1, x, y);  // a logistics office and its trucks: the dump
     b.place("ger_mg_nest", 1, x - 4, y + 3);
     b.squad("ger_rifleman", 1, x + 2, y - 3, 4, 8);
   }
@@ -1015,7 +1017,7 @@ bool gbrRaid(Builder& b, const std::string& out) {
   Script s;
   const int a1 = s.area("Dump north", 56, 16, 72, 32), a2 = s.area("Dump east", 96, 56, 112, 72), a3 = s.area("Dump south", 66, 92, 82, 108),
             hq = s.area("Their camp", 116, 100, 124, 110);
-  const int depot = b.t("ger_depot");
+  const int depot = b.t("ger_office");
   s.on("Briefing", {always()},
        {say(0, "Lantern Force: three supply dumps, marked on your map. Destroy them all. Speed is everything: once they know "
                "we're here, they'll send their armour."),
@@ -1051,10 +1053,7 @@ bool gbrGap(Builder& b, const std::string& out) {
   for (auto [dx, dy, id] : {std::tuple{0, 0, "ger_yard"}, {-6, -6, "ger_power"}, {-6, 6, "ger_power"}, {5, 7, "ger_barracks"},
                             {-1, 12, "ger_factory"}, {-12, -5, "ger_bunker"}, {-12, 5, "ger_atgun"}, {-10, 10, "ger_mg_nest"}})
     b.place(id, 1, gx + dx, gy + dy);
-  {
-    const Vec2i sp = b.nearestSupply(gx, gy);
-    b.place("ger_depot", 1, sp.x, sp.y);
-  }
+  b.income("ger", 1, gx, gy, 64, 64);
   b.squad("ger_rifleman", 1, gx - 14, gy, 10, 8);
 
   Script s;

@@ -122,6 +122,8 @@ void GameScene::drawNatoSymbol(ImDrawList* dl, ImVec2 c, float scale, const std:
     dl->AddCircleFilled(c, ih * 0.4f, line);
   } else if (nato == "hq") {
     dl->AddLine(ImVec2(a.x, b.y), ImVec2(a.x, b.y + h * 0.9f), line, t);
+  } else if (nato == "supply") {
+    dl->AddLine(ImVec2(a.x, c.y + ih * 0.5f), ImVec2(b.x, c.y + ih * 0.5f), line, t);  // the bar across the foot of the frame
   }
   // Size above the frame: Ø team, • squad, ••• platoon, | company, || battalion.
   const float y = (hostile ? c.y - h * 1.35f : a.y) - 4 * scale;
@@ -201,22 +203,37 @@ void GameScene::drawWorldOverlays() {
       }
   }
 
-  // --- Supply points ---------------------------------------------------------
+  // --- Logistics points -------------------------------------------------------
+  // A free point carries its name; while someone holds it, a bar in their
+  // colour shows how near the office is. (A taken point shows its office and flag.)
   for (size_t i = 0; i < map_.supplyPoints.size(); ++i) {
     const Vec2i sp = map_.supplyPoints[i];
-    if (fog && terrain_.fogAt(sp.x, sp.y) == 0) continue;
     const ImVec2 c = toScreen(groundToScreenWorld(sp.x * 256.0f + 128, sp.y * 256.0f + 128));
     if (!onScreen(c)) continue;
-    // The compound itself is drawn with the scenery; a label shows only
-    // while a depot is being placed.
-    const Entity depot = sim_->depotOn(static_cast<int>(i));
-    const int placing = sidebar_->placingType();
-    if (depot.valid() || placing < 0 || types_.get(placing).role != "depot") continue;
-    const uint32_t col = rgba8(214, 196, 120);
-    const char* label = "SUPPLY POINT";
+    if (sim_->officeOn(static_cast<int>(i)).valid()) continue;
+    const char* label = "LOGISTICS POINT";
     const ImVec2 ts = ImGui::CalcTextSize(label);
-    dl->AddRectFilled(ImVec2(c.x - ts.x / 2 - 4, c.y - ts.y / 2 - 2), ImVec2(c.x + ts.x / 2 + 4, c.y + ts.y / 2 + 2), IM_COL32(20, 20, 16, 180), 3);
-    dl->AddText(ImVec2(c.x - ts.x / 2, c.y - ts.y / 2), imcol(col, 0.95f), label);
+    const ImVec2 at(c.x, c.y - 26);
+    dl->AddRectFilled(ImVec2(at.x - ts.x / 2 - 5, at.y - ts.y / 2 - 2), ImVec2(at.x + ts.x / 2 + 5, at.y + ts.y / 2 + 2), IM_COL32(20, 20, 16, 190), 3);
+    dl->AddText(ImVec2(at.x - ts.x / 2, at.y - ts.y / 2), imcol(rgba8(214, 196, 120), 0.95f), label);
+    const Simulation::PointState& st = sim_->pointState(i);
+    const bool seen = !fog || sim_->vision().visible(player_, sp.x, sp.y);
+    if (st.side == 0xFF || st.progress == 0 || !seen) continue;
+    const float frac = std::clamp(static_cast<float>(st.progress) / Simulation::kCaptureTicks, 0.0f, 1.0f);
+    const float w = ts.x + 10, y = at.y + ts.y / 2 + 4;
+    dl->AddRectFilled(ImVec2(at.x - w / 2, y), ImVec2(at.x + w / 2, y + 5), IM_COL32(12, 12, 10, 220));
+    dl->AddRectFilled(ImVec2(at.x - w / 2 + 1, y + 1), ImVec2(at.x - w / 2 + 1 + (w - 2) * frac, y + 4), imcol(teamColor(st.side), 1.0f));
+  }
+
+  // --- Money paid in by a convoy: a figure that floats up from the headquarters ----
+  for (const Floater& f : floaters_) {
+    const ImVec2 c = toScreen(groundToScreenWorld(f.pos.x, f.pos.y));
+    if (!onScreen(c)) continue;
+    const float a = std::clamp(1.0f - f.age / 2.2f, 0.0f, 1.0f);
+    const ImVec2 ts = ImGui::CalcTextSize(f.text.c_str());
+    const ImVec2 at(c.x - ts.x / 2, c.y - 30 - f.age * 22);
+    dl->AddText(ImVec2(at.x + 1, at.y + 1), IM_COL32(0, 0, 0, static_cast<int>(200 * a)), f.text.c_str());
+    dl->AddText(at, imcol(rgba8(236, 206, 96), a), f.text.c_str());
   }
 
   // --- Garrison badges -----------------------------------------------------------

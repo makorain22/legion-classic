@@ -234,6 +234,12 @@ void GameAudio::onEvent(const SimEvent& ev, const Simulation& sim, uint8_t playe
     case EventType::ObjectivesChanged:
       if (playing && (ev.owner == ANY_PLAYER || sim.allied(ev.owner, player))) play("ui_objective");
       break;
+    case EventType::PointCaptured:
+      if (playing && sim.allied(ev.owner, player)) play("ui_captured");
+      break;
+    case EventType::ConvoyArrived:
+      if (playing && ev.owner == player) play("ui_convoy");
+      break;
     default:
       break;
   }

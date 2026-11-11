@@ -687,6 +687,19 @@ void GameScene::runWorksDemo() {
 void GameScene::runTownDemo() {
   Registry& reg = sim_->registry();
   const int32_t T = LEPTONS_PER_TILE;
+  if (opt_.townDemo == 4) {
+    // --logistics-demo: the camera on the first logistics office to go up (before that, on the first point).
+    if (frame_ == 3) revealMap_ = true;
+    if (frame_ < 3 || map_.supplyPoints.empty()) return;
+    Vec2i at{map_.supplyPoints.front().x * T + 128, map_.supplyPoints.front().y * T + 128};
+    for (size_t i = 0; i < map_.supplyPoints.size(); ++i)
+      if (sim_->officeOn(static_cast<int>(i)).valid()) {
+        at = {map_.supplyPoints[i].x * T + 128, map_.supplyPoints[i].y * T + 128};
+        break;
+      }
+    centerOn(at);
+    return;
+  }
   if (frame_ != 2) {
     if (frame_ == 3) revealMap_ = true;
     if (frame_ == 4 && opt_.townDemo == 2) {
@@ -783,6 +796,122 @@ void GameScene::runTownDemo() {
   sim_->queue(std::move(sp));
   selection_.clear();
   centerOn(c);
+}
+
+// --bench N: the skirmish that --ai-battle set up, played for N game minutes
+// without drawing anything. Every two minutes it prints what each side has
+// (money, income buildings, logistics offices and trucks, army, how much of
+// the army is bound into units, where the main force is going), and at the
+// end who is left. For tuning the computer player and the balance.
+void GameScene::runBench() {
+  Registry& reg = sim_->registry();
+  const int32_t T = LEPTONS_PER_TILE;
+  struct Tally {
+    int64_t convoy = 0;      // paid in by supply trucks
+    int captured = 0;        // logistics points taken
+    int lostMen = 0, lostVehicles = 0, lostStructures = 0;
+    int64_t boundTicks = 0, armyTicks = 0;  // unit-ticks in a bound unit / in the army (sampled once a second)
+    int64_t fireOn[MAX_PLAYERS] = {};       // shots fired at ground held by each other side
+  };
+  std::array<Tally, MAX_PLAYERS> tally{};
+  auto home = [&](uint8_t p) { return Vec2i{players_[p].startX, players_[p].startY}; };
+  auto report = [&](uint32_t tick) {
+    std::printf("--- %2u:%02u ---\n", tick / 900, tick / 15 % 60);
+    for (uint8_t p = 0; p < MAX_PLAYERS; ++p) {
+      if (!players_[p].active) continue;
+      const PlayerState& ps = sim_->playerState(p);
+      int yards = 0, posts = 0, wh = 0, fuel = 0, offices = 0, trucks = 0, men = 0, veh = 0, bound = 0, other = 0, fort = 0, scouts = 0;
+      for (uint32_t e : reg.pool<CUnit>().entities()) {
+        const CUnit& u = reg.pool<CUnit>().get(e);
+        if (u.owner != p) continue;
+        const UnitTypeDef& d = types_.get(u.type);
+        if (d.isStructure()) {
+          yards += d.role == "yard";
+          posts += d.role == "post";
+          wh += d.role == "warehouse";
+          fuel += d.role == "fuel";
+          offices += d.role == "office";
+          fort += d.category == UnitCategory::Fortification;
+          other += d.role != "yard" && d.role != "post" && d.role != "warehouse" && d.role != "fuel" && d.role != "office" &&
+                   d.category != UnitCategory::Fortification;
+          continue;
+        }
+        if (d.capacity > 0) {
+          ++trucks;
+          continue;
+        }
+        if (d.weapons.empty()) continue;
+        (d.infantry() ? men : veh) += 1;
+        scouts += d.scout;
+        bound += sim_->groupOf(reg.handle(e)) != nullptr;
+      }
+      const AiPlayer& ai = sim_->ai().player(p);
+      const Tally& t = tally[p];
+      std::string fire;
+      for (uint8_t q = 0; q < MAX_PLAYERS; ++q)
+        if (q != p && players_[q].active) fire += " >" + std::to_string(q) + ":" + std::to_string(t.fireOn[q]);
+      std::printf("  %u %s%s $%-6d +%-4d/min  yards %d post %d wh %d fuel %d other %d works %d | offices %d trucks %d convoys $%lld (taken %d) |"
+                  " army %d men %d veh (%d scouts), bound %d%% now, %d%% so far | wave %zu phase %d waves %u raiders %zu capture %zu |"
+                  " lost %d men %d veh %d bld | fire%s\n",
+                  p, players_[p].faction.c_str(), ps.defeated ? " DEFEATED" : "", ps.credits, ps.incomePerMinute, yards, posts, wh, fuel, other, fort,
+                  offices, trucks, static_cast<long long>(t.convoy), t.captured, men, veh, scouts, men + veh ? bound * 100 / (men + veh) : 0,
+                  t.armyTicks ? static_cast<int>(t.boundTicks * 100 / t.armyTicks) : 0, ai.wave.size(), ai.phase, ai.waves, ai.raiders.size(),
+                  ai.capture.size(), t.lostMen, t.lostVehicles, t.lostStructures, fire.c_str());
+    }
+    std::fflush(stdout);
+  };
+  const uint32_t total = static_cast<uint32_t>(opt_.bench) * 60u * TICKS_PER_SECOND;
+  const uint64_t t0 = SDL_GetTicks();
+  uint32_t ended = 0;
+  for (uint32_t i = 1; i <= total; ++i) {
+    sim_->tick();
+    for (const SimEvent& ev : sim_->events()) {
+      if (ev.owner >= MAX_PLAYERS) continue;
+      Tally& t = tally[ev.owner];
+      if (ev.type == EventType::ConvoyArrived) t.convoy += ev.amount;
+      else if (ev.type == EventType::PointCaptured) ++t.captured;
+      else if (ev.type == EventType::UnitDied) {
+        const UnitTypeDef& d = types_.get(ev.unitType);
+        (d.isStructure() ? t.lostStructures : d.infantry() ? t.lostMen : t.lostVehicles) += 1;
+      } else if (ev.type == EventType::Fire) {
+        // Whose ground was it aimed at? The side whose base is nearest the aim point.
+        int best = -1;
+        int64_t bd = INT64_MAX;
+        for (uint8_t q = 0; q < MAX_PLAYERS; ++q) {
+          if (!players_[q].active || q == ev.owner) continue;
+          const Vec2i h = home(q);
+          const int64_t d = static_cast<int64_t>(ev.at.x - h.x) * (ev.at.x - h.x) + static_cast<int64_t>(ev.at.y - h.y) * (ev.at.y - h.y);
+          if (d < bd && d < static_cast<int64_t>(34 * T) * (34 * T)) {
+            bd = d;
+            best = q;
+          }
+        }
+        if (best >= 0) ++t.fireOn[best];
+      }
+    }
+    if (i % TICKS_PER_SECOND == 0)
+      for (uint32_t e : reg.pool<CUnit>().entities()) {
+        const CUnit& u = reg.pool<CUnit>().get(e);
+        if (u.owner >= MAX_PLAYERS) continue;
+        const UnitTypeDef& d = types_.get(u.type);
+        if (d.isStructure() || d.weapons.empty() || d.capacity > 0) continue;
+        ++tally[u.owner].armyTicks;
+        tally[u.owner].boundTicks += sim_->groupOf(reg.handle(e)) != nullptr;
+      }
+    if (i % (120 * TICKS_PER_SECOND) == 0 || i == total) report(i);
+    int standing = 0;
+    for (uint8_t p = 0; p < MAX_PLAYERS; ++p) standing += players_[p].active && !sim_->playerState(p).defeated;
+    if (standing <= 1 && !ended) {
+      ended = i;
+      report(i);
+      break;
+    }
+  }
+  std::printf("=== %s after %u:%02u (%.1f s of machine time) ===\n", ended ? "decided" : "undecided", (ended ? ended : total) / 900,
+              (ended ? ended : total) / 15 % 60, static_cast<double>(SDL_GetTicks() - t0) / 1000.0);
+  for (uint8_t p = 0; p < MAX_PLAYERS; ++p)
+    if (players_[p].active) std::printf("  %u %s: %s\n", p, players_[p].faction.c_str(), sim_->playerState(p).defeated ? "defeated" : "standing");
+  std::fflush(stdout);
 }
 
 }  // namespace legion

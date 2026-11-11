@@ -302,12 +302,13 @@ void Sidebar::rebuildMinimap() {
       for (int x = px - r; x <= px + r; ++x)
         if (x >= 0 && y >= 0 && x < mw && y < mh) minimapPixels_[static_cast<size_t>(y) * mw + x] = d.isStructure() ? shade(c, 1.2f) : c;
   }
-  // Supply points: gold, or the colour of the side whose depot holds them.
+  // Logistics points: gold, or the colour of the side whose office stands there (if we know of it).
   for (size_t i = 0; i < m.supplyPoints.size(); ++i) {
     int px, py;
     if (!toPixel(m.supplyPoints[i].x * 256 + 128, m.supplyPoints[i].y * 256 + 128, px, py)) continue;
-    const Entity depot = scene_.sim().depotOn(static_cast<int>(i));
-    const uint32_t c = depot.valid() ? scene_.teamColor(reg.get<CUnit>(depot).owner) | 0xFF000000u : rgba8(236, 206, 96);
+    const Entity depot = scene_.sim().officeOn(static_cast<int>(i));
+    const bool known = depot.valid() && scene_.structureKnown(depot.index);
+    const uint32_t c = known ? scene_.teamColor(reg.get<CUnit>(depot).owner) | 0xFF000000u : rgba8(236, 206, 96);
     const int r = std::max(1, miniZoom_);
     for (int y = py - r; y <= py + r; ++y)
       for (int x = px - r; x <= px + r; ++x)
@@ -426,7 +427,7 @@ void Sidebar::drawProduction(float width) {
     items.push_back(t);
     if (std::find(groups.begin(), groups.end(), d.group) == groups.end()) groups.push_back(d.group);
   }
-  const float cw = (width - 4) * 0.5f, ch = 84.0f;
+  const float ch = 84.0f;
   ImDrawList* dl = ImGui::GetWindowDrawList();
   const SpriteRenderer& r = scene_.renderer();
   ui::panel(dl, ImGui::GetCursorScreenPos(),
@@ -434,6 +435,8 @@ void Sidebar::drawProduction(float width) {
                                                               std::max(60.0f, ImGui::GetContentRegionAvail().y - 168)),
             true);
   ImGui::BeginChild("##cameos", ImVec2(width, std::max(60.0f, ImGui::GetContentRegionAvail().y - 168)), false);
+  // Plates share the width left beside the scrollbar (when the list is long enough to have one).
+  const float cw = (std::min(width, ImGui::GetContentRegionAvail().x) - 4) * 0.5f;
   dl = ImGui::GetWindowDrawList();
   hoveredType_ = -1;
   for (const std::string& group : groups) {
@@ -467,8 +470,26 @@ void Sidebar::drawProduction(float width) {
       drawIcon(dl, r, scene_.unitArt(t), ImVec2(p0.x + 4, p0.y + 4), ImVec2(cw - 10, ch - 20),
                available && !lineBusy ? IM_COL32_WHITE : IM_COL32(100, 100, 96, 190));
       // Name strip and price tag.
-      dl->AddRectFilled(ImVec2(p0.x + 3, p1.y - 18), ImVec2(p1.x - 3, p1.y - 3), IM_COL32(16, 16, 12, 200));
-      dl->AddText(ImVec2(p0.x + 6, p1.y - 17), available ? ui::kStencil : ui::kStencilDim, d.name.c_str());
+      // A name too long for the plate goes on two lines.
+      float stripTop = p1.y - 18;
+      {
+        const float room = cw - 14;
+        const char* name = d.name.c_str();
+        const char* brk = nullptr;
+        if (ImGui::CalcTextSize(name).x > room)
+          for (const char* c = name; *c; ++c)
+            if (*c == ' ' && ImGui::CalcTextSize(name, c).x <= room) brk = c;
+        const ImU32 col = available ? ui::kStencil : ui::kStencilDim;
+        if (brk) {
+          stripTop = p1.y - 31;
+          dl->AddRectFilled(ImVec2(p0.x + 3, stripTop), ImVec2(p1.x - 3, p1.y - 3), IM_COL32(16, 16, 12, 200));
+          dl->AddText(ImVec2(p0.x + 6, stripTop + 1), col, name, brk);
+          dl->AddText(ImVec2(p0.x + 6, p1.y - 17), col, brk + 1);
+        } else {
+          dl->AddRectFilled(ImVec2(p0.x + 3, stripTop), ImVec2(p1.x - 3, p1.y - 3), IM_COL32(16, 16, 12, 200));
+          dl->AddText(ImVec2(p0.x + 6, p1.y - 17), col, name);
+        }
+      }
       char cost[16];
       std::snprintf(cost, sizeof cost, "$%d", d.cost);
       const float cwid = ImGui::CalcTextSize(cost).x;
@@ -492,6 +513,22 @@ void Sidebar::drawProduction(float width) {
         dl->AddText(ImVec2(p0.x + 6, p0.y + 3), IM_COL32(255, 255, 255, 255), n);
       }
       if (placeType_ == t) dl->AddRect(p0, p1, ui::kBrass, 2.0f, 0, 2.0f);
+      // So many for each construction yard: how many stand, of how many allowed.
+      const int32_t room = sim.roomFor(me, t);
+      if (d.perYard > 0) {
+        int have = 0, yards = 0;
+        for (uint32_t e : scene_.sim().registry().pool<CStructure>().entities()) {
+          const CUnit& su = scene_.sim().registry().pool<CUnit>().get(e);
+          if (su.owner != me) continue;
+          have += su.type == t;
+          yards += types.get(su.type).role == "yard";
+        }
+        char n[24];
+        std::snprintf(n, sizeof n, "%d/%d", have, d.perYard * yards);
+        const float nw = ImGui::CalcTextSize(n).x;
+        dl->AddRectFilled(ImVec2(p0.x + 3, stripTop - 16), ImVec2(p0.x + 9 + nw, stripTop - 1), IM_COL32(16, 16, 12, 190), 2.0f);
+        dl->AddText(ImVec2(p0.x + 6, stripTop - 16), room > 0 ? ui::kStencil : ui::kBrass, n);
+      }
 
       // Clicks.
       if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && available) {
@@ -526,16 +563,25 @@ void Sidebar::drawProduction(float width) {
           ImGui::PopTextWrapPos();
         }
         if (d.isStructure() && d.power) ImGui::Text(d.power > 0 ? "Power +%d" : "Power %d", d.power);
+        if (d.isStructure() && d.income) ImGui::Text("Income +%d a minute", d.income);
+        if (d.auraFireRate) ImGui::Text("Friends within %d tiles fire %d%% faster", d.auraRadius / 256, d.auraFireRate);
+        if (d.perYard) ImGui::Text("%d for each Construction Yard", d.perYard);
+        if (d.capacity) ImGui::Text("Brings %d supplies a trip", d.capacity);
         if (!d.isStructure()) ImGui::Text("%d hp, %s", d.maxHealth, d.infantry() ? "infantry" : "vehicle");
         for (int w : d.weapons) ImGui::BulletText("%s", scene_.weapons().get(w).name.c_str());
         if (d.cover) ImGui::Text("Infantry inside take %d%% less damage", d.cover);
         if (d.coverAround) ImGui::Text("Infantry beside it take %d%% less damage", d.coverAround);
         if (d.garrison) ImGui::Text("Holds %d infantry", d.garrison);
-        if (!available) {
+        if (!available && room <= 0) {
+          ImGui::TextColored(ImVec4(1, 0.5f, 0.4f, 1), "As many as your Construction Yards allow.");
+          ImGui::BulletText("Deploy another Construction Yard for more");
+        } else if (!available) {
           ImGui::TextColored(ImVec4(1, 0.5f, 0.4f, 1), "Needs:");
           for (int need : d.prereqs) ImGui::BulletText("%s", types.get(need).name.c_str());
           if (d.builtAt == "barracks") ImGui::BulletText("a Barracks");
           if (d.builtAt == "factory") ImGui::BulletText("a Tank Works");
+          if (d.builtAt == "post") ImGui::BulletText("a Post Office");
+          if (d.builtAt == "warehouse") ImGui::BulletText("a Logistics Warehouse");
           if (d.builtAt == "yard") ImGui::BulletText("a Construction Yard");
         }
         ImGui::TextDisabled(isFort ? "Click, then drag a line on the map. Right-click cancels."
@@ -700,7 +746,8 @@ void Sidebar::draw() {
                       ps.lowPower() ? IM_COL32(230, 80, 60, 255) : IM_COL32(220, 190, 90, 255));
     ImGui::InvisibleButton("##economy", ImVec2(width, 40));
     if (ImGui::IsItemHovered())
-      ImGui::SetTooltip("Supplies, and income a minute (Supply Depots on supply points, plus the Construction Yard).\n"
+      ImGui::SetTooltip("Supplies, and steady income a minute (Post Offices, Logistics Warehouses, the Strategic Fuel Depot\n"
+                        "and the Construction Yard). Convoys from logistics points pay in on top of that as they arrive.\n"
                         "Power used / made: short of power, everything takes twice as long to build.");
   }
   ImGui::Dummy(ImVec2(0, 2));

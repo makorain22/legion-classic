@@ -202,6 +202,57 @@
 - Saved games are format SIM5 (marches in progress are saved); older saves
   still load. `--formation-demo` for screenshots.
 
+### Milestone 9.6: the economy
+
+- **Supply points and Supply Depots are gone.** Money now comes from three
+  buildings in the base and from convoys out on the map (playtest edits 13
+  and 14).
+- **Three income buildings**, each paying more than the last, and each
+  construction yard you own allows only so many of them (the button shows
+  how many stand of how many you may have):
+  - **Post Office** ($400, +180 a minute, three for each yard). Calls up
+    **levy infantry**: Volkssturm (Germany), Conscripts (Soviet Union),
+    Recruits (Britain). An old rifle, 55 health, slow and wild shooting at
+    4.5 tiles, $3 or $4 a man: weak one by one, cheap enough to mass.
+    Shift-click orders five.
+  - **Logistics Warehouse** ($900, +360 a minute, two for each yard). Builds
+    **supply trucks**, and friendly units within 14 tiles of it fire a tenth
+    faster. The Tank Works and medium tanks need one.
+  - **Strategic Fuel Depot** ($1600, +720 a minute, one for each yard).
+    Heavy tanks (and the Firefly) need one.
+- **Logistics points:** a map has only a few (two to a dozen by its size),
+  placed at random, far from every base and from each other, in pairs
+  mirrored through the middle of the map so a duel is even. Hold one alone
+  with armed troops for twelve seconds and a **Logistics Office** goes up
+  there with **three supply trucks**. The trucks load at the office, drive
+  to your nearest Construction Yard and pay in $400 each, trip after trip:
+  more than any building earns. A bar under the point's label shows who is
+  taking it; nobody gains while both sides stand there.
+- **Convoys can be cut.** The office (700 health) and the trucks (110,
+  unarmed) can be destroyed. Lost trucks are replaced from a Logistics
+  Warehouse and go to whichever office is short of one; with the office
+  gone the point is free for whoever holds it next, and trucks left without
+  one wait for the next office you win. A truck you move by hand goes back
+  to its run after eight seconds.
+- **The computer plays it:** post offices, warehouses and a fuel depot
+  behind its headquarters, a party of infantry sent to take the nearest
+  free logistics point with an MG nest beside each office it wins, lost
+  trucks replaced, and its raiders go for enemy offices.
+- Every army's base starts with a post office and a warehouse. New models
+  for the post office, warehouse, logistics office and supply trucks; a
+  till rings and a figure floats up when a convoy pays in; a status note
+  and a sound when a point is taken.
+- Tutorial lesson 4 teaches the post office, the warehouse and taking a
+  logistics point; campaign missions and all bundled maps are rebuilt with
+  logistics points. Briefings updated.
+- The editor's *Supply points* tool is now *Logistics points*. Rules: new
+  keys `perYard`, `aura`, `convoy`, `capacity`, roles `post`, `warehouse`,
+  `fuel`, `office`, and `builtAt` `post` / `warehouse` (docs/MODDING.md).
+- Saved games are format SIM6 (who is taking each point, convoys on the
+  road); older saves still load. `--logistics-demo` for screenshots.
+- The sidebar's building plates fit beside the scrollbar, and a name too
+  long for its plate goes on two lines.
+
 ## 0.9.0 – Milestone 9: Britain, sound, tutorial, campaigns (7 Nov 2026)
 
 - **Sound and music**, built for immersion and size. A new audio module in

@@ -116,6 +116,26 @@ vehicles), but its units keep the class they name, so check them against the
 new meanings. Armour-piercing guns now use one of three warheads: `ap_light`,
 `ap` or `ap_heavy`.
 
+## Income, logistics and levies (new in 0.9.1, Milestone 9.6)
+
+These keys in `buildings.json` and `units.json` drive the economy:
+
+| Key | On | Meaning |
+| --- | --- | --- |
+| `income` | a structure | Supplies a minute for as long as it stands. |
+| `perYard` | a structure | How many of it a side may have for each Construction Yard it owns (0 or absent: no limit). |
+| `aura` | a structure | `{ "radius": tiles, "fireRate": percent }`: friendly units within the radius fire that much faster. The best aura in reach counts; they don't add up. |
+| `role` | a structure | `post`, `warehouse`, `fuel` are the income buildings (the computer builds them by role); `office` is the building that goes up on a captured logistics point (one per army, `cost` 0, never built from the sidebar); `yard` is where convoys pay in. |
+| `convoy` | an `office` | How many trucks an office keeps running. |
+| `freeUnit` | a structure | The unit that arrives with it (an office gets `convoy` of them). |
+| `capacity` | a unit | A supply truck: the supplies it pays in each trip. A unit with a `capacity` runs convoys. |
+| `builtAt` | a unit | Now also `post` (the Post Office: levy infantry) and `warehouse` (the Logistics Warehouse: supply trucks), besides `barracks`, `factory` and `yard`. |
+
+A mod that still has a building with the old role `depot` loads, but nothing
+earns on a supply point any more: give it an `income` and a `perYard`
+instead. Maps keep their `supplyPoints` list; those are the logistics points
+now.
+
 ## The rules editor
 
 Open it from **Mods and creation tools**, or from the Live Scenario Editor

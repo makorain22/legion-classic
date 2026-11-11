@@ -126,7 +126,11 @@ void Simulation::stepWeapons() {
           const WeaponDef& wd = weapons_.get(w);
           if (c.cooldown[slot] > 0 || d > static_cast<uint32_t>(wd.range)) continue;
           if (weapons_.damageCenti(w, armor) <= 0) continue;
-          c.cooldown[slot] = static_cast<uint16_t>(wd.cooldown);
+          // A logistics warehouse within reach keeps the ammunition coming.
+          // (Rounded up or down from shot to shot so that quick-firing guns gain exactly as much as slow ones.)
+          const int32_t per = 100 + fireRateBonus(u.owner, p.x, p.y);
+          const int32_t dither = per > 100 ? static_cast<int32_t>(hash32(tick_ * 2654435761u + ei * 40503u + static_cast<uint32_t>(slot)) % static_cast<uint32_t>(per)) : 0;
+          c.cooldown[slot] = static_cast<uint16_t>(std::max(1, (wd.cooldown * 100 + dither) / per));
           shots.push_back({ei, w, {p.x, p.y}, {tp.x, tp.y}, c.target});
         }
       });

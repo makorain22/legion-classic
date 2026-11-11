@@ -78,7 +78,7 @@ TEST_CASE("the British: the same base, their own guns") {
   for (size_t i = 0; i < R.types.size(); ++i) {
     const UnitTypeDef& d = R.types.get(static_cast<int>(i));
     if (d.faction != "ger") continue;
-    const std::string mine = "gbr_" + d.id.substr(4);
+    const std::string mine = d.id == "ger_volkssturm" ? "gbr_recruit" : "gbr_" + d.id.substr(4);  // each army's levy has its own name
     const int t = R.types.find(mine);
     CHECK_MESSAGE(t >= 0, mine);
     if (t < 0) continue;

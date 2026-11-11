@@ -1,25 +1,15 @@
 // Slave Engine - structures, the economy and production.
 //
 // Structures sit on the tile grid and mark their tiles in the map's block
-// layer, so pathfinding goes around them. Supplies come from oil: supply
-// trucks pump it from fields and drive it to a refinery. Each side has four
-// production lines (buildings, defences, infantry, vehicles); work is paid for
-// as it progresses and runs at half speed when the side lacks power.
+// layer, so pathfinding goes around them. Supplies come from income buildings
+// and from logistics points (logistics.cpp). Each side has four production
+// lines (buildings, defences, infantry, vehicles); work is paid for as it
+// progresses and runs at half speed when the side lacks power.
 #include <algorithm>
 
 #include "slave/sim/simulation.hpp"
 
 namespace slave {
-
-namespace {
-constexpr int32_t kOilValue = 5;          // supplies per unit of oil
-constexpr int32_t kPumpTicks = 6;         // ticks per pump stroke
-constexpr int32_t kPumpAmount = 5;        // oil per stroke
-constexpr int32_t kUnloadTicks = 2;
-constexpr int32_t kUnloadAmount = 10;
-constexpr int32_t kFieldSearch = 40;      // tiles a truck looks for oil
-constexpr uint32_t kDockReach = 200;      // leptons from the refinery's door to unload
-}  // namespace
 
 Queue queueFor(UnitCategory c) {
   switch (c) {
@@ -39,10 +29,11 @@ Vec2i Simulation::footprintOrigin(int type, Vec2i centre) const {
   return {(centre.x - d.footW * 128 + 128) >> LEPTON_SHIFT, (centre.y - d.footH * 128 + 128) >> LEPTON_SHIFT};
 }
 
-bool Simulation::canPlace(int type, Vec2i o, bool anySlope) const {
+bool Simulation::canPlace(int type, Vec2i o, bool anySlope, bool ignoreUnits) const {
   const UnitTypeDef& d = types_.get(type);
   if (!d.isStructure()) return false;
-  if (d.role == "depot" && supplyPointFor(type, o) < 0) return false;  // depots go on free supply points
+  // A logistics point is kept clear for the office of whoever takes it.
+  if (d.role != "office" && !d.bridge && pointUnder(type, o) >= 0) return false;
   for (int y = o.y; y < o.y + d.footH; ++y)
     for (int x = o.x; x < o.x + d.footW; ++x) {
       if (!map_.inBounds(x, y) || (map_.block(x, y) & Map::kOccupied)) return false;
@@ -53,6 +44,7 @@ bool Simulation::canPlace(int type, Vec2i o, bool anySlope) const {
       if (d.bridge) continue;  // bridges go over water and down banks
       if ((t.slope > maxSlope && !anySlope) || t.waterDepth > -4) return false;
     }
+  if (ignoreUnits) return true;
   // Not on top of units (structures can't crush a squad).
   auto& units = reg_.pool<CUnit>();
   for (uint32_t e : units.entities()) {
@@ -66,7 +58,6 @@ bool Simulation::canPlace(int type, Vec2i o, bool anySlope) const {
 
 bool Simulation::inBuildRange(uint8_t player, int type, Vec2i o) const {
   const UnitTypeDef& d = types_.get(type);
-  if (d.role == "depot") return true;  // supply points can be claimed anywhere on the map
   auto& units = reg_.pool<CUnit>();
   auto& structs = reg_.pool<CStructure>();
   for (uint32_t e : structs.entities()) {
@@ -86,6 +77,7 @@ bool Simulation::canProduce(uint8_t player, int type) const {
   const UnitTypeDef& d = types_.get(type);
   if (d.builtAt.empty() || d.hidden || buildLocked(player, type)) return false;
   if (!producerFor(player, d.builtAt).valid()) return false;
+  if (roomFor(player, type) <= 0) return false;  // as many as its yards allow already stand
   auto& units = reg_.pool<CUnit>();
   for (int need : d.prereqs) {
     bool have = false;
@@ -317,7 +309,7 @@ void Simulation::applyEconomyCommand(const Command& cmd) {
       ProductionQueue& q = ps.queues[static_cast<size_t>(queueFor(types_.get(cmd.unitType).category))];
       if (!q.ready || q.items.empty() || q.items.front() != cmd.unitType) break;
       const Vec2i o = footprintOrigin(cmd.unitType, cmd.target);
-      if (!canPlace(cmd.unitType, o) || !inBuildRange(pl, cmd.unitType, o)) {
+      if (!canPlace(cmd.unitType, o) || !inBuildRange(pl, cmd.unitType, o) || roomFor(pl, cmd.unitType) <= 0) {
         refuse(cmd.unitType);
         break;
       }
@@ -401,14 +393,17 @@ void Simulation::applyEconomyCommand(const Command& cmd) {
         setOrderIdle(e);
         reg_.get<COrder>(e).type = OrderType::Harvest;
         CHarvester& h = reg_.get<CHarvester>(e);
-        h.state = HarvestState::FindField;
         h.idleTicks = 0;
-        const int tx = cmd.target.x >> LEPTON_SHIFT, ty = cmd.target.y >> LEPTON_SHIFT;
-        h.field = (cmd.target.x > 0 && map_.inBounds(tx, ty) && map_.oil(tx, ty) > 0) ? Vec2i{tx, ty} : Vec2i{-1, -1};
-        if (h.field.x >= 0) {
-          h.state = HarvestState::ToField;
-          requestPath(e, {tx * 256 + 128, ty * 256 + 128});
+        h.timer = 0;
+        // Told which office to work for: it does, if that office has room for a truck.
+        const Entity office = cmd.targetUnit;
+        if (office.valid() && reg_.alive(office) && reg_.has<CUnit>(office) && office != h.office) {
+          const CUnit& ou = reg_.get<CUnit>(office);
+          const UnitTypeDef& od = types_.get(ou.type);
+          if (ou.owner == reg_.get<CUnit>(e).owner && od.role == "office" && officeTrucks(office) < std::max(1, od.convoy))
+            h.office = office;
         }
+        h.state = h.cargo > 0 ? HarvestState::ToYard : h.office.valid() ? HarvestState::ToOffice : HarvestState::Seek;
       }
       break;
 
@@ -548,16 +543,23 @@ void Simulation::stepEconomy() {
   for (PlayerState& ps : players_) ps.powerMade = ps.powerUsed = 0;
   auto& units = reg_.pool<CUnit>();
   structureReach_ = 0;
+  auras_.clear();
   for (uint32_t e : reg_.pool<CStructure>().entities()) {
     const CUnit& u = units.get(e);
-    structureReach_ = std::max(structureReach_, types_.get(u.type).radius * 3 / 4);
-    const int32_t pw = types_.get(u.type).power;
+    const UnitTypeDef& sd = types_.get(u.type);
+    structureReach_ = std::max(structureReach_, sd.radius * 3 / 4);
+    if (sd.auraFireRate > 0 && sd.auraRadius > 0 && u.health > 0 && u.owner < MAX_PLAYERS) {
+      const CPosition& sp = reg_.pool<CPosition>().get(e);
+      auras_.push_back({u.owner, {sp.x, sp.y}, sd.auraRadius, sd.auraFireRate});
+    }
+    const int32_t pw = sd.power;
     PlayerState& ps = players_[u.owner % MAX_PLAYERS];
     if (pw > 0) ps.powerMade += pw;
     else ps.powerUsed -= pw;
   }
   for (uint8_t p = 0; p < MAX_PLAYERS; ++p) stepProduction(p);
-  stepHarvesters();
+  stepPoints();
+  stepConvoys();
   stepIncome();
   stepRepairs();
   if (tick_ % 15 == 0) checkDefeat();
@@ -606,127 +608,6 @@ void Simulation::completeUnit(uint8_t pl, uint16_t type) {
     m.units = {e};
     orderMove(m.units, pr->rally, OrderType::Move, m);
   }
-}
-
-void Simulation::stepHarvesters() {
-  auto& units = reg_.pool<CUnit>();
-  reg_.each<CHarvester, COrder, CMover, CPosition, CUnit>(
-      [&](uint32_t ei, CHarvester& h, COrder& o, CMover& m, CPosition& p, CUnit& u) {
-        if (o.type != OrderType::Harvest) return;
-        const Entity self = reg_.handle(ei);
-        const UnitTypeDef& def = types_.get(u.type);
-        const int tx = p.x >> LEPTON_SHIFT, ty = p.y >> LEPTON_SHIFT;
-        if (h.idleTicks > 0) {
-          --h.idleTicks;
-          return;
-        }
-        switch (h.state) {
-          case HarvestState::FindField: {
-            if (h.cargo >= def.capacity) {
-              h.state = HarvestState::FindRefinery;
-              break;
-            }
-            // Nearest tile with oil: rings outward from the last field (or the truck).
-            const int sx = h.field.x >= 0 ? h.field.x : tx, sy = h.field.x >= 0 ? h.field.y : ty;
-            Vec2i best{-1, -1};
-            for (int r = 0; r <= kFieldSearch && best.x < 0; ++r)
-              for (int dy = -r; dy <= r && best.x < 0; ++dy)
-                for (int dx = -r; dx <= r; ++dx) {
-                  if (std::max(std::abs(dx), std::abs(dy)) != r) continue;
-                  const int x = sx + dx, y = sy + dy;
-                  if (!map_.inBounds(x, y) || map_.oil(x, y) == 0 || !map_.passable(x, y, def.locomotor)) continue;
-                  best = {x, y};
-                  break;
-                }
-            if (best.x < 0) {
-              // Nothing left nearby: deliver what we have, or wait.
-              if (h.cargo > 0) h.state = HarvestState::FindRefinery;
-              else h.idleTicks = 75;
-              break;
-            }
-            h.field = best;
-            h.state = HarvestState::ToField;
-            requestPath(self, {best.x * 256 + 128, best.y * 256 + 128});
-            break;
-          }
-          case HarvestState::ToField:
-            if (tx == h.field.x && ty == h.field.y) {
-              m.active = false;
-              m.request = 0;
-              h.state = HarvestState::Pumping;
-              h.timer = 0;
-            } else if (!m.active && !m.request) {
-              // Lost the way (or the tile was taken): look again shortly.
-              h.state = HarvestState::FindField;
-              h.idleTicks = 15;
-            }
-            break;
-          case HarvestState::Pumping: {
-            if (++h.timer < kPumpTicks) break;
-            h.timer = 0;
-            const uint8_t left = map_.inBounds(h.field.x, h.field.y) ? map_.oil(h.field.x, h.field.y) : 0;
-            const int32_t take = std::min<int32_t>({kPumpAmount, left, def.capacity - h.cargo});
-            if (take > 0) {
-              map_.setOil(h.field.x, h.field.y, static_cast<uint8_t>(left - take));
-              h.cargo += take;
-            }
-            if (h.cargo >= def.capacity) h.state = HarvestState::FindRefinery;
-            else if (take <= 0 || map_.oil(h.field.x, h.field.y) == 0) h.state = HarvestState::FindField;
-            break;
-          }
-          case HarvestState::FindRefinery: {
-            Entity best;
-            uint32_t bd = UINT32_MAX;
-            for (uint32_t e : reg_.pool<CStructure>().entities()) {
-              if (units.get(e).owner != u.owner || types_.get(units.get(e).type).role != "refinery") continue;
-              const Vec2i door = exitOf(reg_.handle(e));
-              const uint32_t d = distance(door.x - p.x, door.y - p.y);
-              if (d < bd) {
-                bd = d;
-                best = reg_.handle(e);
-              }
-            }
-            if (!best.valid()) {
-              h.idleTicks = 75;  // no refinery: wait for one
-              break;
-            }
-            h.refinery = best;
-            h.state = HarvestState::ToRefinery;
-            requestPath(self, exitOf(best));
-            break;
-          }
-          case HarvestState::ToRefinery: {
-            if (!reg_.alive(h.refinery)) {
-              h.state = HarvestState::FindRefinery;
-              break;
-            }
-            const Vec2i door = exitOf(h.refinery);
-            if (distance(door.x - p.x, door.y - p.y) <= kDockReach) {
-              m.active = false;
-              m.request = 0;
-              h.state = HarvestState::Unloading;
-              h.timer = 0;
-            } else if (!m.active && !m.request) {
-              requestPath(self, door);
-              if (m.failures >= 3) h.state = HarvestState::FindRefinery;
-            }
-            break;
-          }
-          case HarvestState::Unloading: {
-            if (!reg_.alive(h.refinery)) {
-              h.state = HarvestState::FindRefinery;
-              break;
-            }
-            if (++h.timer < kUnloadTicks) break;
-            h.timer = 0;
-            const int32_t give = std::min(kUnloadAmount, h.cargo);
-            h.cargo -= give;
-            players_[u.owner % MAX_PLAYERS].credits += give * kOilValue;
-            if (h.cargo <= 0) h.state = HarvestState::FindField;
-            break;
-          }
-        }
-      });
 }
 
 void Simulation::checkDefeat() {

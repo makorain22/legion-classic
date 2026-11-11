@@ -38,8 +38,8 @@ players on a random map.
   shows which). **Starting positions**: *Opposite sides* (the default: teams
   face each other across the map, as in Company of Heroes), *Fixed* or
   *Shuffled*. Every side starts with a base laid out like a military post (a
-  compound with a parade ground, barracks, power, a depot on the nearest
-  supply point, sandbags and MG nests across the front, wire and tank traps
+  compound with a parade ground, barracks, power, a post office and a
+  logistics warehouse, sandbags and MG nests across the front, wire and tank traps
   beyond) and a small force on its parade ground; villages and towns stand
   between them.
 - **Play a scenario.** Missions that come with the game (*Kalach Crossing*:
@@ -74,11 +74,13 @@ Its forces move all the time. The **main force** gathers in front of the base,
 binds into a unit and attacks, often round a flank; when it is badly hurt it
 falls back a few hundred metres, takes cover in buildings and trenches, and
 goes again, rather than running home. **Raiders** (scout cars, half-tracks and
-light tanks) hunt the weakest-defended enemy depots and stragglers. A **home
-guard** mans the base's trenches and bunkers, and damaged vehicles go home for
-repairs. It keeps **expanding**: depots on ever more distant supply points
-with an MG nest beside the far ones, and later a second Construction Yard on
-a quieter part of the map. **Easy** thinks slowly and attacks with small
+light tanks) hunt the weakest-defended enemy logistics offices and stragglers.
+A **home guard** mans the base's trenches and bunkers, and damaged vehicles go
+home for repairs. It keeps **expanding**: post offices, warehouses and a fuel
+depot behind its headquarters, a **party of infantry sent to take the nearest
+free logistics point** (and an MG nest beside each office it wins), lost
+supply trucks replaced, and later a second Construction Yard on a quieter
+part of the map, which lets it build more of each. **Easy** thinks slowly and attacks with small
 forces; **hard** thinks fast, fortifies more and attacks sooner and harder.
 You can hand any side to the computer in the editor's Sides tab, even
 mid-battle.
@@ -115,14 +117,16 @@ differences follow it.
 | Scout Car | Tank Works | 400 | Fast, sees far: spots for the guns. Thin-skinned (80 hit points). |
 | Half-track | Tank Works | 450 | Quick, machine gun on a pivot; proof against rifles for a while, not against any gun. |
 | Light Tank | Tank Works | 550 | 37 / 45 mm gun. Fast and cheap, a quarter of a heavy tank's health; its gun does little to a medium tank's front and next to nothing to a heavy's. |
-| Medium Tank | Tank Works (needs a Supply Depot) | 850 / 900 | The backbone: 75 / 76 mm gun, HE against infantry. Half a heavy tank's health; needs numbers or a flank against a heavy. |
-| Tank Destroyer | Tank Works (needs a Supply Depot) | 1100 | No turret, heavy armour, a long gun that goes through a heavy tank's front. Must turn to fire. Two of them beat a heavy tank. |
+| Medium Tank | Tank Works (needs a Logistics Warehouse) | 850 / 900 | The backbone: 75 / 76 mm gun, HE against infantry. Half a heavy tank's health; needs numbers or a flank against a heavy. |
+| Tank Destroyer | Tank Works (needs a Logistics Warehouse) | 1100 | No turret, heavy armour, a long gun that goes through a heavy tank's front. Must turn to fire. Two of them beat a heavy tank. |
 | Artillery | Tank Works (needs a Watchtower) | 1200 | Germany: 105 mm howitzer (28 tiles). Russia: rocket truck firing salvoes of 8 rockets (24 tiles) that blanket an area. Needs spotters; dies to anything that reaches it. |
-| Heavy Tank | Tank Works (needs a Supply Depot and a Watchtower) | 2000 | 88 / 122 mm gun at 10.5–11.5 tiles, armour that shrugs off light guns and blunts medium ones: it falls to numbers, to tank destroyers, or to a shot from behind. |
+| Heavy Tank | Tank Works (needs a Strategic Fuel Depot and a Watchtower) | 2000 | 88 / 122 mm gun at 10.5–11.5 tiles, armour that shrugs off light guns and blunts medium ones: it falls to numbers, to tank destroyers, or to a shot from behind. |
 | Construction Truck | Tank Works | 3000 | Unfolds into a new Construction Yard. |
+| Volkssturm / Conscripts / Recruits | Post Office | 4 / 3 / 4 | Levy infantry: an old rifle, 55 health, slow and wild shots at 4.5 tiles. Weak one by one, cheap enough to mass: for holding trenches, taking logistics points and soaking up fire. Click for one, Shift-click for five. |
+| Supply Truck | Logistics Warehouse | 300 | Unarmed. Runs between a logistics office and your headquarters with 400 supplies a trip. A new one goes to whichever office is short of a truck. |
 
 **The British** build the same base under their own names (Drill Hall, Tank
-Workshop, Supply Dump, Observation Post, Pillbox, 6-pdr Gun Pit, Vickers Nest,
+Workshop, Observation Post, Pillbox, 6-pdr Gun Pit, Vickers Nest,
 Slit Trench, Dannert Wire, Anti-Tank Cubes) and field:
 
 | Unit | Slot | Cost | Notes |
@@ -135,7 +139,7 @@ Slit Trench, Dannert Wire, Anti-Tank Cubes) and field:
 | Universal Carrier | Half-track | 400 | Cheaper and quicker than a half-track, thinner skinned. |
 | Crusader | Light Tank | 600 | A 6-pounder: the best gun on a light tank. |
 | Cromwell | Medium Tank | 850 | Fast, with a dual-purpose 75 mm: good HE, weaker AP than the German 75. |
-| Sherman Firefly | Tanks (needs a Supply Dump and an Observation Post) | 1150 | A Sherman with the 17-pounder: the British answer to heavy tanks. |
+| Sherman Firefly | Tanks (needs a Strategic Fuel Depot and an Observation Post) | 1150 | A Sherman with the 17-pounder: the British answer to heavy tanks. |
 | Achilles | Tank Destroyer | 1050 | The 17-pounder in an open turret on a fast, thin hull. |
 | Sexton | Artillery | 1100 | A 25-pounder: 26 tiles, fires every 4 s (the German 105 every 6.3 s). |
 | Churchill | Heavy Tank | 1800 | The toughest thing on tracks (720 hit points), very slow, only a 75 mm gun. |
@@ -165,20 +169,51 @@ grey on the minimap.
 
 - **Supplies** ($, top of the sidebar, with your income a minute beside it) pay
   for everything. Your Construction Yard brings in a trickle ($120 a minute).
-  The real money comes from **supply points**: marked SUPPLY on the ground and
-  as gold squares on the minimap. Build a **Supply Depot** on one ($800) and it
-  earns $600 a minute for as long as it stands. Depots can go on any free
-  supply point on the map, however far from your base, so the points out in
-  the middle are worth fighting over. Destroy an enemy depot and its point is
-  free again.
+- **Three buildings earn a steady income**, each more than the last, and each
+  construction yard you own allows only so many of them (the button shows how
+  many stand out of how many you may have):
+
+  | Building | Cost | Income a minute | For each yard | Also |
+  | --- | --- | --- | --- | --- |
+  | Post Office | 400 | 180 | 3 | Calls up levy infantry (Volkssturm, Conscripts, Recruits). |
+  | Logistics Warehouse | 900 | 360 | 2 | Builds supply trucks. Friendly units within 14 tiles fire a tenth faster. Needed for the Tank Works and medium tanks. |
+  | Strategic Fuel Depot | 1600 | 720 | 1 | Needed for heavy tanks. |
+
+  A second Construction Yard doubles what you may build, which is the reason
+  to expand.
+- **Logistics points** are where the big money is. A map has only a few (two
+  to a dozen, by its size), scattered at random, far from every base and from
+  each other, in pairs mirrored through the middle of the map so that in a
+  duel neither side has them nearer. They show as LOGISTICS POINT on the
+  ground and as gold squares on the minimap.
+  - **Taking one:** put armed troops within about three tiles of it and keep
+    the enemy away. After **twelve seconds** held alone (a bar under the label
+    fills in your colour; nobody gains while both sides are there, and the
+    hold lapses when you leave) a **Logistics Office** goes up in the compound
+    and **three supply trucks** arrive with it.
+  - **Convoys:** the trucks load at the office (twelve seconds), drive to your
+    nearest Construction Yard and pay in **$400 each**, then go back for
+    more: a figure floats up over the yard and a till rings. A point near
+    your base pays faster than a far one; all of them pay more than any
+    building.
+  - **Losing it:** the office (700 health) and the trucks (110, unarmed) can
+    be destroyed. Kill the trucks and the money stops until they are
+    replaced: build Supply Trucks at a Logistics Warehouse; each goes to an
+    office that is short of one (or right-click an office with trucks
+    selected). Destroy the office and the point is free again for whoever
+    holds it next; trucks left without an office wait, and take up with the
+    next office you win. You can build defences beside an office.
+  - A truck you move by hand goes back to its run eight seconds after it
+    stops.
 - **Power.** Most structures use power; Power Stations make it (the bar under
   your supplies). Short of power, everything takes twice as long to build.
 - **Building.** On the sidebar's **Build** tab, click a structure. It is paid
   for as it goes up; when it says READY, click it again and put it down near
   your other structures (a green footprint means it fits; a grid shows the
   tiles around the cursor, red where the ground is too steep or wet).
-  Structures need others first: the Barracks needs a Power Station, the Tank
-  Works a Supply Depot, and so on (hover a greyed-out button to see what's
+  Structures need others first: the Barracks and the Post Office need a Power
+  Station, the Logistics Warehouse a Post Office, the Tank Works and the Fuel
+  Depot a Warehouse, and so on (hover a greyed-out button to see what's
   missing).
 - **Training.** The **Train** and **Vehicles** tabs queue infantry at the Barracks
   and vehicles at the Tank Works. Infantry are cheap: a Grenadier costs $10.
@@ -503,7 +538,7 @@ removes those units again; undoing a delete brings them back where they were.
 
 | Tool | What it does |
 | --- | --- |
-| Supply points | Click to add a supply point (Supply Depots earn on them); Shift-click removes the nearest |
+| Logistics points | Click to add a logistics point (the side that holds it gets an office and convoys); Shift-click removes the nearest |
 | Raise / Lower | Build hills or dig valleys and riverbeds |
 | Smooth | Soften bumps and sharp edges |
 | Flatten | Level the ground to the height where the stroke started |

@@ -366,6 +366,122 @@ VoxelModel makeRefinery(const FactionLook& look) {
   return m;
 }
 
+// --- The 9.6 economy -------------------------------------------------------------
+// Post office (2x2): a small brick office under a hipped roof, a telegraph
+// pole and its wires, mail sacks by the door and a posting box in team colour.
+VoxelModel makePostOffice(const FactionLook& look) {
+  VoxelModel m(24, 24, 28);
+  m.box(0, 0, 0, 24, 24, 1, EARTH);
+  const uint8_t wall = look.sloped ? WOOD : look.british ? BRICK : PLASTER;
+  m.box(3, 3, 1, 21, 16, 10, wall);
+  weather(m, WOOD, WOOD_DARK, WOOD, 961, 30, 0);
+  weather(m, BRICK, BRICK_DARK, BRICK, 962);
+  weather(m, PLASTER, PLASTER_DARK, PLASTER, 963);
+  pitchedRoofX(m, 2, 2, 22, 17, 10, look.british ? ROOF_DARK : TILE_ROOF, look.british ? ROOF : TILE_ROOF_DARK);
+  windowsAlongX(m, 5, 20, 16, 5, 6, WINDOW_LIT);
+  m.box(10, 16, 1, 14, 17, 8, WOOD_DARK);             // door
+  m.box(8, 16, 8, 16, 18, 10, TEAM);                  // the sign over it
+  m.box(9, 17, 9, 15, 18, 10, MARK_WHITE);
+  m.box(17, 18, 1, 19, 20, 5, TEAM);                  // posting box
+  m.box(17, 18, 5, 19, 20, 6, TEAM_DARK);
+  for (int i = 0; i < 3; ++i) m.box(4 + i * 2, 18 + (i % 2), 1, 6 + i * 2, 20 + (i % 2), 3, CANVAS);  // mail sacks
+  m.box(5, 19, 3, 7, 20, 4, CANVAS_DARK);
+  m.box(20, 20, 1, 21, 21, 26, WOOD_DARK);            // telegraph pole
+  m.box(18, 20, 23, 23, 21, 24, WOOD_DARK);           // cross-arm
+  m.set(18, 20, 24, MARK_WHITE);
+  m.set(22, 20, 24, MARK_WHITE);
+  m.box(4, 5, 10, 5, 6, 16, BRICK_DARK);              // chimney
+  return m;
+}
+
+// Logistics warehouse (3x2): a long shed under a barrel roof, loading doors
+// on a raised dock, stacked crates and drums, a lamp over the yard.
+VoxelModel makeLogisticsWarehouse(const FactionLook& look) {
+  VoxelModel m(36, 24, 24);
+  m.box(0, 0, 0, 36, 24, 1, CONCRETE_DARK);
+  weather(m, CONCRETE_DARK, SOOT, CONCRETE, 971, 16, 6);
+  const uint8_t wall = look.sloped ? WOOD : BRICK;
+  m.box(2, 2, 1, 34, 16, 9, wall);
+  weather(m, WOOD, WOOD_DARK, WOOD, 972, 30, 0);
+  weather(m, BRICK, BRICK_DARK, BRICK, 973);
+  // Barrel roof: corrugated sheets curved over the span.
+  for (int y = 1; y < 17; ++y) {
+    const float t = (y - 9.0f) / 8.0f;
+    const int h = 9 + static_cast<int>(5.0f * std::sqrt(std::max(0.0f, 1.0f - t * t)) + 0.5f);
+    for (int x = 1; x < 35; ++x) {
+      for (int z = 9; z < h; ++z)
+        if (y > 1 && y < 16 && (x == 1 || x == 34)) m.set(x, y, z, wall);  // gable ends
+      m.set(x, y, h, (x % 4 == 0) ? STEEL_DARK : STEEL);
+    }
+  }
+  weather(m, STEEL, RUST, STEEL, 974, 10, 0);
+  m.box(2, 16, 1, 34, 19, 3, CONCRETE);               // the dock
+  for (int x = 5; x < 32; x += 9) {
+    m.box(x, 15, 3, x + 6, 17, 8, STEEL_DARK);         // roller doors
+    m.box(x, 16, 8, x + 6, 17, 9, TEAM);
+  }
+  // Crates and drums on the dock and in the yard.
+  m.box(3, 17, 3, 6, 19, 5, WOOD);
+  m.box(3, 17, 5, 5, 19, 7, WOOD_DARK);
+  m.box(14, 17, 3, 17, 19, 5, WOOD);
+  m.box(23, 20, 1, 27, 23, 3, WOOD);
+  m.box(24, 20, 3, 26, 22, 5, WOOD_DARK);
+  for (int x = 29; x < 35; x += 2) cylinder(m, x + 0.5f, 21.5f, 1.0f, 1, 4, (x % 4) ? RUST : TANK_PAINT_DARK);
+  m.box(8, 20, 1, 20, 23, 2, CANVAS_DARK);            // a tarpaulin over stores
+  m.box(9, 20, 2, 19, 23, 4, CANVAS);
+  m.box(1, 20, 1, 2, 21, 14, STEEL_DARK);             // lamp post
+  m.box(1, 20, 14, 4, 21, 15, STEEL_DARK);
+  m.set(3, 20, 13, LAMP);
+  return m;
+}
+
+// Logistics office (3x3): what a side puts up on a logistics point it has
+// taken. A hut with an awning, a fenced yard of stores, fuel drums, a flag.
+VoxelModel makeLogisticsOffice(const FactionLook& look) {
+  VoxelModel m(36, 36, 30);
+  m.box(0, 0, 0, 36, 36, 1, EARTH);
+  weather(m, EARTH, EARTH_DARK, EARTH, 981, 22, 0);
+  const uint8_t wall = look.sloped ? WOOD : look.british ? CANVAS : CONCRETE;
+  m.box(3, 3, 1, 21, 15, 9, wall);
+  weather(m, WOOD, WOOD_DARK, WOOD, 982, 30, 0);
+  weather(m, CONCRETE, CONCRETE_DARK, CONCRETE_LIGHT, 983);
+  pitchedRoofX(m, 2, 2, 22, 16, 9, look.british ? CANVAS_DARK : ROOF, look.british ? CANVAS : ROOF_DARK);
+  windowsAlongX(m, 5, 20, 15, 5, 6);
+  m.box(11, 15, 1, 14, 16, 7, WOOD_DARK);             // door
+  // Awning over the counter.
+  m.box(5, 16, 8, 20, 20, 9, CANVAS);
+  m.box(5, 19, 1, 6, 20, 8, WOOD_DARK);
+  m.box(19, 19, 1, 20, 20, 8, WOOD_DARK);
+  m.box(7, 17, 1, 18, 19, 4, WOOD);                   // the counter
+  // Stores: rows of crates under tarpaulins, a stack of drums.
+  for (int y = 4; y < 14; y += 5) {
+    m.box(24, y, 1, 33, y + 4, 4, WOOD);
+    m.box(25, y, 4, 32, y + 3, 6, WOOD_DARK);
+    m.box(24, y, 6, 33, y + 4, 7, (y % 2) ? CANVAS : CANVAS_DARK);
+  }
+  for (int i = 0; i < 6; ++i)
+    cylinder(m, 25.5f + (i % 3) * 3.0f, 18.5f + (i / 3) * 3.0f, 1.2f, 1, 5, (i % 2) ? RUST : TANK_PAINT_DARK);
+  cylinder(m, 27.0f, 20.0f, 1.2f, 5, 8, TANK_PAINT);
+  // A loading ramp at the front where the trucks pull up.
+  m.box(4, 28, 1, 26, 34, 2, CONCRETE_DARK);
+  m.box(6, 29, 2, 10, 32, 4, WOOD);
+  m.box(12, 29, 2, 15, 33, 3, CANVAS);
+  // Fence posts round the yard.
+  for (int x = 1; x < 36; x += 5) {
+    m.box(x, 0, 1, x + 1, 1, 5, WOOD_DARK);
+    if (x < 3 || x > 28) m.box(x, 35, 1, x + 1, 36, 5, WOOD_DARK);
+  }
+  for (int y = 5; y < 36; y += 5) {
+    m.box(0, y, 1, 1, y + 1, 5, WOOD_DARK);
+    m.box(35, y, 1, 36, y + 1, 5, WOOD_DARK);
+  }
+  // The flag: whose point this is, from a long way off.
+  m.box(31, 26, 1, 32, 27, 28, STEEL_DARK);
+  m.box(23, 26, 21, 31, 27, 27, TEAM);
+  m.box(23, 26, 23, 31, 27, 25, TEAM_LIGHT);
+  return m;
+}
+
 VoxelModel makeBarracks(const FactionLook& look) {
   VoxelModel m(36, 24, 26);
   m.box(0, 0, 0, 36, 24, 1, EARTH);
@@ -830,6 +946,9 @@ bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error, const ArtOption
   addStructure(ab, cat, "power", &makePowerStation);
   addStructure(ab, cat, "refinery", &makeRefinery);
   addStructure(ab, cat, "barracks", &makeBarracks);
+  addStructure(ab, cat, "post_office", &makePostOffice);
+  addStructure(ab, cat, "logistics_warehouse", &makeLogisticsWarehouse);
+  addStructure(ab, cat, "logistics_office", &makeLogisticsOffice);
   addStructure(ab, cat, "factory", &makeFactory);
   addStructure(ab, cat, "tower", &makeWatchtower);
   addStructure(ab, cat, "bunker", &makePillbox, &makePillboxGun, kFineStructureVoxel);

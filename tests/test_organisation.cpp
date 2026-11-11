@@ -184,32 +184,6 @@ TEST_CASE("rifles barely scratch a heavy tank, but thirty men wear it down") {
   CHECK(left > 0);                // but don't simply kill it
 }
 
-TEST_CASE("a supply depot earns only on a supply point") {
-  Rules R;
-  Map map(64, 64, 300);
-  map.supplyPoints = {{20, 20}};
-  Simulation sim(map, R.types, R.weapons, 5);
-  const int depot = R.t("ger_depot");
-  CHECK_FALSE(sim.canPlace(depot, {40, 40}));       // no point there
-  CHECK(sim.canPlace(depot, {19, 19}));             // over the point
-  CHECK(sim.supplyPointFor(depot, {19, 19}) == 0);
-  Command c;
-  c.type = CommandType::SpawnList;
-  c.spawns = {{static_cast<uint16_t>(depot), 0, {20 * T + 128, 20 * T + 128}, 0, -1}};
-  sim.queue(c);
-  Command money;
-  money.type = CommandType::SetCredits;
-  money.player = 0;
-  money.amount = 0;
-  sim.queue(money);
-  sim.tick();
-  CHECK(sim.depotOn(0).valid());
-  CHECK_FALSE(sim.canPlace(depot, {17, 21}));       // the point is taken
-  for (int i = 0; i < 15 * 60; ++i) sim.tick();
-  CHECK(sim.playerState(0).credits >= R.types.get(depot).income - 20);  // about a minute's worth
-  CHECK(sim.playerState(0).incomePerMinute == R.types.get(depot).income);
-}
-
 TEST_CASE("men dig into a trench line, three to a piece, and stay until evacuated") {
   Rules R;
   Map map(64, 64, 301);

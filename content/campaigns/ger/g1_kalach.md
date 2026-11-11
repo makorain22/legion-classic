@@ -14,6 +14,6 @@ The Soviets took the crossroads village east of the bridge last night. Kampfgrup
 
 - The village is held by riflemen with two bunkers, machine guns and anti-tank rifles, and one T-34.
 - The Soviet base lies on the river bank to the east. Expect their armour to cross within ten minutes of the village falling.
-- You have a construction truck. A base and a supply depot will keep the Kampfgruppe in the fight.
+- You have a construction truck. A base with a post office and a warehouse behind it will keep the Kampfgruppe in the fight; the logistics points out on the map pay better still.
 
 > Keep the Tiger alive. There will not be another one.

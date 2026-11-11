@@ -493,6 +493,32 @@
    "pitch": 0.0,
    "perSecond": 6,
    "limit": 2
+  },
+  "ui_captured": {
+   "files": [
+    "sfx/ui_captured.ogg"
+   ],
+   "bus": "ui",
+   "volume": 0.6,
+   "range": 0,
+   "priority": 10,
+   "reverb": 0.0,
+   "pitch": 0.0,
+   "perSecond": 6,
+   "limit": 2
+  },
+  "ui_convoy": {
+   "files": [
+    "sfx/ui_convoy.ogg"
+   ],
+   "bus": "ui",
+   "volume": 0.4,
+   "range": 0,
+   "priority": 10,
+   "reverb": 0.0,
+   "pitch": 0.0,
+   "perSecond": 2,
+   "limit": 1
   }
  },
  "music": {

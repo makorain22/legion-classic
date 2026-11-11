@@ -1,5 +1,5 @@
 {
-  "_comment": "Structures: buildings, defences and fortifications. footprint in tiles [width, depth]; power: + produced, - used; role: what it provides (yard builds structures, barracks trains infantry, factory builds vehicles, depot earns supplies on a supply point); buildRadius: tiles around it where its side may build; cover: % less damage for infantry standing in it; coverAround: same for infantry next to it; blocks: which movement types it stops (default all). Faction 'neutral' structures are civilian buildings: nobody builds them, nobody attacks them unless ordered to, and infantry beside them take cover. garrison: how many infantry it holds (they take half damage inside). income: supplies per minute (a depot only while on a supply point).",
+  "_comment": "Structures: buildings, defences and fortifications. footprint in tiles [width, depth]; power: + produced, - used; role: what it provides (yard builds structures, barracks trains infantry, factory builds vehicles, post trains levy infantry, warehouse builds supply trucks, fuel is the strategic fuel depot, office is the logistics office that goes up on a captured logistics point); buildRadius: tiles around it where its side may build; cover: % less damage for infantry standing in it; coverAround: same for infantry next to it; blocks: which movement types it stops (default all). Faction 'neutral' structures are civilian buildings: nobody builds them, nobody attacks them unless ordered to, and infantry beside them take cover. garrison: how many infantry it holds (they take half damage inside). income: supplies per minute. perYard: how many of it a side may have for each construction yard it owns. aura: {radius in tiles, fireRate in percent}: friendly units that near fire that much faster. convoy: supply trucks a logistics office runs (it arrives with them: freeUnit); a truck's capacity is what each brings per trip.",
   "units": [
     {
       "id": "ger_yard",
@@ -49,25 +49,26 @@
       "id": "ger_depot",
       "faction": "ger",
       "armor": "structure",
-      "name": "Supply Depot",
+      "name": "Strategic Fuel Depot",
       "model": "refinery",
       "footprint": [
         3,
         3
       ],
       "health": 1000,
-      "power": -20,
-      "role": "depot",
-      "buildRadius": 5,
-      "cost": 800,
-      "buildTime": 12,
+      "power": -30,
+      "role": "fuel",
+      "buildRadius": 4,
+      "cost": 1600,
+      "buildTime": 16,
       "builtAt": "yard",
       "requires": [
-        "ger_power"
+        "ger_warehouse"
       ],
-      "income": 600,
-      "group": "Base",
-      "description": "Must stand on a supply point. Earns supplies every minute it stands."
+      "income": 720,
+      "group": "Supply",
+      "description": "Your best earner: 720 supplies a minute. Only one for each construction yard you own, and heavy tanks need it. It burns well, so keep it behind the lines.",
+      "perYard": 1
     },
     {
       "id": "ger_barracks",
@@ -110,7 +111,7 @@
       "buildTime": 20,
       "builtAt": "yard",
       "requires": [
-        "ger_depot"
+        "ger_warehouse"
       ],
       "group": "Production",
       "description": "Builds vehicles and tanks."
@@ -347,25 +348,26 @@
       "id": "rus_depot",
       "faction": "rus",
       "armor": "structure",
-      "name": "Supply Depot",
+      "name": "Strategic Fuel Depot",
       "model": "refinery",
       "footprint": [
         3,
         3
       ],
       "health": 1000,
-      "power": -20,
-      "role": "depot",
-      "buildRadius": 5,
-      "cost": 800,
-      "buildTime": 12,
+      "power": -30,
+      "role": "fuel",
+      "buildRadius": 4,
+      "cost": 1600,
+      "buildTime": 16,
       "builtAt": "yard",
       "requires": [
-        "rus_power"
+        "rus_warehouse"
       ],
-      "income": 600,
-      "group": "Base",
-      "description": "Must stand on a supply point. Earns supplies every minute it stands."
+      "income": 720,
+      "group": "Supply",
+      "description": "Your best earner: 720 supplies a minute. Only one for each construction yard you own, and heavy tanks need it. It burns well, so keep it behind the lines.",
+      "perYard": 1
     },
     {
       "id": "rus_barracks",
@@ -408,7 +410,7 @@
       "buildTime": 20,
       "builtAt": "yard",
       "requires": [
-        "rus_depot"
+        "rus_warehouse"
       ],
       "group": "Production",
       "description": "Builds vehicles and tanks."
@@ -1031,7 +1033,10 @@
       "coverAround": 30,
       "autoTarget": false,
       "garrison": 30,
-      "description": "A brick works with a saw-tooth roof and a tall chimney."
+      "description": "A brick works with a saw-tooth roof and a tall chimney.",
+      "requires": [
+        "neutral_warehouse"
+      ]
     },
     {
       "id": "neutral_tavern",
@@ -1275,25 +1280,26 @@
       "id": "gbr_depot",
       "faction": "gbr",
       "armor": "structure",
-      "name": "Supply Dump",
+      "name": "Strategic Fuel Depot",
       "model": "refinery",
       "footprint": [
         3,
         3
       ],
       "health": 1000,
-      "power": -20,
-      "role": "depot",
-      "buildRadius": 5,
-      "cost": 800,
-      "buildTime": 12,
+      "power": -30,
+      "role": "fuel",
+      "buildRadius": 4,
+      "cost": 1600,
+      "buildTime": 16,
       "builtAt": "yard",
       "requires": [
-        "gbr_power"
+        "gbr_warehouse"
       ],
-      "income": 600,
-      "group": "Base",
-      "description": "Must stand on a supply point. Earns supplies every minute it stands."
+      "income": 720,
+      "group": "Supply",
+      "description": "Your best earner: 720 supplies a minute. Only one for each construction yard you own, and heavy tanks need it. It burns well, so keep it behind the lines.",
+      "perYard": 1
     },
     {
       "id": "gbr_barracks",
@@ -1336,7 +1342,7 @@
       "buildTime": 20,
       "builtAt": "yard",
       "requires": [
-        "gbr_depot"
+        "gbr_warehouse"
       ],
       "group": "Production",
       "description": "Builds vehicles and tanks."
@@ -1582,6 +1588,231 @@
       "group": "Emplacements",
       "description": "A 5.5-inch medium gun dug in behind sandbags. The longest reach on the field, slow to fire.",
       "nato": "artillery"
+    },
+    {
+      "id": "ger_post",
+      "faction": "ger",
+      "armor": "structure",
+      "name": "Post Office",
+      "model": "post_office",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 600,
+      "power": -10,
+      "role": "post",
+      "buildRadius": 4,
+      "cost": 400,
+      "buildTime": 8,
+      "builtAt": "yard",
+      "requires": [
+        "ger_power"
+      ],
+      "income": 180,
+      "perYard": 3,
+      "group": "Supply",
+      "description": "A small, steady income (180 supplies a minute) and the place where levy infantry are called up: Volkssturm, cheap and weak unless massed. Up to three for each construction yard."
+    },
+    {
+      "id": "ger_warehouse",
+      "faction": "ger",
+      "armor": "structure",
+      "name": "Logistics Warehouse",
+      "model": "logistics_warehouse",
+      "footprint": [
+        3,
+        2
+      ],
+      "health": 900,
+      "power": -20,
+      "role": "warehouse",
+      "buildRadius": 4,
+      "cost": 900,
+      "buildTime": 12,
+      "builtAt": "yard",
+      "requires": [
+        "ger_post"
+      ],
+      "income": 360,
+      "perYard": 2,
+      "aura": {
+        "radius": 14,
+        "fireRate": 10
+      },
+      "group": "Supply",
+      "description": "A middling income (360 supplies a minute). Builds supply trucks to replace those lost on the road, and keeps the ammunition coming: friendly units within 14 tiles fire a tenth faster. Tank works and medium tanks need one. Up to two for each construction yard."
+    },
+    {
+      "id": "ger_office",
+      "faction": "ger",
+      "armor": "structure",
+      "name": "Logistics Office",
+      "model": "logistics_office",
+      "footprint": [
+        3,
+        3
+      ],
+      "health": 700,
+      "role": "office",
+      "buildRadius": 4,
+      "sight": 6,
+      "cost": 0,
+      "category": "building",
+      "freeUnit": "ger_supply_truck",
+      "convoy": 3,
+      "group": "Supply",
+      "description": "Goes up by itself on a logistics point your troops have held alone for twelve seconds, and brings three supply trucks that carry money to your headquarters. Lose it and the point is anyone's to take; you can build defences beside it."
+    },
+    {
+      "id": "rus_post",
+      "faction": "rus",
+      "armor": "structure",
+      "name": "Post Office",
+      "model": "post_office",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 600,
+      "power": -10,
+      "role": "post",
+      "buildRadius": 4,
+      "cost": 400,
+      "buildTime": 8,
+      "builtAt": "yard",
+      "requires": [
+        "rus_power"
+      ],
+      "income": 180,
+      "perYard": 3,
+      "group": "Supply",
+      "description": "A small, steady income (180 supplies a minute) and the place where levy infantry are called up: Conscripts, cheap and weak unless massed. Up to three for each construction yard."
+    },
+    {
+      "id": "rus_warehouse",
+      "faction": "rus",
+      "armor": "structure",
+      "name": "Logistics Warehouse",
+      "model": "logistics_warehouse",
+      "footprint": [
+        3,
+        2
+      ],
+      "health": 900,
+      "power": -20,
+      "role": "warehouse",
+      "buildRadius": 4,
+      "cost": 900,
+      "buildTime": 12,
+      "builtAt": "yard",
+      "requires": [
+        "rus_post"
+      ],
+      "income": 360,
+      "perYard": 2,
+      "aura": {
+        "radius": 14,
+        "fireRate": 10
+      },
+      "group": "Supply",
+      "description": "A middling income (360 supplies a minute). Builds supply trucks to replace those lost on the road, and keeps the ammunition coming: friendly units within 14 tiles fire a tenth faster. Tank works and medium tanks need one. Up to two for each construction yard."
+    },
+    {
+      "id": "rus_office",
+      "faction": "rus",
+      "armor": "structure",
+      "name": "Logistics Office",
+      "model": "logistics_office",
+      "footprint": [
+        3,
+        3
+      ],
+      "health": 700,
+      "role": "office",
+      "buildRadius": 4,
+      "sight": 6,
+      "cost": 0,
+      "category": "building",
+      "freeUnit": "rus_supply_truck",
+      "convoy": 3,
+      "group": "Supply",
+      "description": "Goes up by itself on a logistics point your troops have held alone for twelve seconds, and brings three supply trucks that carry money to your headquarters. Lose it and the point is anyone's to take; you can build defences beside it."
+    },
+    {
+      "id": "gbr_post",
+      "faction": "gbr",
+      "armor": "structure",
+      "name": "Post Office",
+      "model": "post_office",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 600,
+      "power": -10,
+      "role": "post",
+      "buildRadius": 4,
+      "cost": 400,
+      "buildTime": 8,
+      "builtAt": "yard",
+      "requires": [
+        "gbr_power"
+      ],
+      "income": 180,
+      "perYard": 3,
+      "group": "Supply",
+      "description": "A small, steady income (180 supplies a minute) and the place where levy infantry are called up: Recruits, cheap and weak unless massed. Up to three for each construction yard."
+    },
+    {
+      "id": "gbr_warehouse",
+      "faction": "gbr",
+      "armor": "structure",
+      "name": "Logistics Warehouse",
+      "model": "logistics_warehouse",
+      "footprint": [
+        3,
+        2
+      ],
+      "health": 900,
+      "power": -20,
+      "role": "warehouse",
+      "buildRadius": 4,
+      "cost": 900,
+      "buildTime": 12,
+      "builtAt": "yard",
+      "requires": [
+        "gbr_post"
+      ],
+      "income": 360,
+      "perYard": 2,
+      "aura": {
+        "radius": 14,
+        "fireRate": 10
+      },
+      "group": "Supply",
+      "description": "A middling income (360 supplies a minute). Builds supply trucks to replace those lost on the road, and keeps the ammunition coming: friendly units within 14 tiles fire a tenth faster. Tank works and medium tanks need one. Up to two for each construction yard."
+    },
+    {
+      "id": "gbr_office",
+      "faction": "gbr",
+      "armor": "structure",
+      "name": "Logistics Office",
+      "model": "logistics_office",
+      "footprint": [
+        3,
+        3
+      ],
+      "health": 700,
+      "role": "office",
+      "buildRadius": 4,
+      "sight": 6,
+      "cost": 0,
+      "category": "building",
+      "freeUnit": "gbr_supply_truck",
+      "convoy": 3,
+      "group": "Supply",
+      "description": "Goes up by itself on a logistics point your troops have held alone for twelve seconds, and brings three supply trucks that carry money to your headquarters. Lose it and the point is anyone's to take; you can build defences beside it."
     }
   ]
 }

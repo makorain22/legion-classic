@@ -55,7 +55,7 @@ enum class CommandType : uint8_t {
   PlaceWalls,     // player buys fortifications unitType at each of `spawns[].pos` (bought on the spot)
   Sell,           // structures in `units` are sold for half their cost
   Deploy,         // construction trucks in `units` unfold into their structure
-  Harvest,        // supply trucks in `units` go to work (at the oil near `target`, if given)
+  Harvest,        // supply trucks in `units` go to work (for the logistics office `targetUnit`, if given and it has room)
   SetRally,       // producing structures in `units` send new units to `target`
   SetCredits,     // player's supplies become `amount`
   SetController,  // player is played by the computer at difficulty `amount` (0..2), or by a human (-1)
@@ -169,6 +169,8 @@ enum class EventType : uint8_t {
   Hint,             // a script's hint for owner (`text`; empty: close the panel)
   Highlight,        // a script highlights the interface element `text` for owner
   ScoutFallsBack,   // owner's scout pulled back to `at` from an enemy that came close
+  PointCaptured,    // owner took the logistics point at `at`: its office stands, the trucks are on their way
+  ConvoyArrived,    // a supply truck paid `amount` in at owner's headquarters at `at`
 };
 
 struct SimEvent {
@@ -228,7 +230,7 @@ class Simulation {
   // Top-left tile of a structure whose footprint is centred on `centre`.
   Vec2i footprintOrigin(int type, Vec2i centre) const;
   // Ground is clear for this structure (terrain, other structures, units).
-  bool canPlace(int type, Vec2i origin, bool anySlope = false) const;
+  bool canPlace(int type, Vec2i origin, bool anySlope = false, bool ignoreUnits = false) const;
   // Within building range of the player's own structures.
   bool inBuildRange(uint8_t player, int type, Vec2i origin) const;
   // The player owns what this type requires, and something that can make it.
@@ -369,7 +371,6 @@ class Simulation {
   void recomputeCover();
   void stepEconomy();
   void stepProduction(uint8_t player);
-  void stepHarvesters();
   void stepRepairs();
   void completeUnit(uint8_t player, uint16_t type);
   Entity producerFor(uint8_t player, const std::string& role) const;
@@ -396,8 +397,27 @@ class Simulation {
   bool inTrench(Entity unit) const;
   int garrisonLevel(Entity building) const;  // 0 empty, 1..3 how fortified it looks
   std::vector<Vec2i> trenchLine(Entity piece) const;
-  int supplyPointFor(int type, Vec2i origin) const;  // a free supply point a depot there would stand on, or -1
-  Entity depotOn(int point) const;
+  // --- Logistics points (9.6) --------------------------------------------------
+  // The map's supply points are logistics points: a side that holds one alone
+  // for a while gets a logistics office there, and three supply trucks that
+  // carry money from it to the side's headquarters.
+  struct PointState {
+    uint8_t side = 0xFF;    // who is taking it (0xFF: nobody)
+    uint16_t progress = 0;  // ticks held so far
+  };
+  static constexpr int32_t kCaptureTicks = 12 * TICKS_PER_SECOND;
+  static constexpr int32_t kCaptureReach = 3 * LEPTONS_PER_TILE + 128;
+  const PointState& pointState(size_t point) const {
+    static const PointState none;
+    return point < points_.size() ? points_[point] : none;
+  }
+  Entity officeOn(int point) const;       // the logistics office standing on a point, or null
+  int pointUnder(int type, Vec2i origin) const;  // a logistics point this footprint would cover, or -1
+  int officeTrucks(Entity office) const;  // supply trucks working for it
+  // How many more of this type the player may have (per-yard limits); INT32_MAX = no limit.
+  int32_t roomFor(uint8_t player, int type) const;
+  // Percent faster a unit of `owner` at (x, y) fires: the best friendly aura over it.
+  int32_t fireRateBonus(uint8_t owner, int32_t x, int32_t y) const;
   // Tests and tools: hurt a unit as a weapon would (hundredths of a hit point).
   void debugDamage(Entity e, int32_t centi) {
     if (reg_.alive(e) && reg_.has<CUnit>(e)) damage(e.index, centi, kNullEntity);
@@ -416,6 +436,8 @@ class Simulation {
   void stepGarrisons();
   int32_t shelterPercent(uint32_t victim) const;
   void stepIncome();
+  void stepPoints();
+  void stepConvoys();
   void checkDefeat();
 
   // scripting (script.cpp)
@@ -451,6 +473,13 @@ class Simulation {
   bool coverDirty_ = false;
   std::array<bool, MAX_PLAYERS> playedOnce_{};
   int32_t structureReach_ = 0;  // how far a structure's edge reaches beyond its centre (largest standing)
+  std::vector<PointState> points_;  // one per map supply point
+  struct Aura {
+    uint8_t owner;
+    Vec2i at;
+    int32_t radius, fireRate;
+  };
+  std::vector<Aura> auras_;  // rebuilt every second
 
   struct TriggerState {
     bool enabled = true;

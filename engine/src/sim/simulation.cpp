@@ -38,7 +38,7 @@ void Simulation::rulesChanged() {
     if (def.turret && !reg_.has<CTurret>(e)) reg_.add<CTurret>(e, {reg_.get<CFacing>(e).angle, 0});
     else if (!def.turret && reg_.has<CTurret>(e)) reg_.remove<CTurret>(e);
     if (def.isStructure()) {
-      const bool makes = def.role == "barracks" || def.role == "factory";
+      const bool makes = def.role == "barracks" || def.role == "factory" || def.role == "post" || def.role == "warehouse";
       if (makes && !reg_.has<CProducer>(e)) reg_.add<CProducer>(e, {});
       else if (!makes && reg_.has<CProducer>(e)) reg_.remove<CProducer>(e);
     } else if (def.capacity > 0 && !reg_.has<CHarvester>(e)) {
@@ -70,7 +70,7 @@ Entity Simulation::spawnUnit(uint16_t type, uint8_t player, Vec2i pos, Angle fac
     reg_.add<COrder>(e, {});
     reg_.add<CAnim>(e, {});
     reg_.add<CStructure>(e, {o.x, o.y, def.footW, def.footH, tick_});
-    if (def.role == "barracks" || def.role == "factory") reg_.add<CProducer>(e, {});
+    if (def.role == "barracks" || def.role == "factory" || def.role == "post" || def.role == "warehouse") reg_.add<CProducer>(e, {});
     if (!def.weapons.empty()) reg_.add<CCombat>(e, {});
     if (def.turret) reg_.add<CTurret>(e, {angleOfFacing(4), 0});
     occupy(e.index, def, o);
@@ -81,11 +81,23 @@ Entity Simulation::spawnUnit(uint16_t type, uint8_t player, Vec2i pos, Angle fac
     ev.unitType = type;
     ev.at = c;
     events_.push_back(ev);
-    // A refinery comes with its first supply truck.
+    // A logistics office comes with its supply trucks, which set off one after another.
+    // (Trucks of its side that have lost their office take up the run first.)
+    int spare = 0;
     if (def.freeUnit >= 0) {
-      const Entity t = spawnUnit(static_cast<uint16_t>(def.freeUnit), player, exitOf(e), angleOfFacing(4));
-      (void)t;
+      auto& trucks = reg_.pool<CHarvester>();
+      for (uint32_t t : trucks.entities())
+        if (reg_.pool<CUnit>().get(t).owner == player && !reg_.alive(trucks.get(t).office)) ++spare;
     }
+    if (def.freeUnit >= 0)
+      for (int i = spare; i < std::max(1, def.convoy); ++i) {
+        const Entity t = spawnUnit(static_cast<uint16_t>(def.freeUnit), player, exitOf(e), angleOfFacing(4));
+        if (!t.valid() || !reg_.has<CHarvester>(t)) continue;
+        CHarvester& h = reg_.get<CHarvester>(t);
+        h.office = e;
+        h.state = HarvestState::Loading;
+        h.timer = static_cast<uint16_t>(std::max(0, 9 - i * 2) * TICKS_PER_SECOND);  // the first is nearly loaded
+      }
     return e;
   }
   pos.x = std::clamp(pos.x, def.radius, map_.widthLeptons() - 1 - def.radius);
@@ -114,7 +126,7 @@ Entity Simulation::spawnUnit(uint16_t type, uint8_t player, Vec2i pos, Angle fac
   reg_.add<CAnim>(e, {});
   if (!def.weapons.empty()) reg_.add<CCombat>(e, {});
   if (def.turret) reg_.add<CTurret>(e, {a, 0});
-  if (def.capacity > 0) {  // supply trucks start work at once
+  if (def.capacity > 0) {  // supply trucks go to work at once: to an office of their side that is short of one
     reg_.add<CHarvester>(e, {});
     reg_.get<COrder>(e).type = OrderType::Harvest;
   }

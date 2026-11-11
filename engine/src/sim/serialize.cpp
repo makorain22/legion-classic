@@ -11,7 +11,8 @@
 namespace slave {
 
 namespace {
-constexpr uint32_t kStateMagic = 0x53494D35;  // "SIM5": formations
+constexpr uint32_t kStateMagic = 0x53494D36;  // "SIM6": logistics points
+constexpr uint32_t kStateMagicV5 = 0x53494D35;  // "SIM5": formations
 constexpr uint32_t kStateMagicV4 = 0x53494D34;  // "SIM4": hints, build locks, orders given, campaign flags
 constexpr uint32_t kStateMagicV3 = 0x53494D33;  // "SIM3": AI doctrine state (phases, raiders, guard)
 constexpr uint32_t kStateMagicV2 = 0x53494D32;  // "SIM2": groups, garrisons, supply income
@@ -234,8 +235,15 @@ void Simulation::saveState(ByteWriter& w) const {
       w.u16(f.finalFacing);
       w.i32(f.remaining);
       w.u16(f.stall);
+      w.u16(f.fight);
       w.podVector(f.members);
     }
+  }
+  // Logistics points: who is taking each, and how far along.
+  w.u32(static_cast<uint32_t>(points_.size()));
+  for (const PointState& ps : points_) {
+    w.u8(ps.side);
+    w.u16(ps.progress);
   }
 }
 
@@ -250,7 +258,7 @@ bool Simulation::loadState(ByteReader& r, std::string& error, const std::vector<
                            bool* remapped) {
   if (remapped) *remapped = false;
   const uint32_t magic = r.u32();
-  const int version = magic == kStateMagic ? 5 : magic == kStateMagicV4 ? 4 : magic == kStateMagicV3 ? 3 : magic == kStateMagicV2 ? 2 : 0;
+  const int version = magic == kStateMagic ? 6 : magic == kStateMagicV5 ? 5 : magic == kStateMagicV4 ? 4 : magic == kStateMagicV3 ? 3 : magic == kStateMagicV2 ? 2 : 0;
   if (version == 0) {
     error = "not a saved game state";
     return false;
@@ -428,6 +436,7 @@ bool Simulation::loadState(ByteReader& r, std::string& error, const std::vector<
       f.finalFacing = r.u16();
       f.remaining = r.i32();
       f.stall = r.u16();
+      if (version >= 6) f.fight = r.u16();
       f.members = r.podVector<Entity>();
     }
     reg_.pool<CFormation>().restore(std::move(ents), std::move(forms));
@@ -435,6 +444,26 @@ bool Simulation::loadState(ByteReader& r, std::string& error, const std::vector<
       error = "saved state is damaged";
       return false;
     }
+  }
+  points_.clear();
+  if (version >= 6) {
+    const uint32_t n = r.u32();
+    if (n > 4096) {
+      error = "saved state is damaged";
+      return false;
+    }
+    points_.resize(n);
+    for (PointState& ps : points_) {
+      ps.side = r.u8();
+      ps.progress = r.u16();
+    }
+    if (!r.ok()) {
+      error = "saved state is damaged";
+      return false;
+    }
+  } else {
+    // Before 9.6 supply trucks hauled oil: none were in the rules, but be safe.
+    for (CHarvester& h : reg_.pool<CHarvester>().data()) h = CHarvester{};
   }
   // Saved with the unit types in another order (a newer roster, other mods)?
   // Renumber by id; a type these rules don't have at all refuses the load.

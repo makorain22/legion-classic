@@ -120,6 +120,7 @@ struct CFormation {
   Angle finalFacing = 0;
   int32_t remaining = 0;     // leptons of route left
   uint16_t stall = 0;        // ticks spent waiting for laggards
+  uint16_t fight = 0;        // ticks it has been in contact (it stands to fight at first, then presses on)
   std::vector<Entity> members;
 };
 
@@ -157,13 +158,20 @@ struct CProducer {
   bool primary = false;  // new units of this kind come out here
 };
 
-// Supply trucks: pump oil from fields and drive it to a refinery.
-enum class HarvestState : uint8_t { FindField, ToField, Pumping, FindRefinery, ToRefinery, Unloading };
+// Supply trucks (9.6): they run between a logistics office and their side's
+// headquarters, loading at the office and unloading money at the yard.
+enum class HarvestState : uint8_t {
+  Seek = 0,   // looking for an office of its side with room for a truck
+  ToOffice,   // driving out to it
+  Loading,    // standing at its door, loading
+  ToYard,     // driving the load to the nearest construction yard
+  Unloading,  // at the yard: the load is paid in
+};
 struct CHarvester {
-  HarvestState state = HarvestState::FindField;
-  int32_t cargo = 0;  // oil units on board
-  Vec2i field{-1, -1};  // tile being worked
-  Entity refinery;
+  HarvestState state = HarvestState::Seek;
+  int32_t cargo = 0;       // supplies on board
+  Entity office;           // the logistics office it works for
+  Entity yard;             // the yard it is driving to
   uint16_t timer = 0;
   uint16_t idleTicks = 0;  // nothing to do: wait a while before looking again
 };

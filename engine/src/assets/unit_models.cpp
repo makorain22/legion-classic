@@ -650,7 +650,7 @@ UnitModel constructionTruck(const FactionLook& look, int f) {
 // ---------------------------------------------------------------------------
 // Infantry
 // ---------------------------------------------------------------------------
-UnitModel single(const FactionLook& look, int f, Kit kit, bool cap = false, bool smock = false) {
+UnitModel single(const FactionLook& look, int f, Kit kit, bool cap = false, bool smock = false, bool levy = false) {
   UnitModel um;
   um.body = VoxelModel(20, 12, 21);
   SoldierSpec s;
@@ -658,12 +658,15 @@ UnitModel single(const FactionLook& look, int f, Kit kit, bool cap = false, bool
   s.frame = f;
   s.cap = cap;
   s.smock = smock;
+  s.levy = levy;
   soldier(um.body, look, 10, 6, s);
   return um;
 }
 
 UnitModel rifleman(const FactionLook& look, int f) { return single(look, f, Kit::Rifle); }
 UnitModel sniper(const FactionLook& look, int f) { return single(look, f, Kit::ScopedRifle, true, true); }
+// Levy infantry (Volkssturm, conscripts, recruits): a rifle and whatever they came in.
+UnitModel levy(const FactionLook& look, int f) { return single(look, f, Kit::Rifle, true, false, true); }
 UnitModel engineer(const FactionLook& look, int f) { return single(look, f, Kit::Tools); }
 
 UnitModel team(const FactionLook& look, int f, Kit lead, Kit second) {
@@ -1194,7 +1197,8 @@ void parapet(VoxelModel& m, Post post, int fx, int y0, int y1, uint32_t seed) {
   }
 }
 
-UnitModel dugIn(const FactionLook& look, int f, Post post, Kit lead, Kit second, bool cap = false, bool smock = false) {
+UnitModel dugIn(const FactionLook& look, int f, Post post, Kit lead, Kit second, bool cap = false, bool smock = false,
+                bool levy = false) {
   const bool pair = second != lead || lead == Kit::MachineGun;
   const int GX = 30, GY = pair ? 24 : 16, GZ = 20;
   UnitModel um;
@@ -1216,6 +1220,7 @@ UnitModel dugIn(const FactionLook& look, int f, Post post, Kit lead, Kit second,
   a.kit = lead;
   a.cap = cap;
   a.smock = smock;
+  a.levy = levy;
   a.aim = up;
   a.frame = 0;
   const float leadY = pair ? GY * 0.5f - 4.5f : GY * 0.5f;
@@ -1259,6 +1264,8 @@ UnitModel dugAt(const FactionLook& look, int f) {
   return dugIn(look, f, Post::Trench, look.sloped ? Kit::AtRifle : Kit::RocketTube, Kit::Rifle);
 }
 UnitModel bagRifleman(const FactionLook& look, int f) { return dugIn(look, f, Post::Bags, Kit::Rifle, Kit::Rifle); }
+UnitModel dugLevy(const FactionLook& look, int f) { return dugIn(look, f, Post::Trench, Kit::Rifle, Kit::Rifle, true, false, true); }
+UnitModel bagLevy(const FactionLook& look, int f) { return dugIn(look, f, Post::Bags, Kit::Rifle, Kit::Rifle, true, false, true); }
 UnitModel bagSniper(const FactionLook& look, int f) { return dugIn(look, f, Post::Bags, Kit::ScopedRifle, Kit::ScopedRifle, true, true); }
 UnitModel bagEngineer(const FactionLook& look, int f) { return dugIn(look, f, Post::Bags, Kit::Smg, Kit::Smg); }
 UnitModel bagMg(const FactionLook& look, int f) { return dugIn(look, f, Post::Bags, Kit::MachineGun, Kit::Ammo); }
@@ -1274,7 +1281,7 @@ UnitModel bagAt(const FactionLook& look, int f) {
 void soldier(VoxelModel& m, const FactionLook& look, float ox, float oy, const SoldierSpec& s) {
   const int X = static_cast<int>(std::floor(ox)) - 1;  // body spans X..X+3 front to back
   const int Y = static_cast<int>(std::floor(oy)) - 2;  // and Y..Y+4 side to side
-  const uint8_t tunic = UNIFORM, trousers = UNIFORM_DARK;
+  const uint8_t tunic = s.levy ? BLANKET : UNIFORM, trousers = s.levy ? CANVAS_DARK : UNIFORM_DARK;
   const bool sov = look.sloped;
 
   if (s.pose == Pose::Dead || s.pose == Pose::Prone) {
@@ -1317,15 +1324,22 @@ void soldier(VoxelModel& m, const FactionLook& look, float ox, float oy, const S
   m.box(X + 2, Y + 3, zt + 1, X + 3, Y + 4, zt + 2, LEATHER);
   m.set(X + 2, Y + 1, zt + 3, WEBBING);                          // braces
   m.set(X + 2, Y + 2, zt + 4, WEBBING);
-  // Pack and rolled blanket in team colour: the side reads from above.
-  m.box(X - 1, Y + 1, zt + 2, X, Y + 3, zt + 5, TEAM_DARK);
-  m.box(X - 1, Y, zt + 5, X + 1, Y + 4, zt + 6, TEAM);
-  m.set(X - 1, Y + 3, zt + 1, STOCK);                            // entrenching tool
+  if (s.levy) {
+    // No pack: a long coat, and an armband and a sash in team colour so the side reads from above.
+    m.box(X, Y, zt - 2, X + 3, Y + 4, zt, tunic);                // coat skirts
+    m.box(X, Y, zt + 5, X + 2, Y + 4, zt + 6, TEAM);
+    m.box(X + 1, Y, zt + 3, X + 2, Y + 1, zt + 5, TEAM_DARK);
+  } else {
+    // Pack and rolled blanket in team colour: the side reads from above.
+    m.box(X - 1, Y + 1, zt + 2, X, Y + 3, zt + 5, TEAM_DARK);
+    m.box(X - 1, Y, zt + 5, X + 1, Y + 4, zt + 6, TEAM);
+    m.set(X - 1, Y + 3, zt + 1, STOCK);                          // entrenching tool
+  }
   // Head and helmet.
   const int zh = zt + 6;
   m.box(X + 1, Y + 1, zh, X + 3, Y + 3, zh + 3, SKIN);
   m.set(X + 1, Y + 1, zh + 1, SKIN);
-  if (s.cap) {
+  if (s.cap || s.levy) {
     m.box(X + 1, Y + 1, zh + 2, X + 3, Y + 3, zh + 3, CAP);
     m.box(X + 3, Y + 1, zh + 2, X + 4, Y + 3, zh + 3, CAP);      // peak
   } else if (look.british) {
@@ -1423,6 +1437,9 @@ void addUnitModels(BakeQueue& q, SpriteCatalog& cat) {
   addUnit(q, cat, "engineer", &engineer, 4, &corpseOne, kInfantryVoxel);
   addUnit(q, cat, "sniper", &sniper, 4, &corpseOne, kInfantryVoxel);
   // The same men dug in: "<model>_dug" in a trench, "<model>_bags" behind sandbags.
+  addUnit(q, cat, "levy", &levy, 4, &corpseOne, kInfantryVoxel);
+  addUnit(q, cat, "levy_dug", &dugLevy, 2, nullptr, kInfantryVoxel);
+  addUnit(q, cat, "levy_bags", &bagLevy, 2, nullptr, kInfantryVoxel);
   addUnit(q, cat, "rifleman_dug", &dugRifleman, 2, nullptr, kInfantryVoxel);
   addUnit(q, cat, "mg_team_dug", &dugMg, 2, nullptr, kInfantryVoxel);
   addUnit(q, cat, "at_team_dug", &dugAt, 2, nullptr, kInfantryVoxel);

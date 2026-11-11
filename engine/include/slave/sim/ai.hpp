@@ -16,13 +16,15 @@
 //   - the main force gathers in front of the base, binds into a unit and
 //     attacks, often by a flanking route; when it is badly hurt it falls
 //     back a little to regroup and dig in rather than running home;
-//   - raiders - fast cars and light tanks - hunt enemy supply depots and
+//   - raiders - fast cars and light tanks - hunt enemy logistics offices and
 //     stragglers, hopping from target to target;
 //   - a home guard mans the base's trenches and bunkers;
 //   - damaged vehicles go home for repairs on their own.
-// It keeps expanding: depots on ever more distant supply points (with an MG
-// nest beside the far ones), a second construction yard later on, trench
-// lines, wire and tank traps across the approach to its base. Difficulty
+// It keeps expanding: post offices, warehouses and a fuel depot behind its
+// headquarters, parties sent out to take logistics points (with an MG nest
+// beside each office), lost supply trucks replaced, a second construction
+// yard later on, trench lines, wire and tank traps across the approach to
+// its base. Difficulty
 // changes how fast it thinks, how big its attacks are and how much it builds.
 
 #include <cstdint>
@@ -63,6 +65,10 @@ struct AiPlayer {
   std::vector<Entity> guard;    // home guard
   uint32_t lastFortify = 0;
   Vec2i expandTo{-1, -1};       // where a construction truck is heading
+  // Added with save version 6 (the 9.6 economy).
+  std::vector<Entity> capture;  // the party sent to take a logistics point
+  Vec2i captureTarget{-1, -1};  // that point (leptons)
+  uint32_t captureReady = 0;    // next party not before this tick
 };
 
 class SkirmishAi {

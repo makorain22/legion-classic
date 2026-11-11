@@ -529,31 +529,8 @@ int32_t Simulation::shelterPercent(uint32_t victim) const {
 }
 
 // ---------------------------------------------------------------------------
-// Supply points and income
+// Income from buildings (logistics points and convoys: logistics.cpp)
 // ---------------------------------------------------------------------------
-int Simulation::supplyPointFor(int type, Vec2i o) const {
-  const UnitTypeDef& d = types_.get(type);
-  for (size_t i = 0; i < map_.supplyPoints.size(); ++i) {
-    const Vec2i p = map_.supplyPoints[i];
-    if (p.x < o.x - 1 || p.y < o.y - 1 || p.x > o.x + d.footW || p.y > o.y + d.footH) continue;
-    if (depotOn(static_cast<int>(i)).valid()) continue;
-    return static_cast<int>(i);
-  }
-  return -1;
-}
-
-Entity Simulation::depotOn(int point) const {
-  if (point < 0 || point >= static_cast<int>(map_.supplyPoints.size())) return kNullEntity;
-  const Vec2i p = map_.supplyPoints[static_cast<size_t>(point)];
-  auto& units = reg_.pool<CUnit>();
-  for (uint32_t e : reg_.pool<CStructure>().entities()) {
-    if (types_.get(units.get(e).type).role != "depot") continue;
-    const CStructure& s = reg_.pool<CStructure>().get(e);
-    if (p.x >= s.tx - 1 && p.y >= s.ty - 1 && p.x <= s.tx + s.w && p.y <= s.ty + s.h) return reg_.handle(e);
-  }
-  return kNullEntity;
-}
-
 void Simulation::stepIncome() {
   if (tick_ % TICKS_PER_SECOND != 0) return;
   std::array<int32_t, MAX_PLAYERS> perMinute{};
@@ -562,14 +539,6 @@ void Simulation::stepIncome() {
     const CUnit& u = units.get(e);
     const UnitTypeDef& d = types_.get(u.type);
     if (d.income <= 0 || u.owner >= MAX_PLAYERS || u.health <= 0) continue;
-    if (d.role == "depot") {
-      // A depot earns only while it stands on a supply point.
-      const CStructure& s = reg_.pool<CStructure>().get(e);
-      bool on = false;
-      for (const Vec2i& p : map_.supplyPoints)
-        on = on || (p.x >= s.tx - 1 && p.y >= s.ty - 1 && p.x <= s.tx + s.w && p.y <= s.ty + s.h);
-      if (!on) continue;
-    }
     perMinute[u.owner] += d.income;
   }
   for (uint8_t p = 0; p < MAX_PLAYERS; ++p) {

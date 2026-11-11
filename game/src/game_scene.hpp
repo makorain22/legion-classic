@@ -78,7 +78,7 @@ struct SceneOptions {
   std::string encyclopedia;      // open the encyclopedia on this unit id at start (screenshots)        // ignore content/art/blitzkrieg (compare with the built-in art)
   bool gallery = false;
   bool battleDemo = false;       // two forces fighting in the open (screenshots)
-  int townDemo = 0;              // 1: every civilian building in rows; 2: the camera on a bridge; 3: on the steepest rock
+  int townDemo = 0;              // 1: every civilian building in rows; 2: the camera on a bridge; 3: on the steepest rock; 4: on a logistics office
   bool formationDemo = false;    // groups marching in each formation, for screenshots
   bool worksDemo = false;        // trenches and sandbag walls manned by every kind of infantry, for screenshots
   bool orgDemo = false;          // fireteams, platoons, a garrison and fog chips, for screenshots         // every unit lined up, for screenshots of the art
@@ -106,6 +106,7 @@ struct SceneOptions {
   bool classic = false;         // --classic: the old 2D sprite view instead of 3D
   bool noShadows = false;       // --no-shadows (testing, comparisons)
   bool intel = false;           // --intel: an AI battle seen with the viewing side's intel (no reveal)
+  int bench = 0;                // --bench N: play an --ai-battle for N game minutes without drawing, print a report, quit
   float yaw = -1000, pitch = -1000;  // --yaw / --pitch: starting camera angles in degrees (screenshots)
 };
 
@@ -293,6 +294,13 @@ class GameScene final : public slave::Scene {
     uint32_t color = 0;
     bool slot = false;  // a small mark where one unit of a formation will stand
   };
+  // A figure that floats up from where a convoy paid in.
+  struct Floater {
+    slave::Vec2f pos;  // ground point, leptons
+    float age = 0;
+    std::string text;
+  };
+  std::vector<Floater> floaters_;
   // A front being dragged with the right button: where it is, which way it
   // faces and how wide. False while there is nothing to lay out.
   bool draggedFront(slave::Vec2f startPx, slave::Vec2f endPx, slave::Vec2i& mid, slave::Angle& facing, int32_t& width);
@@ -340,6 +348,7 @@ class GameScene final : public slave::Scene {
   void runWorksDemo();
   void runFormationDemo();
   void runTownDemo();
+  void runBench();
   slave::Vec2i galleryAt_{0, 0};
   std::array<std::vector<slave::Entity>, 5> demoGroups_;
   slave::Vec2i bridgeFrom_{0, 0}, bridgeTo_{0, 0};  // --bridge-demo: the span's ends (tiles)

@@ -17,7 +17,7 @@ struct Tuning {
   int waveGrowth;        // added per attack
   uint32_t waveTimeout;  // ticks: attack with what it has after this long
   int bunkers, atGuns, towers;
-  int refineries, barracks, factories;
+  int refineries, barracks, factories;  // refineries: income buildings it starts with (more as the game goes on)
   int32_t reserve;       // supplies kept back from army production
   int engineers;         // kept at home to repair
   int guard;             // men in the home guard
@@ -49,6 +49,7 @@ Doctrine doctrineFor(const std::string& faction) {
 int modelWeight(const std::string& faction, const std::string& model) {
   if (faction == "rus") {
     if (model == "rifleman") return 3;
+    if (model == "levy") return 4;  // conscripts by the hundred
     if (model == "tank") return 3;  // T-34s in numbers
     if (model == "artillery") return 2;
     if (model == "heavy_tank" || model == "tank_destroyer") return 1;
@@ -186,47 +187,6 @@ bool SkirmishAi::placeNear(Simulation& sim, uint8_t p, int type, Vec2i want, int
 bool SkirmishAi::placeStructure(Simulation& sim, uint8_t p, int type, bool defensive) {
   const AiPlayer& ai = players_[p];
   const UnitTypeDef& d = sim.types_.get(type);
-  const Map& m = sim.map_;
-  if (d.role == "depot") {
-    // Supply depots: the nearest free supply point, reaching further as the
-    // game goes on - from any of our yards.
-    std::vector<Vec2i> yards;
-    for (uint32_t e : sim.reg_.pool<CStructure>().entities()) {
-      const CUnit& u = sim.reg_.pool<CUnit>().get(e);
-      if (u.owner == p && sim.types_.get(u.type).role == "yard")
-        yards.push_back({sim.reg_.pool<CPosition>().get(e).x, sim.reg_.pool<CPosition>().get(e).y});
-    }
-    if (yards.empty()) yards.push_back(ai.base);
-    const int32_t reach = std::min<int32_t>(30 * T + static_cast<int32_t>(sim.tick_ / 90) * T, 400 * T);
-    std::vector<std::pair<int32_t, Vec2i>> sites;
-    for (const Vec2i& sp : m.supplyPoints) {
-      int32_t best = INT32_MAX;
-      for (const Vec2i& y : yards) best = std::min(best, dist({sp.x * 256 + 128, sp.y * 256 + 128}, y));
-      sites.push_back({best, sp});
-    }
-    std::sort(sites.begin(), sites.end(), [](const auto& a, const auto& b) {
-      return a.first != b.first ? a.first < b.first : (a.second.y != b.second.y ? a.second.y < b.second.y : a.second.x < b.second.x);
-    });
-    for (const auto& [score, sp] : sites) {
-      if (score > reach) break;
-      // Centred in the compound first.
-      for (int ring = 0; ring <= 2; ++ring)
-        for (int oy = -d.footH; oy <= 1; ++oy)
-          for (int ox = -d.footW; ox <= 1; ++ox) {
-            if (std::max(std::abs(ox + d.footW / 2), std::abs(oy + d.footH / 2)) != ring) continue;
-            const Vec2i o{sp.x + ox, sp.y + oy};
-            if (!sim.canPlace(type, o)) continue;
-            Command c;
-            c.type = CommandType::PlaceBuilding;
-            c.player = p;
-            c.unitType = static_cast<uint16_t>(type);
-            c.target = {o.x * 256 + d.footW * 128, o.y * 256 + d.footH * 128};
-            sim.queueInternal(std::move(c));
-            return true;
-          }
-    }
-    return false;
-  }
   // Production and power in rows behind the headquarters; defences out front.
   const Vec2i side{-ai.toward.y, ai.toward.x};
   Vec2i want = ai.base;
@@ -239,8 +199,22 @@ bool SkirmishAi::placeStructure(Simulation& sim, uint8_t p, int type, bool defen
   } else if (d.role == "barracks" || d.role == "factory") {
     want = {ai.base.x + ai.toward.x * 4 + side.x * (d.role == "factory" ? 6 : -6),
             ai.base.y + ai.toward.y * 4 + side.y * (d.role == "factory" ? 6 : -6)};
+  } else if (d.role == "post" || d.role == "warehouse" || d.role == "fuel") {
+    // The money-makers stand behind the headquarters, away from the enemy.
+    const int s = d.role == "post" ? -1 : d.role == "warehouse" ? 1 : 0;
+    want = {ai.base.x - ai.toward.x * (d.role == "fuel" ? 9 : 5) + side.x * s * 7, ai.base.y - ai.toward.y * (d.role == "fuel" ? 9 : 5) + side.y * s * 7};
   }
-  return placeNear(sim, p, type, want, 16);
+  if (placeNear(sim, p, type, want, 16)) return true;
+  if (defensive) return false;
+  // No room round the first base: any other yard of ours will do.
+  for (uint32_t e : sim.reg_.pool<CStructure>().entities()) {
+    const CUnit& u = sim.reg_.pool<CUnit>().get(e);
+    if (u.owner != p || sim.types_.get(u.type).role != "yard") continue;
+    const CPosition& c = sim.reg_.pool<CPosition>().get(e);
+    if (dist({c.x, c.y}, ai.base) < 6 * T) continue;
+    if (placeNear(sim, p, type, {c.x - ai.toward.x * 5, c.y - ai.toward.y * 5}, 12)) return true;
+  }
+  return false;
 }
 
 bool SkirmishAi::manageEconomy(Simulation& sim, uint8_t p) {
@@ -252,7 +226,8 @@ bool SkirmishAi::manageEconomy(Simulation& sim, uint8_t p) {
 
   // What do we have?
   std::string faction;
-  int roleCount[6] = {};  // yard, power, depot, barracks, factory, other
+  int roleCount[6] = {};  // yard, power, income buildings, barracks, factory, other
+  int posts = 0, warehouses = 0, fuels = 0, offices = 0, trucks = 0;
   int bunkers = 0, atGuns = 0, towers = 0, nests = 0, guns = 0;
   std::vector<Entity> mcvList;
   for (uint32_t e : reg.pool<CUnit>().entities()) {
@@ -262,7 +237,12 @@ bool SkirmishAi::manageEconomy(Simulation& sim, uint8_t p) {
     if (faction.empty()) faction = d.faction;
     if (d.isStructure()) {
       const std::string& r = d.role;
-      roleCount[r == "yard" ? 0 : r == "power" ? 1 : (r == "refinery" || r == "depot") ? 2 : r == "barracks" ? 3 : r == "factory" ? 4 : 5]++;
+      const bool earns = r == "post" || r == "warehouse" || r == "fuel";
+      roleCount[r == "yard" ? 0 : r == "power" ? 1 : earns ? 2 : r == "barracks" ? 3 : r == "factory" ? 4 : 5]++;
+      posts += r == "post";
+      warehouses += r == "warehouse";
+      fuels += r == "fuel";
+      offices += r == "office";
       if (d.model == "bunker") ++bunkers;
       if (d.model == "atgun") ++atGuns;
       if (d.model == "tower") ++towers;
@@ -270,8 +250,15 @@ bool SkirmishAi::manageEconomy(Simulation& sim, uint8_t p) {
       if (d.model == "howitzer_pit") ++guns;
     } else if (d.deploysTo >= 0) {
       mcvList.push_back(reg.handle(e));
+    } else if (d.capacity > 0) {
+      ++trucks;
     }
   }
+  auto typeByRole = [&](const char* role) {
+    for (int t = 0; t < static_cast<int>(types.size()); ++t)
+      if (types.get(t).faction == faction && types.get(t).role == role && !types.get(t).builtAt.empty()) return t;
+    return -1;
+  };
   auto typeOf = [&](const char* model) {
     for (int t = 0; t < static_cast<int>(types.size()); ++t)
       if (types.get(t).faction == faction && types.get(t).model == model) return t;
@@ -330,10 +317,10 @@ bool SkirmishAi::manageEconomy(Simulation& sim, uint8_t p) {
       const int t = pq.items.front();
       bool placed = false;
       if (q == Queue::Defenses && types.get(t).model == "mg_nest") {
-        // MG nests guard our far-flung depots first.
+        // MG nests guard our logistics offices first.
         for (uint32_t e : reg.pool<CStructure>().entities()) {
           const CUnit& u = reg.pool<CUnit>().get(e);
-          if (u.owner != p || types.get(u.type).role != "depot") continue;
+          if (u.owner != p || types.get(u.type).role != "office") continue;
           const CPosition& c = reg.pool<CPosition>().get(e);
           if (dist({c.x, c.y}, ai.base) < 22 * T) continue;
           bool guarded = false;
@@ -370,40 +357,69 @@ bool SkirmishAi::manageEconomy(Simulation& sim, uint8_t p) {
   if (bq.items.empty()) {
     const int powerType = typeOf("power");
     const int margin = ps.powerMade - ps.powerUsed;
-    int pick = -1;
-    if (margin < 30 && powerType >= 0) pick = powerType;
-    else if (roleCount[2] < 1) pick = typeOf("refinery");
-    else if (roleCount[3] < 1) pick = typeOf("barracks");
-    else if (roleCount[4] < 1) pick = typeOf("factory");
-    else if (roleCount[2] < std::min(tune.refineries + minutes / 3, 10)) pick = typeOf("refinery");
-    else if (roleCount[3] < tune.barracks && ps.credits > 1200) pick = typeOf("barracks");
-    else if (roleCount[4] < tune.factories && ps.credits > 2500) pick = typeOf("factory");
-    if (pick >= 0) produce(pick);
+    // The first of whatever it has none of, in this order; then more income
+    // as the game goes on (as many as its yards allow), then more production.
+    const int post = typeByRole("post"), warehouse = typeByRole("warehouse"), fuel = typeByRole("fuel");
+    const bool grow = roleCount[2] < std::min(tune.refineries + minutes / 3, 14);
+    std::vector<int> wants;
+    if (margin < 30 && powerType >= 0) wants.push_back(powerType);
+    if (posts < 1) wants.push_back(post);
+    if (roleCount[3] < 1) wants.push_back(typeOf("barracks"));
+    if (warehouses < 1) wants.push_back(warehouse);
+    if (roleCount[4] < 1) wants.push_back(typeOf("factory"));
+    if (fuels < 1 && ps.credits > 800) wants.push_back(fuel);
+    if (grow) {
+      // The best earner there is room for.
+      wants.push_back(fuel);
+      wants.push_back(warehouse);
+      wants.push_back(post);
+    }
+    if (roleCount[3] < tune.barracks && ps.credits > 1200) wants.push_back(typeOf("barracks"));
+    if (roleCount[4] < tune.factories && ps.credits > 2500) wants.push_back(typeOf("factory"));
+    for (int pick : wants)
+      if (pick >= 0 && produce(pick)) break;
+  }
+  // Supply trucks lost on the road are replaced, one at a time.
+  {
+    int truckType = -1;
+    for (int t = 0; t < static_cast<int>(types.size()) && truckType < 0; ++t)
+      if (types.get(t).faction == faction && types.get(t).capacity > 0 && !types.get(t).isStructure()) truckType = t;
+    const auto& vq = ps.queues[static_cast<size_t>(Queue::Vehicles)].items;
+    const bool queued = truckType >= 0 && std::find(vq.begin(), vq.end(), truckType) != vq.end();
+    if (truckType >= 0 && !queued && trucks < offices * 3) produce(truckType);
   }
   // A second (and third) yard further out, once the base is up.
   const int mcvType = typeOf("mcv");
   const auto& vItems = ps.queues[static_cast<size_t>(Queue::Vehicles)].items;
   const bool mcvQueued = std::find(vItems.begin(), vItems.end(), mcvType) != vItems.end();
   if (roleCount[0] < tune.maxYards && roleCount[4] > 0 && roleCount[2] >= 3 && mcvList.empty() && !mcvQueued && minutes >= 6) {
-    // Somewhere with free supply points, away from our base, not toward the enemy.
+    // Every yard allows more post offices, warehouses and another fuel depot.
+    // Somewhere off to a side or behind, well away from the base, not toward the enemy.
+    const Vec2i side{-ai.toward.y, ai.toward.x};
     Vec2i best{-1, -1};
     int32_t bestScore = INT32_MIN;
-    for (const Vec2i& sp : sim.map_.supplyPoints) {
-      const Vec2i c{sp.x * 256 + 128, sp.y * 256 + 128};
-      bool taken = false;
-      for (size_t i = 0; i < sim.map_.supplyPoints.size(); ++i)
-        if (sim.map_.supplyPoints[i] == sp && sim.depotOn(static_cast<int>(i)).valid()) taken = true;
+    for (int k = 0; k < 6; ++k) {
+      const int sideways = (k % 2 ? 1 : -1) * (k < 4 ? 26 : 16), back = k < 2 ? 0 : k < 4 ? 12 : 24;
+      Vec2i c{ai.base.x + side.x * sideways - ai.toward.x * back, ai.base.y + side.y * sideways - ai.toward.y * back};
+      if (c.x < 8 * T || c.y < 8 * T || c.x > sim.map_.widthLeptons() - 8 * T || c.y > sim.map_.heightLeptons() - 8 * T) continue;
+      c = sim.pathfinder_.nearestReachable(ai.base, c, Locomotor::Wheeled);
       const int32_t d = dist(c, ai.base);
-      if (taken || d < 28 * T || d > 70 * T) continue;
-      // Ahead is risky: score sideways and rearward sites higher.
-      const int64_t ahead = (static_cast<int64_t>(c.x - ai.base.x) * ai.toward.x + static_cast<int64_t>(c.y - ai.base.y) * ai.toward.y) / 256;
-      const int32_t score = -static_cast<int32_t>(ahead) - d / 4;
+      if (d < 16 * T) continue;
+      // Not on top of another yard, ours or anyone's.
+      bool crowded = false;
+      for (uint32_t e : reg.pool<CStructure>().entities()) {
+        if (types.get(reg.pool<CUnit>().get(e).type).role != "yard") continue;
+        const CPosition& yc = reg.pool<CPosition>().get(e);
+        if (dist({yc.x, yc.y}, c) < 14 * T) crowded = true;
+      }
+      if (crowded) continue;
+      const int32_t score = d - k * T - static_cast<int32_t>(hash32(static_cast<uint32_t>(p) * 31u + static_cast<uint32_t>(k)) % 4) * T;
       if (score > bestScore) {
         bestScore = score;
         best = c;
       }
     }
-    if (best.x >= 0 && produce(mcvType)) ai.expandTo = {best.x - ai.toward.x * 3, best.y - ai.toward.y * 3};
+    if (best.x >= 0 && produce(mcvType)) ai.expandTo = best;
   }
   const ProductionQueue& dq = ps.queues[static_cast<size_t>(Queue::Defenses)];
   const Doctrine doc = doctrineFor(faction);
@@ -412,8 +428,7 @@ bool SkirmishAi::manageEconomy(Simulation& sim, uint8_t p) {
   if (dq.items.empty() && towers == 0 && roleCount[3] > 0 && ps.credits > 300 && (doc.guns > 0 || minutes >= 8))
     produce(typeOf("tower"));
   else if (dq.items.empty() && ps.credits > 700) {
-    const int farDepots = std::max(0, roleCount[2] - 1);
-    if (nests < std::min(farDepots, 6) + (doc.fortify >= 2 ? 2 : 1)) produce(typeOf("mg_nest"));
+    if (nests < std::min(offices, 6) + (doc.fortify >= 2 ? 2 : 1)) produce(typeOf("mg_nest"));
     else if (bunkers < tune.bunkers) produce(typeOf("bunker"));
     else if (atGuns < tune.atGuns + (doc.fortify >= 3 ? 1 : 0)) produce(typeOf("atgun"));
     else if (towers < tune.towers) produce(typeOf("tower"));
@@ -421,7 +436,7 @@ bool SkirmishAi::manageEconomy(Simulation& sim, uint8_t p) {
              ps.credits > 2500)
       produce(typeOf("howitzer_pit"));
   }
-  // Expansion comes first: while a depot, a yard or power is on order, the
+  // Expansion comes first: while a building, a yard or power is on order, the
   // army holds back new orders so the work isn't starved of supplies.
   return (!bq.items.empty() && !bq.ready) || mcvQueued;
 }
@@ -573,7 +588,7 @@ void SkirmishAi::manageArmy(Simulation& sim, uint8_t p, bool saving) {
     };
     if (!infantry.empty() && iq.items.size() < (saving ? 3u : wantInfantry ? 15u : 5u)) {
       const int t = weighted(infantry, 1);
-      if (t >= 0) produce(t, 5);  // infantry come as fireteams
+      if (t >= 0) produce(t, types.get(t).model == "levy" ? 10 : 5);  // infantry come as fireteams, levies in crowds
     }
     if (!vehicles.empty() && !saving && vq.items.size() < (wantInfantry ? 1u : 3u)) {
       const int t = weighted(vehicles, 2);
@@ -606,6 +621,7 @@ void SkirmishAi::manageArmy(Simulation& sim, uint8_t p, bool saving) {
   std::erase_if(ai.wave, [&](Entity e) { return !alive(e); });
   std::erase_if(ai.raiders, [&](Entity e) { return !alive(e); });
   std::erase_if(ai.guard, [&](Entity e) { return !alive(e); });
+  std::erase_if(ai.capture, [&](Entity e) { return !alive(e); });
   auto in = [](const std::vector<Entity>& v, Entity e) { return std::find(v.begin(), v.end(), e) != v.end(); };
 
   // Damaged vehicles head home for repairs (engineers patch them up there).
@@ -617,13 +633,14 @@ void SkirmishAi::manageArmy(Simulation& sim, uint8_t p, bool saving) {
       limping.push_back(e);
       std::erase(ai.wave, e);
       std::erase(ai.raiders, e);
+      std::erase(ai.capture, e);
     }
   }
   if (!limping.empty() && sim.tick_ % (TICKS_PER_SECOND * 6) < tune.thinkTicks) order(CommandType::Move, limping, ai.base);
 
   std::vector<Entity> home;
   for (Entity e : army)
-    if (!in(ai.wave, e) && !in(ai.raiders, e) && !in(ai.guard, e) && !in(limping, e)) home.push_back(e);
+    if (!in(ai.wave, e) && !in(ai.raiders, e) && !in(ai.guard, e) && !in(ai.capture, e) && !in(limping, e)) home.push_back(e);
 
   // The home guard: infantry kept back to man the base's trenches and bunkers.
   for (Entity e : home)
@@ -689,7 +706,71 @@ void SkirmishAi::manageArmy(Simulation& sim, uint8_t p, bool saving) {
     }
   }
 
-  // --- Raiders: fast vehicles hunting depots and stragglers ---------------------------
+  // --- Logistics points: a party goes out to take the nearest free one ----------------
+  {
+    const int minutes = static_cast<int>(sim.tick_ / (TICKS_PER_SECOND * 60));
+    const int32_t reach = (45 + minutes * 10) * T;
+    Vec2i want{-1, -1};
+    int32_t bestD = INT32_MAX;
+    bool atTarget = false;
+    for (size_t i = 0; i < sim.map_.supplyPoints.size(); ++i) {
+      if (sim.officeOn(static_cast<int>(i)).valid()) continue;  // taken (an enemy's office is the raiders' business)
+      const Vec2i c{sim.map_.supplyPoints[i].x * T + 128, sim.map_.supplyPoints[i].y * T + 128};
+      const int32_t d = dist(c, ai.base);
+      if (c == ai.captureTarget) atTarget = true;
+      if (d < bestD && d <= reach) {
+        bestD = d;
+        want = c;
+      }
+    }
+    const int partySize = ai.difficulty == AiDifficulty::Easy ? 4 : 6;
+    if (!ai.capture.empty()) {
+      if (strength(ai.capture) < 2) {
+        // Too few left to hold anything: back into the pool; try again later.
+        ai.capture.clear();
+        ai.captureTarget = {-1, -1};
+        ai.captureReady = sim.tick_ + TICKS_PER_SECOND * 60;
+      } else if (!atTarget) {
+        // Taken (by us or someone else): on to the next, or home.
+        ai.captureTarget = want;
+        if (want.x >= 0) order(CommandType::AttackMove, ai.capture, want, Formation::Column);
+        else {
+          order(CommandType::Move, ai.capture, ai.staging);
+          ai.capture.clear();
+          ai.captureReady = sim.tick_ + TICKS_PER_SECOND * 30;
+        }
+      } else {
+        // On the way or standing on it; anyone who stopped short goes on.
+        std::vector<Entity> idle;
+        for (Entity e : ai.capture) {
+          const CPosition& c = reg.get<CPosition>(e);
+          if (reg.get<COrder>(e).type == OrderType::Idle && dist({c.x, c.y}, ai.captureTarget) > 2 * T) idle.push_back(e);
+        }
+        if (!idle.empty() && sim.tick_ % (TICKS_PER_SECOND * 4) < tune.thinkTicks) order(CommandType::AttackMove, idle, ai.captureTarget, Formation::Column);
+      }
+    } else if (want.x >= 0 && sim.tick_ >= ai.captureReady && threat.x < 0 &&
+               (ai.difficulty != AiDifficulty::Easy || minutes >= 4)) {
+      std::vector<Entity> pick;
+      for (Entity e : home)
+        if (isInfantry(e) && modelOf(e) != "sniper" && static_cast<int>(pick.size()) < partySize &&
+            (reg.get<COrder>(e).type == OrderType::Idle || reg.get<COrder>(e).type == OrderType::Move))
+          pick.push_back(e);
+      if (static_cast<int>(pick.size()) >= partySize - 1) {
+        // A half-track or light tank goes along if one is to hand.
+        for (Entity e : home)
+          if (!isInfantry(e) && (modelOf(e) == "halftrack" || modelOf(e) == "light_tank")) {
+            pick.push_back(e);
+            break;
+          }
+        ai.capture = pick;
+        ai.captureTarget = want;
+        order(CommandType::AttackMove, pick, want, Formation::Column);
+        std::erase_if(home, [&](Entity e) { return in(ai.capture, e); });
+      }
+    }
+  }
+
+  // --- Raiders: fast vehicles hunting offices and stragglers ---------------------------
   if (ai.raiders.empty() && sim.tick_ >= ai.raidReady && threat.x < 0) {
     std::vector<Entity> pick;
     for (Entity e : home)
@@ -703,7 +784,7 @@ void SkirmishAi::manageArmy(Simulation& sim, uint8_t p, bool saving) {
   }
   if (!ai.raiders.empty()) {
     const Vec2i rc = centreOf(ai.raiders);
-    // Target: the enemy depot (else any structure) with the fewest defenders near it.
+    // Target: the enemy logistics office (else any structure) with the fewest defenders near it.
     Vec2i best{-1, -1};
     int32_t bestScore = INT32_MAX;
     for (uint32_t e : reg.pool<CStructure>().entities()) {
@@ -719,7 +800,7 @@ void SkirmishAi::manageArmy(Simulation& sim, uint8_t p, bool saving) {
         const CPosition& oc = reg.pool<CPosition>().get(o);
         if (std::abs(oc.x - c.x) < 9 * T && std::abs(oc.y - c.y) < 9 * T) defenders += types.get(ou.type).isStructure() ? 6 : types.get(ou.type).infantry() ? 1 : 4;
       }
-      const int32_t score = defenders * 8 * T + dist({c.x, c.y}, rc) / 2 - (d.role == "depot" ? 30 * T : 0);
+      const int32_t score = defenders * 8 * T + dist({c.x, c.y}, rc) / 2 - (d.role == "office" ? 30 * T : 0);
       if (score < bestScore) {
         bestScore = score;
         best = {c.x, c.y};
@@ -937,6 +1018,9 @@ void SkirmishAi::save(ByteWriter& w) const {
     w.podVector(a.guard);
     w.u32(a.lastFortify);
     w.pod(a.expandTo);
+    w.podVector(a.capture);
+    w.pod(a.captureTarget);
+    w.u32(a.captureReady);
   }
 }
 
@@ -966,6 +1050,11 @@ bool SkirmishAi::load(ByteReader& r, int version) {
       a.guard = r.podVector<Entity>();
       a.lastFortify = r.u32();
       a.expandTo = r.pod<Vec2i>();
+      if (version >= 6) {
+        a.capture = r.podVector<Entity>();
+        a.captureTarget = r.pod<Vec2i>();
+        a.captureReady = r.u32();
+      }
     } else if (!a.wave.empty()) {
       a.phase = 1;
     }

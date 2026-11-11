@@ -1,5 +1,5 @@
 {
-  "_comment": "Unit types. speed: leptons per tick (256 leptons = 1 tile, 15 ticks = 1 second). turnTicks: ticks per 1/16 turn (0 = instant). sight in tiles. armor: infantry, soft (cars, carriers, lorries, self-propelled guns: bullets hurt them), light (light tanks), medium (medium tanks), heavy (heavy tanks and casemate tank destroyers) or structure. Health scale: a medium tank has half its army's heavy tank, a light tank a quarter. cost in supplies; buildTime in seconds at full power; builtAt: the structure role that makes it (barracks, factory); requires: structures the side must own first. capacity: oil a supply truck carries. deploysTo: the structure a construction truck unfolds into. repair: hit points per tick an engineer restores to a friendly structure. nato: the symbol on unit cards and chips (infantry, mg, antitank, engineer, sniper, recon, mech, armour, antitank_armour, artillery, hq); recon units are scouts: they fall back by themselves when an enemy comes close.",
+  "_comment": "Unit types. speed: leptons per tick (256 leptons = 1 tile, 15 ticks = 1 second). turnTicks: ticks per 1/16 turn (0 = instant). sight in tiles. armor: infantry, soft (cars, carriers, lorries, self-propelled guns: bullets hurt them), light (light tanks), medium (medium tanks), heavy (heavy tanks and casemate tank destroyers) or structure. Health scale: a medium tank has half its army's heavy tank, a light tank a quarter. cost in supplies; buildTime in seconds at full power; builtAt: the structure role that makes it (barracks, factory); requires: structures the side must own first. capacity: supplies a supply truck brings from a logistics office to the headquarters each trip. deploysTo: the structure a construction truck unfolds into. repair: hit points per tick an engineer restores to a friendly structure. nato: the symbol on unit cards and chips (infantry, mg, antitank, engineer, sniper, recon, mech, armour, antitank_armour, artillery, hq); recon units are scouts: they fall back by themselves when an enemy comes close.",
   "units": [
     {
       "id": "ger_rifleman",
@@ -236,7 +236,7 @@
       "buildTime": 20,
       "builtAt": "factory",
       "requires": [
-        "ger_depot"
+        "ger_warehouse"
       ],
       "aiWeight": 5,
       "nato": "armour",
@@ -288,7 +288,7 @@
       "buildTime": 20,
       "builtAt": "factory",
       "requires": [
-        "ger_depot"
+        "ger_warehouse"
       ],
       "aiWeight": 2,
       "nato": "antitank_armour",
@@ -589,7 +589,7 @@
       "buildTime": 20,
       "builtAt": "factory",
       "requires": [
-        "rus_depot"
+        "rus_warehouse"
       ],
       "aiWeight": 5,
       "nato": "armour",
@@ -641,7 +641,7 @@
       "buildTime": 20,
       "builtAt": "factory",
       "requires": [
-        "rus_depot"
+        "rus_warehouse"
       ],
       "aiWeight": 2,
       "nato": "antitank_armour",
@@ -942,7 +942,7 @@
       "buildTime": 20,
       "builtAt": "factory",
       "requires": [
-        "gbr_depot"
+        "gbr_warehouse"
       ],
       "aiWeight": 5,
       "nato": "armour",
@@ -994,7 +994,7 @@
       "buildTime": 20,
       "builtAt": "factory",
       "requires": [
-        "gbr_depot"
+        "gbr_warehouse"
       ],
       "aiWeight": 2,
       "nato": "antitank_armour",
@@ -1091,6 +1091,150 @@
       "nato": "armour",
       "group": "Tanks",
       "description": "An infantry tank: very slow, very thick, and hard to stop. Climbs anything and leads the assault; its gun is no better than a Cromwell's."
+    },
+    {
+      "id": "ger_volkssturm",
+      "name": "Volkssturm",
+      "faction": "ger",
+      "model": "levy",
+      "locomotor": "foot",
+      "speed": 10,
+      "turnTicks": 0,
+      "radius": 28,
+      "animTicks": 3,
+      "health": 55,
+      "armor": "infantry",
+      "sight": 6,
+      "weapons": [
+        "rifle_levy"
+      ],
+      "cost": 4,
+      "buildTime": 0.8,
+      "builtAt": "post",
+      "requires": [],
+      "aiWeight": 2,
+      "nato": "infantry",
+      "group": "Levies",
+      "description": "Old men and boys with armbands and old rifles, called up at the post office. Worth little one by one, cheap enough to send by the hundred: they hold trenches, take logistics points and soak up fire."
+    },
+    {
+      "id": "ger_supply_truck",
+      "name": "Supply Truck",
+      "faction": "ger",
+      "model": "truck",
+      "locomotor": "wheeled",
+      "speed": 26,
+      "turnTicks": 1,
+      "radius": 84,
+      "animTicks": 2,
+      "health": 110,
+      "armor": "soft",
+      "sight": 5,
+      "cost": 300,
+      "buildTime": 8,
+      "builtAt": "warehouse",
+      "requires": [],
+      "capacity": 400,
+      "aiWeight": 0,
+      "nato": "supply",
+      "group": "Engineering",
+      "description": "Runs between a logistics office and your headquarters, paying in 400 supplies every time it arrives. Unarmed and thin-skinned: escort it, and hunt the enemy's. A new one goes to whichever of your offices is short of a truck; right-click an office to send it there yourself."
+    },
+    {
+      "id": "rus_conscript",
+      "name": "Conscripts",
+      "faction": "rus",
+      "model": "levy",
+      "locomotor": "foot",
+      "speed": 10,
+      "turnTicks": 0,
+      "radius": 28,
+      "animTicks": 3,
+      "health": 55,
+      "armor": "infantry",
+      "sight": 6,
+      "weapons": [
+        "rifle_levy"
+      ],
+      "cost": 3,
+      "buildTime": 0.8,
+      "builtAt": "post",
+      "requires": [],
+      "aiWeight": 3,
+      "nato": "infantry",
+      "group": "Levies",
+      "description": "Men called up at the post office and marched off the same day. Poorly armed and barely trained, but there are always more of them: mass them and they carry a position by weight of numbers."
+    },
+    {
+      "id": "rus_supply_truck",
+      "name": "Supply Truck",
+      "faction": "rus",
+      "model": "truck",
+      "locomotor": "wheeled",
+      "speed": 26,
+      "turnTicks": 1,
+      "radius": 84,
+      "animTicks": 2,
+      "health": 110,
+      "armor": "soft",
+      "sight": 5,
+      "cost": 300,
+      "buildTime": 8,
+      "builtAt": "warehouse",
+      "requires": [],
+      "capacity": 400,
+      "aiWeight": 0,
+      "nato": "supply",
+      "group": "Engineering",
+      "description": "Runs between a logistics office and your headquarters, paying in 400 supplies every time it arrives. Unarmed and thin-skinned: escort it, and hunt the enemy's. A new one goes to whichever of your offices is short of a truck; right-click an office to send it there yourself."
+    },
+    {
+      "id": "gbr_recruit",
+      "name": "Recruits",
+      "faction": "gbr",
+      "model": "levy",
+      "locomotor": "foot",
+      "speed": 10,
+      "turnTicks": 0,
+      "radius": 28,
+      "animTicks": 3,
+      "health": 55,
+      "armor": "infantry",
+      "sight": 6,
+      "weapons": [
+        "rifle_levy"
+      ],
+      "cost": 4,
+      "buildTime": 0.8,
+      "builtAt": "post",
+      "requires": [],
+      "aiWeight": 2,
+      "nato": "infantry",
+      "group": "Levies",
+      "description": "Fresh from the recruiting counter at the post office with a few weeks' drill. No match for regulars man for man; in numbers they hold a line and free the riflemen for the attack."
+    },
+    {
+      "id": "gbr_supply_truck",
+      "name": "Supply Lorry",
+      "faction": "gbr",
+      "model": "truck",
+      "locomotor": "wheeled",
+      "speed": 26,
+      "turnTicks": 1,
+      "radius": 84,
+      "animTicks": 2,
+      "health": 110,
+      "armor": "soft",
+      "sight": 5,
+      "cost": 300,
+      "buildTime": 8,
+      "builtAt": "warehouse",
+      "requires": [],
+      "capacity": 400,
+      "aiWeight": 0,
+      "nato": "supply",
+      "group": "Engineering",
+      "description": "Runs between a logistics office and your headquarters, paying in 400 supplies every time it arrives. Unarmed and thin-skinned: escort it, and hunt the enemy's. A new one goes to whichever of your offices is short of a truck; right-click an office to send it there yourself."
     }
   ]
 }

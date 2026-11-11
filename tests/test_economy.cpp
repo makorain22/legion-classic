@@ -148,25 +148,6 @@ TEST_CASE("prerequisites, low power and running out of money slow or stop produc
   CHECK(sim.playerState(0).credits == 4800);
 }
 
-TEST_CASE("a refinery's supply truck turns oil into supplies") {
-  World w;
-  w.map.addOilField(30, 20, 3, 7);
-  Simulation sim(w.map, w.types, w.weapons, 1);
-  spawnOne(sim, w.t("refinery"), 0, {22 * 256, 20 * 256});
-  CHECK(countType(sim, w.t("truck")) == 1);  // comes free
-  int oilBefore = 0;
-  for (uint8_t v : w.map.oilData()) oilBefore += v;
-  ticks(sim, 15 * 60);
-  int oilAfter = 0;
-  for (uint8_t v : w.map.oilData()) oilAfter += v;
-  CHECK(sim.playerState(0).credits > 500);
-  CHECK(oilAfter < oilBefore);
-  CHECK(sim.playerState(0).credits == (oilBefore - oilAfter - [&] {
-          for (uint32_t e : sim.registry().pool<CHarvester>().entities()) return sim.registry().pool<CHarvester>().get(e).cargo;
-          return 0;
-        }()) * 5);
-}
-
 TEST_CASE("a construction truck unfolds into a yard; selling refunds half") {
   World w;
   Simulation sim(w.map, w.types, w.weapons, 1);

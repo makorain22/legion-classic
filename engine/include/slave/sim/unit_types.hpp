@@ -51,15 +51,19 @@ struct UnitTypeDef {
   std::string builtAt;       // role of the structure that makes it: "yard", "barracks", "factory"
   std::vector<std::string> requiresIds;  // the owner needs one of each of these first
   std::vector<int> prereqs;              // resolved
-  int32_t capacity = 0;      // supply trucks: oil units carried
+  int32_t capacity = 0;      // supply trucks: supplies a truck carries from a logistics office to the HQ per trip
   std::string deploysToId;   // construction truck: the structure it unfolds into
   int deploysTo = -1;
-  std::string freeUnitId;    // a refinery comes with a supply truck
+  std::string freeUnitId;    // a logistics office comes with its supply trucks
   int freeUnit = -1;
+  int32_t convoy = 0;        // logistics office: how many supply trucks run from it (it arrives with that many)
+  int32_t perYard = 0;       // structures: how many of this type a side may have per construction yard (0 = any number)
+  int32_t auraRadius = 0;    // structures: friends within this many leptons fire faster...
+  int32_t auraFireRate = 0;  // ...by this many percent (the best aura counts, they don't add up)
   std::string nato;          // map symbol for unit cards and chips ("infantry", "armour"...)
   bool scout = false;        // reconnaissance ("nato": "recon"): falls back from enemies that come close
   int32_t garrison = 0;      // structures: infantry it can hold
-  int32_t income = 0;        // supplies per minute it earns (a depot on a supply point; a yard's trickle)
+  int32_t income = 0;        // supplies per minute it earns (post office, warehouse, fuel depot; a yard's trickle)
   int32_t repair = 0;        // engineers: hit points restored per tick to friendly machines and works
   int32_t aiWeight = 1;      // how often the computer picks it (relative), 0 = never
   std::string group;         // heading it is listed under in the sidebar ("Tanks", "Support"...)
@@ -68,7 +72,7 @@ struct UnitTypeDef {
   // Structures (footW > 0).
   int32_t footW = 0, footH = 0;  // footprint in tiles
   uint8_t blocks = 0;            // locomotors it stops (bit per Locomotor)
-  std::string role;              // what it provides: "yard", "barracks", "factory", "refinery", "power"
+  std::string role;              // what it provides: "yard", "barracks", "factory", "power", "post", "warehouse", "fuel", "office"
   int32_t buildRadius = 0;       // tiles around it where the owner may build
   uint8_t cover = 0;             // % less damage for infantry standing in it (trenches)
   bool bridge = false;           // a bridge piece: anything may cross its tile, water or not

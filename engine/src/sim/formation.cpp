@@ -7,8 +7,10 @@
 // member, turning with the route. Each tick every member heads for its slot
 // in the moving frame, so the shape holds on the way instead of only at the
 // end. The frame waits when members fall behind, squeezes its slots together
-// where the ground is too narrow, halts while its members fight (attack-move)
-// and closes with enemies near its route as a body. When it arrives it turns
+// where the ground is too narrow and closes with enemies near its route as
+// a body. On an attack-move it halts when it makes contact and the ranks
+// behind come up into the firing line; if the fight drags on it presses on
+// slowly towards where it was sent, those in contact firing as it goes. When it arrives it turns
 // to its final front and lets its members go to their final slots.
 //
 // Everything is integer maths in a fixed order, like the rest of the
@@ -31,6 +33,8 @@ constexpr int32_t kBlend = 3 * kT;   // this near the end, the frame turns to it
 constexpr int32_t kPursue = 8 * kT;  // attack-move: how far off its route a formation goes after an enemy
 constexpr uint16_t kStall = 6 * TICKS_PER_SECOND;  // waiting this long, the laggards are left to catch up
 constexpr int32_t kReversePace = 60;               // percent, as in movement.cpp
+constexpr uint16_t kStandFight = 6 * TICKS_PER_SECOND;  // in contact this long, the body presses on while it fights
+constexpr int32_t kPressPace = 40;                 // percent of its pace while pressing on
 constexpr int32_t kSettled = 64;                   // this near its final slot when the march ends, a unit stays put
 constexpr int32_t kLineWidth = 40;                 // most units abreast in a line that wasn't dragged out
 constexpr int32_t kEdge = 96;                      // a formation keeps this far inside the map's edge
@@ -62,10 +66,12 @@ std::vector<Vec2i> formationShape(Formation f, int32_t n, int32_t spacing, int32
       }
       return out;
     }
-    // Bigger: a filled arrowhead, row r holding 2r+1 units.
-    for (int32_t r = 0; static_cast<int32_t>(out.size()) < n; ++r)
-      for (int32_t i = -r; i <= r && static_cast<int32_t>(out.size()) < n; ++i)
+    // Bigger: a filled arrowhead, row r holding 2r+1 units (no wider than a line would be).
+    for (int32_t r = 0; static_cast<int32_t>(out.size()) < n; ++r) {
+      const int32_t half = std::min(r, kLineWidth / 2);
+      for (int32_t i = -half; i <= half && static_cast<int32_t>(out.size()) < n; ++i)
         out.push_back({i * spacing, r * depth * 4 / 5});
+    }
     return out;
   }
   int32_t cols = 1;
@@ -306,7 +312,7 @@ void Simulation::orderMove(const std::vector<Entity>& units, Vec2i target, Order
       leader = e;
     }
   }
-  const Vec2i lpos{reg_.get<CPosition>(leader).x, reg_.get<CPosition>(leader).y};
+  Vec2i lpos{reg_.get<CPosition>(leader).x, reg_.get<CPosition>(leader).y};
 
   // Backing up: when every vehicle in the group would reverse this move, the
   // formation keeps the front it has and backs away as a body.
@@ -326,6 +332,26 @@ void Simulation::orderMove(const std::vector<Entity>& units, Vec2i target, Order
   }
 
   target = fitFormation(L, target, facing);
+  // A group strung out along its way forms on its leading elements: the
+  // frame starts far enough forward for its front rank to be level with
+  // whoever is furthest on, so nobody is called back to fall in and the
+  // rest catch up. (A group standing together forms where it stands.)
+  if (!reverse && target != L.centroid) {
+    const Angle way = atan2Angle(target.y - L.centroid.y, target.x - L.centroid.x);
+    const int64_t wx = cosQ16(way), wy = sinQ16(way);
+    int64_t lead = 0;
+    for (Entity e : L.units) {
+      const CPosition& p = reg_.get<CPosition>(e);
+      lead = std::max(lead, (static_cast<int64_t>(p.x - L.centroid.x) * wx + static_cast<int64_t>(p.y - L.centroid.y) * wy) / 65536);
+    }
+    int32_t front = INT32_MAX;
+    for (const Vec2i& l : L.local) front = std::min(front, l.y);
+    const int64_t forward = lead - (L.centre.y - front);
+    if (forward > 2 * kT) {
+      const Vec2i on{L.centroid.x + static_cast<int32_t>(wx * forward / 65536), L.centroid.y + static_cast<int32_t>(wy * forward / 65536)};
+      lpos = pathfinder_.nearestReachable(lpos, on, routeLoco);
+    }
+  }
   const Vec2i dest = pathfinder_.nearestReachable(lpos, place(target, L.centre, facing), routeLoco);
   std::vector<Vec2i> route;
   pathfinder_.findPath(lpos, dest, routeLoco, route, 400000);
@@ -574,6 +600,39 @@ void Simulation::stepFormations() {
       }
     }
 
+    // In a fight the ranks behind don't stand and watch: every armed member
+    // with nothing in reach closes with the enemy on its own (its own target,
+    // or where the others are shooting) until it can fire too. When the
+    // fight is over they fall in again and the body goes on.
+    F.fight = engaged ? static_cast<uint16_t>(std::min<int32_t>(F.fight + 1, 60000)) : static_cast<uint16_t>(std::max<int32_t>(0, F.fight - 2));
+    const bool pressing = engaged && F.fight > kStandFight;
+    if (engaged && !pressing) {
+      int64_t cx = 0, cy = 0, n = 0;
+      for (size_t i = 0; i < F.members.size(); ++i) {
+        if (!busy[i]) continue;
+        const CPosition& tp = pos.get(combats.get(F.members[i].index).target.index);
+        cx += tp.x;
+        cy += tp.y;
+        ++n;
+      }
+      const Vec2i contact{static_cast<int32_t>(cx / n), static_cast<int32_t>(cy / n)};
+      for (size_t i = 0; i < F.members.size(); ++i) {
+        const uint32_t e = F.members[i].index;
+        if (busy[i] || orders.get(e).type != OrderType::AttackMove) continue;
+        const UnitTypeDef& def = types_.get(units.get(e).type);
+        if (def.weapons.empty()) continue;  // lorries and engineers keep their place
+        Vec2i to = contact;
+        if (const CCombat* c = combats.tryGet(e))
+          if (reg_.alive(c->target) && units.has(c->target.index) && units.get(c->target.index).health > 0) {
+            const CPosition& tp = pos.get(c->target.index);
+            to = {tp.x, tp.y};
+          }
+        // Not past the body's leash: nobody runs off across the map after a scout car.
+        if (distance(to.x - F.anchor.x, to.y - F.anchor.y) > static_cast<uint32_t>(kPursue + 6 * kT)) continue;
+        slots[i] = pathfinder_.nearestReachable({pos.get(e).x, pos.get(e).y}, to, def.locomotor);
+      }
+    }
+
     // Pace and cohesion.
     int32_t pace = INT32_MAX, paceAll = INT32_MAX, maxLag = 0;
     for (size_t i = 0; i < F.members.size(); ++i) {
@@ -588,18 +647,20 @@ void Simulation::stepFormations() {
       if (F.reverse && def.locomotor != Locomotor::Foot && def.turnTicks > 0) sp = sp * kReversePace / 100;
       sp = std::max(1, sp);
       paceAll = std::min(paceAll, sp);
-      if (fm.flags & CFormationMember::kJoined) {
+      if ((fm.flags & CFormationMember::kJoined) && !(pressing && busy[i])) {  // (those in the fight don't hold the body back)
         pace = std::min(pace, sp);
         maxLag = std::max(maxLag, lag);
       }
     }
     if (pace == INT32_MAX) pace = paceAll;  // nobody has fallen in yet: set off, they catch up
     const int32_t factor = maxLag <= kTight ? 100 : maxLag >= kWait ? 0 : (kWait - maxLag) * 100 / (kWait - kTight);
-    int32_t step = engaged ? 0 : pace * factor / 100;
-    if (!engaged && factor > 0) step = std::max(step, std::min(pace, 6));
+    const bool standing = engaged && !pressing;
+    int32_t step = standing ? 0 : pace * factor / 100 * (pressing ? kPressPace : 100) / 100;
+    if (!standing && factor > 0) step = std::max(step, std::min(pace, 6));
+    if (pressing) haveChase = false;  // it has an enemy already
 
     const bool atEnd = !F.pursuing && !haveChase && F.index >= F.path.size();
-    if (!engaged && step == 0) {
+    if (!standing && step == 0) {
       // Waiting for laggards: after a while they are left to catch up.
       if (++F.stall > kStall) {
         F.stall = 0;
@@ -617,7 +678,7 @@ void Simulation::stepFormations() {
     // Move the frame.
     const Vec2i before = F.anchor;
     Angle desired = F.facing;
-    if (engaged) {
+    if (standing) {
       // stand
     } else if (haveChase) {
       if (!F.pursuing) {
@@ -677,7 +738,7 @@ void Simulation::stepFormations() {
       }
     }
     F.moving = F.anchor != before;
-    if (!engaged) {
+    if (!standing) {
       // The frame wheels only as fast as its members keep up.
       const int32_t turn = std::max(factor > 0 ? 6 : 0, kWheel * factor / 100);
       const int32_t delta = angleDelta(F.facing, desired);
@@ -685,7 +746,7 @@ void Simulation::stepFormations() {
     }
 
     // Arrived and turned to its front (or waited long enough for that).
-    if (atEnd && !engaged) {
+    if (atEnd && !standing) {
       if (snake || std::abs(angleDelta(F.facing, F.finalFacing)) <= 8 || ++F.stall > kStall) {
         releaseFormation(F);
         finished.push_back(self);

@@ -582,6 +582,18 @@
       "muzzle": 2,
       "sound": "howitzer",
       "impact": "explosion_large"
+    },
+    {
+      "id": "rifle_levy",
+      "name": "Old rifle",
+      "warhead": "bullet",
+      "damage": 10,
+      "range": 4.5,
+      "cooldown": 30,
+      "projectile": "instant",
+      "accuracy": 50,
+      "muzzle": 0,
+      "sound": "rifle"
     }
   ]
 }

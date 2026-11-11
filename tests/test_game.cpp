@@ -54,13 +54,9 @@ void base(Simulation& sim, const Rules& R, uint8_t owner, const char* f, Vec2i a
   const std::string F = f;
   place(sim, R.t((F + "_yard").c_str()), owner, at);
   place(sim, R.t((F + "_power").c_str()), owner, {at.x - 5 * 256, at.y - 4 * 256});
-  {  // a supply depot on the nearest supply point
-    Vec2i best = sim.map().supplyPoints.front();
-    for (const Vec2i& sp : sim.map().supplyPoints)
-      if (std::abs(sp.x * 256 - at.x) + std::abs(sp.y * 256 - at.y) < std::abs(best.x * 256 - at.x) + std::abs(best.y * 256 - at.y))
-        best = sp;
-    place(sim, R.t((F + "_depot").c_str()), owner, {best.x * 256 + 128, best.y * 256 + 128});
-  }
+  // income: a post office and a logistics warehouse behind the yard
+  place(sim, R.t((F + "_post").c_str()), owner, {at.x - 5 * 256, at.y + 3 * 256});
+  place(sim, R.t((F + "_warehouse").c_str()), owner, {at.x - 1 * 256, at.y + 7 * 256});
   place(sim, R.t((F + "_barracks").c_str()), owner, {at.x + 5 * 256, at.y + 3 * 256});
   Command c;
   c.type = CommandType::SetCredits;
@@ -451,7 +447,8 @@ TEST_CASE("each side's computer player fights to its own doctrine") {
       for (uint32_t e : sim.registry().pool<CUnit>().entities()) {
         bound |= sim.registry().pool<CGroupMember>().has(e);
         const CUnit& u = sim.registry().pool<CUnit>().get(e);
-        if (u.owner <= 1 && sim.types().get(u.type).role == "depot") ++depots[u.owner];
+        const std::string& role = sim.types().get(u.type).role;
+        if (u.owner <= 1 && (role == "post" || role == "warehouse" || role == "fuel" || role == "office")) ++depots[u.owner];
         wire += u.owner == 0 && sim.types().get(u.type).model == "wire";
       }
       peakWire = std::max(peakWire, wire);
@@ -464,7 +461,7 @@ TEST_CASE("each side's computer player fights to its own doctrine") {
     const CUnit& u = sim.registry().pool<CUnit>().get(e);
     if (u.owner > 1) continue;
     const UnitTypeDef& d = sim.types().get(u.type);
-    count[u.owner][0] += d.role == "depot";
+    count[u.owner][0] += d.role == "office";
     count[u.owner][1] += d.model == "trench";
     count[u.owner][2] += d.model == "wire";
     if (!d.isStructure() && !d.weapons.empty()) {
@@ -473,7 +470,7 @@ TEST_CASE("each side's computer player fights to its own doctrine") {
     }
   }
   for (int p = 0; p < 2; ++p) {
-    CHECK(peakDepots[p] >= 4);  // it expanded onto more supply points
+    CHECK(peakDepots[p] >= 4);  // it built up its income: post offices, warehouses, a fuel depot, logistics offices
     CHECK(count[p][1] >= 5);  // and dug a trench line
   }
   CHECK(peakWire > 0);      // the Germans wire their front

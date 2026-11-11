@@ -11,6 +11,7 @@ needs numpy, scipy and oggenc (vorbis-tools). Deterministic: the same seed
 makes the same files.
 """
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -485,6 +486,23 @@ def ui_objective():
     return norm(fade(mix(bell(880, 2.2), at(bell(1108.7, 2.2), 0.18), at(bell(1318.5, 2.2), 0.36)), 0, 0.4), 0.5)
 
 
+def ui_captured():
+    """A logistics point taken: a short rising call, bugle over a drum tap."""
+    def horn(f, sec):
+        t = t_(sec)
+        s = sum(np.sin(2 * np.pi * f * k * t) / k for k in (1, 2, 3, 4, 5)) * (1 + 0.004 * np.sin(2 * np.pi * 5.5 * t))
+        return lp(s, 2600) * np.interp(t, [0, 0.03, sec - 0.08, sec], [0, 1, 0.8, 0])
+    call = mix(horn(392.0, 0.16), at(horn(523.25, 0.16), 0.17), at(horn(659.25, 0.5), 0.34))
+    return norm(mix(call * 0.8, thump(0.3, 140, 60, 0.05, 0.7), at(thump(0.25, 150, 70, 0.04, 0.5), 0.34)), 0.5)
+
+
+def ui_convoy():
+    """A convoy paying in: a till's bell and the drawer."""
+    ring = mix(bell(2093, 0.9) * 0.7, at(bell(2637, 0.9) * 0.6, 0.07))
+    drawer = mix(thump(0.2, 180, 80, 0.03, 0.8), bp(noise(0.12), 900, 5000) * expenv(0.12, 0.03) * 0.5)
+    return norm(fade(mix(at(ring, 0.1), drawer), 0, 0.3), 0.42)
+
+
 # ---------------------------------------------------------------------------
 # Ambience (stereo loops)
 # ---------------------------------------------------------------------------
@@ -651,7 +669,11 @@ def write_ogg(path, x, quality=4, loop=False):
         tmp = f.name
     try:
         wavfile.write(tmp, SR, (x * 32767).astype(np.int16))
-        subprocess.run(['oggenc', '-Q', '-q', str(quality), '-o', path, tmp], check=True)
+        if shutil.which('oggenc'):
+            subprocess.run(['oggenc', '-Q', '-q', str(quality), '-o', path, tmp], check=True)
+        else:  # no vorbis-tools: ffmpeg's Vorbis encoder does as well
+            subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', tmp, '-c:a', 'libvorbis', '-q:a', str(quality), path],
+                           check=True)
     finally:
         os.unlink(tmp)
 
@@ -683,8 +705,16 @@ def main():
                  (f'whistle_{v}', lambda v=v: whistle(v)), (f'engine_rev_{v}', lambda v=v: engine_rev(v))]
     jobs += [('tank_engine', tank_engine), ('truck_engine', truck_engine), ('march', march), ('fire', fire_loop),
              ('ui_click', ui_click), ('ui_tab', ui_tab), ('ui_ready', ui_ready), ('ui_denied', ui_denied),
-             ('ui_place', ui_place), ('ui_sell', ui_sell), ('ui_message', ui_message), ('ui_objective', ui_objective)]
+             ('ui_place', ui_place), ('ui_sell', ui_sell), ('ui_message', ui_message), ('ui_objective', ui_objective),
+             ('ui_captured', ui_captured), ('ui_convoy', ui_convoy)]
     loops = {'tank_engine', 'truck_engine', 'march', 'fire'}
+    only = set(sys.argv[2:])  # name some effects to make just those (the rest are left as they are)
+    if only:
+        for name, make in jobs:
+            if name in only:
+                write_ogg(os.path.join(sfx, name + '.ogg'), make(), loop=name in loops)
+                print('sfx', name, flush=True)
+        return
     for name, make in jobs:
         write_ogg(os.path.join(sfx, name + '.ogg'), make(), loop=name in loops)
         print('sfx', name, flush=True)

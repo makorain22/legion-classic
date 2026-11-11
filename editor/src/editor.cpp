@@ -20,7 +20,7 @@ namespace legion {
 
 namespace {
 const char* kToolNames[] = {"Raise", "Lower", "Smooth", "Flatten", "Roughen", "Paint ground", "Place props",
-                            "Erase props", "Supply points", "Place units", "Select units", "Artillery", "Smite", "Heal", "Draw area"};
+                            "Erase props", "Logistics points", "Place units", "Select units", "Artillery", "Smite", "Heal", "Draw area"};
 const char* kToolTips[] = {
     "Raise the ground into hills.",
     "Lower the ground into valleys and riverbeds.",
@@ -30,7 +30,7 @@ const char* kToolTips[] = {
     "Paint grass, dirt, mud, roads and more. Edges blend naturally.",
     "Click to place one, drag to scatter trees, bushes or rocks.",
     "Remove trees, bushes and rocks inside the brush.",
-    "Click to add a supply point (a Supply Depot built on one earns supplies). Shift-click removes the nearest.",
+    "Click to add a logistics point (a side that holds one gets an office there and convoys of money). Shift-click removes the nearest.",
     "Place units for any side: one per click, a brush of them, or a whole block.",
     "Select units of any side; drag them to move them; inspect and edit them.",
     "Call down a barrage of 105 mm shells. Hurts every side.",

@@ -71,6 +71,12 @@ bool UnitTypeRegistry::loadJson(const nlohmann::json& doc, std::string& error) {
       d.capacity = u.value("capacity", 0);
       d.deploysToId = u.value("deploysTo", "");
       d.freeUnitId = u.value("freeUnit", "");
+      d.convoy = std::clamp(u.value("convoy", 0), 0, 12);
+      d.perYard = std::max(0, u.value("perYard", 0));
+      if (u.contains("aura")) {
+        d.auraRadius = static_cast<int32_t>(u["aura"].value("radius", 0.0) * 256.0 + 0.5);
+        d.auraFireRate = std::clamp(u["aura"].value("fireRate", 0), 0, 100);
+      }
       d.repair = u.value("repair", 0);
       d.garrison = u.value("garrison", 0);
       d.nato = u.value("nato", std::string());

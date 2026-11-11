@@ -145,6 +145,7 @@ struct SoldierSpec {
   bool cap = false;     // field cap instead of a helmet (snipers)
   bool smock = false;   // camouflage smock
   bool aim = false;     // weapon up at the shoulder, pointing ahead (dug-in men firing)
+  bool levy = false;    // levy infantry: a greatcoat, a cap and an armband instead of uniform, helmet and pack
 };
 // Draws one soldier facing +X with his feet centred at (ox, oy).
 void soldier(VoxelModel& m, const FactionLook& look, float ox, float oy, const SoldierSpec& s);

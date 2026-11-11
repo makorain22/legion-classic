@@ -183,6 +183,11 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
       }
     }
     startSkirmish(s);
+    speed_ = std::clamp(opt_.speed, 0.25f, 16.0f);  // (a new skirmish starts at 1x: --speed asks for more)
+    if (opt_.bench > 0) {
+      runBench();
+      quit_ = true;
+    }
     if (opt_.side >= 0 && opt_.side < MAX_PLAYERS && players_[opt_.side].active) {
       setPlayer(static_cast<uint8_t>(opt_.side));
       if (players_[player_].startX >= 0) centerOn({players_[player_].startX, players_[player_].startY});
@@ -598,8 +603,6 @@ void GameScene::spawnAt(const std::string& typeId, uint8_t player, Vec2i at, int
   sim_->queue(std::move(c));
 }
 
-// A starting base: construction yard, power, an oil depot (with its truck)
-// and barracks, laid out around `centre`, facing the enemy.
 // A starting base laid out like a military post: headquarters in the middle
 // of a beaten-earth yard, barracks and workshops in rows behind it, a road
 // to the gate, a sandbagged front with MG nests and watchtowers at the
@@ -665,40 +668,9 @@ void GameScene::buildBase(uint8_t player, Vec2i centre) {
   add("barracks", 5, -5);
   add("power", -5, -6);
   add("power", -5, -3);
-  // A supply depot on the nearest supply point.
-  if (!map_.supplyPoints.empty()) {
-    Vec2i best = map_.supplyPoints.front();
-    auto far = [&](Vec2i p) { return std::abs(p.x * T - centre.x) + std::abs(p.y * T - centre.y); };
-    for (const Vec2i& p : map_.supplyPoints)
-      if (far(p) < far(best)) best = p;
-    const int t = types_.find(f + "_depot");
-    if (t >= 0) {
-      const UnitTypeDef& d = types_.get(t);
-      bool placed = false;
-      // Centred on the point, inside its compound, if it fits.
-      std::vector<Vec2i> offs;
-      for (int oy = -d.footH; oy <= 1; ++oy)
-        for (int ox = -d.footW; ox <= 1; ++ox) offs.push_back({ox, oy});
-      const Vec2i mid{-(d.footW / 2), -(d.footH / 2)};
-      std::stable_sort(offs.begin(), offs.end(), [&](Vec2i a, Vec2i b) {
-        return std::abs(a.x - mid.x) + std::abs(a.y - mid.y) < std::abs(b.x - mid.x) + std::abs(b.y - mid.y);
-      });
-      for (const Vec2i off : offs) {
-        if (placed) break;
-        {
-          const int ox = off.x, oy = off.y;
-          const Vec2i o{best.x + ox, best.y + oy};
-          if (!sim_->canPlace(t, o)) continue;
-          Command c;
-          c.type = CommandType::SpawnList;
-          c.spawns.push_back({static_cast<uint16_t>(t), player, {o.x * T + d.footW * 128, o.y * T + d.footH * 128}, 0, -1});
-          sim_->queue(std::move(c));
-          sim_->tick();
-          placed = true;
-        }
-      }
-    }
-  }
+  // Income from the start: a post office and a logistics warehouse behind the headquarters.
+  add("post", -5, 3);
+  add("warehouse", -5, 7);
   // The front: sandbags with a gate on the road, MG nests either side of
   // it, watchtowers at the corners, wire and tank traps beyond.
   for (int side = -8; side <= 8; ++side)
@@ -1280,16 +1252,19 @@ void GameScene::rightClick(Vec2f start, bool dragged, Vec2f end) {
     else if (hit == e && types_.get(reg.get<CUnit>(e).type).deploysTo >= 0) deployers.push_back(e);
     else rest.push_back(e);
   }
-  // Supply trucks: right-click oil (or a refinery) to put them to work.
-  const int tx = g.x >> LEPTON_SHIFT, ty = g.y >> LEPTON_SHIFT;
-  const bool onOil = map_.inBounds(tx, ty) && map_.oil(tx, ty) > 0;
-  const bool onRefinery = hit.valid() && types_.get(reg.get<CUnit>(hit).type).role == "refinery";
-  if (!trucks.empty() && (onOil || onRefinery)) {
+  // Supply trucks: right-click one of your logistics offices to put them on its run.
+  const bool onOffice = hit.valid() && reg.get<CUnit>(hit).owner == player_ && types_.get(reg.get<CUnit>(hit).type).role == "office";
+  if (!trucks.empty() && onOffice) {
     Command c;
     c.type = CommandType::Harvest;
+    c.player = player_;
     c.units = trucks;
-    c.target = onOil ? g : Vec2i{-1, -1};
+    c.targetUnit = hit;
     sim_->queue(std::move(c));
+    showStatus(sim_->officeTrucks(hit) >= std::max(1, types_.get(reg.get<CUnit>(hit).type).convoy)
+                   ? "That office has all the trucks it can use: they go where one is short"
+                   : "Supply trucks assigned to the office",
+               2.5f);
     trucks.clear();
   }
   rest.insert(rest.end(), trucks.begin(), trucks.end());
@@ -1742,6 +1717,18 @@ void GameScene::announce(const SimEvent& ev) {
       else showStatus("Can't build " + d.name + " there", 2.5f);
       break;
     }
+    case EventType::PointCaptured:
+      if (mode_ != Mode::Game) break;
+      if (ev.owner == player_) showStatus("Logistics point taken: the office is up and three supply trucks are on their way", 4);
+      else if (sim_->allied(ev.owner, player_)) showStatus("An ally has taken a logistics point", 3);
+      break;
+    case EventType::ConvoyArrived:
+      if (ev.owner == player_ || revealMap_) {
+        char txt[32];
+        std::snprintf(txt, sizeof txt, "+$%d", ev.amount);
+        floaters_.push_back({{static_cast<float>(ev.at.x), static_cast<float>(ev.at.y)}, 0, txt});
+      }
+      break;
     case EventType::ScoutFallsBack:
       // Once in a while, not for every scout every time.
       if (ev.owner == player_ && mode_ == Mode::Game && frame_ - lastScoutNote_ > 600) {
@@ -1904,6 +1891,8 @@ void GameScene::onUpdate(float dt, float alpha) {
     if (selection_.empty()) attackMoveMode_ = false;
   }
   std::erase_if(markers_, [](const Marker& m) { return m.age > (m.slot ? 1.2f : 0.6f); });
+  for (Floater& f : floaters_) f.age += dt;
+  std::erase_if(floaters_, [](const Floater& f) { return f.age > 2.2f; });
   if (statusTime_ > 0) statusTime_ -= dt;
 }
 
@@ -2130,8 +2119,8 @@ void GameScene::drawUnits(const RectF& view) {
                          static_cast<float>(p.x), static_cast<float>(p.y), ph});
     drawList_.back().blend = 0.06f;  // grass round the trunk or stone
   }
-  // Supply points: a fenced compound with crates and fuel drums, a gate in
-  // front; a depot goes up inside.
+  // Logistics points: a fenced compound with crates and fuel drums, a gate in
+  // front; the office of whoever takes it goes up inside.
   if (auto fence = art_.joined.find("fence"); fence != art_.joined.end()) {
     constexpr int R = 3;  // compound: 7 x 7 tiles, fence on the border
     for (const Vec2i& sp : map_.supplyPoints) {
