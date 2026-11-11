@@ -16,7 +16,7 @@ enum class InputAction : uint8_t {
   AttackMove, Stop, Deploy, SelectAll, BindGroup, UnbindGroup,
   Pause, SpeedUp, SpeedDown, CentreSelection, NextSide, Menu,
   Help, Editor, Debug, Screenshot, ToggleInfo, Encyclopedia, Evacuate,
-  RotateLeft, RotateRight, TiltUp, TiltDown, ResetCamera,
+  RotateLeft, RotateRight, TiltUp, TiltDown, ResetCamera, NextFormation,
   Count
 };
 constexpr int ACTION_COUNT = static_cast<int>(InputAction::Count);

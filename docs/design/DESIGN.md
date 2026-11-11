@@ -187,7 +187,21 @@ recognition flash on vehicles and a roundel in the interface.
      artillery 24–38 tiles; reverse gear (`reverseReach`, `wouldReverse`,
      stateless test in `stepMovement`: waypoint more than 112° off the bow
      and the path no longer than 5 tiles, 12 in contact).
-   - **9.5 Formations** – reworked.
+   - **9.5 Formations** – done (11 Nov; the user's answer to "what feels
+     wrong": shape breaks on the move, spacing and shapes, facing, controls).
+     A group move creates a `CFormation` (`engine/src/sim/formation.cpp`): a
+     frame that travels the route of the group's centre at the pace of its
+     slowest joined member, wheeling at most 40/4096 of a turn a tick; each
+     member (`CFormationMember`: offset, final goal, shape, heading) is sent
+     to its slot every tick (straight line when clear, else a path). Lag
+     slows the frame (full pace under 1 tile, halt at 3); stragglers beyond 7
+     tiles are dropped until within 2. Slots on impassable ground are pulled
+     in (offset halved twice). A Column is not a stiff frame: slots lie on
+     the route itself (`routePoint`), so it snakes. Attack-move: the frame
+     halts while any member has a target in range and pursues up to 8 tiles
+     off its route. `COrder::faceTo` survives arrival as the post facing.
+     Spacing: men 150 leptons; vehicles 3 radii abreast, 4 nose to tail.
+     Saves are SIM5 (SIM4 and older still load).
    - **9.6 Economy** – rare logistics points far from the bases: capture one
      and a logistics office sends three-truck convoys of money to your HQ
      (office and trucks can be destroyed); Post Office (small income, cheap

@@ -15,6 +15,7 @@ constexpr int32_t kReverseShort = 5 * LEPTONS_PER_TILE;     // any move this sho
 constexpr int32_t kReverseContact = 12 * LEPTONS_PER_TILE;  // while in contact (shooting or being shot at)
 constexpr int32_t kReverseSpeed = 60;                       // percent of the forward speed
 constexpr uint32_t kContactTicks = 5 * 15;
+constexpr uint32_t kPostTicks = 3 * 15;  // quiet this long, a unit turns back to its post facing
 }  // namespace
 
 // How far (leptons) this unit will back up rather than turn round: 0 for men
@@ -100,18 +101,30 @@ void Simulation::stepOrders() {
     const Entity e = reg_.handle(ei);
     const UnitTypeDef& def = types_.get(u.type);
     switch (o.type) {
-      case OrderType::Idle:
+      case OrderType::Idle: {
+        // Standing at its post: once a fight is over it turns back to the
+        // front it was given (9.5).
+        if (o.faceTo < 0 || def.speed <= 0 || m.active || m.request) break;
+        CFacing& f = reg_.get<CFacing>(e);
+        if (facingOf(f.angle) == facingOf(static_cast<Angle>(o.faceTo))) break;
+        if (reg_.pool<CGarrisoned>().has(ei)) break;
+        if (const CCombat* c = reg_.pool<CCombat>().tryGet(ei))
+          if (c->target.valid() || (c->hurtTick != 0 && tick_ - c->hurtTick < kPostTicks)) break;
+        turnToward(f.angle, static_cast<Angle>(o.faceTo), f.turnWait, def.turnTicks);
+        break;
+      }
       case OrderType::Harvest:  // run by the economy step
       case OrderType::Repair:
       case OrderType::Occupy:  // organisation.cpp
         break;
       case OrderType::Move:
+        if (formationOf(e)) break;  // marching in formation: the frame says when it has arrived
         if (!m.active && !m.request) {
-          // Arrived: turn to face the formation's front, then stand.
+          // Arrived: turn to face the formation's front, then stand. The
+          // front is kept as the unit's post facing.
           CFacing& f = reg_.get<CFacing>(e);
           if (o.faceTo < 0 || def.speed <= 0 || turnToward(f.angle, static_cast<Angle>(o.faceTo), f.turnWait, def.turnTicks)) {
             o.type = OrderType::Idle;
-            o.faceTo = -1;
             o.forced = false;
           }
         }
@@ -144,10 +157,14 @@ void Simulation::stepOrders() {
             // plain Move order; attack-move means "stop and engage".)
             m.active = false;
             m.request = 0;
+          } else if (formationOf(e)) {
+            // In formation: the body closes with the enemy together (formation.cpp).
           } else if ((!m.active && !m.request) || (tick_ + ei) % kChaseReplanTicks == 0) {
             o.chasedAt = {tp.x, tp.y};
             requestPath(e, o.chasedAt);
           }
+        } else if (formationOf(e)) {
+          // keeps its slot
         } else if (!m.active && !m.request) {
           if (distance(o.goal.x - p.x, o.goal.y - p.y) <= 192) o.type = OrderType::Move;  // arrived: face the front
           else requestPath(e, o.goal);  // resume the advance
@@ -159,6 +176,8 @@ void Simulation::stepOrders() {
 }
 
 void Simulation::stepMovement() {
+  auto& fmembers = reg_.pool<CFormationMember>();
+  auto& forms = reg_.pool<CFormation>();
   reg_.each<CMover, CPosition, CPrevPosition, CFacing, CUnit, CAnim>(
       [&](uint32_t ei, CMover& m, CPosition& pos, CPrevPosition& prev, CFacing& facing, CUnit& unit, CAnim& anim) {
         prev.x = pos.x;
@@ -174,8 +193,20 @@ void Simulation::stepMovement() {
         const int32_t dx = wp.x - pos.x, dy = wp.y - pos.y;
         const uint32_t dist = distance(dx, dy);
 
+        // Keeping its slot in a marching formation (not while it finds its own
+        // way round an obstacle): the waypoint is the slot, renewed every tick.
+        const CFormation* form = nullptr;
+        Angle heading = 0;
+        if (const CFormationMember* fm = fmembers.tryGet(ei))
+          if (!(fm->flags & CFormationMember::kDetour) && fm->formation.valid() && reg_.alive(fm->formation)) {
+            form = forms.tryGet(fm->formation.index);
+            heading = fm->heading;
+          }
+
         // Stuck detection: if we haven't got closer for a while, re-plan.
-        if (static_cast<int32_t>(dist) + 24 < m.bestDist) {
+        if (form) {
+          // the formation looks after its members
+        } else if (static_cast<int32_t>(dist) + 24 < m.bestDist) {
           m.bestDist = static_cast<int32_t>(dist);
           m.stuckTicks = 0;
         } else if (++m.stuckTicks > kStuckCheckTicks) {
@@ -190,25 +221,34 @@ void Simulation::stepMovement() {
           return;
         }
 
-        // Reverse gear: the way to go lies behind the hull and the trip is short.
-        // Judged afresh every tick; it holds steady because backing up keeps the
-        // waypoint astern, just as driving forward keeps it ahead.
+        // Which way the hull should point. Reverse gear: the way to go lies
+        // behind the hull and the trip is short. Judged afresh every tick; it
+        // holds steady because backing up keeps the waypoint astern, just as
+        // driving forward keeps it ahead. A formation backing up as a body
+        // says so itself; a member in its slot faces the way the body goes.
+        const bool vehicle = def.locomotor != Locomotor::Foot && def.turnTicks > 0;
         Angle desired = atan2Angle(dy, dx);
         bool reverse = false;
-        if (dist > 0 && std::abs(angleDelta(facing.angle, desired)) > ANGLE_FULL * 5 / 16) {
+        if (form && form->reverse && vehicle) {
+          reverse = true;
+          desired = form->facing;
+        } else if (form && form->moving && dist <= 64) {
+          desired = heading;
+        } else if (dist > 0 && std::abs(angleDelta(facing.angle, desired)) > ANGLE_FULL * 5 / 16) {
           const int32_t limit = reverseReach(ei, def);
           int64_t left = dist;
+          if (form) left += form->remaining;
           for (size_t i = m.index + 1; i < m.path.size() && left <= limit; ++i)
             left += distance(m.path[i].x - m.path[i - 1].x, m.path[i].y - m.path[i - 1].y);
           reverse = left <= limit;
+          if (reverse) desired = static_cast<Angle>((desired + ANGLE_FULL / 2) & ANGLE_MASK);
         }
-        if (reverse) desired = static_cast<Angle>((desired + ANGLE_FULL / 2) & ANGLE_MASK);
 
         // The ground underfoot sets the pace (slopes, mud, fords).
         const int32_t speed = std::max<int32_t>(
             1, def.speed * map_.speedPercent(pos.x >> LEPTON_SHIFT, pos.y >> LEPTON_SHIFT, def.locomotor) / 100 *
                    (reverse ? kReverseSpeed : 100) / 100);
-        if (dist <= static_cast<uint32_t>(speed)) {
+        auto arrive = [&]() {
           pos.x = wp.x;
           pos.y = wp.y;
           anim.moving = dist > 0;
@@ -218,11 +258,21 @@ void Simulation::stepMovement() {
             m.active = false;
             m.repaths = 0;
           }
+          if (anim.moving && ++anim.timer >= def.animTicks) {
+            anim.timer = 0;
+            anim.frame = static_cast<uint8_t>((anim.frame + 1) & 3);
+          }
+        };
+        const int32_t want = facingOf(desired), have = facingOf(facing.angle);
+        // The last step. A vehicle in formation takes one every tick, so it
+        // must point the right way first or it would slide sideways.
+        if (dist <= static_cast<uint32_t>(speed) && (!form || want == have || dist <= 6 || def.turnTicks == 0)) {
+          if (form && def.turnTicks == 0 && dist > 6) facing.angle = angleOfFacing(want);
+          arrive();
           return;
         }
 
         // Turn in visible 1/16 steps before driving, like the classics.
-        const int32_t want = facingOf(desired), have = facingOf(facing.angle);
         if (want != have) {
           if (def.turnTicks == 0) {
             facing.angle = angleOfFacing(want);
@@ -236,6 +286,10 @@ void Simulation::stepMovement() {
             // Vehicles may creep forward while turning gently, not while pivoting hard.
             if (std::abs(angleDelta(facing.angle, desired)) > ANGLE_PER_FACING) return;
           }
+        }
+        if (dist <= static_cast<uint32_t>(speed)) {
+          arrive();
+          return;
         }
 
         const int32_t nx = pos.x + static_cast<int32_t>(static_cast<int64_t>(dx) * speed / dist);

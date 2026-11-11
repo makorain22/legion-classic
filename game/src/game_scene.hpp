@@ -79,6 +79,7 @@ struct SceneOptions {
   bool gallery = false;
   bool battleDemo = false;       // two forces fighting in the open (screenshots)
   int townDemo = 0;              // 1: every civilian building in rows; 2: the camera on a bridge; 3: on the steepest rock
+  bool formationDemo = false;    // groups marching in each formation, for screenshots
   bool worksDemo = false;        // trenches and sandbag walls manned by every kind of infantry, for screenshots
   bool orgDemo = false;          // fireteams, platoons, a garrison and fog chips, for screenshots         // every unit lined up, for screenshots of the art
   bool economyDemo = false;     // scripted base building, for automated screenshots
@@ -183,6 +184,12 @@ class GameScene final : public slave::Scene {
   // Units.
   std::vector<slave::Entity>& selection() { return selection_; }
   void pruneSelection();
+  // Formations (9.5). The shape the selected units move in (the commonest
+  // among them); -1 when nothing that moves is selected.
+  int selectionShape();
+  // Gives the selection a new shape at once: on the march it re-forms on the
+  // way, standing it forms up where it stands, keeping its front.
+  void setFormation(slave::Formation f);
   slave::Entity pickUnit(slave::Vec2f screenPx, bool ownOnly) const;
   slave::Vec2f unitScreenWorld(uint32_t entityIndex) const;
   // Height the ground or a bridge deck stands at (height units) under (lx, ly).
@@ -284,7 +291,12 @@ class GameScene final : public slave::Scene {
     slave::Vec2f pos;  // ground point, leptons
     float age = 0;
     uint32_t color = 0;
+    bool slot = false;  // a small mark where one unit of a formation will stand
   };
+  // A front being dragged with the right button: where it is, which way it
+  // faces and how wide. False while there is nothing to lay out.
+  bool draggedFront(slave::Vec2f startPx, slave::Vec2f endPx, slave::Vec2i& mid, slave::Angle& facing, int32_t& width);
+  void markSlots(const std::vector<slave::Vec2i>& slots, uint32_t color);
   struct DrawItem {
     int64_t depth;
     uint32_t order;
@@ -326,8 +338,10 @@ class GameScene final : public slave::Scene {
   void runBattleDemo();
   void runOrgDemo();
   void runWorksDemo();
+  void runFormationDemo();
   void runTownDemo();
   slave::Vec2i galleryAt_{0, 0};
+  std::array<std::vector<slave::Entity>, 5> demoGroups_;
   slave::Vec2i bridgeFrom_{0, 0}, bridgeTo_{0, 0};  // --bridge-demo: the span's ends (tiles)
   void drawFormationPicker();
   bool formationPicker_ = false;

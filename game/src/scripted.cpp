@@ -544,6 +544,65 @@ void GameScene::runOrgDemo() {
   }
 }
 
+// Formations on the march (--formation-demo): five mixed groups, one in each
+// shape, cross the field side by side.
+void GameScene::runFormationDemo() {
+  Registry& reg = sim_->registry();
+  const int32_t T = LEPTONS_PER_TILE;
+  const int kGroups = static_cast<int>(Formation::Count);
+  if (frame_ == 2) {
+    Command rm;
+    rm.type = CommandType::Remove;
+    for (uint32_t i : reg.pool<CUnit>().entities())
+      if (reg.pool<CUnit>().get(i).owner < MAX_PLAYERS) rm.units.push_back(reg.handle(i));
+    sim_->queue(std::move(rm));
+    galleryAt_ = findLand({map_.widthLeptons() / 2, map_.heightLeptons() / 2});
+    for (int g = 0; g < kGroups; ++g) {
+      Command sp;
+      sp.type = CommandType::SpawnList;
+      const Vec2i at{galleryAt_.x - 16 * T, galleryAt_.y + (g * 2 - (kGroups - 1)) * 7 * T};
+      const int tank = types_.find(g % 2 ? "rus_medium_tank" : "ger_medium_tank");
+      const int man = types_.find(g % 2 ? "rus_rifleman" : "ger_rifleman");
+      if (tank < 0 || man < 0) return;
+      for (int i = 0; i < 5; ++i)
+        sp.spawns.push_back({static_cast<uint16_t>(tank), 0, {at.x + (i % 3) * 380, at.y + (i / 3) * 380}, 0, -1});
+      for (int i = 0; i < 12; ++i)
+        sp.spawns.push_back({static_cast<uint16_t>(man), 0, {at.x - 2 * T + (i % 4) * 150, at.y + (i / 4) * 150}, 0, -1});
+      sp.tag = static_cast<uint32_t>(1000 + g);
+      sim_->queue(std::move(sp));
+    }
+    revealMap_ = true;
+    centerOn(galleryAt_);
+  }
+  if (frame_ == 3)
+    for (const SpawnRecord& r : sim_->spawnLog())
+      if (r.tag >= 1000 && r.tag < 1000u + static_cast<uint32_t>(kGroups)) demoGroups_[r.tag - 1000].push_back(r.entity);
+  if (frame_ == 5) {
+    selection_.clear();
+    for (int g = 0; g < kGroups; ++g) {
+      Command mv;
+      mv.type = CommandType::Move;
+      mv.player = 0;
+      mv.units = demoGroups_[static_cast<size_t>(g)];
+      mv.target = {galleryAt_.x + 30 * T, galleryAt_.y + (g * 2 - (kGroups - 1)) * 7 * T};
+      mv.formation = static_cast<Formation>(g);
+      sim_->queue(std::move(mv));
+    }
+  }
+  // Follow the middle of them all.
+  if (frame_ > 5) {
+    int64_t cx = 0, cy = 0, n = 0;
+    for (const auto& g : demoGroups_)
+      for (Entity e : g)
+        if (reg.alive(e)) {
+          cx += reg.get<CPosition>(e).x;
+          cy += reg.get<CPosition>(e).y;
+          ++n;
+        }
+    if (n) centerOn({static_cast<int32_t>(cx / n), static_cast<int32_t>(cy / n)});
+  }
+}
+
 // Field works manned (--works-demo): for each army a trench line and a wall
 // of sandbags, held by every kind of infantry, with a target out in front.
 void GameScene::runWorksDemo() {

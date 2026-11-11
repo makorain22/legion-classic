@@ -13,7 +13,7 @@ const char* actionLabel(InputAction a) {
                                 "Screenshot", "Game info panel", "Encyclopedia",
                                 "Evacuate (leave trenches and buildings)",
                                 "Turn the view left", "Turn the view right", "Tilt the view up", "Tilt the view down",
-                                "Reset the view"};
+                                "Reset the view", "Next formation for the selection"};
   return names[static_cast<int>(a)];
 }
 
@@ -62,6 +62,7 @@ void Settings::resetKeys() {
   set(InputAction::TiltUp, {SDLK_PAGEUP, 0});
   set(InputAction::TiltDown, {SDLK_PAGEDOWN, 0});
   set(InputAction::ResetCamera, {SDLK_BACKSPACE, 0});
+  set(InputAction::NextFormation, {SDLK_Z, 0});
 }
 
 bool Settings::pressed(InputAction a, const SDL_KeyboardEvent& e) const {

@@ -172,6 +172,36 @@
   instead of turning round, so its front armour and its gun stay on the
   enemy. Further than that it turns and drives.
 
+### Milestone 9.5: formations
+
+- **A group marches as one body.** Sending several units somewhere used to
+  give each its own path and its own speed, so the shape only appeared at
+  the far end, if at all. Now the group forms up and moves as a formation at
+  the pace of its slowest member, turning with its route and holding its
+  shape the whole way. Tanks and their infantry arrive together.
+- **Cohesion:** the body slows and then waits for members that fall behind;
+  one that starts far off is not waited for and catches up on the way. Where
+  the ground narrows the flanks draw in and open out again beyond.
+- **Columns follow the road:** in Column every rank takes the route the head
+  took, bending round corners and filing over bridges and through gaps.
+- **Attack-move as a body:** the formation halts to fight when anyone has a
+  target in range, closes with an enemy near its route together, and carries
+  on afterwards.
+- **Spacing:** men a couple of paces apart; vehicles a hull's width apart
+  side by side and more nose to tail. Line is one rank for a handful, two for
+  a platoon, three beyond; a small Wedge is a true chevron. A formation sent
+  to the map's edge stands inside it instead of piling up on the border.
+- **Facing:** units keep the front they were given: they turn to it on
+  arrival and turn back to it a few seconds after a fight. A group sent a
+  short way to its rear reverses as a body.
+- **Controls:** the formation buttons now show the shape the selected units
+  are in and **re-form them at once** when clicked (standing or on the
+  march); the shape belongs to the units and is used for every later move.
+  **Z** steps to the next shape. Dragging a front with the right button
+  shows a mark where every unit will stand and which way the front faces.
+- Saved games are format SIM5 (marches in progress are saved); older saves
+  still load. `--formation-demo` for screenshots.
+
 ## 0.9.0 – Milestone 9: Britain, sound, tutorial, campaigns (7 Nov 2026)
 
 - **Sound and music**, built for immersion and size. A new audio module in

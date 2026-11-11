@@ -5,7 +5,7 @@
 // arrives as a Command and is applied at the start of the next tick. The
 // simulation runs at a fixed 15 ticks per second and uses integer maths only.
 //
-// Each tick: commands, path requests, orders, movement, collision, vision
+// Each tick: commands, path requests, orders, formations, movement, collision, vision
 // (every 4 ticks), targeting and firing, projectiles, then removal of the dead.
 // What happened (shots, impacts, deaths) is reported as events, which the
 // presentation turns into flashes, explosions and wrecks.
@@ -91,7 +91,7 @@ struct PlayerState {
   bool lowPower() const { return powerUsed > powerMade; }
 };
 
-// Shapes a group takes when it arrives.
+// Shapes a group marches in and stands in when it arrives.
 enum class Formation : uint8_t {
   Box = 0,  // a compact block (default)
   Line,     // a broad front, two or three ranks deep
@@ -304,6 +304,15 @@ class Simulation {
   // same commands must always produce the same hash.
   uint64_t stateHash();
 
+  // --- Formations (formation.cpp) -------------------------------------------------
+  // The march a unit is part of, or null.
+  const CFormation* formationOf(Entity unit) const;
+  // The shape a unit was last ordered in (Box if never).
+  Formation shapeOf(Entity unit) const;
+  // Where each of `units` would stand if ordered there now (world leptons, in
+  // no particular unit order): for the interface's preview of a dragged front.
+  std::vector<Vec2i> formationPreview(const std::vector<Entity>& units, Vec2i target, Formation f, int32_t formFacing,
+                                      int32_t formWidth) const;
   // Reverse gear: would this vehicle back up to `to` (a short way to its rear)
   // instead of turning round? Farther when it is in contact with the enemy.
   bool wouldReverse(Entity e, Vec2i to) const;
@@ -321,6 +330,22 @@ class Simulation {
   Entity spawnUnit(uint16_t type, uint8_t player, Vec2i pos, Angle facing);
   void applyCommand(const Command& cmd);
   void orderMove(const std::vector<Entity>& units, Vec2i target, OrderType type, const Command& cmd);
+  // A group's slots: who stands where in the frame of the formation.
+  struct FormationLayout {
+    std::vector<Entity> units;    // every mover, block by block (tracked, wheeled, foot)
+    std::vector<Vec2i> local;     // slots in the target's frame: x across the front, y backwards (leptons)
+    std::vector<size_t> blockEnd; // end index of each block in `local`
+    std::vector<Locomotor> blockLoco;
+    std::vector<int32_t> blockSpacing;  // each block's distance between ranks
+    Vec2i centre;                 // the frame's centre, same coordinates
+    Vec2i centroid;               // where the group is now (world leptons)
+    Angle facing = 0;             // the front the formation ends up with
+  };
+  bool layoutFormation(const std::vector<Entity>& units, Vec2i target, Formation f, int32_t formFacing, int32_t formWidth,
+                       FormationLayout& out) const;
+  Vec2i fitFormation(const FormationLayout& L, Vec2i target, Angle facing) const;
+  void stepFormations();
+  void releaseFormation(CFormation& f);
   void reactToFire(uint32_t ei, CCombat& c, CUnit& u, const CPosition& p, COrder& o);
   void setOrderIdle(Entity e);
   void applyEdit(const UnitEdit& ed);

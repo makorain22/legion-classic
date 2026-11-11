@@ -11,7 +11,8 @@
 namespace slave {
 
 namespace {
-constexpr uint32_t kStateMagic = 0x53494D34;  // "SIM4": hints, build locks, orders given, campaign flags
+constexpr uint32_t kStateMagic = 0x53494D35;  // "SIM5": formations
+constexpr uint32_t kStateMagicV4 = 0x53494D34;  // "SIM4": hints, build locks, orders given, campaign flags
 constexpr uint32_t kStateMagicV3 = 0x53494D33;  // "SIM3": AI doctrine state (phases, raiders, guard)
 constexpr uint32_t kStateMagicV2 = 0x53494D32;  // "SIM2": groups, garrisons, supply income
 
@@ -212,6 +213,30 @@ void Simulation::saveState(ByteWriter& w) const {
     w.str(k);
     w.i32(v);
   }
+
+  // Formations on the march, and what shape each unit was last given.
+  savePool<CFormationMember>(w, reg_);
+  {
+    auto& fp = reg_.pool<CFormation>();
+    w.podVector(fp.entities());
+    for (const CFormation& f : fp.data()) {
+      w.u8(f.owner);
+      w.u8(f.shape);
+      w.u8(f.loco);
+      w.u8(static_cast<uint8_t>((f.reverse ? 1 : 0) | (f.moving ? 2 : 0) | (f.pursuing ? 4 : 0)));
+      w.podVector(f.path);
+      w.u32(f.index);
+      w.pod(f.start);
+      w.pod(f.anchor);
+      w.pod(f.dest);
+      w.pod(f.leash);
+      w.u16(f.facing);
+      w.u16(f.finalFacing);
+      w.i32(f.remaining);
+      w.u16(f.stall);
+      w.podVector(f.members);
+    }
+  }
 }
 
 std::vector<std::string> Simulation::typeIds() const {
@@ -225,7 +250,7 @@ bool Simulation::loadState(ByteReader& r, std::string& error, const std::vector<
                            bool* remapped) {
   if (remapped) *remapped = false;
   const uint32_t magic = r.u32();
-  const int version = magic == kStateMagic ? 4 : magic == kStateMagicV3 ? 3 : magic == kStateMagicV2 ? 2 : 0;
+  const int version = magic == kStateMagic ? 5 : magic == kStateMagicV4 ? 4 : magic == kStateMagicV3 ? 3 : magic == kStateMagicV2 ? 2 : 0;
   if (version == 0) {
     error = "not a saved game state";
     return false;
@@ -376,6 +401,36 @@ bool Simulation::loadState(ByteReader& r, std::string& error, const std::vector<
       std::string k = r.str();
       flags_[k] = r.i32();
     }
+    if (!r.ok()) {
+      error = "saved state is damaged";
+      return false;
+    }
+  }
+  if (version >= 5) {
+    loadPool<CFormationMember>(r, reg_);
+    std::vector<uint32_t> ents = r.podVector<uint32_t>();
+    std::vector<CFormation> forms(ents.size());
+    for (CFormation& f : forms) {
+      f.owner = r.u8();
+      f.shape = r.u8();
+      f.loco = static_cast<uint8_t>(r.u8() % 3);
+      const uint8_t bits = r.u8();
+      f.reverse = (bits & 1) != 0;
+      f.moving = (bits & 2) != 0;
+      f.pursuing = (bits & 4) != 0;
+      f.path = r.podVector<Vec2i>();
+      f.index = r.u32();
+      f.start = r.pod<Vec2i>();
+      f.anchor = r.pod<Vec2i>();
+      f.dest = r.pod<Vec2i>();
+      f.leash = r.pod<Vec2i>();
+      f.facing = r.u16();
+      f.finalFacing = r.u16();
+      f.remaining = r.i32();
+      f.stall = r.u16();
+      f.members = r.podVector<Entity>();
+    }
+    reg_.pool<CFormation>().restore(std::move(ents), std::move(forms));
     if (!r.ok()) {
       error = "saved state is damaged";
       return false;

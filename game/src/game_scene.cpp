@@ -1033,6 +1033,82 @@ void GameScene::queueOrder(Command c) {
   }
 }
 
+int GameScene::selectionShape() {
+  pruneSelection();
+  Registry& reg = sim_->registry();
+  int counts[static_cast<int>(Formation::Count)] = {};
+  int movers = 0;
+  for (Entity e : selection_)
+    if (types_.get(reg.get<CUnit>(e).type).speed > 0) {
+      ++counts[static_cast<int>(sim_->shapeOf(e))];
+      ++movers;
+    }
+  if (!movers) return -1;
+  int best = 0;
+  for (int f = 1; f < static_cast<int>(Formation::Count); ++f)
+    if (counts[f] > counts[best]) best = f;
+  return best;
+}
+
+void GameScene::markSlots(const std::vector<Vec2i>& slots, uint32_t color) {
+  if (slots.size() < 2 || slots.size() > 400) return;
+  for (const Vec2i& p : slots) markers_.push_back({{static_cast<float>(p.x), static_cast<float>(p.y)}, 0, color, true});
+}
+
+void GameScene::setFormation(Formation f) {
+  pruneSelection();
+  Registry& reg = sim_->registry();
+  std::vector<Entity> movers;
+  for (Entity e : selection_)
+    if (types_.get(reg.get<CUnit>(e).type).speed > 0 && !reg.has<CGarrisoned>(e)) movers.push_back(e);
+  if (movers.empty()) return;
+  static const char* names[] = {"Box", "Line", "Column", "Wedge", "Loose"};
+  Command c;
+  c.player = player_;
+  c.units = movers;
+  c.formation = f;
+  if (const CFormation* march = sim_->formationOf(movers.front())) {
+    // On the march: the same destination in the new shape.
+    c.type = reg.get<COrder>(movers.front()).type == OrderType::AttackMove ? CommandType::AttackMove : CommandType::Move;
+    c.target = march->dest;
+  } else {
+    // Standing: form up where they are, keeping the front they have.
+    int64_t cx = 0, cy = 0;
+    for (Entity e : movers) {
+      cx += reg.get<CPosition>(e).x;
+      cy += reg.get<CPosition>(e).y;
+    }
+    const Vec2i centre{static_cast<int32_t>(cx / static_cast<int64_t>(movers.size())),
+                       static_cast<int32_t>(cy / static_cast<int64_t>(movers.size()))};
+    int votes[FACINGS] = {};
+    for (Entity e : movers) {
+      const COrder& o = reg.get<COrder>(e);
+      ++votes[facingOf(o.faceTo >= 0 ? static_cast<Angle>(o.faceTo) : reg.get<CFacing>(e).angle)];
+    }
+    int front = 0;
+    for (int i = 1; i < FACINGS; ++i)
+      if (votes[i] > votes[front]) front = i;
+    c.type = CommandType::Move;
+    c.formFacing = angleOfFacing(front);
+    // A given front puts the first rank on the target: shift it so the whole
+    // formation is centred on where the group stands.
+    c.target = centre;
+    const std::vector<Vec2i> slots = sim_->formationPreview(movers, centre, f, c.formFacing, 0);
+    if (!slots.empty()) {
+      int64_t sx = 0, sy = 0;
+      for (const Vec2i& p : slots) {
+        sx += p.x;
+        sy += p.y;
+      }
+      c.target = {centre.x * 2 - static_cast<int32_t>(sx / static_cast<int64_t>(slots.size())),
+                  centre.y * 2 - static_cast<int32_t>(sy / static_cast<int64_t>(slots.size()))};
+    }
+  }
+  markSlots(sim_->formationPreview(movers, c.target, f, c.formFacing, 0), kSelectGreen);
+  queueOrder(std::move(c));
+  showStatus(std::string("Formation: ") + names[static_cast<int>(f)], 1.5f);
+}
+
 void GameScene::orderMove(Vec2i target, CommandType type, int formation) {
   pruneSelection();
   if (selection_.empty()) return;
@@ -1041,12 +1117,38 @@ void GameScene::orderMove(Vec2i target, CommandType type, int formation) {
   c.player = player_;
   c.target = target;
   c.units = selection_;
-  c.formation = formation >= 0 ? static_cast<Formation>(formation) : sidebar_ ? sidebar_->formation() : Formation::Box;
+  c.formation = static_cast<Formation>(formation >= 0 ? formation : std::max(0, selectionShape()));
   c.forced = (SDL_GetModState() & SDL_KMOD_ALT) != 0;  // Alt: forced march, don't stop to fight
+  markSlots(sim_->formationPreview(c.units, target, c.formation, -1, 0), type == CommandType::AttackMove ? kAttackRed : kSelectGreen);
   queueOrder(std::move(c));
   orderSound(type == CommandType::AttackMove);
   markers_.push_back({{static_cast<float>(target.x), static_cast<float>(target.y)}, 0,
                       type == CommandType::AttackMove ? kAttackRed : kSelectGreen});
+}
+
+bool GameScene::draggedFront(Vec2f startPx, Vec2f endPx, Vec2i& mid, Angle& facing, int32_t& width) {
+  Registry& reg = sim_->registry();
+  const Vec2f a = groundAt(startPx), b = groundAt(endPx);
+  mid = {static_cast<int32_t>((a.x + b.x) * 0.5f), static_cast<int32_t>((a.y + b.y) * 0.5f)};
+  // The front faces away from where the units are now.
+  int64_t cx = 0, cy = 0, n = 0;
+  for (Entity e : selection_)
+    if (reg.alive(e) && types_.get(reg.get<CUnit>(e).type).speed > 0) {
+      cx += reg.get<CPosition>(e).x;
+      cy += reg.get<CPosition>(e).y;
+      ++n;
+    }
+  if (!n) return false;
+  cx /= n;
+  cy /= n;
+  float nx = -(b.y - a.y), ny = b.x - a.x;  // a normal to the line
+  if (nx * (static_cast<float>(mid.x) - static_cast<float>(cx)) + ny * (static_cast<float>(mid.y) - static_cast<float>(cy)) < 0) {
+    nx = -nx;
+    ny = -ny;
+  }
+  facing = atan2Angle(static_cast<int32_t>(ny * 64), static_cast<int32_t>(nx * 64));
+  width = static_cast<int32_t>(std::hypot(b.x - a.x, b.y - a.y));
+  return true;
 }
 
 void GameScene::orderAttack(Entity target) {
@@ -1078,34 +1180,22 @@ void GameScene::rightClick(Vec2f start, bool dragged, Vec2f end) {
     return;
   }
   if (dragged) {
-    const Vec2f a = groundAt(start), b = groundAt(end);
-    const Vec2i mid{static_cast<int32_t>((a.x + b.x) * 0.5f), static_cast<int32_t>((a.y + b.y) * 0.5f)};
-    // The front faces away from where the units are now.
-    int64_t cx = 0, cy = 0, n = 0;
-    for (Entity e : selection_)
-      if (types_.get(reg.get<CUnit>(e).type).speed > 0) {
-        cx += reg.get<CPosition>(e).x;
-        cy += reg.get<CPosition>(e).y;
-        ++n;
-      }
-    if (!n) return;
-    cx /= n;
-    cy /= n;
-    float nx = -(b.y - a.y), ny = b.x - a.x;  // a normal to the line
-    if (nx * (mid.x - cx) + ny * (mid.y - cy) < 0) {
-      nx = -nx;
-      ny = -ny;
-    }
+    Vec2i mid;
+    Angle facing = 0;
+    int32_t width = 0;
+    if (!draggedFront(start, end, mid, facing, width)) return;
     Command c;
     c.type = ctrl ? CommandType::AttackMove : CommandType::Move;
     c.player = player_;
     c.target = mid;
     c.units = selection_;
-    c.formation = sidebar_->formation() == Formation::Box ? Formation::Line : sidebar_->formation();
-    c.formFacing = atan2Angle(static_cast<int32_t>(ny * 64), static_cast<int32_t>(nx * 64));
-    c.formWidth = static_cast<int32_t>(std::hypot(b.x - a.x, b.y - a.y));
+    c.formation = static_cast<Formation>(std::max(0, selectionShape()));
+    c.formFacing = facing;
+    c.formWidth = width;
     c.forced = (SDL_GetModState() & SDL_KMOD_ALT) != 0;
+    markSlots(sim_->formationPreview(c.units, mid, c.formation, c.formFacing, c.formWidth), ctrl ? kAttackRed : kSelectGreen);
     queueOrder(std::move(c));
+    orderSound(ctrl);
     markers_.push_back({{static_cast<float>(mid.x), static_cast<float>(mid.y)}, 0,
                         ctrl ? kAttackRed : kSelectGreen});
     return;
@@ -1409,6 +1499,9 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
             break;
           }
         }
+      } else if (K.pressed(InputAction::NextFormation, e.key)) {
+        const int shape = selectionShape();
+        if (shape >= 0) setFormation(static_cast<Formation>((shape + 1) % static_cast<int>(Formation::Count)));
       } else if (K.pressed(InputAction::Stop, e.key)) {
         pruneSelection();
         Command c;
@@ -1785,6 +1878,7 @@ void GameScene::onUpdate(float dt, float alpha) {
   if (opt_.battleDemo) runBattleDemo();
   if (opt_.orgDemo) runOrgDemo();
   if (opt_.worksDemo) runWorksDemo();
+  if (opt_.formationDemo) runFormationDemo();
   if (opt_.townDemo) runTownDemo();
   if (opt_.flowSelfTest) runFlowSelfTest();
   if (opt_.modsSelfTest) runModsSelfTest();
@@ -1809,7 +1903,7 @@ void GameScene::onUpdate(float dt, float alpha) {
     pruneSelection();
     if (selection_.empty()) attackMoveMode_ = false;
   }
-  std::erase_if(markers_, [](const Marker& m) { return m.age > 0.6f; });
+  std::erase_if(markers_, [](const Marker& m) { return m.age > (m.slot ? 1.2f : 0.6f); });
   if (statusTime_ > 0) statusTime_ -= dt;
 }
 
@@ -1892,13 +1986,17 @@ void GameScene::drawOverlays(const RectF& view, bool markers) {
 
   for (const Marker& m : markers_) {
     if (!markers) break;
-    const uint8_t alpha = static_cast<uint8_t>(255 * (1.0f - m.age / 0.6f));
+    const float life = m.slot ? 1.2f : 0.6f;
+    const uint8_t alpha = static_cast<uint8_t>(255 * std::max(0.0f, 1.0f - m.age / life));
     const Vec2f ms = groundToScreenWorld(m.pos.x, m.pos.y);
-    renderer_.sprite(art_.moveMarker, ms.x, ms.y, kWhite, (m.color & 0x00FFFFFFu) | (uint32_t(alpha) << 24));
+    const uint32_t col = (m.color & 0x00FFFFFFu) | (uint32_t(alpha) << 24);
+    if (m.slot) renderer_.rect(std::floor(ms.x) - 2, std::floor(ms.y) - 2, 4, 4, col);  // where one unit will stand
+    else renderer_.sprite(art_.moveMarker, ms.x, ms.y, kWhite, col);
   }
   editor_->renderWorld(renderer_);
   sidebar_->renderWorld(renderer_);
-  // A formation front being dragged out: the line and an arrow showing which way it will face.
+  // A formation front being dragged out: the line, a mark where every unit
+  // will stand, and a tick showing which way the front will face.
   if (rmbDragging_ && !selection_.empty()) {
     const Vec2f a = groundAt(rmbStart_), b = groundAt(mouse_);
     const int n = std::clamp(static_cast<int>(std::hypot(b.x - a.x, b.y - a.y) / 40.0f), 2, 200);
@@ -1906,6 +2004,24 @@ void GameScene::drawOverlays(const RectF& view, bool markers) {
       const float t = static_cast<float>(i) / n;
       const Vec2f s = groundToScreenWorld(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
       renderer_.rect(std::floor(s.x) - 1, std::floor(s.y) - 1, 3, 3, kSelectGreen);
+    }
+    Vec2i mid;
+    Angle facing = 0;
+    int32_t width = 0;
+    if (draggedFront(rmbStart_, mouse_, mid, facing, width)) {
+      const int shape = std::max(0, selectionShape());
+      const std::vector<Vec2i> slots = sim_->formationPreview(selection_, mid, static_cast<Formation>(shape), facing, width);
+      if (slots.size() <= 600)
+        for (const Vec2i& p : slots) {
+          const Vec2f s = groundToScreenWorld(static_cast<float>(p.x), static_cast<float>(p.y));
+          renderer_.rect(std::floor(s.x) - 3, std::floor(s.y) - 3, 6, 6, rgba8(20, 40, 16, 200));
+          renderer_.rect(std::floor(s.x) - 2, std::floor(s.y) - 2, 4, 4, rgba8(190, 255, 150));
+        }
+      const float fx = static_cast<float>(cosQ16(facing)) / 65536.0f, fy = static_cast<float>(sinQ16(facing)) / 65536.0f;
+      for (int i = 1; i <= 6; ++i) {  // the way the front faces
+        const Vec2f s = groundToScreenWorld(static_cast<float>(mid.x) + fx * 60.0f * i, static_cast<float>(mid.y) + fy * 60.0f * i);
+        renderer_.rect(std::floor(s.x) - 1, std::floor(s.y) - 1, 3, 3, rgba8(236, 200, 96));
+      }
     }
   }
   renderer_.flush();
@@ -2511,9 +2627,10 @@ void GameScene::drawHelp() {
   row("Double-click", "Select all of that type on screen");
   row("Right click", "Move; on an enemy: attack it");
   row("  engineers", "Right-click a damaged friend: repair it");
-  row("Right drag", "Move into formation along the line");
+  row("Right drag", "Lay out the front: where, how wide, facing which way");
+  row("Z", "Next formation (or the buttons under Orders)");
   row("A, then click", "Attack-move (fight on the way)");
-  row("Ctrl+right click", "Attack-move");
+  row("Ctrl+right click", "Menu: move or attack-move in a chosen formation");
   row("Ctrl+1..9 / 1..9", "Set / recall control group");
   row("Ctrl+A", "Select all your units");
   row("S", "Stop");

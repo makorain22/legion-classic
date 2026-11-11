@@ -87,6 +87,42 @@ struct COrder {
   bool forced = false;  // forced march: ignore enemy fire until arrival
 };
 
+// --- Formations (9.5) ------------------------------------------------------------
+// A group ordered to move together marches as one body: a frame (CFormation)
+// travels along the route at the pace of its slowest member and every member
+// keeps its slot in that frame. The component stays on a unit after it
+// arrives (with no formation), remembering the shape it was last given.
+struct CFormationMember {
+  enum : uint8_t { kJoined = 1, kDetour = 2 };
+  Entity formation;   // the march it is part of, or null
+  Vec2i offset;       // its slot in the frame: x across the front (right positive), y back from the centre; leptons
+  Vec2i goal;         // its final slot (the order's goal): a different goal means a newer order
+  uint8_t shape = 0;  // the Formation it was last ordered in
+  uint8_t flags = 0;  // kJoined: in place, the body waits for it; kDetour: finding its own way to its slot
+  Angle heading = 0;  // the way it faces while it keeps its slot: the body's front, or the road's in a column
+};
+
+// A marching formation. It has no position of its own in the unit pools.
+struct CFormation {
+  uint8_t owner = 0;
+  uint8_t shape = 0;
+  uint8_t loco = 0;          // Locomotor the route was found for
+  bool reverse = false;      // backing up: the frame keeps its front, vehicles use reverse gear
+  bool moving = false;       // the frame advanced this tick
+  bool pursuing = false;     // attack-move: off its route, closing with an enemy
+  std::vector<Vec2i> path;   // the route of the frame's centre
+  uint32_t index = 0;
+  Vec2i start;               // where the route began (a column trails back along the way it came)
+  Vec2i anchor;              // the frame's centre now
+  Vec2i dest;                // where the centre ends up
+  Vec2i leash;               // where it left its route to pursue
+  Angle facing = 0;          // the way the frame's front points now
+  Angle finalFacing = 0;
+  int32_t remaining = 0;     // leptons of route left
+  uint16_t stall = 0;        // ticks spent waiting for laggards
+  std::vector<Entity> members;
+};
+
 struct CMover {
   std::vector<Vec2i> path;  // waypoints in leptons
   uint32_t index = 0;

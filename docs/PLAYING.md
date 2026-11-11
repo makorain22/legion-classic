@@ -288,12 +288,36 @@ guns and towers are built and placed like other structures.
 
 ### Moving and fighting
 
-- **Formations.** Pick one under *Orders* on the sidebar (Box, Line, Column,
-  Wedge, Loose) and it applies to every move. **Hold the right button and drag**
-  to lay out the front line yourself: the units spread along it and face away
-  from where they came from. In mixed groups, armour forms up in front, other
-  vehicles behind it and infantry at the back. Units turn to face the front
-  when they arrive.
+- **Formations.** A group you send somewhere **marches as one body**: it
+  forms up, moves at the pace of its slowest member and keeps its shape all
+  the way, so tanks no longer arrive a minute ahead of their infantry. Armour
+  goes in front, other vehicles behind it, infantry at the back. Men stand a
+  couple of paces apart; vehicles keep a hull's width between them and more
+  nose to tail.
+  - **Shapes** (sidebar *Orders*, or **Z** for the next one): Box, Line (one
+    rank for a handful, two for a platoon, three beyond), Column (two abreast),
+    Wedge and Loose. The button that is lit is the shape the selected units
+    are in. **Picking a shape re-forms them at once**: where they stand,
+    keeping their front, or on the way if they are marching. The shape stays
+    with the units, not with the sidebar: every later move uses it.
+  - **A column follows the road.** Every rank takes the route the head took,
+    so a column bends round corners and files across bridges and through
+    gaps. The other shapes wheel as a body, and draw their flanks in where
+    the ground is too narrow, opening out again beyond.
+  - **Laying out a front:** hold the right button and drag. Marks show where
+    every unit will stand and a short line shows which way the front will
+    face (away from where the units are now); the length of the drag sets the
+    width. The first rank stands on the line.
+  - **Keeping together:** the body waits for members that fall behind, and
+    sets off without one that starts far away (it catches up). On an
+    **attack-move** the whole formation halts to fight when anyone has a
+    target in range, closes with an enemy near its route together, then goes
+    on. A member given another order, halted or sent indoors simply leaves
+    the march.
+  - **Fronts are kept.** Units turn to their front when they arrive, and turn
+    back to it a few seconds after a fight. Vehicles sent a short way back
+    reverse as a body, guns to the enemy.
+  - A formation sent to the edge of the map stands just inside it.
 - **Stances** (sidebar *Orders*):
   - **Aggressive** (the default): fight back when shot, even on the march,
     then carry on; go after attackers they can't reach.
@@ -405,7 +429,8 @@ These are the defaults:
 | Double-click | Select all units of that type on screen |
 | Left click on a building your men hold | Select the men inside |
 | Right click | Move; on a visible enemy: attack it; on a building or bunker with infantry: go in; on (or beside) a trench or sandbags: man it; with engineers on a damaged friend: repair it; with a barracks or works selected: rally point |
-| Right drag | Move into formation along the dragged front line |
+| Right drag | Lay out the front: where it is, how wide, facing which way (marks show every unit's place) |
+| Z | Next formation for the selected units (they re-form at once) |
 | Ctrl+right click | Choose a formation (and move or attack-move) for this order |
 | Alt+right click | Forced march (don't stop to fight) |
 | W A S D, arrow keys, screen edges | Scroll |

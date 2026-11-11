@@ -38,7 +38,6 @@ class Sidebar {
   int placingType() const { return placeType_; }
   int hoveredType() const { return hoveredType_; }  // mouse belongs to the sidebar mode
   void cancel();
-  slave::Formation formation() const { return formation_; }
   void startPlacing(int type);
   // Placement for scripted sessions.
   bool placeAt(slave::Vec2i groundLeptons);
@@ -60,7 +59,6 @@ class Sidebar {
   bool dragging_ = false;  // fortification line being dragged
   slave::Vec2i dragFrom_;
   bool sellMode_ = false;
-  slave::Formation formation_ = slave::Formation::Box;
 
   slave::gl::Texture minimap_;
   std::vector<uint32_t> minimapPixels_;

@@ -30,11 +30,11 @@ const char* kStanceTips[3] = {
 };
 const char* kFormationNames[5] = {"Box", "Line", "Col.", "Wedge", "Loose"};
 const char* kFormationTips[5] = {
-    "A compact block (default).",
-    "A broad front, three ranks deep. Right-drag to set its width and facing.",
+    "A compact block. The selected units form it now and keep it on the move.",
+    "A broad front: one rank for a handful, two for a platoon, three beyond.",
     "Two abreast: for roads, bridges and gaps.",
     "An arrowhead, point forward.",
-    "Spread out: safer against artillery.",
+    "A block spread wide: safer against artillery.",
 };
 
 uint32_t shade(uint32_t c, float k) {
@@ -594,15 +594,18 @@ void Sidebar::drawOrders(float width) {
     }
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", kStanceTips[s]);
   }
-  // Formation used by the next move order.
+  // Formation: the shape the selected units stand and march in. Picking one
+  // re-forms them at once (9.5).
+  const int shape = scene_.selectionShape();
   const float fw = (width - 16) / 5.0f;
   for (int f = 0; f < 5; ++f) {
     if (f) ImGui::SameLine(0, 4);
-    const bool formClicked = ui::plateButton(kFormationNames[f], kFormationNames[f], ImVec2(fw, bh), static_cast<int>(formation_) == f);
+    const bool formClicked = ui::plateButton(kFormationNames[f], kFormationNames[f], ImVec2(fw, bh), shape == f, false, shape >= 0);
     ui::glowIfHighlighted((std::string("order.formation.") + kFormationNames[f]).c_str());
-    if (formClicked)
-      formation_ = static_cast<Formation>(f);
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", kFormationTips[f]);
+    if (formClicked) scene_.setFormation(static_cast<Formation>(f));
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+      ImGui::SetTooltip("%s\nRight-drag on the ground to set where the front is, how wide and facing which way. Z: next formation.",
+                        kFormationTips[f]);
   }
   // Special orders.
   const bool deployClicked = ui::plateButton("deploy", "Deploy", ImVec2(bw, bh), false, false, !deployers.empty());
