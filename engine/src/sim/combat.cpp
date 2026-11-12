@@ -33,6 +33,10 @@ void Simulation::stepTargeting() {
     const int32_t scan = o.type == OrderType::AttackMove ? std::max(range, def.sight) : range;
 
     if (c.target.valid()) {  // keep shooting the same target while it stays reachable
+      if (const CScripted* sc = reg_.pool<CScripted>().tryGet(c.target.index); sc && (sc->flags & kScriptUntargetable)) {
+        c.target = kNullEntity;  // a script took it out of the fight
+        return;
+      }
       const CPosition& tp = pos.get(c.target.index);
       if (effectiveDistance(distance(tp.x - p.x, tp.y - p.y), c.target.index) <= scan + 256 && canSee(u.owner, tp.x, tp.y))
         return;
@@ -45,6 +49,7 @@ void Simulation::stepTargeting() {
       if (allied(v.owner, u.owner) || v.health <= 0) return;
       const UnitTypeDef& vd = types_.get(v.type);
       if (!vd.targetable || !vd.autoTarget) return;
+      if (const CScripted* sc = reg_.pool<CScripted>().tryGet(o2); sc && (sc->flags & kScriptUntargetable)) return;
       const CPosition& q = pos.get(o2);
       const uint32_t d = distance(q.x - p.x, q.y - p.y);
       if (d > static_cast<uint32_t>(scan) || d >= best) return;
@@ -294,6 +299,7 @@ void Simulation::damage(uint32_t victim, int32_t amount, Entity shooter) {
   if (u.health <= 0) return;
   const UnitTypeDef& vd = types_.get(u.type);
   if (!vd.targetable) return;
+  if (!scriptDamage_ && invulnerable(victim)) return;  // a set piece: only the script can hurt it
   // Infantry in a trench or behind sandbags take less; inside a building, half.
   if (vd.infantry()) {
     const CPosition& vp = reg_.pool<CPosition>().get(victim);
@@ -315,6 +321,14 @@ void Simulation::damage(uint32_t victim, int32_t amount, Entity shooter) {
   u.health = static_cast<int32_t>(std::max<int64_t>(static_cast<int64_t>(u.health) - whole, -1000000));
   if (u.health > 0) return;
   dead_.push_back(victim);
+  // The mission's tally (field works don't count).
+  if (vd.category != UnitCategory::Fortification) {
+    if (u.owner < MAX_PLAYERS) ++losses_[u.owner];
+    if (shooter.valid() && reg_.alive(shooter) && reg_.has<CUnit>(shooter)) {
+      const uint8_t killer = reg_.get<CUnit>(shooter).owner;
+      if (killer < MAX_PLAYERS && !allied(killer, u.owner)) ++kills_[killer];
+    }
+  }
   const CPosition& p = reg_.pool<CPosition>().get(victim);
   SimEvent ev;
   ev.type = EventType::UnitDied;

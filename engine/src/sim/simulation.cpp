@@ -159,6 +159,7 @@ void Simulation::tick() {
   lap(stats_.msOrders);
   stepEconomy();
   stepScript();
+  stepMission();
   lap(stats_.msEconomy);
   stepMovement();
   lap(stats_.msMove);
@@ -193,8 +194,42 @@ void Simulation::setOrderIdle(Entity e) {
 
 void Simulation::applyCommand(const Command& cmd) {
   // What humans do, for tutorials waiting on an order (replays count the same).
-  if (cmd.player < MAX_PLAYERS && !ai_.player(cmd.player).enabled && static_cast<size_t>(cmd.type) < 32)
+  if (cmd.player < MAX_PLAYERS && !ai_.player(cmd.player).enabled && !scriptCommand_ && static_cast<size_t>(cmd.type) < 32)
     ++ordersGiven_[cmd.player][static_cast<size_t>(cmd.type)];
+  // Set pieces: units a script holds back are left out of their side's orders
+  // (locked from the player, or kept from the computer); a side confined to a
+  // play area sends nobody out of it.
+  const bool unitOrder = cmd.type == CommandType::Move || cmd.type == CommandType::AttackMove ||
+                         cmd.type == CommandType::Attack || cmd.type == CommandType::Stop ||
+                         cmd.type == CommandType::SetStance || cmd.type == CommandType::Deploy ||
+                         cmd.type == CommandType::Harvest || cmd.type == CommandType::Repair ||
+                         cmd.type == CommandType::BindGroup || cmd.type == CommandType::UnbindGroup ||
+                         cmd.type == CommandType::Occupy || cmd.type == CommandType::Unload ||
+                         cmd.type == CommandType::Sell;
+  const bool human = cmd.player < MAX_PLAYERS && !ai_.player(cmd.player).enabled && !scriptCommand_;
+  const bool confine = human && playAreaLimited(cmd.player) &&
+                       (cmd.type == CommandType::Move || cmd.type == CommandType::AttackMove);
+  if (!scriptCommand_ && unitOrder && !reg_.pool<CScripted>().entities().empty()) {
+    bool any = false;
+    for (Entity e : cmd.units) any = any || !commandable(cmd, e);
+    if (any) {
+      Command c = cmd;
+      std::erase_if(c.units, [&](Entity e) { return !commandable(cmd, e); });
+      if (c.units.empty()) return;
+      if (confine) c.target = clampToPlayArea(cmd.player, c.target);
+      applyCommand(c);
+      return;
+    }
+  }
+  if (confine) {
+    const Vec2i t = clampToPlayArea(cmd.player, cmd.target);
+    if (!(t == cmd.target)) {
+      Command c = cmd;
+      c.target = t;
+      applyCommand(c);
+      return;
+    }
+  }
   // Men inside a building come out to go anywhere; men in a trench stay
   // dug in until told to evacuate.
   std::vector<Entity> movers;
@@ -342,6 +377,15 @@ void Simulation::applyCommandBody(const Command& cmd) {
     case CommandType::SetTeam:
       if (cmd.player < MAX_PLAYERS) team_[cmd.player] = static_cast<uint8_t>(cmd.count);
       break;
+    case CommandType::TagUnits: {
+      const int32_t name = cmd.text.empty() ? -1 : nameIndex(cmd.text == "-" ? std::string() : cmd.text);
+      for (Entity e : cmd.units) {
+        if (!reg_.alive(e) || !reg_.has<CUnit>(e)) continue;
+        if (name >= 0) setUnitName(e, name);
+        setScriptFlags(e, static_cast<uint8_t>(cmd.count), static_cast<uint8_t>(cmd.amount));
+      }
+      break;
+    }
   }
 }
 
@@ -393,6 +437,9 @@ uint64_t Simulation::stateHash() {
     mix(e);
     mix(uint64_t(uint32_t(pr.x)) | (uint64_t(uint32_t(pr.y)) << 32));
   });
+  reg_.each<CScripted>([&](uint32_t e, CScripted& s) { mix(e ^ (uint64_t{s.name} << 32) ^ (uint64_t{s.flags} << 48)); });
+  for (const MissionCountdown& d : countdowns_) mix(d.endTick ^ (uint64_t{d.done} << 40));
+  for (const auto& [k, v] : counters_) mix(static_cast<uint32_t>(v) ^ (k.size() << 20));
   return h;
 }
 

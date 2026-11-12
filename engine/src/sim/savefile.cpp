@@ -51,7 +51,8 @@ bool decodeSaveFile(const std::vector<uint8_t>& bytes, SaveFile& f, bool replay,
     error = replay ? "not a Legion Classic replay" : "not a Legion Classic saved game";
     return false;
   }
-  if (getU32(&bytes[4]) > SAVE_FILE_VERSION) {
+  const uint32_t fileVersion = getU32(&bytes[4]);
+  if (fileVersion > SAVE_FILE_VERSION) {
     error = "made by a newer version of the game";
     return false;
   }
@@ -76,7 +77,7 @@ bool decodeSaveFile(const std::vector<uint8_t>& bytes, SaveFile& f, bool replay,
     for (uint32_t i = 0; i < n && r.ok(); ++i) {
       Simulation::LoggedCommand c;
       c.tick = r.u32();
-      c.cmd = readCommand(r);
+      c.cmd = readCommand(r, fileVersion >= 2);
       f.commands.push_back(std::move(c));
     }
     f.endTick = r.u32();

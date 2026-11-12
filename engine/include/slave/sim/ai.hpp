@@ -47,6 +47,8 @@ class ByteWriter;
 class ByteReader;
 
 enum class AiDifficulty : uint8_t { Easy = 0, Normal, Hard, Count };
+// What a script may forbid the computer (AiBehaviour; bit numbers).
+enum AiBehaviour : int { kAiBuild = 0, kAiTrain, kAiAttack, kAiRaid, kAiCapture, kAiFortify, kAiScout, kAiRepair };
 
 struct AiPlayer {
   bool enabled = false;
@@ -83,8 +85,15 @@ struct AiPlayer {
   Entity scout;                 // the scout posted out in front to watch
   uint8_t scoutPost = 0;        // which of its watch points it is on
   uint32_t scoutTick = 0;       // when it was sent there
+  // Mission scripts' orders (9.9; saved with the mission state, SIM8).
+  uint8_t order = 0;            // 0 its own choice, 1 attack `orderAt`, 2 defend `orderAt`
+  Vec2i orderAt{-1, -1};        // leptons
+  uint8_t disabled = 0;         // AiBehaviour bits it may not do (kAiBehaviourIds)
+  int16_t waveScale = 0;        // percent of its usual attack size (0: usual)
+  uint8_t orderFresh = 0;       // an attack order not yet acted on: go with what it has
   // Not saved: worked out afresh every time it thinks.
   Vec2i enemyAt{-1, -1};        // where the main enemy stands (the middle of its buildings)
+  bool hasBase = false;         // it has a construction yard (a scripted force without one keeps no home guard)
 };
 
 class SkirmishAi {
@@ -97,6 +106,14 @@ class SkirmishAi {
 
   void save(ByteWriter& w) const;
   bool load(ByteReader& r, int version);
+  // Mission orders (scripts).
+  void setOrder(uint8_t player, uint8_t order, Vec2i at);
+  void setBehaviour(uint8_t player, int bit, bool allowed);
+  void setWaveScale(uint8_t player, int16_t percent);
+  bool allowed(uint8_t player, int bit) const { return !(players_[player].disabled & (1u << bit)); }
+  void saveOrders(ByteWriter& w) const;
+  bool loadOrders(ByteReader& r);
+  void clearOrders();
 
  private:
   void think(Simulation& sim, uint8_t p);

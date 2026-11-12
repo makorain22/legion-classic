@@ -205,6 +205,8 @@ class Editor {
 
   bool showNew_ = false, showOpen_ = false, showSaveAs_ = false;
   int newSizeIndex_ = 1;
+  bool newCustom_ = false;   // width and height of your own (long maps for missions)
+  int newW_ = 128, newH_ = 320;
   int newTerrain_ = 1;
   // Civilian buildings always belong to nobody, whichever side is chosen.
   uint8_t placingOwner() const;

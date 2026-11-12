@@ -25,6 +25,9 @@ struct UnitPlacement {
   int32_t x = 0, y = 0;  // leptons
   uint16_t facing = 0;   // Angle
   int32_t health = -1;   // -1 = full
+  std::string name;      // for mission scripts ("" = none)
+  uint8_t flags = 0;     // ScriptFlag bits: invulnerable, kept from the computer, untargetable, locked
+  uint8_t stance = 0;    // Stance: 0 aggressive, 1 hold ground, 2 hold fire
 };
 
 // One side in a scenario. Up to 8; `active` sides appear in the game.

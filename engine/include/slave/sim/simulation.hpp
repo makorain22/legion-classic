@@ -10,7 +10,9 @@
 // What happened (shots, impacts, deaths) is reported as events, which the
 // presentation turns into flashes, explosions and wrecks.
 
+#include <algorithm>
 #include <array>
+#include <string>
 #include <map>
 #include <cstdint>
 #include <utility>
@@ -65,6 +67,8 @@ enum class CommandType : uint8_t {
   UnbindGroup,    // the groups of `units` are disbanded
   Occupy,         // infantry in `units` enter `targetUnit` (a building or bunker) or man its trench line
   Unload,         // occupants of the structures in `units` (or the occupants listed) come out
+  // --- Mission engine (9.9) --------------------------------------------------------
+  TagUnits,       // `units` are named `text` (unless empty) and get ScriptFlag bits: the bits in `count` become those in `amount`
 };
 
 // Production lines: one per kind of thing a side builds.
@@ -152,6 +156,7 @@ struct Command {
   bool forced = false;
   Stance stance = Stance::Aggressive;  // SetStance
   int32_t amount = 0;                  // SetCredits
+  std::string text;                    // TagUnits: the name
 };
 
 enum class EventType : uint8_t {
@@ -171,6 +176,14 @@ enum class EventType : uint8_t {
   ScoutFallsBack,   // owner's scout pulled back to `at` from an enemy that came close
   PointCaptured,    // owner took the logistics point at `at`: its office stands, the trucks are on their way
   ConvoyArrived,    // a supply truck paid `amount` in at owner's headquarters at `at`
+  // --- Mission engine (9.9) ----------------------------------------------------------
+  Transmission,     // a radio message for owner: `text` ("Speaker: words"), shown `amount` seconds (0: by length)
+  CinematicChanged, // owner's letterbox went on (`amount` 1) or off (0)
+  CameraPan,        // owner's view glides to `at` over `amount` seconds
+  PlaySound,        // sound `text` for owner, at `at` (x < 0: everywhere)
+  PlayMusic,        // track or mood `text` for owner (empty: automatic again)
+  CountdownDone,    // countdown `text` ran out
+  PlayAreaChanged,  // the play area changed (see Simulation::playArea)
 };
 
 struct SimEvent {
@@ -197,9 +210,17 @@ struct SimStats {
   uint32_t projectiles = 0;
 };
 
-// Commands in binary, for save games and replays.
+// Commands in binary, for save games and replays. `withText`: the command's
+// text field is in the data (state version 8 / save file version 3 on).
 void writeCommand(ByteWriter& w, const Command& c);
-Command readCommand(ByteReader& r);
+Command readCommand(ByteReader& r, bool withText = true);
+
+// A rectangle of tiles, inclusive.
+struct TileRect {
+  int32_t x0 = 0, y0 = 0, x1 = -1, y1 = -1;
+  bool empty() const { return x1 < x0 || y1 < y0; }
+  bool contains(int x, int y) const { return x >= x0 && x <= x1 && y >= y0 && y <= y1; }
+};
 
 class Simulation {
  public:
@@ -258,6 +279,50 @@ class Simulation {
   bool triggerFired(int i) const { return i >= 0 && i < static_cast<int>(triggerState_.size()) && triggerState_[static_cast<size_t>(i)].fires > 0; }
   bool triggerEnabled(int i) const { return i >= 0 && i < static_cast<int>(triggerState_.size()) && triggerState_[static_cast<size_t>(i)].enabled; }
   int countUnits(uint8_t player, int area, int unitType) const;  // area -1 = whole map
+
+  // --- Mission engine (9.9, mission.cpp) ----------------------------------------
+  // The play area: the part of the map a side may act in (orders, building,
+  // camera). Empty rect = the whole map. Per player; ANY_PLAYER sets all.
+  TileRect playArea(uint8_t player) const;
+  bool playAreaLimited(uint8_t player) const { return player < MAX_PLAYERS && !playArea_[player].empty(); }
+  bool inPlayArea(uint8_t player, int tx, int ty) const;
+  Vec2i clampToPlayArea(uint8_t player, Vec2i leptons) const;
+  void setPlayArea(uint8_t player, TileRect r);
+  const std::vector<MissionCountdown>& countdowns() const { return countdowns_; }
+  // Seconds left on a countdown (rounded up), or -1 if there is none by that name.
+  int32_t countdownLeft(const std::string& label) const;
+  const std::vector<MissionMarker>& markers() const { return markers_; }
+  int32_t counter(const std::string& name) const {
+    auto it = counters_.find(name);
+    return it == counters_.end() ? 0 : it->second;
+  }
+  const std::map<std::string, int32_t>& counters() const { return counters_; }
+  int32_t kills(uint8_t p) const { return p < MAX_PLAYERS ? kills_[p] : 0; }
+  int32_t losses(uint8_t p) const { return p < MAX_PLAYERS ? losses_[p] : 0; }
+  int32_t incomeRate(uint8_t p) const { return p < MAX_PLAYERS ? incomeRate_[p] : 100; }
+  bool cinematic(uint8_t p) const { return p < MAX_PLAYERS && cinematic_[p]; }
+  // The mission's difficulty (campaign setting): 0 easy, 1 normal, 2 hard.
+  uint8_t missionDifficulty() const { return difficulty_; }
+  void setMissionDifficulty(uint8_t d) { difficulty_ = std::min<uint8_t>(d, 2); }
+  // Spawn counts on easy / normal / hard, percent.
+  static int32_t difficultyScale(uint8_t d) { return d == 0 ? 70 : d >= 2 ? 135 : 100; }
+  // Named units and script flags.
+  const std::string& unitName(Entity e) const;
+  uint8_t scriptFlags(Entity e) const;
+  bool invulnerable(uint32_t e) const;
+  bool aiMayCommand(uint32_t e) const;
+  std::vector<Entity> named(const std::string& name) const;
+  int32_t nameIndex(const std::string& name);  // finds or adds it (0 for "")
+  const std::vector<std::string>& names() const { return names_; }
+  // When the trigger last fired (tick), and how many times.
+  uint32_t triggerFires(int i) const { return i >= 0 && i < static_cast<int>(triggerState_.size()) ? triggerState_[static_cast<size_t>(i)].fires : 0; }
+  uint32_t triggerLastFire(int i) const { return i >= 0 && i < static_cast<int>(triggerState_.size()) ? triggerState_[static_cast<size_t>(i)].lastFire : 0; }
+  struct Patrol {
+    std::vector<Entity> units;
+    Vec2i a, b;
+    uint8_t leg = 0;  // 0: heading for b, 1: heading for a
+  };
+  const std::vector<Patrol>& patrols() const { return patrols_; }
 
   // --- Computer players ---------------------------------------------------------
   const SkirmishAi& ai() const { return ai_; }
@@ -446,8 +511,18 @@ class Simulation {
   // scripting (script.cpp)
   void stepScript();
   bool evaluate(const Condition& c, size_t trigger) const;
-  void perform(const Action& a);
+  bool test(const Condition& c, size_t trigger) const;
+  void perform(const Action& a, size_t depth = 0);
   std::vector<Entity> unitsIn(uint8_t player, int area, int unitType) const;
+  std::vector<Entity> actionUnits(const Action& a) const;  // by name, or by player, area and type
+  std::vector<Entity> structuresIn(uint8_t player, int area, int unitType) const;
+  void setScriptFlags(Entity e, uint8_t mask, uint8_t bits);
+  void setUnitName(Entity e, int32_t name);
+  void stepMission();  // countdowns, patrols
+  void saveMission(ByteWriter& w) const;
+  bool loadMission(ByteReader& r);
+  void resetMission();
+  bool commandable(const Command& cmd, Entity e) const;  // locked units ignore their player's orders
 
   // combat (combat.cpp)
   void stepTargeting();
@@ -503,6 +578,19 @@ class Simulation {
   std::array<std::array<uint32_t, 32>, MAX_PLAYERS> ordersGiven_{};  // by CommandType, human players only
   std::map<std::string, int32_t> flags_;
   std::vector<Objective> objectives_;
+  // Mission engine (9.9).
+  std::array<TileRect, MAX_PLAYERS> playArea_{};
+  std::vector<MissionCountdown> countdowns_;
+  std::vector<MissionMarker> markers_;
+  std::map<std::string, int32_t> counters_;
+  std::array<int32_t, MAX_PLAYERS> kills_{}, losses_{};
+  std::array<int32_t, MAX_PLAYERS> incomeRate_{100, 100, 100, 100, 100, 100, 100, 100};
+  std::array<bool, MAX_PLAYERS> cinematic_{};
+  uint8_t difficulty_ = 1;
+  std::vector<std::string> names_{std::string()};
+  std::vector<Patrol> patrols_;
+  bool scriptDamage_ = false;
+  bool scriptCommand_ = false;  // a script is giving the orders: locks and computer control don't apply  // a script is hurting units: invulnerability doesn't count
   SkirmishAi ai_;
   bool recording_ = false;
   std::vector<LoggedCommand> log_;

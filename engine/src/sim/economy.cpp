@@ -309,7 +309,8 @@ void Simulation::applyEconomyCommand(const Command& cmd) {
       ProductionQueue& q = ps.queues[static_cast<size_t>(queueFor(types_.get(cmd.unitType).category))];
       if (!q.ready || q.items.empty() || q.items.front() != cmd.unitType) break;
       const Vec2i o = footprintOrigin(cmd.unitType, cmd.target);
-      if (!canPlace(cmd.unitType, o) || !inBuildRange(pl, cmd.unitType, o) || roomFor(pl, cmd.unitType) <= 0) {
+      if (!canPlace(cmd.unitType, o) || !inBuildRange(pl, cmd.unitType, o) || roomFor(pl, cmd.unitType) <= 0 ||
+          (!ai_.player(pl).enabled && !inPlayArea(pl, cmd.target.x >> LEPTON_SHIFT, cmd.target.y >> LEPTON_SHIFT))) {
         refuse(cmd.unitType);
         break;
       }
@@ -339,6 +340,7 @@ void Simulation::applyEconomyCommand(const Command& cmd) {
         }
         const Vec2i o = footprintOrigin(cmd.unitType, s.pos);
         if (!canPlace(cmd.unitType, o) || !inBuildRange(pl, cmd.unitType, o)) continue;
+        if (!ai_.player(pl).enabled && !inPlayArea(pl, s.pos.x >> LEPTON_SHIFT, s.pos.y >> LEPTON_SHIFT)) continue;
         if (spawnUnit(cmd.unitType, pl, {o.x * 256 + d.footW * 128, o.y * 256 + d.footH * 128}, s.facing).valid())
           ps.credits -= d.cost;
       }

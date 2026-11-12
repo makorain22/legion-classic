@@ -48,8 +48,13 @@ struct Builder {
   // `settlements` false: open country, for missions whose buildings are all placed by hand.
   void start(int size, Biome b, uint64_t seed, int layout, const std::string& name, const std::string& description,
              bool settlements = true) {
+    startRect(size, size, b, seed, layout, name, description, settlements);
+  }
+  // A map that needn't be square: long strips for missions along a road, a coast or a valley.
+  void startRect(int w, int h, Biome b, uint64_t seed, int layout, const std::string& name, const std::string& description,
+                 bool settlements = true) {
     file = MapFile{};
-    file.map.resize(size, size);
+    file.map.resize(w, h);
     file.map.generate(b, seed, layout, settlements);
     file.map.name = name;
     file.map.description = description;

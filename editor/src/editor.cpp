@@ -729,7 +729,21 @@ void Editor::drawNewMapDialog() {
   if (!ImGui::BeginPopupModal("New map", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) return;
   static const char* kSizeNames[] = {"64 x 64 (skirmish)", "128 x 128", "256 x 256", "512 x 512 (huge)",
                                      "1024 x 1024 (experimental)"};
+  ImGui::BeginDisabled(newCustom_);
   ImGui::Combo("Size", &newSizeIndex_, kSizeNames, 5);
+  ImGui::EndDisabled();
+  ImGui::Checkbox("Width and height of my own", &newCustom_);
+  if (ImGui::IsItemHovered())
+    ImGui::SetTooltip("Long maps for missions that move along a road, a coast or a valley. Sizes go in steps of 32 tiles.");
+  if (newCustom_) {
+    ImGui::SetNextItemWidth(110);
+    ImGui::InputInt("Width", &newW_, 32, 64);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(110);
+    ImGui::InputInt("Height", &newH_, 32, 64);
+    newW_ = Map::roundSize(newW_);
+    newH_ = Map::roundSize(newH_);
+  }
   ImGui::Combo("Terrain", &newTerrain_, "Flat grass\0Random landscape\0");
   if (newTerrain_ == 1) {
     if (ImGui::BeginCombo("Biome", biomeName(static_cast<Biome>(newBiome_)))) {
@@ -750,7 +764,8 @@ void Editor::drawNewMapDialog() {
   if (ImGui::Button("Create", ImVec2(120, 0))) {
     MapFile f;
     const int size = kNewSizes[newSizeIndex_];
-    f.map.resize(size, size);
+    if (newCustom_) f.map.resize(newW_, newH_);
+    else f.map.resize(size, size);
     if (newTerrain_ == 1) {
       f.map.generate(static_cast<Biome>(newBiome_), static_cast<uint64_t>(newSeed_), newLayout_, newTowns_);
       f.map.name = std::string(mapLayoutName(f.map.layout)) + " " + std::to_string(newSeed_);

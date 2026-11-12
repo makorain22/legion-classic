@@ -106,9 +106,10 @@ void SkirmishAi::think(Simulation& sim, uint8_t p) {
       break;
     }
   }
+  ai.hasBase = base.x >= 0;
   if (base.x < 0)
     for (uint32_t e : reg.pool<CUnit>().entities())
-      if (reg.pool<CUnit>().get(e).owner == p) {
+      if (reg.pool<CUnit>().get(e).owner == p && sim.aiMayCommand(e)) {
         const CPosition& c = reg.pool<CPosition>().get(e);
         base = {c.x, c.y};
         break;
@@ -163,8 +164,9 @@ void SkirmishAi::think(Simulation& sim, uint8_t p) {
   ai.staging = {base.x + ai.toward.x * 8, base.y + ai.toward.y * 8};  // behind the field works
   ai.staging.x = std::clamp(ai.staging.x, 512, sim.map_.widthLeptons() - 512);
   ai.staging.y = std::clamp(ai.staging.y, 512, sim.map_.heightLeptons() - 512);
-  const bool saving = manageEconomy(sim, p);
-  if (sim.tick_ >= ai.lastFortify + 15 * 20) {
+  if (ai.order == 2 && ai.orderAt.x >= 0) ai.staging = ai.orderAt;  // a script has it hold a place
+  const bool saving = allowed(p, kAiBuild) ? manageEconomy(sim, p) : false;
+  if (allowed(p, kAiFortify) && sim.tick_ >= ai.lastFortify + 15 * 20) {
     ai.lastFortify = sim.tick_;
     fortify(sim, p);
   }
@@ -542,6 +544,7 @@ void SkirmishAi::manageArmy(Simulation& sim, uint8_t p, bool saving) {
     const UnitTypeDef& d = types.get(u.type);
     if (faction.empty()) faction = d.faction;
     if (reg.pool<CProducer>().has(e)) producers.push_back(reg.handle(e));
+    if (!sim.aiMayCommand(e)) continue;  // a script's set piece: not ours to command
     if (d.repair > 0) ++engineers;
     if (d.isStructure() || d.capacity > 0 || d.deploysTo >= 0 || d.weapons.empty()) continue;
     army.push_back(reg.handle(e));
@@ -687,7 +690,7 @@ void SkirmishAi::manageArmy(Simulation& sim, uint8_t p, bool saving) {
   };
 
   // --- Production, to the side's doctrine --------------------------------------
-  if (ps.credits > tune.reserve) {
+  if (ps.credits > tune.reserve && allowed(p, kAiTrain)) {
     std::vector<int> infantry, vehicles;
     for (int t = 0; t < static_cast<int>(types.size()); ++t) {
       const UnitTypeDef& d = types.get(t);
@@ -776,7 +779,7 @@ void SkirmishAi::manageArmy(Simulation& sim, uint8_t p, bool saving) {
   // Damaged vehicles head home for repairs (engineers patch them up there).
   std::vector<Entity> limping;
   for (Entity e : army) {
-    if (isInfantry(e)) continue;
+    if (isInfantry(e) || !allowed(p, kAiRepair) || !ai.hasBase) continue;
     const CUnit& u = reg.get<CUnit>(e);
     if (u.health * 100 < types.get(u.type).maxHealth * 35 && dist({reg.get<CPosition>(e).x, reg.get<CPosition>(e).y}, ai.base) > 10 * T) {
       limping.push_back(e);
@@ -791,9 +794,14 @@ void SkirmishAi::manageArmy(Simulation& sim, uint8_t p, bool saving) {
   for (Entity e : army)
     if (!in(ai.wave, e) && !in(ai.raiders, e) && !in(ai.guard, e) && !in(ai.capture, e) && !in(limping, e) && e != ai.scout) home.push_back(e);
 
-  // The home guard: infantry kept back to man the base's trenches and bunkers.
+  // The home guard: infantry kept back to man the base's trenches and bunkers
+  // (a force without a base - a mission's - has no home to guard).
+  if (!ai.hasBase) {
+    for (Entity e : ai.guard) home.push_back(e);
+    ai.guard.clear();
+  }
   for (Entity e : home)
-    if (static_cast<int>(ai.guard.size()) < tune.guard * (2 + std::min(doc.fortify, 2)) / 4 && isInfantry(e) && modelOf(e) != "sniper") ai.guard.push_back(e);
+    if (ai.hasBase && static_cast<int>(ai.guard.size()) < tune.guard * (2 + std::min(doc.fortify, 2)) / 4 && isInfantry(e) && modelOf(e) != "sniper") ai.guard.push_back(e);
   std::erase_if(home, [&](Entity e) { return in(ai.guard, e); });
   keepBound(ai.guard, 30, true);  // the home guard is a unit too
   {
@@ -837,7 +845,7 @@ void SkirmishAi::manageArmy(Simulation& sim, uint8_t p, bool saving) {
     if (u.owner >= MAX_PLAYERS || sim.allied(u.owner, p) || types.get(u.type).isStructure()) continue;
     const CPosition& c = reg.pool<CPosition>().get(e);
     if (!sim.canSee(p, c.x, c.y)) continue;
-    if (dist({c.x, c.y}, ai.base) < 20 * T) {
+    if (dist({c.x, c.y}, ai.base) < 20 * T || (ai.order == 2 && dist({c.x, c.y}, ai.orderAt) < 16 * T)) {
       if (threat.x < 0) threat = {c.x, c.y};
       threatSize += types.get(u.type).infantry() ? 1 : 4;
     }
@@ -859,7 +867,7 @@ void SkirmishAi::manageArmy(Simulation& sim, uint8_t p, bool saving) {
   // --- The scout: one reconnaissance vehicle out in front, from watch point to watch point
   // It stands and watches (and so falls back by itself when the enemy comes
   // close); what it sees, the guns can shoot at.
-  if (ai.difficulty != AiDifficulty::Easy) {
+  if (ai.difficulty != AiDifficulty::Easy && allowed(p, kAiScout)) {
     if (!ai.scout.valid())
       for (Entity e : home)
         if (types.get(reg.get<CUnit>(e).type).scout) {
@@ -944,7 +952,7 @@ void SkirmishAi::manageArmy(Simulation& sim, uint8_t p, bool saving) {
         }
         if (!idle.empty() && sim.tick_ % (TICKS_PER_SECOND * 4) < tune.thinkTicks) order(CommandType::AttackMove, idle, ai.captureTarget, Formation::Column);
       }
-    } else if (want.x >= 0 && sim.tick_ >= ai.captureReady && threat.x < 0 &&
+    } else if (want.x >= 0 && sim.tick_ >= ai.captureReady && threat.x < 0 && allowed(p, kAiCapture) &&
                (ai.difficulty != AiDifficulty::Easy || minutes >= 4)) {
       std::vector<Entity> pick;
       for (Entity e : home)
@@ -983,7 +991,7 @@ void SkirmishAi::manageArmy(Simulation& sim, uint8_t p, bool saving) {
       if (q != ai.mainEnemy) others.push_back(q);
     ai.raidEnemy = others.empty() ? ai.mainEnemy : others[ai.raids % others.size()];
   };
-  if (ai.raiders.empty() && sim.tick_ >= ai.raidReady && threat.x < 0) {
+  if (ai.raiders.empty() && sim.tick_ >= ai.raidReady && threat.x < 0 && allowed(p, kAiRaid)) {
     std::vector<Entity> pick;
     for (Entity e : home)
       if (!isInfantry(e) && fast(modelOf(e)) && static_cast<int>(pick.size()) < doc.raidSize) pick.push_back(e);
@@ -1066,16 +1074,35 @@ void SkirmishAi::manageArmy(Simulation& sim, uint8_t p, bool saving) {
   }
 
   // --- The main force ----------------------------------------------------------------
-  const int32_t needed = (tune.waveSize + tune.waveGrowth * static_cast<int>(std::min<uint32_t>(ai.waves, 8))) * doc.waveScale / 100;
+  int32_t needed = (tune.waveSize + tune.waveGrowth * static_cast<int>(std::min<uint32_t>(ai.waves, 8))) * doc.waveScale / 100;
+  if (ai.waveScale > 0) needed = std::max<int32_t>(1, needed * ai.waveScale / 100);
+  // A script may hold it back (no attacks, or a place to defend), or send it at a place.
+  const bool mayAttack = allowed(p, kAiAttack) && ai.order != 2;
+  if (!mayAttack && ai.phase != 0 && !ai.wave.empty()) {
+    orderUnits(CommandType::Move, ai.wave, ai.staging, Formation::Box);
+    ai.wave.clear();
+    ai.phase = 0;
+  }
   // Fast vehicles stay back for raiding.
   std::erase_if(home, [&](Entity e) { return fast(modelOf(e)); });
   // Whatever stands at the staging point is a unit already while it gathers,
   // so it fights as one if the enemy comes to it.
   keepBound(home, 25, true);
+  if (ai.order == 2 && sim.tick_ % (TICKS_PER_SECOND * 5) < tune.thinkTicks) {
+    // Defending a place: whoever wandered off (after a fight) goes back to it.
+    std::vector<Entity> away;
+    for (Entity e : home) {
+      const CPosition& c = reg.get<CPosition>(e);
+      if (reg.get<COrder>(e).type == OrderType::Idle && !reg.has<CGarrisoned>(e) && dist({c.x, c.y}, ai.orderAt) > 9 * T) away.push_back(e);
+    }
+    orderUnits(CommandType::Move, away, ai.orderAt, Formation::Line);
+  }
   if (ai.phase == 0) {
-    // Gathering. Attack once strong enough (or it's been long enough).
+    // Gathering. Attack once strong enough (or it's been long enough, or a script says go).
     const bool due = sim.tick_ > ai.lastWaveTick + tune.waveTimeout && strength(home) >= needed / 2;
-    if ((strength(home) >= needed || due) && threat.x < 0 && !home.empty()) {
+    const bool told = ai.order == 1 && ai.orderFresh;
+    if (mayAttack && (strength(home) >= needed || due || told) && (threat.x < 0 || told) && !home.empty()) {
+      ai.orderFresh = 0;
       ai.wave = home;
       home.clear();
       ++ai.waves;
@@ -1090,7 +1117,7 @@ void SkirmishAi::manageArmy(Simulation& sim, uint8_t p, bool saving) {
       const Vec2i c = centreOf(ai.wave);
       const Vec2i side{-ai.toward.y, ai.toward.x};
       const int s = (ai.waves % 2 == 0) ? 1 : -1;
-      ai.flank = (ai.waves % 3 != 1) ? Vec2i{c.x + ai.toward.x * 16 + side.x * s * 14, c.y + ai.toward.y * 16 + side.y * s * 14}
+      ai.flank = (ai.waves % 3 != 1 && ai.order != 1) ? Vec2i{c.x + ai.toward.x * 16 + side.x * s * 14, c.y + ai.toward.y * 16 + side.y * s * 14}
                                      : Vec2i{-1, -1};
       if (ai.flank.x >= 0) {
         ai.flank.x = std::clamp(ai.flank.x, 3 * T, sim.map_.widthLeptons() - 3 * T);
@@ -1155,7 +1182,9 @@ void SkirmishAi::manageArmy(Simulation& sim, uint8_t p, bool saving) {
     // It finishes what it started: the building it is going for stays the
     // target until it is down (a force that changed its mind with every step
     // would form up again and again and never arrive).
-    if (ai.waveTarget.x >= 0 && reg.alive(ai.waveTargetUnit) && reg.has<CStructure>(ai.waveTargetUnit)) {
+    if (ai.order == 1 && ai.orderAt.x >= 0) {
+      target = ai.orderAt;  // where the script sent it; it fights whatever it meets on the way
+    } else if (ai.waveTarget.x >= 0 && reg.alive(ai.waveTargetUnit) && reg.has<CStructure>(ai.waveTargetUnit)) {
       const CUnit& u = reg.get<CUnit>(ai.waveTargetUnit);
       if (u.owner < MAX_PLAYERS && !sim.allied(u.owner, p) && u.health > 0) {
         const CPosition& c = reg.get<CPosition>(ai.waveTargetUnit);
@@ -1262,6 +1291,58 @@ void SkirmishAi::manageArmy(Simulation& sim, uint8_t p, bool saving) {
       bindGroups(ai.wave);
     }
   }
+}
+
+void SkirmishAi::setOrder(uint8_t p, uint8_t order, Vec2i at) {
+  if (p >= 8) return;
+  AiPlayer& a = players_[p];
+  a.order = order;
+  a.orderAt = order ? at : Vec2i{-1, -1};
+  a.orderFresh = order == 1;
+  a.waveTarget = {-1, -1};  // the main force picks its target afresh
+  a.waveTargetUnit = kNullEntity;
+  if (order == 1) a.flank = {-1, -1};
+}
+
+void SkirmishAi::setBehaviour(uint8_t p, int bit, bool allowed) {
+  if (p >= 8 || bit < 0 || bit >= 8) return;
+  if (allowed) players_[p].disabled = static_cast<uint8_t>(players_[p].disabled & ~(1u << bit));
+  else players_[p].disabled = static_cast<uint8_t>(players_[p].disabled | (1u << bit));
+}
+
+void SkirmishAi::setWaveScale(uint8_t p, int16_t percent) {
+  if (p < 8) players_[p].waveScale = percent;
+}
+
+void SkirmishAi::clearOrders() {
+  for (AiPlayer& a : players_) {
+    a.order = 0;
+    a.orderAt = {-1, -1};
+    a.disabled = 0;
+    a.waveScale = 0;
+    a.orderFresh = 0;
+  }
+}
+
+void SkirmishAi::saveOrders(ByteWriter& w) const {
+  for (const AiPlayer& a : players_) {
+    w.u8(a.order);
+    w.pod(a.orderAt);
+    w.u8(a.disabled);
+    w.u16(static_cast<uint16_t>(a.waveScale));
+    w.u8(a.orderFresh);
+  }
+}
+
+bool SkirmishAi::loadOrders(ByteReader& r) {
+  for (AiPlayer& a : players_) {
+    a.order = r.u8();
+    a.orderAt = r.pod<Vec2i>();
+    a.disabled = r.u8();
+    a.waveScale = static_cast<int16_t>(r.u16());
+    a.orderFresh = r.u8();
+  }
+  return r.ok();
 }
 
 void SkirmishAi::save(ByteWriter& w) const {

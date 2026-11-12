@@ -5,6 +5,7 @@
 #include "ui_style.hpp"
 
 #include <glad/gl.h>
+#include <map>
 #include <imgui.h>
 
 #include <algorithm>
@@ -304,10 +305,14 @@ void GameScene::replaceWorld(MapFile&& file, bool keepCamera) {
       if (players_[i].active) pick = i;
     if (pick >= 0 && (!keepCamera || !players_[player_].active)) player_ = static_cast<uint8_t>(pick);
   }
+  // Units exactly as saved: position, facing and health (names, script flags
+  // and stances follow once they stand, below).
+  constexpr uint32_t kPlacedTag = 0x504C4344;  // "PLCD"
+  std::vector<const UnitPlacement*> placed;
   {
-    // Units exactly as saved: position, facing and health.
     Command c;
     c.type = CommandType::SpawnList;
+    c.tag = kPlacedTag;
     for (const UnitPlacement& u : file.units) {
       const int t = types_.find(u.type);
       if (t < 0) {
@@ -315,6 +320,7 @@ void GameScene::replaceWorld(MapFile&& file, bool keepCamera) {
         continue;
       }
       c.spawns.push_back({static_cast<uint16_t>(t), u.owner, {u.x, u.y}, u.facing, u.health});
+      placed.push_back(&u);
     }
     if (!c.spawns.empty()) sim_->queue(std::move(c));
   }
@@ -344,6 +350,36 @@ void GameScene::replaceWorld(MapFile&& file, bool keepCamera) {
     sim_->queue(std::move(c));
   }
   sim_->tick();  // apply teams, supplies and spawns
+  {
+    // Placed units with a name, script flags or a stance (mission set pieces).
+    std::map<std::pair<std::string, uint8_t>, std::vector<Entity>> tags;
+    std::array<std::vector<Entity>, static_cast<size_t>(Stance::Count)> stances;
+    for (const SpawnRecord& r : sim_->spawnLog()) {
+      if (r.tag != kPlacedTag || r.index >= placed.size()) continue;
+      const UnitPlacement& u = *placed[r.index];
+      if (!u.name.empty() || u.flags) tags[{u.name, u.flags}].push_back(r.entity);
+      if (u.stance > 0 && u.stance < static_cast<uint8_t>(Stance::Count)) stances[u.stance].push_back(r.entity);
+    }
+    for (auto& [key, units] : tags) {
+      Command c;
+      c.type = CommandType::TagUnits;
+      c.player = NEUTRAL_OWNER;
+      c.units = std::move(units);
+      c.text = key.first;
+      c.count = 0xFF;
+      c.amount = key.second;
+      sim_->queue(std::move(c));
+    }
+    for (size_t st = 1; st < stances.size(); ++st) {
+      if (stances[st].empty()) continue;
+      Command c;
+      c.type = CommandType::SetStance;
+      c.player = NEUTRAL_OWNER;
+      c.units = std::move(stances[st]);
+      c.stance = static_cast<Stance>(st);
+      sim_->queue(std::move(c));
+    }
+  }
   updateCameraBounds();
   if (keepCamera) {
     if (cam_.is3D()) focusCamera(camera);
@@ -410,7 +446,12 @@ std::vector<UnitPlacement> GameScene::exportUnits() {
   for (uint32_t e : reg.pool<CUnit>().entities()) {
     const CUnit& u = reg.pool<CUnit>().get(e);
     const CPosition& p = reg.pool<CPosition>().get(e);
-    out.push_back({types_.get(u.type).id, u.owner, p.x, p.y, reg.pool<CFacing>().get(e).angle, u.health});
+    UnitPlacement pl{types_.get(u.type).id, u.owner, p.x, p.y, reg.pool<CFacing>().get(e).angle, u.health};
+    const Entity h = reg.handle(e);
+    pl.name = sim_->unitName(h);
+    pl.flags = sim_->scriptFlags(h);
+    pl.stance = static_cast<uint8_t>(u.stance);
+    out.push_back(std::move(pl));
   }
   return out;
 }

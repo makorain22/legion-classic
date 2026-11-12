@@ -35,8 +35,13 @@ std::vector<uint8_t> encodeMap(const Map& map, const std::vector<UnitPlacement>&
   auto& props = j["props"] = nlohmann::json::array();
   for (const Prop& p : map.props()) props.push_back({static_cast<int>(p.kind), p.variant, p.x, p.y});
   auto& us = j["units"] = nlohmann::json::array();
-  for (const UnitPlacement& u : units)
-    us.push_back({{"type", u.type}, {"owner", u.owner}, {"x", u.x}, {"y", u.y}, {"facing", u.facing}, {"health", u.health}});
+  for (const UnitPlacement& u : units) {
+    nlohmann::json uj{{"type", u.type}, {"owner", u.owner}, {"x", u.x}, {"y", u.y}, {"facing", u.facing}, {"health", u.health}};
+    if (!u.name.empty()) uj["name"] = u.name;
+    if (u.flags) uj["flags"] = u.flags;
+    if (u.stance) uj["stance"] = u.stance;
+    us.push_back(std::move(uj));
+  }
   auto& ps = j["players"] = nlohmann::json::array();
   for (const PlayerSetup& p : players)
     ps.push_back({{"name", p.name}, {"faction", p.faction}, {"color", p.color}, {"team", p.team},
@@ -154,6 +159,9 @@ bool decodeMap(const std::vector<uint8_t>& bytes, MapFile& out, std::string& err
       u.y = uj.at("y").get<int32_t>();
       u.facing = uj.value("facing", uint16_t{0});
       u.health = uj.value("health", -1);
+      u.name = uj.value("name", std::string());
+      u.flags = uj.value("flags", uint8_t{0});
+      u.stance = uj.value("stance", uint8_t{0});
       out.units.push_back(std::move(u));
     }
     out.players.clear();

@@ -11,7 +11,8 @@
 namespace slave {
 
 namespace {
-constexpr uint32_t kStateMagic = 0x53494D37;  // "SIM7": the computer's main enemy, raid rotation and scout
+constexpr uint32_t kStateMagic = 0x53494D38;  // "SIM8": the mission engine (play area, countdowns, named units...)
+constexpr uint32_t kStateMagicV7 = 0x53494D37;  // "SIM7": the computer's main enemy, raid rotation and scout
 constexpr uint32_t kStateMagicV6 = 0x53494D36;  // "SIM6": logistics points
 constexpr uint32_t kStateMagicV5 = 0x53494D35;  // "SIM5": formations
 constexpr uint32_t kStateMagicV4 = 0x53494D34;  // "SIM4": hints, build locks, orders given, campaign flags
@@ -67,9 +68,10 @@ void writeCommand(ByteWriter& w, const Command& c) {
   w.u8(c.forced ? 1 : 0);
   w.u8(static_cast<uint8_t>(c.stance));
   w.i32(c.amount);
+  w.str(c.text);
 }
 
-Command readCommand(ByteReader& r) {
+Command readCommand(ByteReader& r, bool withText) {
   Command c;
   c.type = static_cast<CommandType>(r.u8());
   c.player = r.u8();
@@ -91,6 +93,7 @@ Command readCommand(ByteReader& r) {
   c.forced = r.u8() != 0;
   c.stance = static_cast<Stance>(r.u8() % static_cast<uint8_t>(Stance::Count));
   c.amount = r.i32();
+  if (withText) c.text = r.str();
   return c;
 }
 
@@ -246,6 +249,8 @@ void Simulation::saveState(ByteWriter& w) const {
     w.u8(ps.side);
     w.u16(ps.progress);
   }
+  // The mission engine (9.9).
+  saveMission(w);
 }
 
 std::vector<std::string> Simulation::typeIds() const {
@@ -259,7 +264,7 @@ bool Simulation::loadState(ByteReader& r, std::string& error, const std::vector<
                            bool* remapped) {
   if (remapped) *remapped = false;
   const uint32_t magic = r.u32();
-  const int version = magic == kStateMagic ? 7 : magic == kStateMagicV6 ? 6 : magic == kStateMagicV5 ? 5 : magic == kStateMagicV4 ? 4 : magic == kStateMagicV3 ? 3 : magic == kStateMagicV2 ? 2 : 0;
+  const int version = magic == kStateMagic ? 8 : magic == kStateMagicV7 ? 7 : magic == kStateMagicV6 ? 6 : magic == kStateMagicV5 ? 5 : magic == kStateMagicV4 ? 4 : magic == kStateMagicV3 ? 3 : magic == kStateMagicV2 ? 2 : 0;
   if (version == 0) {
     error = "not a saved game state";
     return false;
@@ -273,7 +278,7 @@ bool Simulation::loadState(ByteReader& r, std::string& error, const std::vector<
   rng_.restore(st, inc);
   pending_.clear();
   const uint32_t nPending = r.u32();
-  for (uint32_t i = 0; i < nPending && r.ok(); ++i) pending_.push_back(readCommand(r));
+  for (uint32_t i = 0; i < nPending && r.ok(); ++i) pending_.push_back(readCommand(r, version >= 8));
 
   Registry::State rs;
   rs.generations = r.podVector<uint32_t>();
@@ -465,6 +470,14 @@ bool Simulation::loadState(ByteReader& r, std::string& error, const std::vector<
   } else {
     // Before 9.6 supply trucks hauled oil: none were in the rules, but be safe.
     for (CHarvester& h : reg_.pool<CHarvester>().data()) h = CHarvester{};
+  }
+  if (version >= 8) {
+    if (!loadMission(r)) {
+      error = "saved state is damaged (mission)";
+      return false;
+    }
+  } else {
+    resetMission();
   }
   // Saved with the unit types in another order (a newer roster, other mods)?
   // Renumber by id; a type these rules don't have at all refuses the load.

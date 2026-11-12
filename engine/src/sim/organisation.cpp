@@ -547,8 +547,8 @@ void Simulation::stepIncome() {
   }
   for (uint8_t p = 0; p < MAX_PLAYERS; ++p) {
     PlayerState& ps = players_[p];
-    ps.incomePerMinute = perMinute[p];
-    ps.incomeAcc += perMinute[p];
+    ps.incomePerMinute = static_cast<int32_t>(static_cast<int64_t>(perMinute[p]) * incomeRate_[p] / 100);
+    ps.incomeAcc += ps.incomePerMinute;
     ps.credits += ps.incomeAcc / 60;
     ps.incomeAcc %= 60;
   }

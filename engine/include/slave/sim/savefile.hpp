@@ -15,7 +15,7 @@
 
 namespace slave {
 
-constexpr uint32_t SAVE_FILE_VERSION = 1;
+constexpr uint32_t SAVE_FILE_VERSION = 2;  // 2: commands carry text (9.9)
 
 struct SaveFile {
   std::string metaJson;             // title, date, map name, the game's own view settings...

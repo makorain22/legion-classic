@@ -41,6 +41,15 @@ struct CUnit {
   uint8_t damageFrac = 0;  // hundredths of a hit point taken but not yet counted (rifles on armour)
 };
 
+// What a mission script has said about a unit: its name (an index into the
+// simulation's name table, 0 = none) and ScriptFlag bits. Only units a script
+// or the scenario editor has touched carry one.
+struct CScripted {
+  uint16_t name = 0;
+  uint8_t flags = 0;
+  uint8_t pad = 0;
+};
+
 // --- Unit organisation ---------------------------------------------------------
 // Infantry: fireteam (5), squad (10), platoon (20), company (100).
 // Vehicles: platoon (5), company (15), battalion (50).
