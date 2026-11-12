@@ -205,11 +205,13 @@ TEST_CASE("each biome has its own ground, trees and settlements") {
   CHECK(propCount(Biome::Tropical, PropKind::JungleTree) > 100);
   // The jungle has stilt houses along its tracks (and timber bridges), nothing else.
   for (const Map::Lot& l : maps.at(Biome::Tropical).lots) CHECK((l.kind == 29 || l.kind == Map::kWoodBridgeLot));
-  CHECK(maps.at(Biome::Urban).lots.size() > maps.at(Biome::Temperate).lots.size() * 4);
+  // (Since 9.8 a village has as many buildings as a few city blocks, in a fraction of the room.)
+  CHECK(maps.at(Biome::Urban).lots.size() > 150);
   CHECK(!maps.at(Biome::Temperate).lots.empty());
-  // Mud-brick houses, market stalls, courtyard villas, wells (and bridges).
+  // Mud-brick houses alone and in rows, market stalls, courtyard villas, wells (and bridges).
   for (const Map::Lot& l : maps.at(Biome::Desert).lots)
-    CHECK((l.kind == 5 || l.kind == 10 || l.kind == 27 || l.kind == 28 || l.kind == Map::kBridgeLot));
+    CHECK((l.kind == 5 || l.kind == 10 || l.kind == 27 || l.kind == 28 || l.kind == Map::kRowLot + 3 || l.kind == Map::kRowLot + 4 ||
+           l.kind == Map::kBridgeLot));
   // Every lot names a building the rules have.
   for (const auto& [b, m] : maps)
     for (const Map::Lot& l : m.lots) CHECK(R.types.find(Map::lotBuildingId(l.kind)) >= 0);

@@ -22,7 +22,7 @@ void usage() {
            "         --offscreen --frames N --screenshot out.png --demo --fixed-dt --no-help --debug\n"
            "         --dump-atlas atlas.png --editor --open map.lmap --editor-demo --live-demo\n"
            "         --tool rules[:unit_id]|mods --mods-selftest\n"
-           "         --menu --ai-battle --side N --biome temperate|winter|desert|tropical|urban --gallery --works-demo --formation-demo --town-demo --bridge-demo --logistics-demo\n"
+           "         --menu --ai-battle --side N --biome temperate|winter|desert|tropical|urban --gallery --works-demo --formation-demo --town-demo --village-demo --bridge-demo --logistics-demo\n"
            "         --ffa (every side for itself) --bench MINUTES (an --ai-battle played without drawing; prints what each side did)\n"
            "         --export-sprites DIR (write every sprite as PNG for repainting; see docs/ART_PIPELINE.md)\n"
            "         --import-blitzkrieg DATA (make the Blitzkrieg art pack from the game's Data folder)");
@@ -103,6 +103,7 @@ int main(int argc, char** argv) {
     else if (a == "--bridge-demo") opt.townDemo = 2;
     else if (a == "--cliff-demo") opt.townDemo = 3;
     else if (a == "--logistics-demo") opt.townDemo = 4;
+    else if (a == "--village-demo") opt.townDemo = 5;
     else if (a == "--export-sprites") opt.exportSprites = next();
     else if (a == "--import-blitzkrieg") importDir = next();
     else if (a == "--no-art-pack") opt.noArtPack = true;

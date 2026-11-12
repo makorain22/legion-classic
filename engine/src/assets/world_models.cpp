@@ -1164,6 +1164,139 @@ VoxelModel makeStiltHut(const FactionLook&) {
   return m;
 }
 
+// Row houses (Milestone 9.8): narrow town houses one tile wide, built wall to
+// wall. A piece fills its tile to the edge on every side where another row
+// house stands (`mask`: +X 1, +Y 2, -X 4, -Y 8) and shows a front or a gable
+// on the others, so rows, corners and whole blocks round a courtyard grow out
+// of single pieces. The ridge runs along the row; a corner house carries a
+// cross-gabled roof; a taller house shows its bare party wall above a lower
+// neighbour. Styles: 0 plastered, two storeys; 1 brick with a shop below,
+// three storeys; 2 half-timbered under a steep roof; 3 and 4 flat-roofed
+// mud brick, low and tall. 12 voxels a tile like the other buildings, in a
+// 16 x 16 grid (the tile is 2..14) so eaves and steps have room.
+VoxelModel makeRowHouse(int style, int mask) {
+  constexpr int E0 = 2, E1 = 14;
+  const bool jx1 = mask & 1, jy1 = mask & 2, jx0 = mask & 4, jy0 = mask & 8;
+  const bool adobe = style >= 3;
+  const int storeys = style == 1 ? 3 : style == 4 ? 2 : style == 3 ? 1 : 2;
+  const int sh = adobe ? 7 : style == 2 ? 6 : 7;        // storey height
+  const int h = storeys * sh + (adobe ? 2 : 0);
+  const uint8_t wall = style == 1 ? BRICK : adobe ? SAND_ROCK : PLASTER;
+  const uint8_t trim = style == 1 ? BRICK_DARK : adobe ? SAND_ROCK_DARK : style == 2 ? WOOD_DARK : PLASTER_DARK;
+  VoxelModel m(16, 16, h + 16);
+  // Walls: out to the tile's edge where a neighbour stands, a voxel in where the street is.
+  const int x0 = jx0 ? E0 : E0 + 1, x1 = jx1 ? E1 : E1 - 1, y0 = jy0 ? E0 : E0 + 1, y1 = jy1 ? E1 : E1 - 1;
+  m.box(x0, y0, 0, x1, y1, h, wall);
+  m.box(x0, y0, 0, x1, y1, 1, trim);  // plinth
+
+  // A front: door and window below, two windows to every floor above. `put`
+  // maps (along the wall, up) to the voxel on that face.
+  auto face = [&](int side, bool front) {
+    const bool alongX = side == 1 || side == 3;  // the +Y and -Y faces run along X
+    const int a0 = alongX ? x0 : y0, a1 = alongX ? x1 : y1;
+    const int fixed = side == 0 ? x1 - 1 : side == 1 ? y1 - 1 : side == 2 ? x0 : y0;
+    auto put = [&](int a, int z, uint8_t c) {
+      if (a < a0 || a >= a1 || z < 0) return;
+      if (alongX) m.set(a, fixed, z, c);
+      else m.set(fixed, a, z, c);
+    };
+    const int w = a1 - a0, left = a0 + 1 + (w > 10 ? 1 : 0), right = a1 - 3 - (w > 10 ? 1 : 0);
+    for (int s = 0; s < storeys; ++s) {
+      const int z = s * sh + (adobe ? 3 : 2);
+      const bool shop = style == 1 && s == 0 && front;
+      for (int a : {left, right}) {
+        if (s == 0 && front && a == left) {
+          for (int dz = 1; dz <= (adobe ? 4 : 5); ++dz) put(a, dz, WOOD_DARK), put(a + 1, dz, WOOD_DARK);  // the door
+          continue;
+        }
+        const int top = adobe ? 2 : 3;
+        for (int dz = 0; dz < top; ++dz) put(a, z + dz, WINDOW), put(a + 1, z + dz, WINDOW);
+        if (shop) {
+          for (int dz = -1; dz < top + 1; ++dz)
+            for (int da = -2; da <= 1; ++da) put(a + da, z + dz, WINDOW);  // a shop window
+        } else if (!adobe) {
+          put(a, z - 1, trim), put(a + 1, z - 1, trim);  // sill
+        }
+      }
+      if (shop)
+        for (int a = a0; a < a1; ++a) put(a, sh - 1, CONCRETE_DARK);  // the board over the shop
+    }
+    if (adobe && front)
+      for (int a = a0 + 2; a < a1 - 1; a += 3) {  // roof beams poking out of the wall
+        const int ox = side == 0 ? x1 : side == 2 ? x0 - 1 : a, oy = side == 1 ? y1 : side == 3 ? y0 - 1 : a;
+        m.set(ox, oy, h - 3, WOOD);
+      }
+  };
+  if (!jx1) face(0, true);
+  if (!jy1) face(1, true);
+  if (!jx0) face(2, false);
+  if (!jy0) face(3, false);
+  if (style == 2) timberFrame(m, x0, y0, x1, y1, 1, h);
+
+  if (adobe) {
+    // A flat roof behind a low parapet (none where the next roof carries on).
+    m.box(x0, y0, h - 1, x1, y1, h, SAND_ROCK_DARK);
+    if (!jx0) m.box(x0, y0, h, x0 + 1, y1, h + 1, SAND_ROCK);
+    if (!jx1) m.box(x1 - 1, y0, h, x1, y1, h + 1, SAND_ROCK);
+    if (!jy0) m.box(x0, y0, h, x1, y0 + 1, h + 1, SAND_ROCK);
+    if (!jy1) m.box(x0, y1 - 1, h, x1, y1, h + 1, SAND_ROCK);
+    if (style == 4) m.box(x0 + 2, y0 + 2, h, x0 + 6, y0 + 6, h + 3, SAND_ROCK);  // a stair house up on the roof
+    speckle(m, SAND_ROCK, SAND_ROCK_DARK, PLASTER, 61u + static_cast<uint32_t>(style * 16 + mask), 18, 8);
+    return m;
+  }
+
+  // Pitched roofs. Along X when the row runs that way (or the house stands
+  // alone), along Y when it runs that way, both for a corner.
+  const bool rowX = jx0 || jx1 || !(jy0 || jy1), rowY = jy0 || jy1;
+  const int pitch = style == 2 ? 2 : 1;
+  const uint8_t ra = style == 1 ? ROOF : TILE_ROOF, rb = style == 1 ? ROOF_DARK : TILE_ROOF_DARK;
+  auto roof = [&](bool alongX) {
+    // Across the ridge: from eave to eave (a voxel over the wall on open sides).
+    const int c0 = alongX ? y0 - (jy0 ? 0 : 1) : x0 - (jx0 ? 0 : 1), c1 = alongX ? y1 + (jy1 ? 0 : 1) : x1 + (jx1 ? 0 : 1);
+    // Along it: to the tile's edge at a neighbour, a voxel over the gable otherwise.
+    const int l0 = alongX ? (jx0 ? E0 : x0 - 1) : (jy0 ? E0 : y0 - 1), l1 = alongX ? (jx1 ? E1 : x1 + 1) : (jy1 ? E1 : y1 + 1);
+    const int w0 = alongX ? x0 : y0, w1 = alongX ? x1 : y1;  // the end walls
+    const int half = (c1 - c0 + 1) / 2;
+    for (int i = 0; i < half; ++i) {
+      const int a = c0 + i, b = c1 - i, z = h + i * pitch;
+      const uint8_t c = (i % 2) ? ra : rb;
+      if (alongX) {
+        m.box(l0, a, z, l1, b, z + pitch, c);
+        // Gables and party walls: the wall carries on up under the roof at both ends.
+        if (b - a > 2) m.box(w0, a + 1, z, w0 + 1, b - 1, z + pitch, wall), m.box(w1 - 1, a + 1, z, w1, b - 1, z + pitch, wall);
+      } else {
+        m.box(a, l0, z, b, l1, z + pitch, c);
+        if (b - a > 2) m.box(a + 1, w0, z, b - 1, w0 + 1, z + pitch, wall), m.box(a + 1, w1 - 1, z, b - 1, w1, z + pitch, wall);
+      }
+    }
+    return h + half * pitch;
+  };
+  int top = h;
+  if (rowX) top = std::max(top, roof(true));
+  if (rowY) top = std::max(top, roof(false));
+  // A window in an open gable.
+  if (rowX && !jx0) m.box(x0, 7, h + 1, x0 + 1, 9, h + 1 + pitch, WINDOW);
+  if (rowX && !jx1) m.box(x1 - 1, 7, h + 1, x1, 9, h + 1 + pitch, WINDOW);
+  if (rowY && !jy0) m.box(7, y0, h + 1, 9, y0 + 1, h + 1 + pitch, WINDOW);
+  if (rowY && !jy1) m.box(7, y1 - 1, h + 1, 9, y1, h + 1 + pitch, WINDOW);
+  // The chimney stack stands on the party wall (shared with the neighbour), or at one end.
+  {
+    const int cx = rowX ? (jx1 ? E1 - 2 : x1 - 3) : 7, cy = rowX ? 7 : (jy1 ? E1 - 2 : y1 - 3);
+    m.box(cx, cy, top - 2 * pitch, cx + 2, cy + 2, top + 2, BRICK);
+    m.box(cx, cy, top + 1, cx + 2, cy + 2, top + 2, BRICK_DARK);
+  }
+  if (style == 1 && !jy1) m.box(x0 + 1, y1, 0, x0 + 4, y1 + 1, 1, CONCRETE);  // a step up to the shop
+  grimeWalls(m, 200u + static_cast<uint32_t>(style * 16 + mask));
+  return m;
+}
+
+// For the editor's list and the encyclopedia: a house standing alone.
+VoxelModel makeRowPlaster(const FactionLook&) { return makeRowHouse(0, 0); }
+VoxelModel makeRowBrick(const FactionLook&) { return makeRowHouse(1, 0); }
+VoxelModel makeRowTimber(const FactionLook&) { return makeRowHouse(2, 0); }
+VoxelModel makeRowAdobe(const FactionLook&) { return makeRowHouse(3, 0); }
+VoxelModel makeRowAdobeTall(const FactionLook&) { return makeRowHouse(4, 0); }
+
 // Bridges, at 24 voxels a tile like the other field works. The deck is level
 // across the whole bridge; its top is kBridgeDeckZ voxels above the sprite's
 // foot, piers and arches (or timber trestles) reaching kBridgePierDepth below

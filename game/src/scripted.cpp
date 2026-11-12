@@ -741,6 +741,33 @@ void GameScene::runTownDemo() {
     centerOn({at.x * T + 128, at.y * T + 128});
     return;
   }
+  if (opt_.townDemo == 5) {
+    // --village-demo: the camera on the place with the most civilian buildings.
+    std::vector<Vec2i> at;
+    for (uint32_t i : reg.pool<CUnit>().entities()) {
+      const UnitTypeDef& d = types_.get(reg.pool<CUnit>().get(i).type);
+      if (d.faction != "neutral" || d.bridge || !d.isStructure()) continue;
+      const CPosition& p = reg.pool<CPosition>().get(i);
+      at.push_back({p.x / T, p.y / T});
+    }
+    int best = -1;
+    Vec2i c{map_.width() / 2, map_.height() / 2};
+    for (const Vec2i& a : at) {
+      int n = 0;
+      for (const Vec2i& b : at) n += std::abs(a.x - b.x) <= 9 && std::abs(a.y - b.y) <= 9;
+      // (A tie goes to the place nearest the middle of the map.)
+      const int score = n * 1000 - std::abs(a.x - map_.width() / 2) - std::abs(a.y - map_.height() / 2);
+      if (score > best) best = score, c = a;
+    }
+    Vec2i sum{0, 0};
+    int n = 0;
+    for (const Vec2i& b : at)
+      if (std::abs(c.x - b.x) <= 9 && std::abs(c.y - b.y) <= 9) sum = {sum.x + b.x, sum.y + b.y}, ++n;
+    if (n) c = {sum.x / n, sum.y / n};
+    revealMap_ = true;
+    centerOn({c.x * T + 128, c.y * T + 128});
+    return;
+  }
   if (opt_.townDemo == 2) {
     Entity bridge;
     for (uint32_t i : reg.pool<CUnit>().entities())

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.9.1 – in progress (edits after Milestone 9; Milestone 9.1: terrain and camera overhaul)
+## 0.9.1 – in progress (edits after Milestone 9; Milestones 9.1–9.8)
 
 - **Fixed a crash** in skirmish (seen in a 1v1v1 at high game speed, and
   probably the old "2v2 crash after five minutes"): a man killed inside a
@@ -297,6 +297,38 @@
   prints what each side did every two minutes (income, convoys, army, how
   much of it is bound, whom it fired on); thirty minutes take a few seconds.
   `--ffa` makes every side its own team (`--sides 3` or `4`).
+
+### Milestone 9.8: towns and villages
+
+- **Villages and towns are built the way they stand in Europe:** narrow
+  houses wall to wall in rows along the street, lanes leading off it between
+  them, blocks closed round a courtyard, the church at the end of its lane on
+  a small green, the inn down another, a well, a farm at the end of the
+  street with its barn, shed and ricks. A village takes a fraction of the
+  ground the scattered hamlets did and has several times as many buildings.
+- **The market town** sits where the roads really cross: a paved square with
+  the church and the town hall facing each other across it, the inn and the
+  market stalls on the other road, both streets lined with houses, blocks
+  packed in behind them from the middle outwards, a school, a station and a
+  warehouse among them.
+- **Five row houses** (one tile each; they join into terraces, round corners
+  and round whole blocks with whatever row house stands next door): plastered
+  town house, brick shop and lodgings, half-timbered house, mud-brick house
+  and a tall mud-brick one. Three or four men each; in the editor with the
+  civilian buildings.
+- By climate: plaster, brick and half-timber in the west; mud brick in the
+  desert, with the odd courtyard villa; in the snow and the jungle, log
+  houses and stilt huts stand apart along the street, as close together.
+- Every row stands level and close in height to its neighbours, the ground
+  eased in round it; lanes, squares and the strip in front of the houses are
+  paved, yards are bare earth with a tree or crates; no trees through roofs.
+  Nothing is built near the starting areas, logistics points, fords or
+  bridges, and no lane or yard is ever shut in.
+- Big urban maps keep their city grid.
+- Missions whose buildings are all placed by hand start from open country
+  (`generate(..., settlements = false)`). All bundled maps rebuilt.
+- `--village-demo`: the camera on the biggest settlement (`LEGION_DEBUG_TOWN=1`
+  prints a plan of each one).
 
 ## 0.9.0 – Milestone 9: Britain, sound, tutorial, campaigns (7 Nov 2026)
 

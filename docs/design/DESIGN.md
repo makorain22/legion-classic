@@ -244,8 +244,21 @@ recognition flash on vehicles and a roundel in the interface.
      gave it: in free-for-all it presses the nearest enemy and raids the
      others; it binds most of its army into battle groups; it plays the new
      economy.
-   - **9.8 Towns and villages** – compact towns, buildings stitched together
-     into streets and blocks like European towns.
+   - **9.8 Towns and villages** (done 12 Nov) – compact settlements: one-tile
+     row houses (`neutral_row*`, lot kinds `Map::kRowLot`..+4, joined
+     models by neighbour mask; every row style joins every other) in rows of
+     two to five along the street with alleys between, lanes off the street
+     to the church (on a green) and the inn, blocks round a yard with one way
+     in, a well and a farm; the market town round the real crossing of the
+     two roads (square, church and town hall facing, inn and market, school,
+     station, warehouse, blocks packed from the middle out). Timber country
+     (winter without a town, tropical) builds apart. Laid with its own random
+     stream after the terrain, so the rest of the map is unchanged; each
+     group of touching buildings is levelled to its mean height, neighbours
+     within 8 of each other, the ground eased in (9 per corner); lanes and
+     fronts paved. `Map::lotFootprint` is the shared footprint table.
+     `generate(..., settlements)`: missions placed by hand start from open
+     country. Urban maps keep their grid.
    - **9.9–9.11 Campaigns** – many more missions for Germany, the Soviet Union
      and Britain, varied in difficulty and scale.
    - **9.12 Big scenarios** – large stand-alone battles inspired by great

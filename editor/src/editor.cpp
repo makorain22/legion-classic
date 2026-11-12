@@ -752,7 +752,7 @@ void Editor::drawNewMapDialog() {
     const int size = kNewSizes[newSizeIndex_];
     f.map.resize(size, size);
     if (newTerrain_ == 1) {
-      f.map.generate(static_cast<Biome>(newBiome_), static_cast<uint64_t>(newSeed_), newLayout_);
+      f.map.generate(static_cast<Biome>(newBiome_), static_cast<uint64_t>(newSeed_), newLayout_, newTowns_);
       f.map.name = std::string(mapLayoutName(f.map.layout)) + " " + std::to_string(newSeed_);
       if (newTowns_) scene_.addTownBuildings(f);
     } else {

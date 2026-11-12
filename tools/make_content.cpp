@@ -45,10 +45,12 @@ struct Builder {
     }
     return true;
   }
-  void start(int size, Biome b, uint64_t seed, int layout, const std::string& name, const std::string& description) {
+  // `settlements` false: open country, for missions whose buildings are all placed by hand.
+  void start(int size, Biome b, uint64_t seed, int layout, const std::string& name, const std::string& description,
+             bool settlements = true) {
     file = MapFile{};
     file.map.resize(size, size);
-    file.map.generate(b, seed, layout);
+    file.map.generate(b, seed, layout, settlements);
     file.map.name = name;
     file.map.description = description;
     sim = std::make_unique<Simulation>(file.map, types, weapons, 1);
@@ -162,10 +164,11 @@ struct Builder {
 };
 
 // A seed whose map is dry ground along every listed tile.
-uint64_t findSeed(int size, Biome b, int layout, uint64_t from, const std::vector<std::pair<int, int>>& mustBeDry) {
+uint64_t findSeed(int size, Biome b, int layout, uint64_t from, const std::vector<std::pair<int, int>>& mustBeDry,
+                  bool settlements = true) {
   for (uint64_t seed = from;; ++seed) {
     Map probe(size, size);
-    probe.generate(b, seed, layout);
+    probe.generate(b, seed, layout, settlements);
     bool ok = true;
     for (const auto& [x, y] : mustBeDry) ok = ok && probe.info(x, y).waterDepth < -16 && probe.info(x, y).slope <= 20;
     if (ok) return seed;
@@ -312,9 +315,9 @@ constexpr uint32_t kRed = 0xFF2C3AC4, kBlue = 0xFFC46034, kGreen = 0xFF48A042, k
 // The tutorial: Basic Training (British, against an opposing force in German kit)
 // ---------------------------------------------------------------------------
 bool tutorialFirstOrders(Builder& b, const std::string& out) {
-  const uint64_t seed = findSeed(64, Biome::Temperate, static_cast<int>(MapLayout::Steppe), 101, row(6, 56, 32) + rect(38, 26, 50, 38));
+  const uint64_t seed = findSeed(64, Biome::Temperate, static_cast<int>(MapLayout::Steppe), 101, row(6, 56, 32) + rect(38, 26, 50, 38), false);
   b.start(64, Biome::Temperate, seed, static_cast<int>(MapLayout::Steppe), "Basic Training: First Orders",
-          "Selecting, moving and fighting.");
+          "Selecting, moving and fighting.", false);
   b.file.map.lots.clear();
   b.side(0, "Training Company", "gbr", kKhaki, 0, true, 0, 10, 32);
   b.side(1, "Opposing Force", "ger", kRed, 1, true, 0, 54, 32);
@@ -358,9 +361,9 @@ bool tutorialFirstOrders(Builder& b, const std::string& out) {
 }
 
 bool tutorialCover(Builder& b, const std::string& out) {
-  const uint64_t seed = findSeed(64, Biome::Temperate, static_cast<int>(MapLayout::Steppe), 201, row(6, 58, 32) + rect(22, 26, 32, 38));
+  const uint64_t seed = findSeed(64, Biome::Temperate, static_cast<int>(MapLayout::Steppe), 201, row(6, 58, 32) + rect(22, 26, 32, 38), false);
   b.start(64, Biome::Temperate, seed, static_cast<int>(MapLayout::Steppe), "Basic Training: Cover and Armour",
-          "Houses, sandbags, and the PIAT.");
+          "Houses, sandbags, and the PIAT.", false);
   b.file.map.lots.clear();
   b.side(0, "Training Company", "gbr", kKhaki, 0, true, 0, 12, 32);
   b.side(1, "Opposing Force", "ger", kRed, 1, true, 0, 54, 32);
@@ -408,9 +411,9 @@ bool tutorialCover(Builder& b, const std::string& out) {
 }
 
 bool tutorialDigIn(Builder& b, const std::string& out) {
-  const uint64_t seed = findSeed(64, Biome::Temperate, static_cast<int>(MapLayout::Steppe), 301, row(4, 58, 32) + rect(6, 24, 36, 40));
+  const uint64_t seed = findSeed(64, Biome::Temperate, static_cast<int>(MapLayout::Steppe), 301, row(4, 58, 32) + rect(6, 24, 36, 40), false);
   b.start(64, Biome::Temperate, seed, static_cast<int>(MapLayout::Steppe), "Basic Training: Digging In",
-          "Trenches, wire and holding a line.");
+          "Trenches, wire and holding a line.", false);
   b.file.map.lots.clear();
   b.side(0, "Training Company", "gbr", kKhaki, 0, true, 400, 18, 32);
   b.side(1, "Opposing Force", "ger", kRed, 1, true, 0, 54, 32);
@@ -549,7 +552,7 @@ bool kalach(Builder& b, const std::string& out) {
   uint64_t seed = 1946;
   for (;; ++seed) {
     Map probe(128, 128);
-    probe.generate(Biome::Winter, seed);
+    probe.generate(Biome::Winter, seed, -1, false);
     bool dry = true;
     for (int x : {10, 14, 20, 40, 64, 90, 108, 116})
       for (int y = 48; y <= 80; ++y) dry = dry && probe.info(x, y).waterDepth < -16;
@@ -557,7 +560,7 @@ bool kalach(Builder& b, const std::string& out) {
   }
   b.start(128, Biome::Winter, seed, -1, "Kalach Crossing",
           "Winter 1946. Kampfgruppe Adler must take the crossroads village, hold it against the counter-attack, "
-          "then destroy the Soviet base.");
+          "then destroy the Soviet base.", false);
   b.file.map.lots.clear();  // the village is placed by hand
   PlayerSetup ger, rus;
   ger.name = "Kampfgruppe Adler";

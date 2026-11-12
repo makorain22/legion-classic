@@ -2273,9 +2273,13 @@ void GameScene::drawUnits(const RectF& view) {
       // Sandbag walls and wire join up with neighbours of the same kind.
       if (auto j = art_.joined.find(def.model); j != art_.joined.end()) {
         const CStructure& st = reg.pool<CStructure>().get(e);
+        // (Row houses of every style join each other; the rest only their own kind.)
+        const bool row = def.model.rfind("rowhouse", 0) == 0;
         auto same = [&](int x, int y) {
           const Entity o = sim_->structureAt(x, y);
-          return o.valid() && types_.get(reg.get<CUnit>(o).type).model == def.model;
+          if (!o.valid()) return false;
+          const std::string& om = types_.get(reg.get<CUnit>(o).type).model;
+          return row ? om.rfind("rowhouse", 0) == 0 : om == def.model;
         };
         const int mask = (same(st.tx + 1, st.ty) ? 1 : 0) | (same(st.tx, st.ty + 1) ? 2 : 0) | (same(st.tx - 1, st.ty) ? 4 : 0) |
                          (same(st.tx, st.ty - 1) ? 8 : 0);

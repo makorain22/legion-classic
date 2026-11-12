@@ -1,6 +1,8 @@
 #include "slave/map/map.hpp"
 
 #include <algorithm>
+#include <cstdio>
+#include <cstdlib>
 #include <cmath>
 #include <functional>
 
@@ -250,6 +252,17 @@ bool parseBiome(const std::string& s, Biome& out) {
 }
 
 
+Vec2i Map::lotFootprint(uint8_t kind) {
+  // (tests/test_content.cpp checks this against the rules.)
+  switch (kind) {
+    case 3: case 23: case 24: case 28: return {3, 3};                               // churches, town hall, villa
+    case 9: case 13: case 14: case 19: case 20: case 21: case 22: return {3, 2};    // warehouse, farm, school and their like
+    case 12: return {4, 2};                                                         // station
+    case 7: case 10: case 11: case 25: case 26: return {1, 1};                      // shed, well, towers, silo, windmill
+    default: return kind >= kRowLot ? Vec2i{1, 1} : Vec2i{2, 2};                    // houses; row houses and bridge pieces
+  }
+}
+
 const char* Map::lotBuildingId(uint8_t kind) {
   static const char* kinds[] = {
       "neutral_cottage", "neutral_cottage_bombed", "neutral_townhouse", "neutral_church",   "neutral_ruin",
@@ -258,7 +271,9 @@ const char* Map::lotBuildingId(uint8_t kind) {
       // 15.. the variants that stand in for the plain kinds above
       "neutral_half_timber", "neutral_stone_cottage", "neutral_shopfront", "neutral_apartment", "neutral_factory",
       "neutral_tavern",      "neutral_terrace",       "neutral_manor",     "neutral_town_hall", "neutral_onion_church",
-      "neutral_grain_silo",  "neutral_windmill",      "neutral_market",    "neutral_villa",     "neutral_stilt_hut"};
+      "neutral_grain_silo",  "neutral_windmill",      "neutral_market",    "neutral_villa",     "neutral_stilt_hut",
+      // 30.. row houses, one tile each, built wall to wall (9.8)
+      "neutral_row", "neutral_row_brick", "neutral_row_timber", "neutral_row_adobe", "neutral_row_adobe_tall"};
   if (kind == kBridgeLot) return "neutral_bridge";
   if (kind == kWoodBridgeLot) return "neutral_bridge_wood";
   return kinds[kind % (sizeof kinds / sizeof kinds[0])];
@@ -304,8 +319,8 @@ MapLayout layoutForSeed(uint64_t seed) {
                                 static_cast<uint32_t>(MapLayout::Count));
 }
 
-void Map::generate(Biome b, uint64_t seed, int layout) {
-  generateTerrain(seed, b, layout < 0 ? static_cast<int>(layoutForSeed(seed)) : layout);
+void Map::generate(Biome b, uint64_t seed, int layout, bool settlements) {
+  generateTerrain(seed, b, layout < 0 ? static_cast<int>(layoutForSeed(seed)) : layout, settlements);
   recomputeInfo();  // speeds read the finished ground layers and roads
 }
 
@@ -394,7 +409,7 @@ struct Plan {
 };
 }  // namespace
 
-void Map::generateTerrain(uint64_t seed, Biome b, int layoutIndex) {
+void Map::generateTerrain(uint64_t seed, Biome b, int layoutIndex, bool settlements) {
   biome = b;
   layout = static_cast<MapLayout>(std::clamp(layoutIndex, 0, static_cast<int>(MapLayout::Count) - 1));
   lots.clear();
@@ -1102,6 +1117,7 @@ void Map::generateTerrain(uint64_t seed, Biome b, int layoutIndex) {
       return std::abs(tx - cx) <= half + 1 && std::abs(ty - cy) <= half + 1;
     });
   };
+  if (!settlements) return;
   if (urban) {
     for (int by = 0; by + 12 <= H; by += 12)
       for (int bx = 0; bx + 12 <= W; bx += 12) {
@@ -1119,48 +1135,662 @@ void Map::generateTerrain(uint64_t seed, Biome b, int layoutIndex) {
       }
     return;
   }
-  auto houseKind = [&](bool town) -> uint8_t {
-    const uint32_t pick = rng.below(100);
-    if (tropical) return 29;  // stilt huts
-    if (desert) return pick < 85 ? 5 : 10;
-    if (winter) return pick < 45 ? 8 : pick < 60 ? 6 : pick < 72 ? 7 : pick < 82 ? 1 : pick < 90 ? 10 : pick < 96 ? 4 : 3;
-    if (town) return pick < 34 ? 2 : pick < 50 ? 0 : pick < 60 ? 14 : pick < 68 ? 12 : pick < 76 ? 9 : pick < 84 ? 3 : pick < 92 ? 11 : 1;
-    return pick < 36 ? 0 : pick < 50 ? 1 : pick < 61 ? 6 : pick < 69 ? 7 : pick < 75 ? 10 : pick < 79 ? 11
-         : pick < 87 ? 13 : pick < 94 ? 4 : 3;
+  // --- Compact settlements (9.8) -------------------------------------------------
+  // Villages and towns the way they stand in Europe: narrow houses built wall
+  // to wall in rows along the street, lanes leading off it between them,
+  // blocks closed round a courtyard, the church and the inn on a small
+  // square, a farm at the end of the street. A settlement takes a fraction
+  // of the ground the scattered houses did and has several times as many
+  // buildings. Row houses are one tile each and join up with their
+  // neighbours (kRowLot + style); the landmarks are the free-standing
+  // buildings. Laid with their own random stream. Where the winter and the
+  // jungle build in timber the houses stand apart, but as close together.
+  Rng trng(seed ^ 0x51ED270B9F3A6C15ULL);
+  auto tr = [&](int lo, int hi) { return static_cast<int>(trng.range(lo, hi)); };
+  const size_t tiles = static_cast<size_t>(W) * H;
+  auto at = [&](int x, int y) { return static_cast<size_t>(y) * W + x; };
+  // What stands on each tile: 0 nothing, 1 a building, 2 a lane or square (paved), 3 a yard (bare earth).
+  std::vector<uint8_t> occ(tiles, 0);
+  std::vector<int32_t> piece(tiles, -1);  // which row, block or building a built tile belongs to
+  std::vector<uint8_t> rowPiece;          // per piece: row houses (which join) or a building standing alone
+  std::vector<Prop> decor;                // trees on the green, ricks, crates: added once the streets are cleared
+  int pieces = 0;
+  // Never built on: the map's rim, steep or wet ground, the starting areas,
+  // logistics points, and the approaches to fords and bridges.
+  std::vector<uint8_t> bad(tiles, 0);
+  {
+    std::vector<Vec2f> fords;
+    for (const Curve& road : plan.roads)
+      for (int i = 0; i <= 600; ++i) {
+        const Vec2f p = curvePoint(road, i / 600.0f);
+        bool wet = false;
+        for (const Curve& r : plan.rivers) wet = wet || curveDistance(r, p) < r.halfWidth + 1.0f;
+        if (wet && (fords.empty() || std::hypot(fords.back().x - p.x, fords.back().y - p.y) > 2.0f)) fords.push_back(p);
+      }
+    for (int y = 0; y < H; ++y)
+      for (int x = 0; x < W; ++x) {
+        const TileInfo& t = info(x, y);
+        bool b = x < 3 || y < 3 || x >= W - 3 || y >= H - 3 || t.slope > 18 || t.waterDepth > -12 || oil(x, y) > 0;
+        for (int oy = -2; oy <= 2 && !b; ++oy)  // not on the water's edge either
+          for (int ox = -2; ox <= 2 && !b; ++ox) b = inBounds(x + ox, y + oy) && info(x + ox, y + oy).waterDepth > -4;
+        for (const auto& sp : homes) b = b || (std::abs(x - sp[0]) < 15 && std::abs(y - sp[1]) < 15);
+        for (const Vec2i& sp : supplyPoints) b = b || (std::abs(x - sp.x) < 5 && std::abs(y - sp.y) < 5);
+        for (const Vec2f& f : fords) b = b || (std::abs(x + 0.5f - f.x) < 8.0f && std::abs(y + 0.5f - f.y) < 8.0f);
+        bad[at(x, y)] = b;
+      }
+  }
+  // Houses come up to the road's verge and no nearer.
+  auto roadClear = [&](int x, int y) { return roadAt(x + 0.5f, y + 0.5f) >= 1.9f; };
+  auto freeTile = [&](int x, int y) { return inBounds(x, y) && !bad[at(x, y)] && !occ[at(x, y)] && roadClear(x, y); };
+  auto built = [&](int x, int y) { return inBounds(x, y) && occ[at(x, y)] == 1; };
+  auto isRow = [&](int x, int y) { return built(x, y) && rowPiece[static_cast<size_t>(piece[at(x, y)])]; };
+  // A row house may go on a free tile beside other row houses (they join),
+  // but not hard against a free-standing building.
+  auto canRow = [&](int x, int y) {
+    if (!freeTile(x, y)) return false;
+    for (int oy = -1; oy <= 1; ++oy)
+      for (int ox = -1; ox <= 1; ++ox)
+        if ((ox || oy) && built(x + ox, y + oy) && !isRow(x + ox, y + oy)) return false;
+    return true;
   };
-  auto bigKind = [](uint8_t k) { return k == 9 || k == 12 || k == 13 || k == 14; };
-  if (plan.centralTown && !tropical) {
-    // A market town round the crossroads.
-    for (int k = 0; k < 90; ++k) {
-      const int cx = W / 2 + static_cast<int>(rng.range(-11, 11)), cy = H / 2 + static_cast<int>(rng.range(-11, 11));
-      if (std::max(std::abs(cx - W / 2), std::abs(cy - H / 2)) < 5 || nearRoad(cx, cy)) continue;
-      uint8_t kind = houseKind(true);
-      if (bigKind(kind) && !plotFree(cx, cy, 2)) kind = desert ? 5 : winter ? 8 : 2;
-      if (!plotFree(cx, cy, 1)) continue;
-      lots.push_back({cx, cy, kind});
-      clearProps(cx, cy, bigKind(kind) ? 2 : 1);
+  auto newPiece = [&](bool row) {
+    rowPiece.push_back(row);
+    return pieces++;
+  };
+  auto putRow = [&](int x, int y, int p, uint8_t style) {
+    lots.push_back({x, y, static_cast<uint8_t>(kRowLot + style)});
+    occ[at(x, y)] = 1;
+    piece[at(x, y)] = p;
+  };
+  // Keep a tile open: 2 paved, 3 a yard.
+  auto keepOpen = [&](int x, int y, uint8_t what) {
+    if (inBounds(x, y) && !bad[at(x, y)] && occ[at(x, y)] != 1 && (occ[at(x, y)] == 0 || what == 2)) occ[at(x, y)] = what;
+  };
+  // A free-standing building on the tiles from (x0, y0), a clear tile all round.
+  auto canStand = [&](int x0, int y0, int w, int h) {
+    for (int y = y0; y < y0 + h; ++y)
+      for (int x = x0; x < x0 + w; ++x)
+        if (!freeTile(x, y)) return false;
+    for (int y = y0 - 1; y <= y0 + h; ++y)
+      for (int x = x0 - 1; x <= x0 + w; ++x)
+        if (built(x, y)) return false;
+    return true;
+  };
+  auto stand = [&](int x0, int y0, uint8_t kind) {
+    const Vec2i sz = lotFootprint(kind);
+    if (!canStand(x0, y0, sz.x, sz.y)) return false;
+    lots.push_back({x0 + sz.x / 2, y0 + sz.y / 2, kind});
+    const int p = newPiece(false);
+    for (int y = y0; y < y0 + sz.y; ++y)
+      for (int x = x0; x < x0 + sz.x; ++x) occ[at(x, y)] = 1, piece[at(x, y)] = p;
+    return true;
+  };
+  // A well or a shed may stand on a square or in a yard, a step clear of the houses.
+  auto standSmall = [&](int x, int y, uint8_t kind) {
+    if (!inBounds(x, y) || bad[at(x, y)] || occ[at(x, y)] == 1 || !roadClear(x, y)) return false;
+    for (int oy = -1; oy <= 1; ++oy)
+      for (int ox = -1; ox <= 1; ++ox)
+        if (built(x + ox, y + oy)) return false;
+    lots.push_back({x, y, kind});
+    occ[at(x, y)] = 1;
+    piece[at(x, y)] = newPiece(false);
+    return true;
+  };
+  // The first place round (x, y) where the building can stand, nearest first.
+  auto standNear = [&](int x, int y, int reach, uint8_t kind) {
+    const Vec2i sz = lotFootprint(kind);
+    for (int r = 0; r <= reach; ++r)
+      for (int dy = -r; dy <= r; ++dy)
+        for (int dx = -r; dx <= r; ++dx)
+          if (std::max(std::abs(dx), std::abs(dy)) == r && stand(x + dx - sz.x / 2, y + dy - sz.y / 2, kind)) return true;
+    return false;
+  };
+  auto rowStyle = [&](bool town) -> uint8_t {
+    const int p = tr(0, 99);
+    if (desert) return p < 68 ? 3 : 4;                        // mud brick, low and tall
+    if (winter) return p < 50 ? 2 : p < 82 ? 0 : 1;           // timber, plaster, the odd brick front
+    if (town) return p < 42 ? 0 : p < 74 ? 1 : 2;             // plaster, brick shops, timber
+    return p < 52 ? 0 : p < 86 ? 2 : 1;
+  };
+  // Timber country: log houses and stilt huts stand apart.
+  const bool apart = tropical || (winter && !plan.centralTown);
+  auto apartKind = [&]() -> uint8_t {
+    if (tropical) return 29;
+    const int p = tr(0, 99);
+    return p < 72 ? 8 : p < 82 ? 6 : p < 90 ? 1 : 4;  // log houses, a barn, a burnt-out one, a ruin
+  };
+
+  // The road a settlement is being laid along.
+  const Curve* street = nullptr;
+  auto streetDist = [&](int x, int y) { return curveDistance(*street, {x + 0.5f, y + 0.5f}); };
+  // Where that road runs at `a` tiles along from (cx, cy): the tile across the
+  // axis nearest its middle (false when the road has gone elsewhere).
+  auto roadAcross = [&](int cx, int cy, bool alongX, int a, int& kc) {
+    float best = 1e9f;
+    for (int k = -8; k <= 8; ++k) {
+      const int x = alongX ? cx + a : cx + k, y = alongX ? cy + k : cy + a;
+      if (!inBounds(x, y)) continue;
+      const float d = streetDist(x, y);
+      if (d < best) best = d, kc = k;
+    }
+    return best < 1.5f;
+  };
+  // Houses along one or both sides of the road (`sides`: 1 the low side, 2
+  // the high side, 3 both) for `reach` tiles each way from (cx, cy), leaving
+  // the first `skip` clear. Rows of two to five, an alley between rows. A row
+  // is straight: where the road bends away from it or into it the row ends
+  // and the next one starts on a new line.
+  auto frontage = [&](int cx, int cy, bool alongX, int reach, int skip, int sides, bool town) {
+    int count = 0;
+    auto tile = [&](int a, int k) { return alongX ? Vec2i{cx + a, cy + k} : Vec2i{cx + k, cy + a}; };
+    for (int side = -1; side <= 1; side += 2) {
+      if (!(sides & (side < 0 ? 1 : 2))) continue;
+      int run = 0, runMax = tr(2, 5), p = newPiece(true), line = 0;
+      for (int a = -reach; a <= reach; ++a) {
+        int kc = 0;
+        const bool here = std::abs(a) >= skip && roadAcross(cx, cy, alongX, a, kc);
+        if (!here || run >= runMax) {  // the square, no road, or time for an alley
+          if (run) p = newPiece(true), runMax = tr(2, 5);
+          run = 0;
+          continue;
+        }
+        if (run == 0) {
+          // The row's line: far enough out to clear the verge for its first three houses.
+          line = kc + side * 2;
+          for (int j = 0; j < 3; ++j) {
+            int kj = 0;
+            if (std::abs(a + j) < skip || !roadAcross(cx, cy, alongX, a + j, kj)) break;
+            int k = kj + side * 2;
+            while (std::abs(k - kj) < 4 && inBounds(tile(a + j, k).x, tile(a + j, k).y) && !roadClear(tile(a + j, k).x, tile(a + j, k).y)) k += side;
+            if ((k - line) * side > 0) line = k;
+          }
+        }
+        const Vec2i t = tile(a, line);
+        bool put = false;
+        if (inBounds(t.x, t.y) && roadClear(t.x, t.y) && streetDist(t.x, t.y) < 4.4f) {
+          if (apart) {
+            // A log house or hut on this tile and the one behind, the next one a tile on.
+            const int x0 = alongX ? t.x : std::min(t.x, t.x + side), y0 = alongX ? std::min(t.y, t.y + side) : t.y;
+            if (stand(x0, y0, apartKind())) put = true, a += 2;
+          } else if (canRow(t.x, t.y)) {
+            putRow(t.x, t.y, p, rowStyle(town));
+            put = true;
+          }
+        }
+        if (put) {
+          ++count;
+          ++run;
+        } else if (run) {
+          run = 0;
+          p = newPiece(true);
+        }
+      }
+    }
+    return count;
+  };
+  // A lane leading off the road at `a0` along, `len` tiles out to `side`,
+  // houses down both sides of it. Returns the tile at its far end.
+  auto lane = [&](int cx, int cy, bool alongX, int a0, int side, int len, Vec2i& end, int& k0) {
+    int kc = 0;
+    if (!roadAcross(cx, cy, alongX, a0, kc)) return false;
+    auto tile = [&](int a, int k) { return alongX ? Vec2i{cx + a, cy + k} : Vec2i{cx + k, cy + a}; };
+    // From the road out: every lane tile must be buildable ground.
+    for (int i = 1; i <= len + 2; ++i) {
+      const Vec2i t = tile(a0, kc + side * i);
+      if (!inBounds(t.x, t.y) || bad[at(t.x, t.y)] || occ[at(t.x, t.y)] == 1) return false;
+    }
+    k0 = kc + side * 2;
+    while (std::abs(k0 - kc) < 4 && !roadClear(tile(a0, k0).x, tile(a0, k0).y)) k0 += side;
+    for (int i = -2; i < len; ++i) keepOpen(tile(a0, k0 + side * i).x, tile(a0, k0 + side * i).y, 2);
+    end = tile(a0, k0 + side * len);
+    return true;
+  };
+  auto laneHouses = [&](int cx, int cy, bool alongX, int a0, int side, int len, int k0, bool town) {
+    auto tile = [&](int a, int k) { return alongX ? Vec2i{cx + a, cy + k} : Vec2i{cx + k, cy + a}; };
+    int count = 0;
+    for (int da = -1; da <= 1; da += 2) {
+      int run = 0, runMax = tr(3, 5), p = newPiece(true);
+      for (int i = 0; i < len; ++i) {
+        const Vec2i t = tile(a0 + da, k0 + side * i);
+        if (run >= runMax) {
+          run = 0, runMax = tr(2, 4), p = newPiece(true);
+          continue;
+        }
+        if (apart) {
+          const int x0 = alongX ? std::min(t.x, t.x + da) : std::min(t.x, t.x + side), y0 = alongX ? std::min(t.y, t.y + side) : std::min(t.y, t.y + da);
+          if (stand(x0, y0, apartKind())) ++count, i += 2;
+        } else if (canRow(t.x, t.y)) {
+          putRow(t.x, t.y, p, rowStyle(town));
+          ++count;
+          ++run;
+        } else if (run) {
+          run = 0, p = newPiece(true);
+        }
+      }
+    }
+    return count;
+  };
+  // A block: houses all round a yard, one left out for the way in.
+  auto block = [&](int x0, int y0, int w, int h, bool town) {
+    for (int y = y0 - 1; y <= y0 + h; ++y)
+      for (int x = x0 - 1; x <= x0 + w; ++x) {
+        const bool inside = x >= x0 && x < x0 + w && y >= y0 && y < y0 + h;
+        if (inside ? !freeTile(x, y) : built(x, y)) return false;
+      }
+    const int p = newPiece(true);
+    // The way in: not a corner house.
+    int gap = -1;
+    if (w >= 3 && h >= 3) {
+      const int n = 2 * (w - 2) + 2 * (h - 2);
+      gap = tr(0, n - 1);
+    }
+    int edge = 0;
+    for (int y = y0; y < y0 + h; ++y)
+      for (int x = x0; x < x0 + w; ++x) {
+        const bool onX = x == x0 || x == x0 + w - 1, onY = y == y0 || y == y0 + h - 1;
+        if (!onX && !onY) {
+          occ[at(x, y)] = 3;
+          continue;
+        }
+        if (onX != onY && edge++ == gap) {
+          occ[at(x, y)] = 3;
+          continue;
+        }
+        putRow(x, y, p, rowStyle(town));
+      }
+    // The lane round it.
+    for (int y = y0 - 1; y <= y0 + h; ++y)
+      for (int x = x0 - 1; x <= x0 + w; ++x) keepOpen(x, y, 2);
+    return true;
+  };
+  auto prop = [&](PropKind kind, int tx, int ty, uint32_t variants) {
+    decor.push_back({kind, static_cast<uint8_t>(trng.below(variants)), tx * 256 + tr(70, 186), ty * 256 + tr(70, 186)});
+    keepOpen(tx, ty, 3);
+  };
+  // A landmark in the street front: on `side` of the road, from `from` tiles
+  // along onwards in steps of `dir`, the first place it fits.
+  auto standOnStreet = [&](int cx, int cy, bool alongX, int from, int dir, int side, uint8_t kind) {
+    const Vec2i sz = lotFootprint(kind);
+    const int w = alongX ? sz.x : sz.y, d = alongX ? sz.y : sz.x;  // along the street, and back from it
+    for (int step = 0; step < 6; ++step) {
+      const int a = from + dir * step, a0 = dir > 0 ? a : a - w + 1;
+      int k0 = 0, k1 = 0;
+      if (!roadAcross(cx, cy, alongX, a0, k0) || !roadAcross(cx, cy, alongX, a0 + w - 1, k1)) continue;
+      const int kc = side > 0 ? std::max(k0, k1) : std::min(k0, k1);
+      for (int out = 2; out <= 4; ++out) {
+        const int k = side > 0 ? kc + out : kc - out - d + 1;
+        if (stand(alongX ? cx + a0 : cx + k, alongX ? cy + k : cy + a0, kind)) return true;
+      }
+    }
+    return false;
+  };
+
+  // --- The market town at the crossroads ---
+  std::vector<Vec2i> centres;  // of every settlement, to keep them apart
+  if (plan.centralTown && !tropical && plan.roads.size() >= 2) {
+    // Where the two roads really cross.
+    Vec2f cross{Wf * 0.5f, Hf * 0.5f};
+    float bestD = 1e9f;
+    for (int i = 0; i <= 400; ++i) {
+      const Vec2f p = curvePoint(plan.roads[0], 0.3f + 0.4f * i / 400.0f);
+      const float d = curveDistance(plan.roads[1], p);
+      if (d < bestD) bestD = d, cross = p;
+    }
+    const int tx0 = static_cast<int>(cross.x), ty0 = static_cast<int>(cross.y);
+    const int R = std::clamp(std::min(W, H) / 9, 9, 16);
+    centres.push_back({tx0, ty0});
+    // The market square, and what stands on it.
+    for (int y = ty0 - 3; y <= ty0 + 3; ++y)
+      for (int x = tx0 - 3; x <= tx0 + 3; ++x) keepOpen(x, y, 2);
+    // Which way each road runs through the town.
+    bool runsX[2] = {true, false};
+    for (int r = 0; r < 2; ++r) {
+      const Curve& road = plan.roads[static_cast<size_t>(r)];
+      float bestU = 0.5f, bd = 1e9f;
+      for (int i = 0; i <= 400; ++i) {
+        const Vec2f p = curvePoint(road, i / 400.0f);
+        const float d = std::hypot(p.x - cross.x, p.y - cross.y);
+        if (d < bd) bd = d, bestU = i / 400.0f;
+      }
+      const Vec2f a = curvePoint(road, bestU - 0.08f), b = curvePoint(road, bestU + 0.08f);
+      runsX[r] = std::abs(b.x - a.x) >= std::abs(b.y - a.y);
+    }
+    // In the street fronts on the square: the church and the town hall on
+    // one road, facing each other across the square; the inn and the market
+    // stalls on the other.
+    const int d0 = tr(0, 1) ? 1 : -1, s0 = tr(0, 1) ? 1 : -1, d1 = tr(0, 1) ? 1 : -1, s1 = tr(0, 1) ? 1 : -1;
+    street = &plan.roads[0];
+    standOnStreet(tx0, ty0, runsX[0], 4 * d0, d0, s0, desert ? 28 : 3);
+    standOnStreet(tx0, ty0, runsX[0], -4 * d0, -d0, -s0, desert ? 28 : winter ? 14 : 23);
+    street = &plan.roads[1];
+    standOnStreet(tx0, ty0, runsX[1], 4 * d1, d1, s1, desert ? 5 : 20);
+    standOnStreet(tx0, ty0, runsX[1], -4 * d1, -d1, -s1, 27);
+    // Houses along both roads through the town, then blocks packed in behind
+    // them from the middle outwards.
+    for (int r = 0; r < 2; ++r) {
+      street = &plan.roads[static_cast<size_t>(r)];
+      frontage(tx0, ty0, runsX[r], R + 3, 4, 3, true);
+    }
+    // Public buildings among the blocks: a school, a station by the road, a warehouse.
+    if (!desert) {
+      const uint8_t pub[3] = {14, 12, 9};
+      for (int i = 0; i < 3; ++i)
+        for (int tries = 0; tries < 12; ++tries) {
+          const int x = tx0 + tr(-R, R), y = ty0 + tr(-R, R);
+          if (std::max(std::abs(x - tx0), std::abs(y - ty0)) < 6) continue;
+          const Vec2i sz = lotFootprint(pub[i]);
+          if (!stand(x, y, pub[i])) continue;
+          for (int yy = y - 1; yy <= y + sz.y; ++yy)
+            for (int xx = x - 1; xx <= x + sz.x; ++xx) keepOpen(xx, yy, 3);
+          break;
+        }
+    }
+    std::vector<Vec2i> spots2;
+    for (int y = ty0 - R; y <= ty0 + R; ++y)
+      for (int x = tx0 - R; x <= tx0 + R; ++x) spots2.push_back({x, y});
+    std::stable_sort(spots2.begin(), spots2.end(), [&](Vec2i p, Vec2i q) {
+      return std::max(std::abs(p.x - tx0), std::abs(p.y - ty0)) < std::max(std::abs(q.x - tx0), std::abs(q.y - ty0));
+    });
+    static const int sizes[6][2] = {{5, 4}, {4, 5}, {4, 4}, {4, 3}, {3, 4}, {3, 3}};
+    for (const Vec2i& sp : spots2) {
+      if (!freeTile(sp.x, sp.y)) continue;
+      const int first = tr(0, 5);
+      for (int i = 0; i < 6; ++i) {
+        const int w = sizes[(first + i) % 6][0], h = sizes[(first + i) % 6][1];
+        // Anchored on the corner nearest the middle, growing outwards.
+        const int x0 = sp.x >= tx0 ? sp.x : sp.x - w + 1, y0 = sp.y >= ty0 ? sp.y : sp.y - h + 1;
+        const int far = std::max({std::abs(x0 - tx0), std::abs(x0 + w - 1 - tx0), std::abs(y0 - ty0), std::abs(y0 + h - 1 - ty0)});
+        if (far > R) continue;
+        if (block(x0, y0, w, h, true)) break;
+      }
+    }
+    // Short rows fill what is left along the lanes.
+    for (const Vec2i& sp : spots2) {
+      if (!inBounds(sp.x, sp.y) || occ[at(sp.x, sp.y)] != 0 || std::max(std::abs(sp.x - tx0), std::abs(sp.y - ty0)) > R - 2) continue;
+      for (int dir = 0; dir < 2; ++dir) {
+        const int n = tr(3, 5);
+        bool ok = true;
+        for (int i = -1; i <= n && ok; ++i)
+          for (int j = -1; j <= 1 && ok; ++j) {
+            const int x = sp.x + (dir ? j : i), y = sp.y + (dir ? i : j);
+            const bool inside = i >= 0 && i < n && j == 0;
+            ok = inside ? freeTile(x, y) : !built(x, y);
+          }
+        if (!ok) continue;
+        const int p = newPiece(true);
+        for (int i = 0; i < n; ++i) putRow(sp.x + (dir ? 0 : i), sp.y + (dir ? i : 0), p, rowStyle(true));
+        for (int i = -1; i <= n; ++i)
+          for (int j = -1; j <= 1; ++j) keepOpen(sp.x + (dir ? j : i), sp.y + (dir ? i : j), 2);
+        break;
+      }
     }
   }
-  if (plan.roads.empty()) return;
-  const int hamlets = std::max(1, W * H / (128 * 128)) * (desert ? 2 : plan.hamletScale);
-  for (int hIdx = 0; hIdx < hamlets; ++hIdx) {
-    // A hamlet: three to six houses around a point beside a road.
-    const Curve& road = plan.roads[static_cast<size_t>(hIdx) % plan.roads.size()];
-    const Vec2f at = curvePoint(road, rf(0.08f, 0.92f));
-    const int hx = static_cast<int>(at.x) + (rng.below(2) ? 4 : -4), hy = static_cast<int>(at.y) + (rng.below(2) ? 3 : -3);
-    const int count = 3 + static_cast<int>(rng.below(4));
-    for (int k = 0; k < count * 3 && k < 24; ++k) {
-      const int cx = hx + static_cast<int>(rng.range(-6, 6)), cy = hy + static_cast<int>(rng.range(-6, 6));
-      if (nearRoad(cx, cy) || !plotFree(cx, cy, 1)) continue;
-      uint8_t kind = houseKind(false);
-      if (kind == 13 && !plotFree(cx, cy, 2)) kind = 0;
-      // Now and then a walled villa with a courtyard among the desert houses.
-      if (kind == 5 && hash32(static_cast<uint32_t>(cx * 131 + cy * 977) ^ static_cast<uint32_t>(s)) % 5 == 0 &&
-          plotFree(cx, cy, 2))
-        kind = 28;
-      lots.push_back({cx, cy, kind});
-      clearProps(cx, cy, kind == 28 ? 2 : 1);
+
+  // --- Villages along the roads ---
+  if (!plan.roads.empty()) {
+    const int villages = std::max(1, W * H / (128 * 128)) * (desert ? 2 : plan.hamletScale);
+    for (int v = 0; v < villages; ++v) {
+      const Curve& road = plan.roads[static_cast<size_t>(v) % plan.roads.size()];
+      // A stretch of road with room beside it, away from the other settlements.
+      Vec2i c{-1, -1};
+      bool alongX = true;
+      for (int tries = 0; tries < 24 && c.x < 0; ++tries) {
+        const float u = static_cast<float>(tr(80, 920)) / 1000.0f;
+        const Vec2f p = curvePoint(road, u), p0 = curvePoint(road, u - 0.02f), p1 = curvePoint(road, u + 0.02f);
+        const int x = static_cast<int>(p.x), y = static_cast<int>(p.y);
+        if (!inBounds(x, y) || x < 12 || y < 12 || x >= W - 12 || y >= H - 12) continue;
+        bool room = true;
+        for (const Vec2i& o : centres) room = room && std::max(std::abs(o.x - x), std::abs(o.y - y)) >= (tries < 16 ? 26 : 18);
+        int good = 0;
+        for (int dy = -4; dy <= 4; ++dy)
+          for (int dx = -4; dx <= 4; ++dx) good += !bad[at(x + dx, y + dy)];
+        if (!room || good < 70) continue;
+        c = {x, y};
+        alongX = std::abs(p1.x - p0.x) >= std::abs(p1.y - p0.y);
+      }
+      if (c.x < 0) continue;
+      centres.push_back(c);
+      street = &road;
+      const int size = tr(0, 99) < 30 ? 0 : tr(0, 99) < 70 ? 1 : 2;  // hamlet, village, big village
+      const int reach = size == 0 ? tr(3, 4) : size == 1 ? tr(5, 7) : tr(7, 9);
+      const int sideA = tr(0, 1) ? 1 : -1;
+      const uint8_t church = tropical ? 29 : desert ? 28 : 3;
+      Vec2i wellAt{-1, -1};
+      if (size >= 1) {
+        // The church lane: off the street to one side, the church on a green at its end.
+        const int a0 = tr(-1, 1), len = size == 1 ? tr(3, 4) : tr(4, 6);
+        Vec2i end;
+        int k0 = 0;
+        if (lane(c.x, c.y, alongX, a0, sideA, len, end, k0)) {
+          const Vec2i sz = lotFootprint(church);
+          // The church across the end of the lane, the green in front of it.
+          const int ex = alongX ? end.x - sz.x / 2 : (sideA > 0 ? end.x + 1 : end.x - sz.x);
+          const int ey = alongX ? (sideA > 0 ? end.y + 1 : end.y - sz.y) : end.y - sz.y / 2;
+          for (int j = -1; j <= 1; ++j) keepOpen(alongX ? end.x + j : end.x, alongX ? end.y : end.y + j, 2);
+          if (stand(ex, ey, church) && !tropical && !desert) {
+            prop(winter ? PropKind::SnowPine : PropKind::Tree, alongX ? end.x - 2 : end.x, alongX ? end.y : end.y - 2, 3);
+            prop(winter ? PropKind::SnowPine : PropKind::Tree, alongX ? end.x + 2 : end.x, alongX ? end.y : end.y + 2, 3);
+          }
+          laneHouses(c.x, c.y, alongX, a0, sideA, len, k0, false);
+          wellAt = alongX ? Vec2i{end.x + (tr(0, 1) ? 1 : -1), end.y} : Vec2i{end.x, end.y + (tr(0, 1) ? 1 : -1)};
+        }
+      }
+      if (size >= 2) {
+        // A second lane on the other side, to the inn (or the market, or a villa).
+        const int a0 = tr(0, 1) ? tr(3, 4) : tr(-4, -3), len = tr(3, 4);
+        Vec2i end;
+        int k0 = 0;
+        if (lane(c.x, c.y, alongX, a0, -sideA, len, end, k0)) {
+          const uint8_t inn = tropical ? 29 : desert ? 27 : winter ? 14 : 20;
+          const Vec2i sz = lotFootprint(inn);
+          const int ex = alongX ? end.x - sz.x / 2 : (-sideA > 0 ? end.x + 1 : end.x - sz.x);
+          const int ey = alongX ? (-sideA > 0 ? end.y + 1 : end.y - sz.y) : end.y - sz.y / 2;
+          stand(ex, ey, inn);
+          laneHouses(c.x, c.y, alongX, a0, -sideA, len, k0, false);
+        }
+      }
+      frontage(c.x, c.y, alongX, reach, 0, size == 0 && tr(0, 99) < 40 ? (sideA > 0 ? 2 : 1) : 3, false);
+      if (size == 2 && !apart) {
+        // A big village has a block or two behind the street, round a yard.
+        std::vector<Vec2i> behind;
+        for (int k = 4; k <= 8; ++k)
+          for (int a = -reach; a <= reach; ++a)
+            for (int sgn = -1; sgn <= 1; sgn += 2) behind.push_back(alongX ? Vec2i{c.x + a, c.y + k * sgn} : Vec2i{c.x + k * sgn, c.y + a});
+        int blocks = 0;
+        for (size_t i = 0; i < behind.size() && blocks < 2; ++i) {
+          const Vec2i sp = behind[(i * 7 + static_cast<size_t>(v) * 3) % behind.size()];
+          const int w = tr(3, 4), h = tr(3, 4);
+          blocks += block(sp.x, sp.y, w, h, false);
+        }
+      }
+      if (tropical) continue;
+      // The well by the street, and a farm at one end: barn, shed, ricks.
+      if (wellAt.x < 0 || !standSmall(wellAt.x, wellAt.y, 10)) {
+        int kc = 0;
+        const int a = (tr(0, 1) ? 1 : -1) * (reach + 1);
+        if (roadAcross(c.x, c.y, alongX, a, kc)) standSmall(alongX ? c.x + a : c.x + kc + sideA * 3, alongX ? c.y + kc + sideA * 3 : c.y + a, 10);
+      }
+      if (!desert) {
+        const int end = (tr(0, 1) ? 1 : -1) * (reach + 3), out = (tr(0, 1) ? 1 : -1) * 4;
+        const int fx = c.x + (alongX ? end : out), fy = c.y + (alongX ? out : end);
+        if (standNear(fx, fy, 3, size == 0 ? 6 : 13)) {
+          standNear(fx + (alongX ? 3 : 0), fy + (alongX ? 0 : 3), 2, winter ? 7 : 6);
+          standNear(fx - (alongX ? 2 : 0), fy - (alongX ? 0 : 2), 2, 7);
+          for (int i = 0; i < 3; ++i) {
+            const int hx = fx + tr(-3, 3), hy = fy + tr(-3, 3);
+            if (freeTile(hx, hy)) prop(winter ? PropKind::Logs : PropKind::Haystack, hx, hy, 3);
+          }
+        }
+      }
     }
+  }
+
+  // A house standing by itself is a small one: the tall fronts belong in a row.
+  for (Lot& l : lots) {
+    if (l.kind < kRowLot || l.kind >= kRowLot + kRowLots) continue;
+    if (isRow(l.tx + 1, l.ty) || isRow(l.tx - 1, l.ty) || isRow(l.tx, l.ty + 1) || isRow(l.tx, l.ty - 1)) continue;
+    if (l.kind == kRowLot + 1) l.kind = kRowLot;
+    if (l.kind == kRowLot + 4) l.kind = kRowLot + 3;
+  }
+  if (std::getenv("LEGION_DEBUG_TOWN")) {
+    for (const Vec2i& c : centres) {
+      std::fprintf(stderr, "settlement at %d,%d\n", c.x, c.y);
+      for (int y = c.y - 18; y <= c.y + 18; ++y) {
+        for (int x = c.x - 22; x <= c.x + 22; ++x) {
+          char ch = ' ';
+          if (!inBounds(x, y)) ch = '?';
+          else if (occ[at(x, y)] == 1) ch = isRow(x, y) ? '#' : 'B';
+          else if (roadAt(x + 0.5f, y + 0.5f) < 1.0f) ch = '=';
+          else if (occ[at(x, y)] == 2) ch = ':';
+          else if (occ[at(x, y)] == 3) ch = '.';
+          else if (bad[at(x, y)]) ch = 'x';
+          else if (!roadClear(x, y)) ch = '-';
+          std::fputc(ch, stderr);
+        }
+        std::fputc('\n', stderr);
+      }
+    }
+  }
+  // --- The ground under them ---
+  // Every row, block and building stands level (a row on a slope is a row
+  // of broken roofs): each group of touching buildings is set at the mean
+  // height of its ground, neighbours across a lane are brought within a
+  // step of each other, and the land round about is eased in.
+  {
+    std::vector<int32_t> comp(tiles, -1);
+    std::vector<int64_t> sum;
+    std::vector<int32_t> count;
+    std::vector<Vec2i> stack;
+    for (int y = 0; y < H; ++y)
+      for (int x = 0; x < W; ++x) {
+        if (occ[at(x, y)] != 1 || comp[at(x, y)] >= 0) continue;
+        const int32_t id = static_cast<int32_t>(sum.size());
+        sum.push_back(0);
+        count.push_back(0);
+        comp[at(x, y)] = id;
+        stack.push_back({x, y});
+        while (!stack.empty()) {
+          const Vec2i t = stack.back();
+          stack.pop_back();
+          sum[static_cast<size_t>(id)] += corner(t.x, t.y) + corner(t.x + 1, t.y) + corner(t.x, t.y + 1) + corner(t.x + 1, t.y + 1);
+          count[static_cast<size_t>(id)] += 4;
+          for (int oy = -1; oy <= 1; ++oy)
+            for (int ox = -1; ox <= 1; ++ox) {
+              const int nx = t.x + ox, ny = t.y + oy;
+              if (!inBounds(nx, ny) || occ[at(nx, ny)] != 1 || comp[at(nx, ny)] >= 0) continue;
+              comp[at(nx, ny)] = id;
+              stack.push_back({nx, ny});
+            }
+        }
+      }
+    const size_t n = sum.size();
+    if (n) {
+      std::vector<float> level(n);
+      for (size_t i = 0; i < n; ++i)
+        level[i] = std::max(static_cast<float>(sum[i]) / static_cast<float>(count[i]), static_cast<float>(wl) + 14.0f);
+      // Neighbours: groups with tiles within three of each other.
+      std::vector<std::pair<int32_t, int32_t>> pairs;
+      for (int y = 0; y < H; ++y)
+        for (int x = 0; x < W; ++x) {
+          const int32_t a = comp[at(x, y)];
+          if (a < 0) continue;
+          for (int oy = 0; oy <= 3; ++oy)
+            for (int ox = -3; ox <= 3; ++ox) {
+              if (!inBounds(x + ox, y + oy)) continue;
+              const int32_t b = comp[at(x + ox, y + oy)];
+              if (b >= 0 && b != a) pairs.push_back({std::min(a, b), std::max(a, b)});
+            }
+        }
+      std::sort(pairs.begin(), pairs.end());
+      pairs.erase(std::unique(pairs.begin(), pairs.end()), pairs.end());
+      constexpr float kStep = 8.0f;
+      for (int pass = 0; pass < 12; ++pass)
+        for (const auto& [a, b] : pairs) {
+          const float d = level[static_cast<size_t>(b)] - level[static_cast<size_t>(a)];
+          if (std::abs(d) <= kStep) continue;
+          const float move = (std::abs(d) - kStep) * (d > 0 ? 1.0f : -1.0f);
+          const float wa = static_cast<float>(count[static_cast<size_t>(b)]) / static_cast<float>(count[static_cast<size_t>(a)] + count[static_cast<size_t>(b)]);
+          level[static_cast<size_t>(a)] += move * wa;
+          level[static_cast<size_t>(b)] -= move * (1.0f - wa);
+        }
+      // Set the corners under the buildings; bound the corners round them.
+      constexpr int kReach = 6, kEase = 9;
+      std::vector<int32_t> fixed(static_cast<size_t>(CX) * CY, -1), lo(static_cast<size_t>(CX) * CY, -1000000), hi(static_cast<size_t>(CX) * CY, 1000000);
+      for (int y = 0; y < H; ++y)
+        for (int x = 0; x < W; ++x) {
+          const int32_t c = comp[at(x, y)];
+          if (c < 0) continue;
+          const int32_t l = static_cast<int32_t>(level[static_cast<size_t>(c)] + 0.5f);
+          for (int q = 0; q < 4; ++q) fixed[static_cast<size_t>(y + (q >> 1)) * CX + x + (q & 1)] = l;
+        }
+      for (int cy = 0; cy < CY; ++cy)
+        for (int cx = 0; cx < CX; ++cx) {
+          const int32_t l = fixed[static_cast<size_t>(cy) * CX + cx];
+          if (l < 0) continue;
+          for (int oy = -kReach; oy <= kReach; ++oy)
+            for (int ox = -kReach; ox <= kReach; ++ox) {
+              const int nx = cx + ox, ny = cy + oy;
+              if (nx < 0 || ny < 0 || nx >= CX || ny >= CY) continue;
+              const int d = std::max(std::abs(ox), std::abs(oy));
+              const size_t i = static_cast<size_t>(ny) * CX + nx;
+              lo[i] = std::max(lo[i], l - kEase * d);
+              hi[i] = std::min(hi[i], l + kEase * d);
+            }
+        }
+      for (int cy = 0; cy < CY; ++cy)
+        for (int cx = 0; cx < CX; ++cx) {
+          const size_t i = static_cast<size_t>(cy) * CX + cx;
+          if (hi[i] == 1000000) continue;
+          const int32_t h = corner(cx, cy);
+          if (fixed[i] < 0 && h < static_cast<int32_t>(wl) + 8) continue;  // banks and beds stay as they are
+          int32_t v = fixed[i] >= 0 ? fixed[i] : lo[i] > hi[i] ? (lo[i] + hi[i]) / 2 : std::clamp(h, lo[i], hi[i]);
+          if (fixed[i] < 0) v = std::max(v, static_cast<int32_t>(wl) + 8);
+          if (v != h) setCorner(cx, cy, static_cast<uint16_t>(std::clamp(v, 0, 65535)));
+        }
+    }
+  }
+  // Paving: lanes and squares, and the strip between a house front and the
+  // road; bare earth in the yards and under the houses.
+  {
+    auto paint = [&](int tx, int ty, Layer layer, int strength) {
+      for (int q = 0; q < 4; ++q) {
+        uint8_t* w = splat(tx * SPLAT_PER_TILE + (q & 1), ty * SPLAT_PER_TILE + (q >> 1));
+        int total = 0;
+        for (int l = 0; l < LAYER_COUNT; ++l) {
+          w[l] = static_cast<uint8_t>(w[l] * (255 - strength) / 255);
+          total += w[l];
+        }
+        w[int(layer)] = static_cast<uint8_t>(w[int(layer)] + 255 - total);
+      }
+    };
+    const Layer yard = desert ? Layer::Sand : Layer::Dirt;
+    for (int y = 0; y < H; ++y)
+      for (int x = 0; x < W; ++x) {
+        const uint8_t o = occ[at(x, y)];
+        if (o == 2) paint(x, y, Layer::Road, 255);
+        else if (o == 3) paint(x, y, yard, winter ? 150 : 230);
+        else if (o == 1 && isRow(x, y)) paint(x, y, yard, winter ? 120 : 200);
+        else if (o == 0 && roadAt(x + 0.5f, y + 0.5f) < 2.6f &&
+                 (isRow(x + 1, y) || isRow(x - 1, y) || isRow(x, y + 1) || isRow(x, y - 1)))
+          paint(x, y, Layer::Road, 255);
+      }
+    // No trees in the streets or through the roofs.
+    std::erase_if(props_, [&](const Prop& p) {
+      const int tx = p.x >> LEPTON_SHIFT, ty = p.y >> LEPTON_SHIFT;
+      if (!inBounds(tx, ty)) return false;
+      if (occ[at(tx, ty)] == 1 || occ[at(tx, ty)] == 2) return true;
+      for (int oy = -1; oy <= 1; ++oy)
+        for (int ox = -1; ox <= 1; ++ox)
+          if (built(tx + ox, ty + oy)) return true;
+      return false;
+    });
+    props_.insert(props_.end(), decor.begin(), decor.end());
+    // Something in the bigger yards: a tree, a stack of crates.
+    for (int y = 1; y < H - 1; ++y)
+      for (int x = 1; x < W - 1; ++x)
+        if (occ[at(x, y)] == 3 && occ[at(x + 1, y)] == 3 && hash32(static_cast<uint32_t>(x * 7919 + y * 104729) ^ s) % 3 == 0)
+          props_.push_back({desert ? PropKind::Palm : winter ? PropKind::Logs : hash32(static_cast<uint32_t>(x + y * 977) ^ s) % 2 ? PropKind::Tree : PropKind::Crates,
+                            static_cast<uint8_t>(trng.below(3)), x * 256 + tr(70, 186), y * 256 + tr(70, 186)});
   }
 }
 

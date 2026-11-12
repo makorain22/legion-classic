@@ -78,7 +78,7 @@ struct SceneOptions {
   std::string encyclopedia;      // open the encyclopedia on this unit id at start (screenshots)        // ignore content/art/blitzkrieg (compare with the built-in art)
   bool gallery = false;
   bool battleDemo = false;       // two forces fighting in the open (screenshots)
-  int townDemo = 0;              // 1: every civilian building in rows; 2: the camera on a bridge; 3: on the steepest rock; 4: on a logistics office
+  int townDemo = 0;              // 1: every civilian building in rows; 2: the camera on a bridge; 3: on the steepest rock; 4: on a logistics office; 5: on the biggest village
   bool formationDemo = false;    // groups marching in each formation, for screenshots
   bool worksDemo = false;        // trenches and sandbag walls manned by every kind of infantry, for screenshots
   bool orgDemo = false;          // fireteams, platoons, a garrison and fog chips, for screenshots         // every unit lined up, for screenshots of the art

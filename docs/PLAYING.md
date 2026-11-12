@@ -173,11 +173,11 @@ longest reach on the field.
 
 Random maps come in five biomes, each with its own ground, trees and light:
 
-- **Temperate**: green fields, oak and pine woods, a river, hamlets of cottages.
+- **Temperate**: green fields, oak and pine woods, a river, villages of houses in rows.
 - **Winter**: deep snow, snowy pines and dead trees, a frozen river.
 - **Desert**: sand and gravel, rock outcrops, palms along a narrow green river,
   mud-brick houses.
-- **Tropical**: dense jungle, palms, broad muddy rivers. No villages.
+- **Tropical**: dense jungle, palms, broad muddy rivers, stilt-house hamlets.
 - **Urban**: a grid of streets filled with town houses, churches, cottages and
   ruins, debris everywhere.
 
@@ -318,6 +318,14 @@ Soldiers fight as units, as real armies do:
   trench or sandbag wall they hold, and the field works right round it.
 
 ### Villages, towns and bridges
+
+Villages and towns are compact, the way they stand in Europe: narrow houses
+built **wall to wall in rows** along the street, lanes leading off between
+them, blocks closed round a courtyard, the church at the end of its lane, a
+farm at the end of the street. A market town has a square where its roads
+cross, with the church and the town hall facing each other across it. Each
+row house holds three or four men, so a street is a line of strongpoints and
+a block is a small fortress with one way into its yard.
 
 Skirmish maps grow villages that fit their country: half-timbered and stone
 cottages, inns, manors, windmills and town halls in the west; log houses,
@@ -699,7 +707,7 @@ computer players; add `--side 1` to watch from the Soviet side, `--sides 3` for 
 for two against two, and `--factions gbr,rus` (or `ger,gbr,rus,gbr` with four
 sides) to choose who plays each side), `--gallery` (every unit and building lined up, for looking
 at the art; with `--factions gbr` one army only), `--works-demo` (trenches and sandbag walls
-manned by every kind of infantry), `--town-demo` (every civilian building), `--bridge-demo`
+manned by every kind of infantry), `--town-demo` (every civilian building), `--village-demo` (the camera on the biggest village or town), `--bridge-demo`
 (with `--ai-battle --layout 0`: a column crossing a bridge), `--org-demo` (a platoon, an armoured platoon, a held building and
 intel chips), `--intel` (with `--ai-battle`: watch with the first side's intel), `--export-sprites folder` (write every sprite as a PNG for
 repainting; see [ART_PIPELINE.md](ART_PIPELINE.md)), `--tool rules:ger_medium_tank`,

@@ -241,6 +241,14 @@ VoxelModel makeWindmill(const FactionLook&);
 VoxelModel makeMarket(const FactionLook&);
 VoxelModel makeVilla(const FactionLook&);
 VoxelModel makeStiltHut(const FactionLook&);
+// A row house by style (0 plaster, 1 brick, 2 half-timbered, 3 mud brick, 4
+// tall mud brick) and neighbour mask (12 voxels a tile, the tile at 2..14 of 16).
+VoxelModel makeRowHouse(int style, int mask);
+VoxelModel makeRowPlaster(const FactionLook&);
+VoxelModel makeRowBrick(const FactionLook&);
+VoxelModel makeRowTimber(const FactionLook&);
+VoxelModel makeRowAdobe(const FactionLook&);
+VoxelModel makeRowAdobeTall(const FactionLook&);
 // A bridge piece by neighbour mask (24 voxels a tile), stone or timber.
 VoxelModel makeBridgeSpan(int mask, bool wood);
 

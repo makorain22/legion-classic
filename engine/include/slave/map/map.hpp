@@ -202,11 +202,13 @@ class Map {
 
   // Random landscape: gentle hills, a river, dirt roads, fields and woods.
   void generateCountryside(uint64_t seed);
-  void generateTerrain(uint64_t seed, Biome b, int layout);
+  void generateTerrain(uint64_t seed, Biome b, int layout, bool settlements = true);
   // Random landscape in a biome (temperate countryside, snowy steppe, desert,
   // jungle, ruined town) around a layout (river valley, lakes, a ridge...;
-  // -1: the seed picks one). Sets `biome` and `layout`.
-  void generate(Biome b, uint64_t seed, int layout = -1);
+  // -1: the seed picks one). Sets `biome` and `layout`. Without `settlements`
+  // the land is left as open country: no villages or towns, no ground
+  // levelled or paved for them (bridges are still laid).
+  void generate(Biome b, uint64_t seed, int layout = -1, bool settlements = true);
   Biome biome = Biome::Temperate;
   MapLayout layout = MapLayout::RiverValley;
 
@@ -217,11 +219,16 @@ class Map {
     uint8_t kind = 0;    // 0 cottage, 1 bombed cottage, 2 town house, 3 church, 4 ruin, 5 adobe,
                          // 6 barn, 7 shed, 8 log house, 9 warehouse, 10 well, 11 water tower,
                          // 12 railway station, 13 farmhouse, 14 school, then the variants
-                         // in lotBuildingId; kBridgeLot / kWoodBridgeLot are bridge pieces
+                         // in lotBuildingId; 30..34 row houses (one tile, built wall to wall);
+                         // kBridgeLot / kWoodBridgeLot are bridge pieces
   };
+  static constexpr uint8_t kRowLot = 30, kRowLots = 5;  // plaster, brick, half-timbered, mud brick, tall mud brick
   static constexpr uint8_t kBridgeLot = 40, kWoodBridgeLot = 41;
   // The neutral building type a lot of this kind becomes ("neutral_cottage"...).
   static const char* lotBuildingId(uint8_t kind);
+  // Its footprint in tiles; the lot's tile is the footprint's middle (an even
+  // side has it on the corner of that tile, as for any building).
+  static Vec2i lotFootprint(uint8_t kind);
   std::vector<Lot> lots;
 
  private:

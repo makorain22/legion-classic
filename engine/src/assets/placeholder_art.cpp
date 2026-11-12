@@ -1008,6 +1008,28 @@ bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error, const ArtOption
   addStructure(ab, cat, "market", &makeMarket);
   addStructure(ab, cat, "villa", &makeVilla);
   addStructure(ab, cat, "stilt_hut", &makeStiltHut);
+  addStructure(ab, cat, "rowhouse", &makeRowPlaster);
+  addStructure(ab, cat, "rowhouse_brick", &makeRowBrick);
+  addStructure(ab, cat, "rowhouse_timber", &makeRowTimber);
+  addStructure(ab, cat, "rowhouse_adobe", &makeRowAdobe);
+  addStructure(ab, cat, "rowhouse_adobe_tall", &makeRowAdobeTall);
+  {
+    // Row houses join wall to wall with whatever row house stands next door.
+    const VoxelPalette rpal = makePalette(kFactions[0]);
+    static const char* kRows[5] = {"rowhouse", "rowhouse_brick", "rowhouse_timber", "rowhouse_adobe", "rowhouse_adobe_tall"};
+    for (int style = 0; style < 5; ++style) {
+      std::array<int, 16>& frames = cat.joined[kRows[style]];
+      for (int mask = 0; mask < 16; ++mask) {
+        const VoxelModel vm = makeRowHouse(style, mask);
+        BakeOptions o = unitBake(kStructureVoxel);
+        o.pivotX = vm.sizeX() / 2.0f;
+        o.pivotY = vm.sizeY() / 2.0f;
+        o.shadowAlpha = 110;
+        BakedSprite b = bakeVoxels(vm, rpal, o);
+        frames[static_cast<size_t>(mask)] = ab.add(std::move(b.image), b.anchorX, b.anchorY, VoxelSourceCache().get(vm, rpal, o), 0.0f);
+      }
+    }
+  }
   addStructure(ab, cat, "bridge", &makeStoneBridgePiece, nullptr, kFineStructureVoxel);
   addStructure(ab, cat, "bridge_wood", &makeWoodBridgePiece, nullptr, kFineStructureVoxel);
   addEconomyDecals(ab, cat);

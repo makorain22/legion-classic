@@ -1813,6 +1813,86 @@
       "convoy": 3,
       "group": "Supply",
       "description": "Goes up by itself on a logistics point your troops have held alone for twelve seconds, and brings three supply trucks that carry money to your headquarters. Lose it and the point is anyone's to take; you can build defences beside it."
+    },
+    {
+      "id": "neutral_row",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Row House",
+      "model": "rowhouse",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 380,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 3,
+      "description": "A narrow plastered town house, one of a row built wall to wall along a street. Put several side by side and they join into a terrace, round a corner or round a whole block with a courtyard inside."
+    },
+    {
+      "id": "neutral_row_brick",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Shop and Lodgings",
+      "model": "rowhouse_brick",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 500,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 4,
+      "description": "Three storeys of brick with a shop on the ground floor, taller than its neighbours in the row. Joins wall to wall with the other row houses."
+    },
+    {
+      "id": "neutral_row_timber",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Timbered Row House",
+      "model": "rowhouse_timber",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 340,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 3,
+      "description": "A half-timbered house under a steep roof, built into a row. Joins wall to wall with the other row houses."
+    },
+    {
+      "id": "neutral_row_adobe",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Mud-brick Row House",
+      "model": "rowhouse_adobe",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 340,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 3,
+      "description": "A low flat-roofed house of mud brick sharing its walls with the houses beside it, as in the old quarters of desert towns."
+    },
+    {
+      "id": "neutral_row_adobe_tall",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Tall Mud-brick House",
+      "model": "rowhouse_adobe_tall",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 460,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 4,
+      "description": "Two storeys of mud brick with a stair house on its flat roof, built into a row."
     }
   ]
 }
