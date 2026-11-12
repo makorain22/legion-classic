@@ -64,6 +64,10 @@ class GameAudio {
               const AudioBeds& beds);
   // A fresh battle (new map, loaded game): calm music, no lingering fights.
   void newBattle();
+  // A mission script picks the music: a mood ("calm", "battle", "victory",
+  // "defeat", "menu") or a piece by title or file name, held until the script
+  // lets go (empty: the music follows the fighting again).
+  void scriptMusic(const std::string& what);
   MusicMood mood() const { return mood_; }
   float nearIntensity() const { return near_; }
   float farIntensity() const { return far_; }
@@ -114,6 +118,8 @@ class GameAudio {
   slave::Biome biome_ = slave::Biome::Temperate;
   int ambienceSound_ = -1;
   bool menu_ = false;
+  bool scripted_ = false;       // a mission script holds the music
+  const Track* scriptTrack_ = nullptr;  // ... on this piece (else on the mood's playlist)
 };
 
 }  // namespace legion

@@ -64,7 +64,23 @@ struct Battle {
       }
       spawns.spawns.push_back({static_cast<uint16_t>(t), u.owner, {u.x, u.y}, u.facing, u.health});
     }
+    spawns.tag = 0x504C4344;
     sim->queue(spawns);
+    // Names, set-piece flags and stances of placed units, in the same tick (as the game does).
+    for (size_t i = 0; i < f.units.size(); ++i) {
+      const UnitPlacement& u = f.units[i];
+      if (u.name.empty() && !u.flags && !u.stance) continue;
+      Command c;
+      c.type = CommandType::TagUnits;
+      c.player = NEUTRAL_OWNER;
+      c.tag = 0x504C4344;
+      c.indexBase = static_cast<uint32_t>(i);
+      c.text = u.name;
+      c.count = 0xFF;
+      c.amount = u.flags;
+      c.radius = u.stance ? u.stance + 1 : 0;
+      sim->queue(c);
+    }
     for (uint8_t i = 0; i < f.players.size() && i < MAX_PLAYERS; ++i) {
       if (f.players[i].active && !f.players[i].human) {
         Command c;
@@ -409,4 +425,77 @@ TEST_CASE("tutorial 4, Base and Supply, is won by doing what the hints say") {
     return b.units(0, [](const UnitTypeDef& d, Entity) { return !d.isStructure() && !d.weapons.empty(); });
   };
   REQUIRE(b.runUntil([&] { return b.won(); }, 900, [&] { b.order(CommandType::AttackMove, army(), {78, 20}); }));
+}
+
+// The mission engine showcase (9.9): its story runs phase by phase - the
+// cinematic opening, the set piece kept alive, the valley opening up when the
+// village falls, the allied company sent in, the clock, the counter-attack
+// that lets the heavy tanks fight and die, and victory at the crossing.
+TEST_CASE("the mission engine showcase plays through its phases") {
+  Rules R;
+  Battle b(R);
+  REQUIRE(b.load(kContent + "scenarios/The_Crossing_at_Dawn.lmap"));
+  CHECK_FALSE(b.fired("Adler is lost"));  // the major's half-track carries its name from the first tick
+  CHECK(b.sim->named("Adler").size() == 1);
+  CHECK(b.f.map.width() == 96);
+  CHECK(b.f.map.height() == 224);
+  b.sim->tick();
+  CHECK(b.sim->cinematic(0));
+  CHECK(b.sim->playAreaLimited(0));
+  CHECK_FALSE(b.sim->inPlayArea(0, 48, 60));
+  const std::vector<Entity> guns = b.sim->named("Village guns");
+  REQUIRE(guns.size() == 2);
+  REQUIRE(b.sim->named("Adler").size() == 1);
+  CHECK((b.sim->scriptFlags(guns[0]) & kScriptInvulnerable));
+  CHECK(b.sim->ai().player(2).order == 2);  // the allied company holds its ground for now
+  REQUIRE(b.runUntil([&] { return !b.sim->cinematic(0); }, 20));
+  REQUIRE(b.sim->objectives().size() == 1);
+  CHECK(b.sim->objectives()[0].area >= 0);
+  // The set piece shrugs off anything.
+  for (Entity g : guns) b.sim->debugDamage(g, 10000000);
+  b.sim->tick();
+  CHECK(b.sim->named("Village guns").size() == 2);
+  // Clear the village and walk in.
+  const int village = [&] {
+    for (size_t i = 0; i < b.script.areas.size(); ++i)
+      if (b.script.areas[i].name == "The village") return static_cast<int>(i);
+    return -1;
+  }();
+  REQUIRE(village >= 0);
+  const ScriptArea& va = b.script.areas[static_cast<size_t>(village)];
+  Command kill;
+  kill.type = CommandType::Kill;
+  for (Entity e : b.units(1))
+    if (va.contains(b.sim->registry().get<CPosition>(e).x >> 8, b.sim->registry().get<CPosition>(e).y >> 8)) kill.units.push_back(e);
+  b.sim->queue(kill);
+  std::vector<UnitEdit> moves;
+  int k = 0;
+  for (Entity e : b.ofType(0, "ger_rifleman")) {
+    UnitEdit ed;
+    ed.unit = e;
+    ed.move = true;
+    ed.pos = {(va.x0 + 4 + k % 8) * 256 + 128, (va.y1 - 3) * 256 + 128};
+    moves.push_back(ed);
+    ++k;
+  }
+  Command mv;
+  mv.type = CommandType::Edit;
+  mv.edits = moves;
+  b.sim->queue(mv);
+  REQUIRE(b.runUntil([&] { return b.fired("Village taken"); }, 30));
+  CHECK_FALSE(b.sim->playAreaLimited(0));
+  CHECK(b.sim->countdownLeft("Reich counter-attack") > 200);
+  CHECK(b.sim->ai().player(2).order == 1);  // the grenadiers go for the crossing
+  CHECK(b.sim->objectives().size() == 2);
+  // The clock runs out: the heavies are let loose.
+  REQUIRE(b.runUntil([&] { return b.fired("Counter-attack"); }, 260));
+  for (Entity g : b.sim->named("Village guns")) {
+    CHECK_FALSE((b.sim->scriptFlags(g) & kScriptInvulnerable));
+    CHECK_FALSE((b.sim->scriptFlags(g) & kScriptNoAi));
+  }
+  CHECK(b.sim->ai().player(1).order == 1);
+  CHECK(b.sim->countdowns().empty());
+  for (Entity g : b.sim->named("Village guns")) b.sim->debugDamage(g, 10000000);
+  REQUIRE(b.runUntil([&] { return b.fired("Heavies gone"); }, 5));
+  CHECK(b.sim->objectives()[2].state == 1);
 }

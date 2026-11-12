@@ -834,8 +834,10 @@ void Menus::drawMissions() {
       const MissionInfo& mi = c.missions[m];
       const bool open = scene_.progress().open(c, m);
       const bool won = scene_.progress().won(c.id, mi.id);
+      if (!mi.act.empty() && (m == 0 || c.missions[m - 1].act != mi.act)) ImGui::SeparatorText(mi.act.c_str());
       const std::string label = std::string(won ? "[x]  " : open ? "[ ]  " : "[-]  ") + std::to_string(m + 1) + ".  " +
-                                mi.title + (mi.place.empty() ? "" : "   -   " + mi.place);
+                                mi.title + (mi.place.empty() ? "" : "   -   " + mi.place) +
+                                (mi.formation.empty() ? "" : "   (" + mi.formation + ")");
       ImGui::BeginDisabled(!open);
       if (ImGui::Selectable(label.c_str(), mission_ == static_cast<int>(m), ImGuiSelectableFlags_AllowDoubleClick)) {
         mission_ = static_cast<int>(m);
@@ -885,6 +887,8 @@ void Menus::drawBriefing() {
   title((std::to_string(mission_ + 1) + ".  " + mi.title).c_str());
   if (!mi.place.empty() || !mi.date.empty())
     ImGui::TextDisabled("%s%s%s", mi.place.c_str(), mi.place.empty() || mi.date.empty() ? "" : "   -   ", mi.date.c_str());
+  if (!mi.act.empty() || !mi.formation.empty())
+    ImGui::TextColored(kGold, "%s%s%s", mi.act.c_str(), mi.act.empty() || mi.formation.empty() ? "" : "   -   ", mi.formation.c_str());
   ImGui::Separator();
   ImGui::BeginChild("##btext", ImVec2(0, 420));
   ImGui::PushTextWrapPos(0);
@@ -919,6 +923,14 @@ void Menus::drawBriefing() {
   ImGui::PopTextWrapPos();
   ImGui::EndChild();
   if (!error_.empty()) ImGui::TextColored(ImVec4(1, 0.5f, 0.4f, 1), "%s", error_.c_str());
+  if (!c.tutorial) {
+    int& d = scene_.settings().campaignDifficulty;
+    ImGui::SetNextItemWidth(160);
+    if (ImGui::Combo("##difficulty", &d, "Difficulty: easy\0Difficulty: normal\0Difficulty: hard\0")) scene_.saveSettings();
+    if (ImGui::IsItemHovered())
+      ImGui::SetTooltip("Easy: fewer enemy reinforcements, a gentler computer.\nHard: more of them, and a sharper computer.");
+    ImGui::SameLine();
+  }
   if (menuButton("Begin", 160)) {
     if (scene_.startMission(c.id, mission_, error_)) {
       page_ = Page::None;

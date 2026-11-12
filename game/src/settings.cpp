@@ -13,7 +13,7 @@ const char* actionLabel(InputAction a) {
                                 "Screenshot", "Game info panel", "Encyclopedia",
                                 "Evacuate (leave trenches and buildings)",
                                 "Turn the view left", "Turn the view right", "Tilt the view up", "Tilt the view down",
-                                "Reset the view", "Next formation for the selection"};
+                                "Reset the view", "Next formation for the selection", "Radio log (mission messages)"};
   return names[static_cast<int>(a)];
 }
 
@@ -63,6 +63,7 @@ void Settings::resetKeys() {
   set(InputAction::TiltDown, {SDLK_PAGEDOWN, 0});
   set(InputAction::ResetCamera, {SDLK_BACKSPACE, 0});
   set(InputAction::NextFormation, {SDLK_Z, 0});
+  set(InputAction::RadioLog, {SDLK_L, 0});
 }
 
 bool Settings::pressed(InputAction a, const SDL_KeyboardEvent& e) const {
@@ -95,6 +96,7 @@ bool Settings::load(const std::string& path) {
   showInfoPanel = j.value("showInfoPanel", showInfoPanel);
   showCards = j.value("showCards", showCards);
   showChips = j.value("showChips", showChips);
+  campaignDifficulty = std::clamp(j.value("campaignDifficulty", campaignDifficulty), 0, 2);
   artPack = j.value("artPack", artPack);
   showEnemyCards = j.value("showEnemyCards", showEnemyCards);
   atmosphere = j.value("atmosphere", atmosphere);
@@ -136,6 +138,7 @@ bool Settings::save(const std::string& path) const {
   j["showInfoPanel"] = showInfoPanel;
   j["showCards"] = showCards;
   j["showChips"] = showChips;
+  j["campaignDifficulty"] = campaignDifficulty;
   j["artPack"] = artPack;
   j["showEnemyCards"] = showEnemyCards;
   j["atmosphere"] = atmosphere;

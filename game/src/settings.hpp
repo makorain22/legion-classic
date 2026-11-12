@@ -17,6 +17,7 @@ enum class InputAction : uint8_t {
   Pause, SpeedUp, SpeedDown, CentreSelection, NextSide, Menu,
   Help, Editor, Debug, Screenshot, ToggleInfo, Encyclopedia, Evacuate,
   RotateLeft, RotateRight, TiltUp, TiltDown, ResetCamera, NextFormation,
+  RadioLog,
   Count
 };
 constexpr int ACTION_COUNT = static_cast<int>(InputAction::Count);
@@ -43,6 +44,7 @@ struct Settings {
   bool showCards = true;       // NATO cards over bound units
   bool showEnemyCards = true;  // cards over the other sides' units too (when seen)
   bool showChips = true;       // chips for enemies detected in the fog
+  int campaignDifficulty = 1;  // 0 easy, 1 normal, 2 hard: enemy reinforcements and computer skill in missions
   bool atmosphere = true;      // colour grading and a vignette over the battlefield
   bool view3D = true;          // the 3D battlefield (false: the classic 2D sprite view)
   bool shadows = true;         // 3D: the sun's shadows

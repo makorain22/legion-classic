@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.9.1 – in progress (edits after Milestone 9; Milestones 9.1–9.8)
+## 0.9.1 – in progress (edits after Milestone 9; Milestones 9.1–9.9)
 
 - **Fixed a crash** in skirmish (seen in a 1v1v1 at high game speed, and
   probably the old "2v2 crash after five minutes"): a man killed inside a
@@ -297,6 +297,54 @@
   prints what each side did every two minutes (income, convoys, army, how
   much of it is bound, whom it fired on); thirty minutes take a few seconds.
   `--ffa` makes every side its own team (`--sides 3` or `4`).
+
+### Milestone 9.9: the mission engine
+
+- **Missions can tell a story as they play.** Radio messages from named
+  speakers, typed out at the lower left with a radio sound (L opens the radio
+  log); clocks at the top of the screen counting down to what's coming;
+  cinematic scenes with black bars, the camera gliding where the mission
+  wants it; goals and dangers marked on the ground and the minimap, with an
+  arrow at the screen's edge pointing to those out of view; the music chosen
+  by the mission when it matters.
+- **Set pieces.** Units can be named and made invulnerable, kept from the
+  computer, ignored by enemies or locked from their own player's orders,
+  from the editor or by a script at any moment, so a mission can set its
+  scene (heavy tanks that can't die shelling a village) and then let them
+  loose to fight and die when the story says.
+- **The computer player takes orders from the mission:** attack this place,
+  defend that one, don't build, don't attack yet, attack with half the usual
+  force, choose for yourself again. It leaves units a script holds alone. A
+  computer side without a base keeps no home guard (it used to keep every
+  man at home).
+- **A battlefield that opens up:** a mission can confine the battle to one
+  area (orders, building and the camera stay inside; the rest of the ground
+  is dimmed) and widen it as the operation develops.
+- **The trigger language** grows from 12 conditions and 22 actions to 33 and
+  62: named units, areas held, structures, health, clocks, counters,
+  objectives, difficulty, chance, kills and losses, alliances; patrols,
+  garrisons, barrages, alliances made and broken, new logistics points,
+  income rates, firing and resetting triggers, survivors carried over by
+  campaign flag and more. Any condition can be negated, and a trigger can
+  fire on any one of its conditions. Full reference in docs/MODDING.md.
+- **Scenario editor:** every new condition and action, in grouped menus and
+  written out as sentences; units picked by name or by side and area; a
+  *Mission* box in the inspector for names and set-piece switches; five new
+  ready-made triggers (a set piece, a hold with a clock, a cinematic
+  opening, an enemy attack on an area, the operation widening); a **mission
+  debugger** showing every trigger, clock, counter, flag and what each
+  computer has been told while the battle runs.
+- **Maps of any width and height** (steps of 32 tiles): long strips for
+  missions along a road, a coast or a valley. *New...* in the editor takes
+  them.
+- **Campaign difficulty:** easy, normal or hard on the briefing page. Enemy
+  computers play a step easier or harder, and reinforcements marked for it
+  come in at 70% / 100% / 135%. Missions can be grouped into acts and say
+  which formation the player commands.
+- **The Crossing at Dawn**, a short scenario on a 96 × 224 map that shows the
+  new pieces at work.
+- Saves are SIM8 (older ones still load); save and replay files are version
+  2 (older replays still play).
 
 ### Milestone 9.8: towns and villages
 

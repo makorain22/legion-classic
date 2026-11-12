@@ -311,9 +311,40 @@ void GameAudio::endOfBattle(bool won) {
   startMusic(won ? MusicMood::Victory : MusicMood::Defeat, 2.0f);
 }
 
+void GameAudio::scriptMusic(const std::string& what) {
+  if (!device_.isOpen()) return;
+  scriptTrack_ = nullptr;
+  if (what.empty()) {
+    scripted_ = false;
+    return;
+  }
+  scripted_ = true;
+  const std::pair<const char*, MusicMood> moods[] = {{"calm", MusicMood::Calm}, {"battle", MusicMood::Battle},
+                                                     {"victory", MusicMood::Victory}, {"defeat", MusicMood::Defeat},
+                                                     {"menu", MusicMood::Menu}};
+  for (const auto& [name, m] : moods)
+    if (what == name) {
+      startMusic(m, 3.0f);
+      return;
+    }
+  for (const auto& [mood, list] : playlists_)
+    for (const Track& t : list)
+      if (t.title == what || t.file == what || t.file.find(what) != std::string::npos) {
+        scriptTrack_ = &t;
+        mixer_->playMusic(t.bytes, 3.0f, t.volume);
+        nowPlaying_ = t.title;
+        lastTrack_ = t.file;
+        return;
+      }
+  SLV_WARN("Mission music: no track or mood called '%s'", what.c_str());
+  scripted_ = false;
+}
+
 void GameAudio::newBattle() {
   near_ = far_ = 0;
   quiet_ = 0;
+  scripted_ = false;
+  scriptTrack_ = nullptr;
   if (mood_ != MusicMood::Calm) startMusic(MusicMood::Calm, 4.0f);
 }
 
@@ -378,6 +409,13 @@ void GameAudio::update(float dt, const Listener& ear, bool menu, bool overlay, b
   if (menu) {
     if (mood_ != MusicMood::Menu) startMusic(MusicMood::Menu, 3.0f);
     else if (!mixer_->musicPlaying()) startMusic(MusicMood::Menu, 2.0f);
+    return;
+  }
+  if (scripted_) {  // the mission chose the music: keep it going
+    if (!mixer_->musicPlaying()) {
+      if (scriptTrack_) mixer_->playMusic(scriptTrack_->bytes, 1.0f, scriptTrack_->volume);
+      else startMusic(mood_, 1.0f);
+    }
     return;
   }
   switch (mood_) {

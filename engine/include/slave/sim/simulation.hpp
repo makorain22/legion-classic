@@ -68,7 +68,9 @@ enum class CommandType : uint8_t {
   Occupy,         // infantry in `units` enter `targetUnit` (a building or bunker) or man its trench line
   Unload,         // occupants of the structures in `units` (or the occupants listed) come out
   // --- Mission engine (9.9) --------------------------------------------------------
-  TagUnits,       // `units` are named `text` (unless empty) and get ScriptFlag bits: the bits in `count` become those in `amount`
+  TagUnits,       // `units` are named `text` (unless empty; "-" clears) and get ScriptFlag bits: the bits in `count` become
+                  // those in `amount`; `radius` 1 + Stance sets the stance (0 keeps it). With `tag` set and no `units`:
+                  // the unit spawned this tick by a SpawnList with that tag, at index `indexBase` (map placements)
 };
 
 // Production lines: one per kind of thing a side builds.

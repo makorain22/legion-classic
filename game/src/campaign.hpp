@@ -8,7 +8,7 @@
 //   {"id": "gbr", "title": "...", "faction": "gbr", "order": 3, "tutorial": false,
 //    "description": "...",
 //    "missions": [{"id": "b1", "title": "...", "map": "b1.lmap", "briefing": "b1.md",
-//                  "place": "...", "date": "..."}]}
+//                  "place": "...", "date": "...", "act": "Act I", "formation": "..."}]}
 //
 // Missions open one after another. Winning one records it in the player's
 // progress (progress.json in the user folder) with the campaign flags its
@@ -24,6 +24,8 @@ namespace legion {
 
 struct MissionInfo {
   std::string id, title, map, briefing, place, date;
+  std::string act;        // the part of the story it belongs to ("Act I - Walkure"); missions list under it
+  std::string formation;  // who the player commands ("Bataillon Brenner")
 };
 
 struct CampaignInfo {

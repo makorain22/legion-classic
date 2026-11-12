@@ -295,6 +295,17 @@ void GameScene::replaceWorld(MapFile&& file, bool keepCamera) {
   }
   players_ = defaultPlayers();
   for (size_t i = 0; i < file.players.size() && i < players_.size(); ++i) players_[i] = file.players[i];
+  if (nextDifficulty_ >= 0) {
+    // A campaign mission at the chosen difficulty: the script's scaled
+    // reinforcements follow it, and enemy computers play a step easier or harder.
+    sim_->setMissionDifficulty(static_cast<uint8_t>(nextDifficulty_));
+    uint8_t humanTeam = 255;
+    for (const PlayerSetup& p : players_)
+      if (p.active && p.human && humanTeam == 255) humanTeam = p.team;
+    for (PlayerSetup& p : players_)
+      if (p.active && !p.human && p.team != humanTeam)
+        p.difficulty = static_cast<uint8_t>(std::clamp(static_cast<int>(p.difficulty) + nextDifficulty_ - 1, 0, 2));
+  }
   applyPlayers();
   // Command the first human side (or keep the current one when it's still in play).
   if (!keepCamera || !players_[player_].active) {
@@ -305,24 +316,36 @@ void GameScene::replaceWorld(MapFile&& file, bool keepCamera) {
       if (players_[i].active) pick = i;
     if (pick >= 0 && (!keepCamera || !players_[player_].active)) player_ = static_cast<uint8_t>(pick);
   }
-  // Units exactly as saved: position, facing and health (names, script flags
-  // and stances follow once they stand, below).
-  constexpr uint32_t kPlacedTag = 0x504C4344;  // "PLCD"
-  std::vector<const UnitPlacement*> placed;
+  // Units exactly as saved: position, facing and health; then, in the same
+  // tick, the names, script flags and stances missions give them.
   {
+    constexpr uint32_t kPlacedTag = 0x504C4344;  // "PLCD"
     Command c;
     c.type = CommandType::SpawnList;
     c.tag = kPlacedTag;
+    std::vector<Command> tags;
     for (const UnitPlacement& u : file.units) {
       const int t = types_.find(u.type);
       if (t < 0) {
         SLV_WARN("Map uses unknown unit type '%s' - skipped", u.type.c_str());
         continue;
       }
+      if (!u.name.empty() || u.flags || u.stance) {
+        Command tag;
+        tag.type = CommandType::TagUnits;
+        tag.player = NEUTRAL_OWNER;
+        tag.tag = kPlacedTag;
+        tag.indexBase = static_cast<uint32_t>(c.spawns.size());
+        tag.text = u.name;
+        tag.count = 0xFF;
+        tag.amount = u.flags;
+        tag.radius = u.stance ? u.stance + 1 : 0;
+        tags.push_back(std::move(tag));
+      }
       c.spawns.push_back({static_cast<uint16_t>(t), u.owner, {u.x, u.y}, u.facing, u.health});
-      placed.push_back(&u);
     }
     if (!c.spawns.empty()) sim_->queue(std::move(c));
+    for (Command& t : tags) sim_->queue(std::move(t));
   }
   // Computer players and the scenario script.
   for (uint8_t i = 0; i < MAX_PLAYERS; ++i) {
@@ -350,36 +373,6 @@ void GameScene::replaceWorld(MapFile&& file, bool keepCamera) {
     sim_->queue(std::move(c));
   }
   sim_->tick();  // apply teams, supplies and spawns
-  {
-    // Placed units with a name, script flags or a stance (mission set pieces).
-    std::map<std::pair<std::string, uint8_t>, std::vector<Entity>> tags;
-    std::array<std::vector<Entity>, static_cast<size_t>(Stance::Count)> stances;
-    for (const SpawnRecord& r : sim_->spawnLog()) {
-      if (r.tag != kPlacedTag || r.index >= placed.size()) continue;
-      const UnitPlacement& u = *placed[r.index];
-      if (!u.name.empty() || u.flags) tags[{u.name, u.flags}].push_back(r.entity);
-      if (u.stance > 0 && u.stance < static_cast<uint8_t>(Stance::Count)) stances[u.stance].push_back(r.entity);
-    }
-    for (auto& [key, units] : tags) {
-      Command c;
-      c.type = CommandType::TagUnits;
-      c.player = NEUTRAL_OWNER;
-      c.units = std::move(units);
-      c.text = key.first;
-      c.count = 0xFF;
-      c.amount = key.second;
-      sim_->queue(std::move(c));
-    }
-    for (size_t st = 1; st < stances.size(); ++st) {
-      if (stances[st].empty()) continue;
-      Command c;
-      c.type = CommandType::SetStance;
-      c.player = NEUTRAL_OWNER;
-      c.units = std::move(stances[st]);
-      c.stance = static_cast<Stance>(st);
-      sim_->queue(std::move(c));
-    }
-  }
   updateCameraBounds();
   if (keepCamera) {
     if (cam_.is3D()) focusCamera(camera);
@@ -389,6 +382,17 @@ void GameScene::replaceWorld(MapFile&& file, bool keepCamera) {
     if (me.startX >= 0) centerOn({me.startX, me.startY});
     else centerOn({map_.widthLeptons() / 2, map_.heightLeptons() / 2});
   }
+  // What a mission's script did on its very first tick (radio, camera, music, cinematic).
+  for (const SimEvent& ev : sim_->events())
+    switch (ev.type) {
+      case EventType::ScriptMessage: case EventType::ObjectivesChanged: case EventType::CameraTo: case EventType::Hint:
+      case EventType::Highlight: case EventType::Transmission: case EventType::CinematicChanged: case EventType::CameraPan:
+      case EventType::PlaySound: case EventType::PlayMusic: case EventType::PlayAreaChanged:
+        announce(ev);
+        break;
+      default:
+        break;
+    }
   if (editor_) editor_->onWorldReplaced();
   if (sidebar_) sidebar_->cancel();
   beginRecording();
@@ -614,7 +618,13 @@ void GameScene::monkeyStep() {
 
 void GameScene::updateCameraBounds() {
   const float w = static_cast<float>(map_.width()), h = static_cast<float>(map_.height());
-  cam_.setBounds3D({0, 0, w, h});
+  if (sim_ && sim_->playAreaLimited(player_) && mode_ != Mode::Menu && !editor_->active()) {
+    // A mission's play area: the camera stays over it, with a little to spare.
+    const TileRect r = sim_->playArea(player_);
+    cam_.setBounds3D({std::max(0.0f, r.x0 - 6.0f), std::max(0.0f, r.y0 - 6.0f), std::min(w, r.x1 + 7.0f), std::min(h, r.y1 + 7.0f)});
+  } else {
+    cam_.setBounds3D({0, 0, w, h});
+  }
   const float lift = map_.maxHeight() * kPxPerUnit;
   cam_.setBounds({-h * iso::HALF_W, -lift, w * iso::HALF_W, (w + h) * iso::HALF_H});
 }
@@ -1383,6 +1393,17 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
     if (e.type == SDL_EVENT_MOUSE_WHEEL && !uiMouse && e.wheel.y != 0) cam_.zoomStep(e.wheel.y > 0 ? +1 : -1, mouse_);
     return;
   }
+  // A mission's cinematic: the script has the camera; the menu, pause and speed keys still work.
+  if (missionInputBlocked()) {
+    if (e.type == SDL_EVENT_KEY_DOWN && !uiKeys) {
+      if (settings_.pressed(InputAction::Menu, e.key)) menus_->openInGameMenu();
+      else if (settings_.pressed(InputAction::Pause, e.key)) paused_ = !paused_;
+      else if (settings_.pressed(InputAction::SpeedUp, e.key)) speed_ = std::min(16.0f, speed_ * 2);
+      else if (settings_.pressed(InputAction::SpeedDown, e.key)) speed_ = std::max(0.25f, speed_ / 2);
+    }
+    lmbDown_ = rmbDown_ = mmbDown_ = dragging_ = rmbDragging_ = false;
+    return;
+  }
   // The editor gets first look at input while it is open, then the sidebar's
   // placement and sell modes.
   if (editor_->onEvent(e, uiMouse, uiKeys)) return;
@@ -1498,6 +1519,8 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
         editor_->setActive(!editor_->active());
       } else if (K.pressed(InputAction::Debug, e.key)) {
         showDebug_ = !showDebug_;
+      } else if (K.pressed(InputAction::RadioLog, e.key)) {
+        showRadioLog_ = !showRadioLog_;
       } else if (K.pressed(InputAction::ToggleInfo, e.key)) {
         settings_.showInfoPanel = !settings_.showInfoPanel;
         saveSettings();
@@ -1786,7 +1809,19 @@ void GameScene::announce(const SimEvent& ev) {
       if (ev.owner == ANY_PLAYER || sim_->allied(ev.owner, player_)) showStatus("Objectives updated", 2.5f);
       break;
     case EventType::CameraTo:
-      if ((ev.owner == ANY_PLAYER || ev.owner == player_) && ev.at.x >= 0 && mode_ == Mode::Game) centerOn(ev.at);
+      if ((ev.owner == ANY_PLAYER || ev.owner == player_) && ev.at.x >= 0 && mode_ == Mode::Game) {
+        panDuration_ = 0;
+        centerOn(ev.at);
+      }
+      break;
+    case EventType::Transmission:
+    case EventType::CinematicChanged:
+    case EventType::CameraPan:
+    case EventType::PlaySound:
+    case EventType::PlayMusic:
+    case EventType::CountdownDone:
+    case EventType::PlayAreaChanged:
+      onMissionEvent(ev);
       break;
     case EventType::PlayerWon:
       if (mode_ == Mode::Menu) break;
@@ -1920,8 +1955,9 @@ void GameScene::onUpdate(float dt, float alpha) {
   for (const Map::TileRect& r : map_.takeHeightEdits()) terrain_.markHeightsDirty(r.x0, r.y0, r.x1, r.y1);
   terrain_.update();
   updateRockFaces();
-  // Intel instead of fog (9.3): the ground is never darkened.
-  terrain_.setFog(nullptr, 0);
+  // Intel instead of fog (9.3): the ground is never darkened - except outside
+  // a mission's play area (and the mission's camera, radio and clocks).
+  updateMission(dt);
   updateIntel();
   terrain_.updateFog(dt);
   fx_.update(dt * timeScale());
@@ -2460,7 +2496,7 @@ void GameScene::onImGui() {
     // A soft dark vignette round the battlefield.
     ImDrawList* bg = ImGui::GetBackgroundDrawList();
     const ImGuiIO& io = ImGui::GetIO();
-    const float w = io.DisplaySize.x - Sidebar::kWidth, h = io.DisplaySize.y, e = std::min(w, h) * 0.22f;
+    const float w = io.DisplaySize.x - (sim_->cinematic(player_) ? 0.0f : Sidebar::kWidth), h = io.DisplaySize.y, e = std::min(w, h) * 0.22f;
     const ImU32 dark = IM_COL32(8, 7, 4, 120), clear = IM_COL32(8, 7, 4, 0);
     bg->AddRectFilledMultiColor(ImVec2(0, 0), ImVec2(w, e), dark, dark, clear, clear);
     bg->AddRectFilledMultiColor(ImVec2(0, h - e), ImVec2(w, h), clear, clear, dark, dark);
@@ -2471,9 +2507,10 @@ void GameScene::onImGui() {
   drawHud();
   // A tutorial's hint and the interface element it points at.
   ui::setHighlight(mode_ != Mode::Menu ? sim_->highlight(player_) : std::string());
-  if (mode_ == Mode::Game) sidebar_->draw();
+  if (mode_ == Mode::Game && !sim_->cinematic(player_)) sidebar_->draw();
   if (mode_ == Mode::Game) editor_->imgui();
   drawObjectives();
+  drawMission();
   drawDebrief();
   if (mode_ != Mode::Menu && !sim_->hint(player_).empty()) {
     const ImGuiIO& io = ImGui::GetIO();
@@ -2493,7 +2530,7 @@ void GameScene::onImGui() {
     dl->AddRectFilled(ImVec2(p.x - 20, p.y - 10), ImVec2(p.x + ts.x * scale + 20, p.y + ts.y * scale + 10), IM_COL32(0, 0, 0, a / 2));
     dl->AddText(nullptr, ImGui::GetFontSize() * scale, p, IM_COL32(236, 200, 96, a), banner_.c_str());
   }
-  if (showHelp_) drawHelp();
+  if (showHelp_ && !missionInputBlocked()) drawHelp();
   if (showDebug_) drawDebug();
   if (formationPicker_) drawFormationPicker();
 }
@@ -2577,7 +2614,7 @@ void GameScene::drawDebrief() {
 void GameScene::drawObjectives() {
   std::vector<const Objective*> mine;
   for (const Objective& o : sim_->objectives())
-    if (o.player == ANY_PLAYER || sim_->allied(o.player, player_)) mine.push_back(&o);
+    if ((o.player == ANY_PLAYER || sim_->allied(o.player, player_)) && o.state != 3) mine.push_back(&o);
   if (mine.empty() && messages_.empty()) return;
   ImGui::SetNextWindowPos(ImVec2(editor_->active() ? Editor::kPanelWidth + 16 : 8, hudBottom_), ImGuiCond_Always);
   ImGui::SetNextWindowBgAlpha(0.75f);

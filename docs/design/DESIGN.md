@@ -259,11 +259,42 @@ recognition flash on vehicles and a roundel in the interface.
      fronts paved. `Map::lotFootprint` is the shared footprint table.
      `generate(..., settlements)`: missions placed by hand start from open
      country. Urban maps keep their grid.
-   - **9.9–9.11 Campaigns** – many more missions for Germany, the Soviet Union
-     and Britain, varied in difficulty and scale.
-   - **9.12 Big scenarios** – large stand-alone battles inspired by great
+   - **9.9 The mission engine** (done 13 Nov) – inserted before the
+     campaigns at the user's request ("engine work first"), with more than
+     the missions strictly need, all of it in the scenario editor for modders.
+     Sim: `CScripted` (name index + ScriptFlag bits: invulnerable, kept from
+     the computer, untargetable, locked); per-player play area (`TileRect`,
+     empty = all; human orders clamped, building refused outside, camera
+     bounds, ground dimmed through the old fog shader); countdowns, markers,
+     counters, kills/losses, income rate, cinematic flag, mission difficulty
+     (spawn scale 70/100/135), patrols; 21 new conditions (33) and 40 new
+     actions (62), `negate` per condition, `any` per trigger, `scaled` per
+     spawn; `Command::text` + `TagUnits` (map placements tagged in the same
+     tick as they spawn, by spawn tag and index). Computer player: ignores
+     script-held units, `order` attack/defend a point (attack launches at
+     once with what it has), behaviour bits (build, train, attack, raid,
+     capture, fortify, scout, repair), wave scale; a side with no yard keeps
+     no home guard. Saves SIM8 (mission block at the end), save files v2
+     (commands carry text). UnitPlacement name/flags/stance. Maps of any
+     width and height (editor *New...*, `Builder::startRect`, `findSeedRect`).
+     Presentation (game/src/mission_ui.cpp): radio panel and log (L),
+     countdown clocks, letterbox, camera glides, ground markers with edge
+     arrows, minimap rings and dimming, script music (`GameAudio::scriptMusic`).
+     Editor: all conditions and actions in grouped menus, NOT / ANY, units by
+     name, inspector Mission box, five story templates, mission debugger.
+     Campaigns: difficulty on the briefing page (enemy computers one step
+     easier/harder), `act` and `formation` per mission. Showcase: *The
+     Crossing at Dawn* (96x224). Tests: test_mission.cpp + the showcase played
+     through phase by phase.
+   - **9.10 Campaign: Germany** (next) – 25 missions in five acts, the main
+     canon; outline approved 12 Nov (see the handoff).
+   - **9.11 Campaign: Soviet Union** – the alternate canon.
+   - **9.12 Campaign: Britain** – canon, on the Germany campaign's timeline, a
+     little more defensive; its later stages on a second front (the Low
+     Countries or the north). An American campaign later.
+   - **9.13 Big scenarios** – large stand-alone battles inspired by great
      battles and long operations, with many units.
-   - **9.13 Tuning and debugging** – always last: playtest, balance the armies
+   - **9.14 Tuning and debugging** – always last: playtest, balance the armies
      and missions, performance, bugs, documentation.
    - Parked: air power (air strikes, an air force). Later: packaging and 1.0.
 

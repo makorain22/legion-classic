@@ -181,6 +181,7 @@ void GameScene::drawWorldOverlays() {
     ImDrawList* d;
     ~PopClip() { d->PopClipRect(); }
   } popClip{dl};
+  drawMissionMarkers(dl);  // a mission's goals and warnings on the ground (9.9)
 
   // --- Placement grid ----------------------------------------------------------
   // While placing a building, the tiles around the cursor are outlined, so

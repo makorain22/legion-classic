@@ -771,9 +771,80 @@ void Editor::drawUnitsTab() {
   drawInspector();
 }
 
+// Mission properties of the selection (9.9): a name for the script, the
+// set-piece switches and a stance. Saved with the map.
+void Editor::drawMissionProperties() {
+  Simulation& sim = scene_.sim();
+  Registry& reg = sim.registry();
+  auto& sel = scene_.selection();
+  std::vector<Entity> units;
+  for (Entity e : sel)
+    if (reg.alive(e) && reg.has<CUnit>(e)) units.push_back(e);
+  if (units.empty()) return;
+  ImGui::SeparatorText("Mission");
+  // The name: the first one's, offered for all of them.
+  if (unitNameFor_ != units.front()) {
+    unitNameFor_ = units.front();
+    unitNameEdit_ = sim.unitName(units.front());
+  }
+  ImGui::SetNextItemWidth(-70);
+  ImGui::InputTextWithHint("##uname", "name for triggers (e.g. Tiger)", &unitNameEdit_);
+  ImGui::SameLine();
+  if (ImGui::Button("Name", ImVec2(-1, 0))) {
+    Command c;
+    c.type = CommandType::TagUnits;
+    c.player = NEUTRAL_OWNER;
+    c.units = units;
+    c.text = unitNameEdit_.empty() ? std::string("-") : unitNameEdit_;
+    sim.queue(std::move(c));
+  }
+  if (ImGui::IsItemHovered())
+    ImGui::SetTooltip("Triggers can find these units by this name: named unit alive, in an area, hurt...\n"
+                      "and actions can pick them by it. Several units can share a name.");
+  struct Flag {
+    uint8_t bit;
+    const char* label;
+    const char* tip;
+  };
+  static const Flag flags[] = {
+      {kScriptInvulnerable, "Invulnerable", "Takes no damage until a script says otherwise: a set piece."},
+      {kScriptNoAi, "Not for the computer", "The computer player never gives it orders; only the script does."},
+      {kScriptUntargetable, "Not a target", "Enemies never pick it as a target on their own."},
+      {kScriptLocked, "Locked from orders", "Its own player can't give it orders (a scripted ally in your colours)."},
+  };
+  for (const Flag& f : flags) {
+    int on = 0;
+    for (Entity e : units) on += (sim.scriptFlags(e) & f.bit) ? 1 : 0;
+    bool v = on == static_cast<int>(units.size());
+    const bool some = on > 0 && !v;
+    const bool clicked = ImGui::Checkbox(some ? (std::string(f.label) + " (some)").c_str() : f.label, &v);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", f.tip);
+    if (clicked) {
+      Command c;
+      c.type = CommandType::TagUnits;
+      c.player = NEUTRAL_OWNER;
+      c.units = units;
+      c.count = f.bit;
+      c.amount = v ? f.bit : 0;
+      sim.queue(std::move(c));
+    }
+  }
+  int stance = static_cast<int>(reg.get<CUnit>(units.front()).stance);
+  ImGui::SetNextItemWidth(-1);
+  if (ImGui::Combo("##stance", &stance, "Stance: aggressive\0Stance: hold ground\0Stance: hold fire (ambush)\0")) {
+    Command c;
+    c.type = CommandType::SetStance;
+    c.player = NEUTRAL_OWNER;
+    c.units = units;
+    c.stance = static_cast<Stance>(stance);
+    sim.queue(std::move(c));
+  }
+}
+
 void Editor::drawInspector() {
   Registry& reg = scene_.sim().registry();
   auto& sel = scene_.selection();
+  drawMissionProperties();
   ImGui::SeparatorText("Inspector");
   if (sel.size() == 1 && reg.alive(sel[0])) {
     const Entity e = sel[0];

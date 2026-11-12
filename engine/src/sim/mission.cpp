@@ -23,6 +23,7 @@ Vec2i Simulation::clampToPlayArea(uint8_t player, Vec2i p) const {
 }
 
 void Simulation::setPlayArea(uint8_t player, TileRect r) {
+  if (r.x0 <= 0 && r.y0 <= 0 && r.x1 >= map_.width() - 1 && r.y1 >= map_.height() - 1) r = TileRect{};  // all of it: no limit
   for (uint8_t p = 0; p < MAX_PLAYERS; ++p)
     if (player == ANY_PLAYER || p == player) playArea_[p] = r;
 }

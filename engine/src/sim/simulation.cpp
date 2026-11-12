@@ -379,10 +379,15 @@ void Simulation::applyCommandBody(const Command& cmd) {
       break;
     case CommandType::TagUnits: {
       const int32_t name = cmd.text.empty() ? -1 : nameIndex(cmd.text == "-" ? std::string() : cmd.text);
-      for (Entity e : cmd.units) {
+      std::vector<Entity> who = cmd.units;
+      if (who.empty() && cmd.tag)
+        for (const SpawnRecord& r : spawnLog_)
+          if (r.tag == cmd.tag && r.index == cmd.indexBase) who.push_back(r.entity);
+      for (Entity e : who) {
         if (!reg_.alive(e) || !reg_.has<CUnit>(e)) continue;
         if (name >= 0) setUnitName(e, name);
         setScriptFlags(e, static_cast<uint8_t>(cmd.count), static_cast<uint8_t>(cmd.amount));
+        if (cmd.radius > 0) reg_.get<CUnit>(e).stance = static_cast<Stance>(std::min<int32_t>(cmd.radius - 1, static_cast<int32_t>(Stance::Count) - 1));
       }
       break;
     }

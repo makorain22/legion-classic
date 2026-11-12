@@ -328,8 +328,11 @@ bool GameScene::startMission(const std::string& campaign, int mission, std::stri
   // The flags earlier missions left are there from the first tick.
   auto f = progress_.flags.find(campaign);
   nextFlags_ = f != progress_.flags.end() ? f->second : std::map<std::string, int32_t>{};
+  nextDifficulty_ = c->tutorial ? 1 : settings_.campaignDifficulty;  // the tutorial plays as written
   const std::string path = c->mapPath(static_cast<size_t>(mission));
-  if (!startScenario(path, error)) {
+  const bool ok = startScenario(path, error);
+  nextDifficulty_ = -1;
+  if (!ok) {
     nextFlags_.clear();
     return false;
   }

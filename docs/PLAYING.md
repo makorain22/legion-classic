@@ -26,7 +26,18 @@ players on a random map.
   the briefing, then Begin. Missions open one after another, and what you
   achieve in one can help in the next (a tank that survives comes back).
   Progress is kept in `progress.json` in the user folder; *Start again* on a
-  campaign's page forgets it.
+  campaign's page forgets it. Choose **easy, normal or hard** on the briefing
+  page: it sets how many reinforcements the enemy brings and how sharp the
+  enemy computer plays.
+- **What a mission can do.** Missions tell their story as they go: radio
+  messages from your officers appear at the lower left (press **L** for the
+  radio log), a clock at the top of the screen counts down to what's coming,
+  goals and dangers are marked on the ground and the minimap (an arrow at the
+  screen's edge points to the ones out of view), and the battlefield can open
+  up as the operation develops: ground outside the current area of operations
+  is dimmed, and you can't send units or build there yet. During a scene with
+  black bars the camera is the mission's; Esc and pause still work.
+- **The Crossing at Dawn** (Scenarios): a short mission that shows all this.
 
 - **Skirmish.** Pick one of twelve ready-made **maps** (one for every
   landscape, villages placed), or a new random map: then pick a map size, a biome (temperate, winter, desert, tropical
@@ -518,6 +529,7 @@ These are the defaults:
 | Ctrl+Shift+A | Select all your units |
 | Ctrl+1…9 / 1…9 | Set / recall a control group |
 | Tab | Switch which side you command (and see) |
+| L | Radio log: the mission's messages so far |
 | Home or C | Centre the view on the selection |
 | Sidebar minimap | Click/drag to look; right-click to send the selection; wheel or + / − to zoom (1× to 8×) |
 | Middle mouse drag | Turn the view (sideways) and tilt it (up and down); classic view: pan |
@@ -652,16 +664,31 @@ save, load and replay exactly.
 - **Areas.** Draw named rectangles on the map (*Draw area*, then drag). Triggers
   refer to them by name. They're outlined on the map while the Script tab is
   open.
-- **Conditions**: always (at the start); a timer (seconds since the start);
-  a side has at least N units (of a type, or any) in an area; a side has no
-  units in an area; a side has at most N units on the map; a side has been
-  defeated; a side has at least N supplies; another trigger has fired.
-- **Actions**: show a message; add an objective (main or optional), complete
-  or fail it; victory or defeat for a side; spawn units in an area; give or
-  take supplies; reveal an area; send a side's units in one area to attack-move
-  or move to another; hand units in an area to another side; destroy units in
-  an area; switch a trigger on or off; hand a side to the computer or a human;
-  move a side's camera to an area.
+- **Conditions** (33): time, clocks, counters, campaign flags, objectives
+  and difficulty; units, structures and their health in an area, an area
+  held with no enemy in it; named units alive, dead, in an area or hurt;
+  sides defeated, their supplies, kills, losses and alliances. Any condition
+  can be negated ("not"), and a trigger can fire on **any one** of its
+  conditions instead of all of them.
+- **Actions** (62): messages, radio messages, objectives (marked on the map),
+  victory and defeat; cinematic letterbox, camera cuts and glides, markers,
+  sounds and music; spawning units (also named, by difficulty, or as many as
+  a campaign flag says), moving, patrolling, garrisoning, binding, damaging,
+  healing, destroying, handing over units; set pieces (invulnerable, kept
+  from the computer, never targeted, locked from orders); telling a computer
+  player to attack or defend a place and what it may do (build, train,
+  attack, raid, capture, fortify, scout, repair) and how big its attacks are;
+  alliances made and broken; the play area; artillery barrages; logistics
+  points; income; clocks, counters and flags; firing and resetting triggers.
+  The full list is in docs/MODDING.md.
+- **Ready-made triggers** on the Quick start page include a set piece
+  (unkillable until released), a held position with a clock, a cinematic
+  opening and the operation widening.
+- **Units tab, inspector:** give the selected units a name for the script
+  and make them set pieces (invulnerable, not for the computer, not a
+  target, locked from orders), and set their stance.
+- **Mission debugger** (Script tab): every trigger and when it fired, the
+  clocks, counters and flags, what each computer player has been told.
 - A trigger fires once, or **repeats** (at most once a second) while its
   conditions hold. Triggers can start switched off and be switched on by
   others, which chains a mission into stages.
@@ -686,7 +713,8 @@ Edit triggers during play: the battle keeps what has already fired.
 ### Files
 
 **New…** makes a flat or random map from 64 × 64 up to 1024 × 1024 tiles, in
-any of the five biomes, with or without villages and towns.
+any of the five biomes, with or without villages and towns, or a width and
+height of your own (long maps for missions along a road or a coast).
 **Save as…** and **Open…** use your maps folder,
 `%APPDATA%\Makorain\LegionClassic\maps\`. Scenario files (`.lmap`) store the
 terrain, water, props, every unit (position, facing, health), the sides and

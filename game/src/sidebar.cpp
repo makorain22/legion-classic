@@ -94,7 +94,8 @@ Vec2i Sidebar::snappedCentre(int type, Vec2f g) const {
 bool Sidebar::validAt(int type, Vec2i centre) const {
   const Simulation& sim = scene_.sim();
   const Vec2i o = sim.footprintOrigin(type, centre);
-  return sim.canPlace(type, o) && sim.inBuildRange(scene_.player(), type, o);
+  return sim.canPlace(type, o) && sim.inBuildRange(scene_.player(), type, o) &&
+         sim.inPlayArea(scene_.player(), o.x + sim.types().get(type).footW / 2, o.y + sim.types().get(type).footH / 2);
 }
 
 std::vector<Vec2i> Sidebar::lineTiles(Vec2i a, Vec2i b) const {
@@ -272,6 +273,19 @@ void Sidebar::rebuildMinimap() {
     terrainRevision_ = m.revision();
   }
   minimapPixels_ = terrainColors_;
+  // A mission's play area: the rest of the map dimmed (9.9).
+  if (scene_.sim().playAreaLimited(scene_.player())) {
+    const TileRect pa = scene_.sim().playArea(scene_.player());
+    for (int py = 0; py < mh; ++py)
+      for (int px = 0; px < mw; ++px) {
+        const float sx = (px + 0.5f) / mw * (W + H) - H, sy = (py + 0.5f) / mh * (W + H);
+        const int tx = static_cast<int>(std::floor((sx + sy) * 0.5f)), ty = static_cast<int>(std::floor((sy - sx) * 0.5f));
+        if (!pa.contains(tx, ty)) {
+          uint32_t& c = minimapPixels_[static_cast<size_t>(py) * mw + px];
+          c = shade(c, 0.38f) | 0xFF000000u;
+        }
+      }
+  }
   // Intel (9.3): the ground is all known; the enemy only where our side sees it.
   const bool fog = scene_.fogEnabled();
   auto toPixel = [&](int32_t lx, int32_t ly, int& px, int& py) {
@@ -314,6 +328,27 @@ void Sidebar::rebuildMinimap() {
       for (int x = px - r; x <= px + r; ++x)
         if (x >= 0 && y >= 0 && x < mw && y < mh && (std::abs(x - px) == r || std::abs(y - py) == r))
           minimapPixels_[static_cast<size_t>(y) * mw + x] = c;
+  }
+  // Mission markers and the places of open objectives: a ring each.
+  {
+    const ScenarioScript& script = scene_.sim().script();
+    auto ring = [&](int area, uint32_t c) {
+      if (area < 0 || area >= static_cast<int>(script.areas.size())) return;
+      const ScriptArea& a = script.areas[static_cast<size_t>(area)];
+      int px, py;
+      if (!toPixel((a.x0 + a.x1 + 1) * 128, (a.y0 + a.y1 + 1) * 128, px, py)) return;
+      const int r = std::max(2, miniZoom_ * 2);
+      for (int y = py - r; y <= py + r; ++y)
+        for (int x = px - r; x <= px + r; ++x) {
+          const int d = (x - px) * (x - px) + (y - py) * (y - py);
+          if (x >= 0 && y >= 0 && x < mw && y < mh && d <= r * r && d >= (r - 1) * (r - 1)) minimapPixels_[static_cast<size_t>(y) * mw + x] = c;
+        }
+    };
+    for (const Objective& o : scene_.sim().objectives())
+      if (o.state == 0 && (o.player == ANY_PLAYER || scene_.sim().allied(o.player, me))) ring(o.area, rgba8(240, 206, 96));
+    for (const MissionMarker& mk : scene_.sim().markers())
+      if (mk.player == ANY_PLAYER || mk.player == me)
+        ring(mk.area, mk.kind == 1 ? rgba8(236, 84, 64) : mk.kind == 2 ? rgba8(150, 190, 230) : rgba8(240, 206, 96));
   }
   if (minimap_.width() != mw || minimap_.height() != mh) minimap_.allocate(mw, mh, {true, false, false});
   minimap_.update(0, 0, mw, mh, minimapPixels_.data());

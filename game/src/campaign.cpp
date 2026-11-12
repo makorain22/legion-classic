@@ -43,6 +43,8 @@ std::vector<CampaignInfo> scanCampaigns(const std::vector<std::string>& dirs, st
         mi.briefing = m.value("briefing", std::string());
         mi.place = m.value("place", std::string());
         mi.date = m.value("date", std::string());
+        mi.act = m.value("act", std::string());
+        mi.formation = m.value("formation", std::string());
         if (mi.id.empty() || mi.map.empty()) {
           warnings += c.id + ": a mission without an id or map was skipped\n";
           continue;

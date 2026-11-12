@@ -90,6 +90,13 @@ struct Builder {
     return ti.waterDepth <= -6 && ti.slope <= 20;
   }
   // Places a unit or structure at the nearest spot that takes it.
+  // The last unit placed: a name for mission scripts, set-piece flags, a stance.
+  void tag(const std::string& name, uint8_t flags = 0, uint8_t stance = 0) {
+    if (file.units.empty()) return;
+    file.units.back().name = name;
+    file.units.back().flags = flags;
+    file.units.back().stance = stance;
+  }
   bool place(const std::string& id, uint8_t owner, int tx, int ty, int facing = 0, bool quiet = false) {
     const int type = t(id);
     if (type < 0) return false;
@@ -168,7 +175,20 @@ struct Builder {
   }
 };
 
-// A seed whose map is dry ground along every listed tile.
+// A seed whose map is dry ground along every listed tile (of a w x h map).
+uint64_t findSeedRect(int w, int h, Biome b, int layout, uint64_t from, const std::vector<std::pair<int, int>>& mustBeDry,
+                      bool settlements = true) {
+  for (uint64_t seed = from; seed < from + 4000; ++seed) {
+    Map probe(w, h);
+    probe.generate(b, seed, layout, settlements);
+    bool ok = true;
+    for (const auto& [x, y] : mustBeDry)
+      ok = ok && probe.inBounds(x, y) && probe.info(x, y).waterDepth < -16 && probe.info(x, y).slope <= 20;
+    if (ok) return seed;
+  }
+  std::fprintf(stderr, "no seed found from %llu\n", static_cast<unsigned long long>(from));
+  return from;
+}
 uint64_t findSeed(int size, Biome b, int layout, uint64_t from, const std::vector<std::pair<int, int>>& mustBeDry,
                   bool settlements = true) {
   for (uint64_t seed = from;; ++seed) {
@@ -258,6 +278,11 @@ Action objective(uint8_t p, const std::string& text, bool optional = false) {
   a.text = text;
   return a;
 }
+Action markedObjective(uint8_t p, const std::string& text, int area, bool optional = false) {
+  Action a = objective(p, text, optional);
+  a.area = area;  // shown on the map while open
+  return a;
+}
 Action done(int i) { return A(ActionType::CompleteObjective, ANY_PLAYER, i); }
 Action failed(int i) { return A(ActionType::FailObjective, ANY_PLAYER, i); }
 Action win(uint8_t p) { return A(ActionType::Victory, p); }
@@ -294,6 +319,42 @@ Action supplies(uint8_t p, int n) { return A(ActionType::GiveSupplies, p, n); }
 Action setFlag(const char* name, int v) {
   Action a = A(ActionType::SetFlag, ANY_PLAYER, v);
   a.text = name;
+  return a;
+}
+
+// The mission engine's conditions and actions (9.9), all through two helpers.
+Condition when(CondType type, uint8_t player = 0, int area = -1, int value = 0, const std::string& text = {}, int unit = -1) {
+  Condition c = C(type, player, area, value, unit);
+  c.text = text;
+  return c;
+}
+Condition unless(Condition c) {
+  c.negate = true;
+  return c;
+}
+Action act(ActionType type, uint8_t player = ANY_PLAYER, int value = 0, const std::string& text = {}, int area = -1,
+           int area2 = -1, int unit = -1) {
+  Action a = A(type, player, value);
+  a.text = text;
+  a.area = area;
+  a.area2 = area2;
+  a.unitType = unit;
+  return a;
+}
+Action radio(uint8_t p, const std::string& words, int seconds = 0) { return act(ActionType::Transmission, p, seconds, words); }
+Action scaledSpawn(uint8_t p, int unit, int area, int n) {
+  Action a = spawn(p, unit, area, n);
+  a.scaled = true;
+  return a;
+}
+Action fire(int trigger) {
+  Action a = A(ActionType::FireTrigger);
+  a.trigger = trigger;
+  return a;
+}
+Action alliance(uint8_t p, uint8_t q, bool allies) {
+  Action a = A(ActionType::SetAlliance, p, allies ? 1 : 0);
+  a.player2 = q;
   return a;
 }
 
@@ -820,6 +881,102 @@ bool gerDonets(Builder& b, const std::string& out) {
 }
 
 // ---------------------------------------------------------------------------
+// The mission engine showcase (9.9): a short scenario that uses the new
+// pieces - a cinematic opening, radio, set pieces that can't die until the
+// story lets them, a clock, an allied computer, enemy computers told where to
+// attack, and a play area that opens up as the operation develops - on a map
+// four times as long as it is wide.
+// ---------------------------------------------------------------------------
+bool showcase(Builder& b, const std::string& out) {
+  const uint64_t seed = findSeedRect(96, 224, Biome::Temperate, static_cast<int>(MapLayout::Steppe), 1948,
+                                     rect(40, 196, 56, 212) + rect(38, 140, 58, 160) + rect(38, 50, 58, 70), false);
+  b.startRect(96, 224, Biome::Temperate, seed, static_cast<int>(MapLayout::Steppe), "The Crossing at Dawn",
+              "Spring 1947. A showcase of the mission engine: a cinematic opening, set pieces, radio, a clock, "
+              "an allied company and an operation that widens as it goes.", false);
+  b.file.map.lots.clear();
+  b.side(0, "Kampfgruppe Adler", "ger", kKhaki, 0, true, 2000, 48, 204);
+  b.side(1, "Reich Garrison", "ger", kRed, 1, false, 4000, 48, 30, 1);
+  b.side(2, "Grenadier Company Voss", "ger", kGreen, 0, false, 0, 30, 196, 1);
+  const int vx = 48, vy = 150, cx = 48, cy = 60;
+  // The village: houses, a church, the garrison dug in, and two heavy tanks
+  // that the story keeps alive until the counter-attack (a set piece).
+  b.place("neutral_church", NEUTRAL_OWNER, vx, vy);
+  for (auto [dx, dy, id] : {std::tuple{-6, -5, "neutral_cottage"}, {6, -5, "neutral_townhouse"}, {-6, 5, "neutral_cottage"},
+                            {6, 6, "neutral_barn"}, {0, -9, "neutral_cottage_bombed"}})
+    b.place(id, NEUTRAL_OWNER, vx + dx, vy + dy);
+  b.place("ger_bunker", 1, vx + 3, vy + 4);
+  b.squad("ger_rifleman", 1, vx, vy - 2, 8, 8);
+  b.squad("ger_mg_team", 1, vx - 3, vy + 3, 2, 8);
+  for (int i = 0; i < 2; ++i) {
+    b.place("ger_heavy_tank", 1, vx - 4 + i * 8, vy - 14, 8);
+    b.tag("Village guns", kScriptInvulnerable | kScriptNoAi, 1);
+  }
+  // The crossing in the north, and the garrison's reserve behind it.
+  b.line("ger_trench", 1, cx - 8, cy + 4, cx + 8, cy + 4);
+  b.place("ger_atgun", 1, cx - 3, cy + 1);
+  b.place("ger_atgun", 1, cx + 4, cy + 1);
+  b.squad("ger_rifleman", 1, cx, cy, 10, 8);
+  b.squad("ger_medium_tank", 1, cx, cy - 12, 3, 8);
+  // Kampfgruppe Adler in the south; the major's own half-track must survive.
+  b.place("ger_halftrack", 0, 48, 210);
+  b.tag("Adler");
+  b.squad("ger_medium_tank", 0, 48, 202, 4, 0);
+  b.squad("ger_rifleman", 0, 44, 206, 12, 0);
+  b.squad("ger_at_team", 0, 54, 206, 2, 0);
+  b.place("ger_artillery", 0, 52, 214);
+  // An allied company to the west, which the script sends in with the attack.
+  b.squad("ger_rifleman", 2, 28, 196, 10, 0);
+  b.squad("ger_medium_tank", 2, 28, 190, 2, 0);
+
+  Script s;
+  const int south = s.area("The approach", 0, 120, 95, 223), whole = s.area("The whole valley", 0, 0, 95, 223),
+            village = s.area("The village", vx - 9, vy - 11, vx + 9, vy + 11), crossing = s.area("The crossing", cx - 9, cy - 6, cx + 9, cy + 6),
+            field = s.area("The field", 30, 170, 66, 180), north = s.area("North road", 40, 4, 56, 12),
+            start = s.area("Start", 36, 196, 60, 216), allyArea = s.area("Voss", 20, 184, 36, 200),
+            guns = s.area("The guns", vx - 8, vy - 17, vx + 8, vy - 11);
+  // Opening scene.
+  const int opening = s.on("Opening", {always()},
+      {act(ActionType::SetPlayArea, ANY_PLAYER, 0, "", south), act(ActionType::Cinematic, 0, 1),
+       act(ActionType::CameraTo, 0, 0, "", start), act(ActionType::CameraPan, 0, 7, "", village),
+       act(ActionType::PlayMusic, 0, 0, "calm"), act(ActionType::AiBehaviour, 1, 0, "build"),
+       act(ActionType::AiBehaviour, 1, 0, "attack"), act(ActionType::AiDefend, 1, 0, "", crossing),
+       act(ActionType::AiBehaviour, 2, 0, "attack"), act(ActionType::AiDefend, 2, 0, "", allyArea),
+       radio(0, "Major Adler: There it is. The village, and the crossing beyond it."),
+       radio(0, "Major Adler: Two of their heavies sit behind the church. We go round them, not through them.")});
+  s.on("The guns fire", {fired(opening, 3)}, {act(ActionType::Barrage, 1, 14, "cannon_88_he", field)});
+  s.on("Opening ends", {fired(opening, 11)},
+       {act(ActionType::Cinematic, 0, 0), act(ActionType::CameraPan, 0, 2, "", start),
+        markedObjective(0, "Take the village", village), act(ActionType::MarkArea, 0, 1, "Heavy tanks", guns), act(ActionType::PlayMusic, 0)});
+  s.on("Adler is lost", {fired(opening), when(CondType::NamedDead, 0, -1, 0, "Adler")},
+       {radio(0, "Kampfgruppe: The major's half-track is burning. Fall back!"), failed(0), lose(0)});
+  // Phase two: the village is ours; the valley opens; a clock until the counter-attack.
+  const int taken = s.on("Village taken", {fired(opening, 12), when(CondType::AreaControlled, 0, village, 3)},
+      {done(0), act(ActionType::SetPlayArea, ANY_PLAYER, 0, "", whole), act(ActionType::CameraPan, 0, 4, "", crossing),
+       radio(0, "Major Adler: The village is ours. Now the crossing - before they wake up."),
+       markedObjective(0, "Take the crossing", crossing), act(ActionType::Countdown, 0, 240, "Reich counter-attack"),
+       act(ActionType::AiFree, 2), act(ActionType::AiBehaviour, 2, 1, "attack"), act(ActionType::AiAttack, 2, 0, "", crossing),
+       radio(0, "Captain Voss: Grenadiers moving up on your left, Herr Major.")});
+  s.on("A minute left", {when(CondType::CountdownBelow, 0, -1, 60, "Reich counter-attack")},
+       {radio(0, "Observation post: Engines in the north. Lots of them.")});
+  // The counter-attack: reinforcements on the north road, and the set piece released to fight - and die.
+  s.on("Counter-attack", {when(CondType::CountdownDone, 0, -1, 0, "Reich counter-attack")},
+       {act(ActionType::StopCountdown, 0, 0, "Reich counter-attack"), act(ActionType::PlayMusic, 0, 0, "battle"),
+        scaledSpawn(1, b.t("ger_medium_tank"), north, 3), scaledSpawn(1, b.t("ger_rifleman"), north, 10),
+        act(ActionType::SetInvulnerable, ANY_PLAYER, 0, "Village guns"), act(ActionType::SetAiControl, ANY_PLAYER, 1, "Village guns"),
+        act(ActionType::AiBehaviour, 1, 1, "attack"), act(ActionType::AiAttack, 1, 0, "", village),
+        act(ActionType::ClearMarker, 0, 0, "Heavy tanks"), objective(0, "Destroy the heavy tanks"),
+        radio(0, "Major Adler: Their heavies are moving. Anti-tank teams to the church!")});
+  s.on("Heavies gone", {fired(taken), when(CondType::NamedDead, 0, -1, 0, "Village guns")},
+       {done(2), radio(0, "Major Adler: Both heavies burning. Well done.")});
+  s.on("Crossing taken", {fired(taken, 10), when(CondType::AreaControlled, 0, crossing, 3)},
+       {done(1), act(ActionType::PlayMusic, 0)});
+  s.on("Won", {when(CondType::ObjectiveDone, 0, -1, 1), when(CondType::ObjectiveDone, 0, -1, 2)},
+       {radio(0, "Major Adler: The crossing is ours. Signal the army group."), win(0)});
+  s.on("Lost", {defeated(0)}, {lose(0)});
+  return b.save(out, &s.s);
+}
+
+// ---------------------------------------------------------------------------
 // The Soviet Union: Guards Rifle Corps
 // ---------------------------------------------------------------------------
 bool rusVillage(Builder& b, const std::string& out) {
@@ -1200,7 +1357,10 @@ int main(int argc, char** argv) {
   if (!b.load(content)) return 1;
   bool ok = true;
   auto want = [&](const char* w) { return what == "all" || what == w; };
-  if (want("scenarios")) ok = kalach(b, content + "scenarios/Kalach_Crossing.lmap") && ok;
+  if (want("scenarios")) {
+    ok = kalach(b, content + "scenarios/Kalach_Crossing.lmap") && ok;
+    ok = showcase(b, content + "scenarios/The_Crossing_at_Dawn.lmap") && ok;
+  }
   if (want("tutorial")) {
     const std::string d = content + "campaigns/tutorial/";
     ok = tutorialFirstOrders(b, d + "t1_first_orders.lmap") && ok;

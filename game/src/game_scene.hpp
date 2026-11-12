@@ -3,6 +3,7 @@
 // control, and the editor overlay (F2) that edits the world while it runs.
 
 #include <array>
+#include <deque>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -409,6 +410,12 @@ class GameScene final : public slave::Scene {
   bool loadFromSave(slave::SaveFile& f, bool replay, std::string& error);
   bool rulesMatch(const nlohmann::json& meta, bool replay, std::string& error) const;
   void drawObjectives();
+  int nextDifficulty_ = -1;  // the campaign difficulty for the battle about to start (-1: not a mission)
+ public:
+  // Mission presentation, for the editor's debugger.
+  void toggleMissionDebug() { showMissionDebug_ = !showMissionDebug_; }
+  bool missionDebugShown() const { return showMissionDebug_; }
+ private:
   int selfTestFailures_ = 0;
   std::vector<slave::Vec2i> before_;
   slave::Vec2i moveDelta_;
@@ -481,6 +488,27 @@ class GameScene final : public slave::Scene {
     float age = 0;
   };
   std::vector<Message> messages_;
+  // Mission presentation (9.9, mission_ui.cpp).
+  struct Transmission {
+    std::string speaker, text;
+    float age = 0, duration = 6;
+  };
+  std::deque<Transmission> transmissions_;  // radio messages, one on screen at a time
+  std::vector<std::pair<std::string, float>> radioLog_;  // the last few, for the log (F4)
+  bool showRadioLog_ = false;
+  slave::Vec2f panFrom_, panTo_;
+  float panTime_ = 0, panDuration_ = 0;    // a scripted camera glide (0: none)
+  float letterbox_ = 0;                    // 0..1, eased toward the cinematic state
+  std::vector<uint8_t> playGrid_;          // the play area as a ground shade (inside lit, outside dim)
+  slave::TileRect playGridRect_{0, 0, -1, -2};
+  uint32_t playGridRevision_ = 1;
+  bool showMissionDebug_ = false;
+  void onMissionEvent(const slave::SimEvent& ev);
+  void updateMission(float dt);
+  void drawMission();
+  void drawMissionMarkers(ImDrawList* dl);
+  void drawMissionDebug();
+  bool missionInputBlocked() const;
   float attractTime_ = 0;
   slave::Vec2f attractFocus_{-1, -1};
   std::string savesDir_, replaysDir_;

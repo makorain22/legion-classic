@@ -119,6 +119,14 @@ class Editor {
   void renderAreas(slave::SpriteRenderer& r);
   void drawAreaLabels();
   bool editCondition(slave::Condition& c);
+  void drawMissionProperties();
+  bool pickByName_ = false;  // Script tab: the action being edited picks its units by name
+  static const char* condGroup(int g);
+  static const char* actionGroup(int g);
+  static std::vector<int> condOrder();    // condition types in menu order; -n-1 = heading n
+  static std::vector<int> actionOrder();
+  slave::Entity unitNameFor_;
+  std::string unitNameEdit_;
   bool editAction(slave::Action& a);
   bool playerCombo(const char* label, uint8_t& p, bool allowAny);
   bool areaCombo(const char* label, int32_t& area);

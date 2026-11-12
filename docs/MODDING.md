@@ -46,7 +46,8 @@ A campaign folder holds `campaign.json`:
 {"id": "my_war", "title": "My War", "faction": "gbr", "order": 10,
  "description": "Shown on the Campaigns page.",
  "missions": [{"id": "m1", "title": "First Day", "map": "m1.lmap", "briefing": "m1.md",
-               "place": "Normandy", "date": "June 1946"}]}
+               "place": "Normandy", "date": "June 1946",
+               "act": "Act I - The Landings", "formation": "2nd Battalion"}]}
 ```
 
 Missions are ordinary scenarios made in the editor (Script tab). A mission is
@@ -54,6 +55,122 @@ won with the *Victory* action; *Set campaign flag* stores a number that later
 missions can test with *Campaign flag at least*. Briefings are Markdown: `#`
 title, `##` headings, `-` bullets, `>` quotes. A mod's campaign with the same
 id as the game's replaces it.
+
+A mission can also carry `"act"` (the part of the story it belongs to: the
+Missions page lists missions under their act) and `"formation"` (who the
+player commands in it), both shown on the list and the briefing. The player
+picks a difficulty on the briefing page (not for a campaign marked
+`"tutorial": true`): enemy computer sides play a step easier or harder than
+the map says, and *Spawn units* actions ticked "more on hard, fewer on easy"
+bring 70% / 100% / 135% of their number.
+
+## Making missions: the trigger language (Milestone 9.9)
+
+A mission's script is a list of **triggers**: *when* its conditions hold
+(all of them, or any one if the trigger is marked "any one"), *then* its
+actions run in order. A trigger fires once, or repeats (at most once a
+second). Any condition can be negated ("not"). Everything runs inside the
+simulation, so missions save, load and replay exactly. The script is stored in
+the map as JSON (ids below); the editor's Script tab edits all of it, with
+every line written out as a sentence.
+
+**Named units and set pieces.** Select units in the editor and use the
+inspector's *Mission* box: give them a name (several can share one), and tick
+*Invulnerable* (takes no damage until a script lets it), *Not for the
+computer* (the computer player never commands it), *Not a target* (enemies
+never pick it) or *Locked from orders* (its own player can't command it), and
+a stance. These are saved with the map (`"name"`, `"flags"`, `"stance"` on a
+unit) and are in place from the first tick. Scripts can do the same at any
+time. This is how a mission sets a scene: tanks that can't die shelling a
+village while the story is told, released to fight (and die) when the
+counter-attack comes.
+
+Actions marked *units* pick their units **by name** (text field) or **by
+side, area and unit type**.
+
+### Conditions
+
+| Id | Holds when |
+| --- | --- |
+| `always` | from the start |
+| `timer` | `value` seconds have passed (since the trigger last fired, if it repeats) |
+| `trigger_fired` | trigger `trigger` has fired, at least `value` seconds ago |
+| `countdown_done` | the countdown `text` has run out |
+| `countdown_below` | the countdown `text` is running with at most `value` seconds left |
+| `counter_at_least` / `counter_at_most` | mission counter `text` is at least / at most `value` |
+| `flag_at_least` | campaign flag `text` is at least `value` |
+| `objective_done` / `objective_failed` | objective number `value` (from 0) is done / failed |
+| `difficulty_at_least` | the mission is played at `value` (0 easy, 1 normal, 2 hard) or harder |
+| `chance` | `value` percent of the times it is checked (deterministic: replays the same) |
+| `units_in_area` | `player` has at least `value` units (of `unit`, or any) in `area` |
+| `no_units_in_area` | `player` has none |
+| `units_in_area_at_most` | `player` has at most `value` |
+| `area_controlled` | `player` and its allies have at least `value` units in `area` and no enemy has any |
+| `unit_count_at_least` / `unit_count_at_most` | on the whole map |
+| `structures_at_least` / `structures_at_most` | structures (of `unit`, or any but field works) in `area` (-1: the map) |
+| `health_below` | `player`'s units in `area` have less than `value` percent of their health in total |
+| `in_cover` | `player` has at least `value` men in buildings, bunkers or trenches |
+| `named_alive` / `named_dead` | a unit named `text` is alive / none is |
+| `named_in_area` | at least `value` units named `text` are in `area` |
+| `named_health_below` | a unit named `text` has less than `value` percent of its health |
+| `player_defeated` | `player` is defeated |
+| `supplies` / `supplies_at_most` | `player` has at least / at most `value` supplies |
+| `kills_at_least` / `losses_at_least` | `player` has destroyed / lost at least `value` units and structures |
+| `allied_with` | `player` is allied with player `value` |
+| `order_given` | a human `player` has given `value` orders of kind `order` (tutorials) |
+
+### Actions
+
+| Id | Does |
+| --- | --- |
+| `message` | shows `text` to `player` |
+| `transmission` | a radio message: `text` = `"Speaker: words"`, shown `value` seconds (0: long enough to read), typed out with a radio sound; kept in the radio log (L) |
+| `add_objective` | objective `text` (optional if `value` 1), marked on the map at `area` while open |
+| `complete_objective` / `fail_objective` / `hide_objective` | objective number `value` |
+| `victory` / `defeat` | `player` (and its allies) win / `player` loses |
+| `hint` / `highlight` | the tutorial panel / a glowing interface element |
+| `cinematic` | letterbox and no orders for `player` (`value` 1), or back to play (0) |
+| `camera_to` / `camera_pan` | cut / glide `player`'s view to `area` (over `value` seconds) |
+| `mark_area` / `clear_marker` | a marker named `text` on `area` and the minimap (`value` 0 goal, 1 danger, 2 note); clear one (empty: all) |
+| `play_sound` | a sound from audio.json, at `area` or everywhere |
+| `play_music` | `calm`, `battle`, `victory`, `defeat`, `menu` or a piece by title; held until a `play_music` with empty text |
+| `spawn_units` | `value` of `unit` for `player` in `area` (`"scaled": true`: by difficulty) |
+| `spawn_named` | the same, and they are called `text` |
+| `spawn_from_flag` | as many `unit` as campaign flag `text` says (at most `value`): survivors carried over |
+| `move_units` / `attack_move` | *units* go to `area2` |
+| `patrol` | *units* walk between `area` and `area2` until given other orders |
+| `garrison` / `evacuate` | infantry (*units*) go into the buildings and trenches in `area2` / men in `area` come out |
+| `bind_units` | *units* bind into a fighting unit |
+| `set_stance` | *units* take stance `value` (0 aggressive, 1 hold ground, 2 hold fire) |
+| `change_owner` | *units* go over to `player2` |
+| `kill_units` / `damage_units` / `set_health` | destroy / take `value`% of maximum health / set health to `value`% (these hurt invulnerable units too) |
+| `name_units` | `player`'s units in `area` (of `unit`) are called `text` (at most `value`; 0: all) |
+| `set_invulnerable` / `set_ai_control` / `set_targetable` / `set_locked` | the set-piece switches on *units* (`value` 1: invulnerable / the computer may command them / a target / locked) |
+| `ai_attack` / `ai_defend` / `ai_free` | the computer playing `player` sends its main force at `area` / holds and defends `area` / chooses for itself again |
+| `ai_behaviour` | the computer may (`value` 1) or may not (0) `build`, `train`, `attack`, `raid`, `capture`, `fortify`, `scout` or `repair` |
+| `ai_wave_size` | it attacks with `value` percent of its usual force (0: usual) |
+| `set_computer` | `player` is played by the computer (`value` difficulty) or a human (-1) |
+| `set_alliance` | `player` becomes an ally (`value` 1) or an enemy (0) of `player2`: betrayals, defections |
+| `set_play_area` | the battle is confined to `area` (-1: the whole map) for `player`: orders, building and the camera stay inside, the rest of the ground is dimmed. Grow it as the operation develops |
+| `reveal_area` | `player` sees `area` for good |
+| `barrage` | `value` shells of weapon `text` (default `howitzer_105`) on `area`, fired by `player` |
+| `add_logistics_point` | a new logistics point in the middle of `area` (an airdrop, a depot found) |
+| `give_supplies` / `set_income_rate` | supplies to `player` / its income at `value` percent |
+| `lock_build` / `unlock_build` | `player` can't / can build `unit` (any: everything) |
+| `countdown` / `stop_countdown` / `pause_countdown` | a clock on screen labelled `text`, `value` seconds; take it away; pause (`value` 1) or run on |
+| `set_counter` / `add_counter` | mission counter `text` |
+| `set_flag` / `add_flag` | campaign flag `text` (kept when the mission is won) |
+| `enable_trigger` / `disable_trigger` | switch trigger `trigger` on or off |
+| `fire_trigger` / `reset_trigger` | run trigger `trigger`'s actions now / let it fire again |
+
+The Script tab's *Mission debugger* shows every trigger with when it fired,
+the clocks, counters and flags, what each computer player has been told and
+the named units, while the battle runs. *The Crossing at Dawn* (in the
+scenarios folder) uses most of the above; open it in the editor to see how.
+
+Maps needn't be square: *New...* in the editor takes a width and a height
+of your own (steps of 32 tiles), for missions along a road, a coast or a
+valley.
 
 `mod.json`:
 
