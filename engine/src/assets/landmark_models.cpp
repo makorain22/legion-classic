@@ -225,6 +225,111 @@ VoxelModel makeFort(const FactionLook&) {
   return m;
 }
 
+// --- The British campaign's coasts and harbours (9.12) ---------------------------
+
+// A landing craft run up on the beach: a flat steel hull, the bow ramp down on
+// the sand, the wheelhouse aft. 2 x 4 tiles, bow towards +y.
+VoxelModel makeLandingCraft(const FactionLook&) {
+  VoxelModel m(24, 48, 18);
+  m.box(2, 6, 0, 22, 44, 6, STEEL_DARK);                  // the hull
+  m.box(3, 8, 2, 21, 42, 6, 0);                           // the well deck, open
+  m.box(3, 8, 1, 21, 42, 2, STEEL);
+  for (int y = 6; y < 44; ++y) {                          // gunwales
+    m.box(2, y, 6, 3, y + 1, 9, STEEL_DARK);
+    m.box(21, y, 6, 22, y + 1, 9, STEEL_DARK);
+  }
+  for (int i = 0; i < 6; ++i) m.box(4, 44 + i, std::max(0, 5 - i), 20, 45 + i, std::max(1, 6 - i), STEEL);  // the ramp, down
+  m.box(4, 0, 4, 20, 8, 14, STEEL_DARK);                  // the wheelhouse aft
+  m.box(6, 7, 10, 18, 8, 12, WINDOW);
+  m.box(11, 2, 14, 13, 4, 17, STEEL);                     // a mast stub
+  m.box(5, 30, 2, 9, 36, 5, CANVAS);                      // stores left aboard
+  m.box(15, 18, 2, 19, 24, 4, CANVAS_DARK);
+  weather(m, STEEL_DARK, SOOT, STEEL, 281, 12, 8);
+  return m;
+}
+
+// A harbour crane on its portal: four legs straddling the quay rails, the cab
+// and the jib over the water.
+VoxelModel makeCrane(const FactionLook&) {
+  VoxelModel m(24, 24, 70);
+  for (int x : {3, 19})
+    for (int y : {3, 19}) m.box(x, y, 0, x + 2, y + 2, 20, RUST);
+  m.box(3, 3, 18, 21, 21, 22, RUST);                      // the portal
+  m.box(7, 7, 22, 17, 17, 34, STEEL_DARK);                // the turntable and cab
+  m.box(8, 16, 26, 16, 17, 30, WINDOW);
+  for (int z = 34, y = 12; z < 60; z += 2, y += 2) m.box(10, std::min(y, 23), z, 14, std::min(y + 2, 24), z + 2, RUST);  // the jib
+  m.box(11, 22, 30, 13, 24, 58, STEEL);                   // the hook cable
+  m.box(10, 22, 28, 14, 24, 30, STEEL_DARK);
+  m.box(8, 2, 22, 16, 7, 30, CONCRETE_DARK);              // counterweight
+  weather(m, RUST, SOOT, STEEL, 283, 10, 6);
+  return m;
+}
+
+// A U-boat pen: a vast low bunker of reinforced concrete with a thick roof
+// and three bays open to the water. 6 x 5 tiles, the bays towards +y.
+VoxelModel makeUboatPen(const FactionLook&) {
+  VoxelModel m(72, 60, 30);
+  m.box(0, 0, 0, 72, 60, 24, CONCRETE);
+  for (int i = 0; i < 3; ++i) {                           // the bays
+    const int x0 = 6 + i * 22;
+    m.box(x0, 20, 0, x0 + 16, 60, 16, 0);
+    m.box(x0 + 2, 24, 0, x0 + 14, 60, 2, STEEL_DARK);     // the dark water inside
+    m.box(x0 + 5, 30, 2, x0 + 11, 56, 6, STEEL_DARK);     // a boat in its bay
+    m.box(x0 + 7, 40, 6, x0 + 9, 46, 10, STEEL_DARK);     // its conning tower
+  }
+  m.box(0, 0, 24, 72, 60, 28, CONCRETE_DARK);             // the burster slab on the roof
+  for (int x = 2; x < 70; x += 6) m.box(x, 2, 28, x + 3, 58, 29, CONCRETE);  // its ribs
+  m.box(30, 0, 0, 42, 2, 12, STEEL_DARK);                 // the landward doors
+  weather(m, CONCRETE, CONCRETE_DARK, SOOT, 285, 16, 6);
+  return m;
+}
+
+// A coastal gun casemate: a squat concrete block with a wide embrasure and the
+// long barrel of a heavy gun reaching out of it, earth heaped at its back.
+VoxelModel makeCasemate(const FactionLook&) {
+  VoxelModel m(36, 36, 20);
+  m.box(2, 2, 0, 34, 34, 14, CONCRETE);
+  m.box(0, 0, 0, 36, 10, 6, EARTH);                       // earth banked behind
+  m.box(1, 1, 14, 35, 35, 17, CONCRETE_DARK);             // the roof slab, overhanging
+  m.box(8, 33, 4, 28, 36, 10, SOOT);                      // the embrasure
+  m.box(16, 20, 6, 20, 36, 9, STEEL_DARK);                // the gun
+  m.box(17, 36, 7, 19, 36, 8, STEEL_DARK);
+  m.box(14, 2, 0, 22, 3, 8, STEEL_DARK);                  // the rear door
+  weather(m, CONCRETE, CONCRETE_DARK, SOOT, 287, 14, 6);
+  return m;
+}
+
+// A polder pumping station: a brick engine house with tall arched windows, a
+// chimney, and the outfall into the dyke.
+VoxelModel makePumpingStation(const FactionLook&) {
+  VoxelModel m(36, 36, 52);
+  m.box(4, 6, 0, 32, 30, 18, BRICK);
+  houseWalls(m, 4, 6, 32, 30, 18, BRICK, CONCRETE_LIGHT);
+  for (int x = 8; x < 30; x += 6) m.box(x, 29, 4, x + 3, 30, 15, WINDOW);
+  tiledRoof(m, 4, 6, 32, 30, 18);
+  cylinder(m, 28.0f, 10.0f, 2.6f, 0, 48, BRICK_DARK);     // the chimney
+  cylinder(m, 28.0f, 10.0f, 1.4f, 46, 48, 0);
+  m.box(12, 30, 0, 24, 36, 4, CONCRETE_DARK);             // the outfall
+  m.box(14, 32, 0, 22, 36, 2, STEEL_DARK);
+  weather(m, BRICK, BRICK_DARK, SOOT, 289, 14, 6);
+  return m;
+}
+
+// A lighthouse: a white tower with a red band, the lantern room on top.
+VoxelModel makeLighthouse(const FactionLook&) {
+  VoxelModel m(24, 24, 84);
+  m.box(4, 4, 0, 20, 20, 3, CONCRETE_DARK);
+  for (int z = 3; z < 66; ++z) {
+    const float r = 7.0f - z * 0.05f;
+    cylinder(m, 12.0f, 12.0f, r, z, z + 1, (z / 12) % 2 ? MARK_RED : MARK_WHITE);
+  }
+  cylinder(m, 12.0f, 12.0f, 5.0f, 66, 68, STEEL_DARK);    // the gallery
+  cylinder(m, 12.0f, 12.0f, 3.2f, 68, 76, LAMP);          // the lantern
+  cylinder(m, 12.0f, 12.0f, 3.6f, 76, 79, MARK_RED);      // its cap
+  m.box(10, 4, 3, 14, 5, 10, WOOD_DARK);                  // the door
+  return m;
+}
+
 // An oil derrick: a lattice tower over the well, a nodding pump beside it.
 VoxelModel makeDerrick(const FactionLook&) {
   VoxelModel m(24, 24, 60);

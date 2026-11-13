@@ -171,3 +171,29 @@ TEST_CASE("a howitzer shell breaks the ice where it lands") {
   CHECK(after < before);
   CHECK(after > before - 12);  // only where the shells fell
 }
+
+// Flooding (Milestone 9.12): opened sluices put the land under shallow water
+// that men can wade and vehicles can't cross; draining puts it back, even
+// after the map (or a save) has been written and read.
+TEST_CASE("flooded land stops vehicles, not men, and drains back to what it was") {
+  Map m = riverMap();
+  REQUIRE(m.info(8, 8).waterDepth < 0);
+  const uint16_t before = m.corner(8, 8);
+  CHECK(m.flood(4, 4, 12, 12) > 0);
+  CHECK(m.info(8, 8).waterDepth > 0);
+  CHECK(m.passable(8, 8, Locomotor::Foot));
+  CHECK_FALSE(m.passable(8, 8, Locomotor::Wheeled));
+  CHECK_FALSE(m.passable(8, 8, Locomotor::Tracked));
+  CHECK(m.speedPercent(8, 8, Locomotor::Foot) == 50);
+  CHECK(m.flood(4, 4, 12, 12) == 0);  // already under water
+  std::string err;
+  MapFile f;
+  REQUIRE(decodeMap(encodeMap(m, {}, {}, ""), f, err));
+  CHECK(f.map.info(8, 8).waterDepth > 0);
+  CHECK(f.map.drain(0, 0, 63, 63) > 0);
+  CHECK(f.map.corner(8, 8) == before);
+  CHECK(f.map.passable(8, 8, Locomotor::Wheeled));
+  CHECK(f.map.floodMemory().empty());
+  CHECK(std::string(actionId(ActionType::FloodArea)) == "flood_area");
+  CHECK(std::string(actionId(ActionType::DrainArea)) == "drain_area");
+}

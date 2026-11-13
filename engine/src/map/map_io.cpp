@@ -44,6 +44,10 @@ std::vector<uint8_t> encodeMap(const Map& map, const std::vector<UnitPlacement>&
         x += n;
       }
   }
+  if (!map.floodMemory().empty()) {  // flooded land (9.12): [corner index, height before]
+    auto& fl = j["flooded"] = nlohmann::json::array();
+    for (const auto& [i, h] : map.floodMemory()) fl.push_back({i, h});
+  }
   auto& sp = j["supplyPoints"] = nlohmann::json::array();
   for (const Vec2i& p : map.supplyPoints) sp.push_back({p.x, p.y});
   auto& props = j["props"] = nlohmann::json::array();
@@ -196,6 +200,12 @@ bool decodeMap(const std::vector<uint8_t>& bytes, MapFile& out, std::string& err
     }
     out.scriptJson = j.contains("script") ? j["script"].dump() : std::string();
     m.recomputeInfo();
+    {
+      std::vector<std::pair<uint32_t, uint16_t>> mem;
+      for (const auto& f : j.value("flooded", nlohmann::json::array()))
+        if (f.is_array() && f.size() == 2) mem.push_back({f[0].get<uint32_t>(), f[1].get<uint16_t>()});
+      m.setFloodMemory(std::move(mem));
+    }
     for (const auto& run : j.value("ice", nlohmann::json::array()))
       if (run.is_array() && run.size() == 3) {
         const int y = run[0].get<int>(), x = run[1].get<int>(), n = run[2].get<int>();

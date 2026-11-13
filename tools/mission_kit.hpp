@@ -249,16 +249,54 @@ struct Builder {
     }
     finishTerrain();
   }
+  // The sea along one edge of the map (9.12): 0 west, 1 east, 2 north, 3 south.
+  // `depth` tiles of deep water, then a sand beach rising over `beach` tiles to
+  // the land. The shoreline wanders a little; the generator's trees leave the water.
+  void sea(int edge, int depth, int beach = 4, uint32_t seed = 3) {
+    const int wl = water();
+    const int W = file.map.cornersX(), H = file.map.cornersY();
+    const int len = edge < 2 ? H : W;
+    for (int i = 0; i < len; ++i) {
+      const int wob = static_cast<int>(std::lround(2.0 * std::sin(i * 0.09 + seed) + 1.2 * std::sin(i * 0.23 + seed * 2)));
+      const int shore = depth + wob;
+      for (int d = 0; d < shore + beach + 2; ++d) {
+        int h;
+        if (d < shore - 5) h = wl - 40;
+        else if (d < shore - 2) h = wl - 26;
+        else if (d < shore) h = wl - 12;
+        else h = wl - 4 + (d - shore) * 6;
+        const int cx = edge == 0 ? d : edge == 1 ? W - 1 - d : i, cy = edge == 2 ? d : edge == 3 ? H - 1 - d : i;
+        lowerTo(cx, cy, h);
+        if (d >= shore - 1 && d < shore + beach) {
+          const int tx = std::min(cx, file.map.width() - 1), ty = std::min(cy, file.map.height() - 1);
+          for (int sy = ty * SPLAT_PER_TILE; sy < (ty + 1) * SPLAT_PER_TILE; ++sy)
+            for (int sx = tx * SPLAT_PER_TILE; sx < (tx + 1) * SPLAT_PER_TILE; ++sx) file.map.paint(sx, sy, Layer::Sand, 255);
+        }
+      }
+    }
+    finishTerrain();
+    clearWetProps();
+  }
   // Patches of a ground layer (mud after the thaw, sand, snow) over a tile
   // rectangle: `cover` percent of it, in blotches. Speeds follow the ground.
   void paintGround(Layer layer, int x0, int y0, int x1, int y1, int cover, uint32_t seed = 1) {
     for (int sy = y0 * SPLAT_PER_TILE; sy < (y1 + 1) * SPLAT_PER_TILE; ++sy)
       for (int sx = x0 * SPLAT_PER_TILE; sx < (x1 + 1) * SPLAT_PER_TILE; ++sx) {
         if (sx < 0 || sy < 0 || sx >= file.map.splatW() || sy >= file.map.splatH()) continue;
-        // Blotches: a cheap value noise on a coarse grid, smoothed by a second octave.
-        auto h = [&](int x, int y) { return static_cast<int>((static_cast<uint32_t>(x * 73856093) ^ static_cast<uint32_t>(y * 19349663) ^ (seed * 83492791u)) % 100u); };
-        const int n = (h(sx / 6, sy / 6) * 3 + h(sx / 3, sy / 3)) / 4;
-        if (n < cover) file.map.paint(sx, sy, layer, 255);
+        // Blotches: smooth value noise (bilinear between random values on an
+        // 8-texel grid, plus a finer octave), so the edges come out rounded.
+        auto h = [&](int x, int y) {
+          return static_cast<float>((static_cast<uint32_t>(x * 73856093) ^ static_cast<uint32_t>(y * 19349663) ^ (seed * 83492791u)) % 1000u) / 10.0f;
+        };
+        auto smooth = [&](int x, int y, int cell) {
+          const int gx = x / cell, gy = y / cell;
+          const float fx = static_cast<float>(x % cell) / cell, fy = static_cast<float>(y % cell) / cell;
+          const float a = h(gx, gy) + (h(gx + 1, gy) - h(gx, gy)) * fx, c = h(gx, gy + 1) + (h(gx + 1, gy + 1) - h(gx, gy + 1)) * fx;
+          return a + (c - a) * fy;
+        };
+        const float n = smooth(sx, sy, 8) * 0.75f + smooth(sx + 97, sy + 31, 3) * 0.25f;
+        // Value noise bunches near the middle: spread `cover` so 0..100 still means none..all.
+        if (n < 25.0f + cover * 0.5f) file.map.paint(sx, sy, layer, 255);
       }
     finishTerrain();
   }
@@ -630,5 +668,11 @@ bool rusAct2(Builder& b, const std::string& dir);
 bool rusAct3(Builder& b, const std::string& dir);
 bool rusAct4(Builder& b, const std::string& dir);
 bool rusAct5(Builder& b, const std::string& dir);
+// The British campaign (tools/campaign_gbr_*.cpp, 9.12).
+bool gbrAct1(Builder& b, const std::string& dir);
+bool gbrAct2(Builder& b, const std::string& dir);
+bool gbrAct3(Builder& b, const std::string& dir);
+bool gbrAct4(Builder& b, const std::string& dir);
+bool gbrAct5(Builder& b, const std::string& dir);
 
 }  // namespace mk

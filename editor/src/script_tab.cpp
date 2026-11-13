@@ -420,6 +420,8 @@ bool Editor::editAction(Action& a) {
       break;
     case ActionType::FreezeWater:
     case ActionType::BreakIce:
+    case ActionType::FloodArea:
+    case ActionType::DrainArea:
       ch |= areaCombo("in", a.area);
       break;
     case ActionType::SetAlliance: {
@@ -676,7 +678,7 @@ std::vector<int> Editor::actionOrder() {
           -4, I(A::SetInvulnerable), I(A::SetAiControl), I(A::SetTargetable), I(A::SetLocked),
           -5, I(A::AiAttack), I(A::AiDefend), I(A::AiFree), I(A::AiBehaviour), I(A::AiWaveSize), I(A::SetComputer),
           I(A::SetAlliance),
-          -6, I(A::SetPlayArea), I(A::RevealArea), I(A::Barrage), I(A::FreezeWater), I(A::BreakIce), I(A::AddLogisticsPoint), I(A::GiveSupplies),
+          -6, I(A::SetPlayArea), I(A::RevealArea), I(A::Barrage), I(A::FreezeWater), I(A::BreakIce), I(A::FloodArea), I(A::DrainArea), I(A::AddLogisticsPoint), I(A::GiveSupplies),
           I(A::SetIncomeRate), I(A::LockBuild), I(A::UnlockBuild),
           -7, I(A::Countdown), I(A::StopCountdown), I(A::PauseCountdown), I(A::SetCounter), I(A::AddCounter), I(A::SetFlag),
           I(A::AddFlag),
@@ -813,6 +815,8 @@ std::string Editor::describeAction(const Action& a) const {
     case ActionType::Barrage: return std::to_string(a.value) + " shells (" + (a.text.empty() ? std::string("howitzer_105") : a.text) + ") on " + area(a.area);
     case ActionType::FreezeWater: return "the water in " + area(a.area) + " freezes";
     case ActionType::BreakIce: return "the ice in " + area(a.area) + " breaks up";
+    case ActionType::FloodArea: return "the land in " + area(a.area) + " floods";
+    case ActionType::DrainArea: return "the land in " + area(a.area) + " is drained";
     case ActionType::SetAlliance: return sideName(sc, a.player) + yes(" allies with ", " turns on ") + sideName(sc, a.player2);
     case ActionType::AiAttack: return "the computer playing " + sideName(sc, a.player) + " attacks " + area(a.area);
     case ActionType::AiDefend: return "the computer playing " + sideName(sc, a.player) + " defends " + area(a.area);

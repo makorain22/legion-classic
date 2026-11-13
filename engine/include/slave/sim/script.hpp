@@ -131,6 +131,8 @@ enum class ActionType : uint8_t {
   // --- Terrain (9.11) ------------------------------------------------------------------
   FreezeWater,      // the water in `area` freezes: men and wheels can cross it, tracks can't
   BreakIce,         // the ice in `area` breaks up; whatever stands on it goes into the water
+  FloodArea,        // the land in `area` floods (9.12): men can wade it, vehicles can't cross it
+  DrainArea,        // the flooded land in `area` is pumped dry again
   Count
 };
 

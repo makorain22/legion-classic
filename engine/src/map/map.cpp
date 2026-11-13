@@ -71,6 +71,7 @@ void Map::resize(int width, int height, uint16_t baseHeight) {
   blocks_.assign(static_cast<size_t>(width_) * height_, 0);
   oil_.assign(static_cast<size_t>(width_) * height_, 0);
   ice_.assign(static_cast<size_t>(width_) * height_, 0);
+  floodMemory_.clear();
   props_.clear();
   waterLevel_ = 0;
   recomputeInfo();
@@ -256,6 +257,55 @@ int Map::setIce(int x0, int y0, int x1, int y1, bool frozen) {
   if (n) {
     recomputeSpeeds(x0, y0, x1, y1);
     ++revision_;  // paths are rebuilt
+  }
+  return n;
+}
+
+int Map::flood(int x0, int y0, int x1, int y1) {
+  if (!waterLevel_) return 0;
+  x0 = std::max(0, x0);
+  y0 = std::max(0, y0);
+  x1 = std::min(width_ - 1, x1);
+  y1 = std::min(height_ - 1, y1);
+  const uint16_t target = static_cast<uint16_t>(std::max(1, int(waterLevel_) - kFloodDepth));
+  int n = 0;
+  for (int cy = y0; cy <= y1 + 1; ++cy)
+    for (int cx = x0; cx <= x1 + 1; ++cx) {
+      const uint32_t i = static_cast<uint32_t>(cy) * cornersX() + cx;
+      if (heights_[i] <= target) continue;
+      const bool known = std::any_of(floodMemory_.begin(), floodMemory_.end(), [&](const auto& m) { return m.first == i; });
+      if (!known) floodMemory_.push_back({i, heights_[i]});
+      heights_[i] = target;
+      ++n;
+    }
+  if (n) {
+    recomputeInfo(x0 - 1, y0 - 1, x1 + 1, y1 + 1);
+    noteHeightEdit({x0 - 1, y0 - 1, x1 + 1, y1 + 1});
+    ++revision_;
+  }
+  return n;
+}
+
+int Map::drain(int x0, int y0, int x1, int y1) {
+  x0 = std::max(0, x0);
+  y0 = std::max(0, y0);
+  x1 = std::min(width_ - 1, x1);
+  y1 = std::min(height_ - 1, y1);
+  int n = 0;
+  for (auto it = floodMemory_.begin(); it != floodMemory_.end();) {
+    const int cx = static_cast<int>(it->first) % cornersX(), cy = static_cast<int>(it->first) / cornersX();
+    if (cx < x0 || cy < y0 || cx > x1 + 1 || cy > y1 + 1) {
+      ++it;
+      continue;
+    }
+    heights_[it->first] = it->second;
+    it = floodMemory_.erase(it);
+    ++n;
+  }
+  if (n) {
+    recomputeInfo(x0 - 1, y0 - 1, x1 + 1, y1 + 1);
+    noteHeightEdit({x0 - 1, y0 - 1, x1 + 1, y1 + 1});
+    ++revision_;
   }
   return n;
 }

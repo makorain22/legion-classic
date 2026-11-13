@@ -2041,6 +2041,105 @@
       "autoTarget": false,
       "garrison": 30,
       "description": "A brick fort of an old fortress ring: a casemate under earth and turf, embrasures all round, a ditch in front. Room for a garrison of thirty."
+    },
+    {
+      "id": "neutral_landing_craft",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Landing Craft",
+      "model": "landing_craft",
+      "footprint": [
+        2,
+        4
+      ],
+      "health": 1600,
+      "coverAround": 30,
+      "autoTarget": false,
+      "description": "A landing craft run up on the beach, its bow ramp down on the sand. It brought the first wave in."
+    },
+    {
+      "id": "neutral_crane",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Harbour Crane",
+      "model": "crane",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 1400,
+      "autoTarget": false,
+      "description": "A portal crane on the quay rails. Docks are worth nothing without them."
+    },
+    {
+      "id": "neutral_uboat_pen",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "U-boat Pen",
+      "model": "uboat_pen",
+      "footprint": [
+        6,
+        5
+      ],
+      "health": 14000,
+      "coverAround": 50,
+      "autoTarget": false,
+      "garrison": 30,
+      "description": "A U-boat bunker of reinforced concrete, its roof thick enough to shrug off bombs. Its bays open onto the water."
+    },
+    {
+      "id": "ger_casemate",
+      "faction": "ger",
+      "armor": "structure",
+      "name": "Coastal Casemate",
+      "model": "casemate",
+      "footprint": [
+        3,
+        3
+      ],
+      "health": 6000,
+      "sight": 16,
+      "category": "defense",
+      "weapons": [
+        "howitzer_150"
+      ],
+      "turret": {
+        "turnTicks": 3
+      },
+      "garrison": 8,
+      "coverAround": 40,
+      "description": "A concrete casemate with a heavy gun covering the sea and the beach. It can't be built; it has to be taken."
+    },
+    {
+      "id": "neutral_pumping_station",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Pumping Station",
+      "model": "pumping_station",
+      "footprint": [
+        3,
+        3
+      ],
+      "health": 2600,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 8,
+      "description": "A brick engine house that keeps the polder dry. Whoever holds the pumps decides where the water goes."
+    },
+    {
+      "id": "neutral_lighthouse",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Lighthouse",
+      "model": "lighthouse",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 1800,
+      "autoTarget": false,
+      "garrison": 4,
+      "description": "A lighthouse on the shore, banded red and white. A fine observation post."
     }
   ]
 }

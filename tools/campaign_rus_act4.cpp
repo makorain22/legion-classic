@@ -172,7 +172,7 @@ bool rising(Builder& b, const std::string& out) {
        aiFree(2), aiMay(2, "attack", true), aiAttack(2, bridgeN)});
   s.on("North bridge", {fired(reached, 3), holds(0, bridgeN, 4)}, {done(3), radio(0, "Nadezhda Orlova: The northern bridge is ours.")});
   s.on("South bridge", {fired(reached, 3), holds(0, bridgeS, 4)}, {done(4), radio(0, "Nadezhda Orlova: And the southern one.")});
-  const int bridges = s.on("Both bridges", {objDone(3), objDone(4)},
+  s.on("Both bridges", {objDone(3), objDone(4)},
       {radio(0, "Ded Matvei: Here comes the garrison's armour - from the south-west, for the bridges."),
        s.goal(0, "Hold the bridges until the Front crosses", bridgeS), clock("The Front crosses", 360),
        scaledSpawn(1, b.t("ger_heavy_tank"), sw, 1), scaledSpawn(1, b.t("ger_medium_tank"), sw, 4), scaledSpawn(1, b.t("ger_rifleman"), sw, 12),

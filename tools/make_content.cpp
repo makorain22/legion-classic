@@ -520,135 +520,6 @@ bool showcase(Builder& b, const std::string& out) {
 }
 
 // ---------------------------------------------------------------------------
-// Britain: the Desert Rats
-// ---------------------------------------------------------------------------
-bool gbrRidge(Builder& b, const std::string& out) {
-  const uint64_t seed = findSeed(128, Biome::Desert, static_cast<int>(MapLayout::Ridge), 1946,
-                                 rect(20, 50, 50, 78) + rect(100, 52, 120, 76));
-  b.start(128, Biome::Desert, seed, static_cast<int>(MapLayout::Ridge), "Point 64",
-          "Libya, March 1946. Hold the ridge at Point 64 while the brigade withdraws behind you.");
-  b.side(0, "7th Armoured Brigade", "gbr", kKhaki, 0, true, 1500, 36, 64);
-  b.side(1, "Panzer Regiment 21", "ger", kRed, 1, true, 0, 112, 64);
-  b.villages({{36, 64, 14}});
-  const int px = 40, py = 64;
-  b.line("gbr_trench", 0, px + 4, py - 8, px + 4, py + 8);
-  b.place("gbr_atgun", 0, px + 2, py - 5);
-  b.place("gbr_atgun", 0, px + 2, py + 5);
-  b.place("gbr_atgun", 0, px + 2, py);
-  b.place("gbr_bunker", 0, px, py - 10);
-  b.squad("gbr_rifleman", 0, px, py - 3, 12, 0);
-  b.squad("gbr_mg_team", 0, px - 2, py + 3, 3, 0);
-  b.place("gbr_heavy_tank", 0, px - 4, py - 6);
-  b.place("gbr_heavy_tank", 0, px - 4, py + 6);
-  b.place("gbr_artillery", 0, px - 12, py);
-  b.place("gbr_engineer", 0, px - 8, py + 2);
-  b.place("gbr_engineer", 0, px - 8, py - 2);
-
-  Script s;
-  const int ridge = s.area("Point 64", px - 6, py - 12, px + 8, py + 12), east = s.area("East track", 118, 54, 124, 74),
-            north = s.area("North wadi", 92, 4, 104, 12);
-  const int guns = b.t("gbr_atgun");
-  s.on("Briefing", {always()},
-       {say(0, "The brigade needs twelve minutes to get clear. Hold Point 64 with what you have: three six-pounders, the infantry "
-               "and two Churchills."),
-        objective(0, "Hold Point 64 for twelve minutes"), objective(0, "Keep two of the six-pounders", true), reveal(0, ridge)});
-  const int w1 = s.on("Wave 1", {timer(90)},
-       {spawn(1, b.t("ger_medium_tank"), east, 3), spawn(1, b.t("ger_halftrack"), east, 2), spawn(1, b.t("ger_rifleman"), east, 8),
-        attack(1, east, ridge), say(0, "Panzers on the east track!")});
-  const int w2 = s.on("Wave 2", {fired(w1, 210)},
-       {spawn(1, b.t("ger_medium_tank"), east, 4), spawn(1, b.t("ger_rifleman"), east, 12), spawn(1, b.t("ger_artillery"), east, 1),
-        attack(1, east, ridge), spawn(1, b.t("ger_light_tank"), north, 3), attack(1, north, ridge),
-        say(0, "More armour, and a flanking column in the north wadi!")});
-  s.on("Wave 3", {fired(w2, 210)},
-       {spawn(1, b.t("ger_heavy_tank"), east, 2), spawn(1, b.t("ger_medium_tank"), east, 3), spawn(1, b.t("ger_rifleman"), east, 12),
-        attack(1, east, ridge), say(0, "Tigers! Hold on, Point 64, the brigade is nearly clear.")});
-  s.on("Guns kept", {timer(720), atLeast(0, 2, guns)}, {done(1), setFlag("ridge_guns", 1)});
-  s.on("Held", {timer(720), inArea(0, ridge, 1)},
-       {done(0), say(0, "The brigade is clear. Fall back, and well done."), win(0)});
-  s.on("Ridge lost", {timer(30), noneIn(0, ridge)}, {failed(0), lose(0)});
-  return b.save(out, &s.s);
-}
-
-bool gbrRaid(Builder& b, const std::string& out) {
-  const uint64_t seed = findSeed(128, Biome::Desert, static_cast<int>(MapLayout::Steppe), 1952,
-                                 rect(6, 54, 20, 74) + rect(60, 20, 70, 30) + rect(100, 60, 110, 70) + rect(70, 96, 80, 106));
-  b.start(128, Biome::Desert, seed, static_cast<int>(MapLayout::Steppe), "Operation Lantern",
-          "Libya, April 1946. A mobile column strikes at the enemy's supply dumps deep behind the line.");
-  b.side(0, "Lantern Force", "gbr", kKhaki, 0, true, 0, 12, 64);
-  b.side(1, "Afrika Korps rear area", "ger", kRed, 1, true, 0, 90, 64);
-  b.villages({{12, 64, 10}});
-  b.squad("gbr_halftrack", 0, 14, 60, 4, 0);
-  b.squad("gbr_light_tank", 0, 14, 68, 4, 0);
-  b.squad("gbr_scout_car", 0, 10, 64, 2, 0);
-  b.squad("gbr_rifleman", 0, 8, 56, 8, 0);
-  b.place("gbr_engineer", 0, 8, 72);
-  const std::vector<std::pair<int, int>> dumps = {{64, 24}, {104, 64}, {74, 100}};
-  for (auto [x, y] : dumps) {
-    b.place("ger_office", 1, x, y);  // a logistics office and its trucks: the dump
-    b.place("ger_mg_nest", 1, x - 4, y + 3);
-    b.squad("ger_rifleman", 1, x + 2, y - 3, 4, 8);
-  }
-  b.place("ger_bunker", 1, 104 - 6, 64);
-  b.place("ger_atgun", 1, 74 + 5, 100 - 4);
-
-  Script s;
-  const int a1 = s.area("Dump north", 56, 16, 72, 32), a2 = s.area("Dump east", 96, 56, 112, 72), a3 = s.area("Dump south", 66, 92, 82, 108),
-            hq = s.area("Their camp", 116, 100, 124, 110);
-  const int depot = b.t("ger_office");
-  s.on("Briefing", {always()},
-       {say(0, "Lantern Force: three supply dumps, marked on your map. Destroy them all. Speed is everything: once they know "
-               "we're here, they'll send their armour."),
-        objective(0, "Destroy the northern dump"), objective(0, "Destroy the eastern dump"), objective(0, "Destroy the southern dump"),
-        reveal(0, a1), reveal(0, a2), reveal(0, a3)});
-  s.on("North", {noneIn(1, a1, depot)}, {done(0)});
-  s.on("East", {noneIn(1, a2, depot)}, {done(1)});
-  s.on("South", {noneIn(1, a3, depot)}, {done(2)});
-  const int alarm = s.on("Alarm", {atMost(1, 2, depot)},
-       {say(0, "They've raised the alarm: armour moving out of their camp in the south-east!"),
-        spawn(1, b.t("ger_medium_tank"), hq, 3), spawn(1, b.t("ger_halftrack"), hq, 2), attack(1, hq, a2)});
-  (void)alarm;
-  s.on("Won", {atMost(1, 0, depot)}, {say(0, "All three dumps are burning. Back to our lines!"), setFlag("lantern", 1), win(0)});
-  s.on("Lost", {atMost(0, 0)}, {lose(0)});
-  return b.save(out, &s.s);
-}
-
-bool gbrGap(Builder& b, const std::string& out) {
-  const uint64_t seed = findSeed(128, Biome::Urban, static_cast<int>(MapLayout::TwinRivers), 1953,
-                                 rect(8, 52, 30, 76) + rect(96, 52, 120, 76));
-  b.start(128, Biome::Urban, seed, static_cast<int>(MapLayout::TwinRivers), "The Gap at Hellenthal",
-          "Rhineland, October 1947. Force the gap through the town and destroy the German garrison.");
-  b.side(0, "7th Armoured Brigade", "gbr", kKhaki, 0, true, 6000, 16, 64);
-  b.side(1, "Kampfgruppe Hellenthal", "ger", kRed, 1, false, 9000, 108, 64, 2);
-  b.villages({{16, 64, 14}, {108, 64, 18}});
-  b.place("gbr_mcv", 0, 16, 64);
-  b.squad("gbr_medium_tank", 0, 22, 62, 4, 0);
-  b.place("gbr_firefly", 0, 24, 66);
-  b.squad("gbr_rifleman", 0, 20, 56, 12, 0);
-  b.squad("gbr_mg_team", 0, 18, 70, 2, 0);
-  b.squad("gbr_engineer", 0, 14, 72, 2, 0);
-  const int gx = 108, gy = 64;
-  for (auto [dx, dy, id] : {std::tuple{0, 0, "ger_yard"}, {-6, -6, "ger_power"}, {-6, 6, "ger_power"}, {5, 7, "ger_barracks"},
-                            {-1, 12, "ger_factory"}, {-12, -5, "ger_bunker"}, {-12, 5, "ger_atgun"}, {-10, 10, "ger_mg_nest"}})
-    b.place(id, 1, gx + dx, gy + dy);
-  b.income("ger", 1, gx, gy, 64, 64);
-  b.squad("ger_rifleman", 1, gx - 14, gy, 10, 8);
-
-  Script s;
-  const int west = s.area("West road", 2, 58, 8, 70);
-  s.on("Briefing", {always()},
-       {say(0, "Build up, then push through the town. The Germans will counter-attack: dig in as you go."),
-        objective(0, "Destroy Kampfgruppe Hellenthal")});
-  s.on("Point 64 guns", {flagAtLeast("ridge_guns", 1)},
-       {spawn(0, b.t("gbr_artillery"), west, 2), say(0, "The gunners of Point 64 are here with two Sextons.")});
-  s.on("Lantern", {flagAtLeast("lantern", 1)},
-       {supplies(0, 2500), say(0, "The enemy is still short of fuel after Operation Lantern: their attacks will be slow to "
-                                  "come. Supplies: two and a half thousand more.")});
-  s.on("Won", {defeated(1)}, {done(0), win(0)});
-  s.on("Lost", {defeated(0)}, {lose(0)});
-  return b.save(out, &s.s);
-}
-
-// ---------------------------------------------------------------------------
 // Skirmish maps: one for every landscape, villages placed, named.
 // ---------------------------------------------------------------------------
 struct SkirmishMap {
@@ -792,11 +663,11 @@ int main(int argc, char** argv) {
   bool (*rusActs[5])(Builder&, const std::string&) = {&rusAct1, &rusAct2, &rusAct3, &rusAct4, &rusAct5};
   for (int i = 0; i < 5; ++i)
     if (want("campaigns") || want("rus") || want("rus" + std::to_string(i + 1))) ok = rusActs[i](b, rusDir) && ok;
-  if (want("campaigns")) {
-    ok = gbrRidge(b, content + "campaigns/gbr/b1_point_64.lmap") && ok;
-    ok = gbrRaid(b, content + "campaigns/gbr/b2_lantern.lmap") && ok;
-  }
-  if (want("campaigns") || want("gbr") || want("gbr3")) ok = gbrGap(b, content + "campaigns/gbr/b3_hellenthal.lmap") && ok;
+  // The British campaign (9.12), the same way ("gbr", "gbr1".."gbr5").
+  const std::string gbrDir = content + "campaigns/gbr/";
+  bool (*gbrActs[5])(Builder&, const std::string&) = {&gbrAct1, &gbrAct2, &gbrAct3, &gbrAct4, &gbrAct5};
+  for (int i = 0; i < 5; ++i)
+    if (want("campaigns") || want("gbr") || want("gbr" + std::to_string(i + 1))) ok = gbrActs[i](b, gbrDir) && ok;
   if (want("skirmish")) ok = skirmishMaps(b, content + "maps/skirmish/") && ok;
   return ok ? 0 : 1;
 }

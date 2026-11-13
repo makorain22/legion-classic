@@ -193,6 +193,16 @@ class Map {
   bool anyIce() const;
   std::vector<uint8_t>& iceData() { return ice_; }
   const std::vector<uint8_t>& iceData() const { return ice_; }
+  // --- Flooding (9.12) -----------------------------------------------------------------
+  // Opened sluices and cut dykes: the land in a tile rectangle sinks just under
+  // the water, shallow enough for men to wade but not for wheels or tracks.
+  // The old heights are remembered (and saved with the map) so drain() can put
+  // them back. Both return the corners changed and note a height edit.
+  int flood(int x0, int y0, int x1, int y1);
+  int drain(int x0, int y0, int x1, int y1);
+  static constexpr int kFloodDepth = 8;  // height units under the water
+  const std::vector<std::pair<uint32_t, uint16_t>>& floodMemory() const { return floodMemory_; }
+  void setFloodMemory(std::vector<std::pair<uint32_t, uint16_t>> m) { floodMemory_ = std::move(m); }
   // --- Supply points ---------------------------------------------------------------
   // Sites where a Supply Depot can be built; a depot on one earns supplies.
   // Stored in tiles (the point's centre tile). Saved with the map.
@@ -249,6 +259,7 @@ class Map {
   std::vector<uint8_t> blocks_;
   std::vector<uint8_t> oil_;
   std::vector<uint8_t> ice_;
+  std::vector<std::pair<uint32_t, uint16_t>> floodMemory_;  // corner index -> height before the flood
   std::vector<Prop> props_;
   uint16_t waterLevel_ = 0;
   TerrainRules rules_;
