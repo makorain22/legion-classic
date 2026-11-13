@@ -577,6 +577,12 @@ class Simulation {
     int32_t area;
   };
   std::vector<RevealedArea> revealed_;  // areas a script has revealed for good
+  // Scratch for stepVision: one unit's sight (tile, radius in tiles, owner). Not saved.
+  struct VisionStamp {
+    int16_t x, y, r;
+    uint8_t owner;
+  };
+  std::vector<VisionStamp> visionStamps_;
   // Tutorials and campaigns.
   std::array<std::string, MAX_PLAYERS> hints_, highlights_;
   std::array<std::vector<uint8_t>, MAX_PLAYERS> buildLocks_;  // by unit type: 1 = a script forbids it

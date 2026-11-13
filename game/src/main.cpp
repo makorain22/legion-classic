@@ -12,7 +12,10 @@
 
 #include "game_scene.hpp"
 #include "pioneer/assets/art_pack.hpp"
+#include "pioneer/core/assert.hpp"
+#include "pioneer/core/jobs.hpp"
 #include "pioneer/core/log.hpp"
+#include "pioneer/core/version.hpp"
 #include "pioneer/platform/app.hpp"
 #include "pioneer/sim/unit_types.hpp"
 
@@ -24,6 +27,8 @@ void usage() {
            "         --tool rules[:unit_id]|mods --mods-selftest\n"
            "         --menu --ai-battle --side N --biome temperate|winter|desert|tropical|urban --gallery --works-demo --formation-demo --town-demo --village-demo --bridge-demo --logistics-demo\n"
            "         --ffa (every side for itself) --bench MINUTES (an --ai-battle played without drawing; prints what each side did)\n"
+           "         --threads N (job system: 0 = one per core, 1 = no extra threads) --exec \"console commands\"\n"
+           "         --profile (measure from the start) --trace out.json [--trace-frames N] (Chrome trace of the first frames, or of a --bench)\n"
            "         --export-sprites DIR (write every sprite as PNG for repainting; see docs/ART_PIPELINE.md)\n"
            "         --import-blitzkrieg DATA (make the Blitzkrieg art pack from the game's Data folder)");
 }
@@ -133,6 +138,11 @@ int main(int argc, char** argv) {
       opt.modsSelfTest = true;
       opt.aiBattle = true;
     } else if (a == "--tool") opt.tool = next();
+    else if (a == "--threads") opt.threads = std::max(0, std::atoi(next()));
+    else if (a == "--exec") opt.exec = next();
+    else if (a == "--profile") opt.profile = true;
+    else if (a == "--trace") opt.trace = next();
+    else if (a == "--trace-frames") opt.traceFrames = std::max(1, std::atoi(next()));
     else if (a == "--campaign") opt.campaign = next();
     else if (a == "--mission") opt.mission = next();
     else if (a == "--biome") {
@@ -154,7 +164,19 @@ int main(int argc, char** argv) {
   if (!app.init(cfg)) return 1;
   pioneer::log::init((app.userDir() + "legion.log").c_str());
   pioneer::crash::install(app.userDir(), "0.9.0");
-  PNR_INFO("Legion Classic 0.9.0 on Pioneer Engine 2.0");
+  PNR_INFO("Legion Classic 0.9.0 on " PIONEER_ENGINE_NAME " " PIONEER_VERSION_STRING);
+  PNR_INFO("Job system: %d thread(s)", pioneer::jobs::init(opt.threads));
+  // A failed check goes into the crash report's notes; debug builds stop there.
+  pioneer::setAssertHandler([](const char* expression, const char* file, int line, const char* message) {
+    char note[512];
+    std::snprintf(note, sizeof note, "Check failed: %s %s at %s:%d", expression, message, file, line);
+    pioneer::crash::note(note);
+#ifdef NDEBUG
+    return pioneer::AssertAction::Continue;
+#else
+    return pioneer::AssertAction::Stop;
+#endif
+  });
 
   std::string contentDir = "content/";
   if (const char* base = SDL_GetBasePath()) contentDir = std::string(base) + "content/";
@@ -177,6 +199,7 @@ int main(int argc, char** argv) {
     }
   }
   app.shutdown();
+  pioneer::jobs::shutdown();
   pioneer::log::shutdown();
   return exitCode;
 }

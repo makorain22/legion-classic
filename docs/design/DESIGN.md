@@ -328,9 +328,44 @@ recognition flash on vehicles and a roundel in the interface.
      danish_rising, arnhem_bridge, rotterdam_port. Old b1-b3 rebuilt as b06,
      b07, b18. An American campaign later.
    - Also 13 Nov: range circles for every unit (T), scouts see 44-48 tiles.
-   - **9.13 Big scenarios** – large stand-alone battles inspired by great
-     battles and long operations, with many units.
-   - **9.14 Tuning and debugging** – always last: playtest, balance the armies
+   - **Roadmap change (13 Nov, after playtest round 1):** the three campaigns
+     are shelved (the user builds the campaigns himself with the Mission
+     Maker and sends packs for finalisation), and the engine is upgraded
+     first.
+   - **9.13 Engine upgrade: the Pioneer Engine 2.0** (in progress) – the
+     engine renamed from Slave Engine and rebuilt in nine parts, deliberately
+     over-engineered ("whatever you plan to add, add more"): core, data,
+     simulation, scripting, UI framework, renderer, assets and audio,
+     networking groundwork, tools. Decisions: Lua yes; must run on old
+     hardware (OpenGL 3.3 kept, ES 3.0 possible later, graphics presets and
+     auto-detect); old replays may break; multiplayer groundwork with
+     hosting, LAN, dedicated server and reconnect; glTF import and export;
+     multithreading with a single-thread fallback. See docs/ENGINE.md.
+     - **Part 1, core (done 13 Nov):** rename (namespace `pioneer`, targets
+       `pioneer_core` / `pioneer` / `pioneer_tests`, macros `PNR_*`); job
+       system (`core/jobs.hpp`: work-stealing workers, `parallelFor` with
+       thread-independent chunks, dependencies, `TaskGraph`, inline mode for
+       one thread); profiler (`core/profiler.hpp`: `PNR_PROFILE`, per-frame
+       stats, Chrome trace capture); memory tracking (`core/memory.hpp`:
+       tags, counting allocator, reporters); logging channels and levels,
+       ring buffer and sinks (`core/log.hpp`); developer console
+       (`core/console.hpp`: commands, typed variables with flags, aliases,
+       binds, completion, config files, `wait`, queued lines) with the
+       engine's own commands in `core/console_core.cpp`; ImGui console and
+       profiler windows (`ui/dev_ui.hpp`); game commands and hooks in
+       `game/src/dev_tools.cpp`. In the sim: `Simulation::tick` is marked
+       step by step and each side's vision grid is a job
+       (`Simulation::stepVision`, `Vision::prepare`). `--bench` reports
+       where the ticks went. Keys: ` / F9 console, F8 profiler. Tests:
+       tests/test_core.cpp (18 cases, including the same battle on 1, 3 and
+       4 threads). Also `core/assert.hpp` (`PNR_ASSERT`, logged and counted;
+       stops debug builds only) and `core/version.hpp`.
+   - **9.14 Mission Maker foundation**, **9.15 Cutscenes and event
+     sequences**, **9.16 Set pieces**, **9.17 Map, assets and terrain**,
+     **9.18 Combat and controls**, (campaign finalisation when the user's
+     packs arrive), **9.19 Big scenarios** – large stand-alone battles
+     inspired by great battles and long operations, with many units.
+   - **9.20 Tuning and debugging** – always last: playtest, balance the armies
      and missions, performance, bugs, documentation.
    - Parked: air power (air strikes, an air force). Later: packaging and 1.0.
 

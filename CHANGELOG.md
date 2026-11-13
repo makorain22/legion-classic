@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.9.2 – in progress (Milestone 9.13: the Pioneer Engine)
+
+- **The engine has a new name: Pioneer Engine 2.0** (was Slave Engine 1.0).
+  Maps, saves and replays are unchanged. Milestone 9.13 rebuilds the engine's
+  foundations in nine parts; [docs/ENGINE.md](docs/ENGINE.md) describes them.
+- **Part 1, the core** (13 Nov):
+  - **Every processor core put to work.** A job system shares work between
+    threads and still gives exactly the same battle as one thread (a test
+    plays a battle on one, three and four threads and compares the result).
+    Each side's vision and the baking of sprites run on it now; pathfinding
+    and loading follow in the next parts. Old machines: `--threads 1` (or
+    `sys.threads 1` in the console) uses no extra threads at all.
+  - **Developer console** (**`** or **F9**): commands and variables by name,
+    Tab completion, history, key binds (`bind f6 "profiler"`), aliases,
+    `exec` files, and a filterable view of the log. Settings marked as saved
+    go to `console.cfg`; your own lines go in `autoexec.cfg`. Cheats for
+    testing (`spawn`, `credits`, `reveal`, `kill`, `side`) need `cheats 1`.
+  - **Profiler** (**F8**): frame-time history, every measured step with its
+    calls, total, own and longest time, a timeline per thread, memory by
+    system and the job system's counters. `prof.capture` (or `--trace
+    out.json`) writes a Chrome trace. `--bench` now ends with where the
+    ticks went.
+  - **Logging by channel** (core, sim, ai, path, script, map, render, audio,
+    net ...), each with its own level: `log.level path debug`.
+  - **Memory by system:** `mem.report`.
+  - New options: `--threads N`, `--exec "commands"`, `--profile`, `--trace
+    file.json`, `--trace-frames N`. `r.showfps 1` shows frames per second.
+
 ## 0.9.1 – in progress (edits after Milestone 9; Milestones 9.1–9.12)
 
 - **Range circles** (13 Nov): selected units and the unit under the mouse

@@ -4,9 +4,13 @@
 
 #include <algorithm>
 #include <cmath>
+#include <map>
+#include <string>
 
 #include "editor.hpp"
 #include "game_scene.hpp"
+#include "pioneer/core/jobs.hpp"
+#include "pioneer/core/profiler.hpp"
 #include "pioneer/core/log.hpp"
 
 using namespace pioneer;
@@ -921,8 +925,41 @@ void GameScene::runBench() {
   const uint32_t total = static_cast<uint32_t>(opt_.bench) * 60u * TICKS_PER_SECOND;
   const uint64_t t0 = SDL_GetTicks();
   uint32_t ended = 0;
+  // Every tick is a profiler frame: at the end the report says where the time went.
+  struct StepCost {
+    double ms = 0, worst = 0;
+  };
+  std::map<std::string, StepCost> steps;
+  double tickMs = 0, worstTick = 0;
+  uint32_t measured = 0, slowTicks = 0;
+  size_t peakUnits = 0;
+  const bool wasMeasuring = prof::enabled();
+  prof::setEnabled(true);
+  prof::beginFrame();
   for (uint32_t i = 1; i <= total; ++i) {
+    if (!opt_.trace.empty() && i == total / 2) prof::startCapture(std::max(1, opt_.traceFrames));
     sim_->tick();
+    prof::beginFrame();
+    {
+      const prof::FrameStats& f = prof::lastFrame();
+      for (const prof::ScopeStat& sc : f.scopes) {
+        StepCost& c = steps[sc.name];
+        c.ms += sc.ms;
+        c.worst = std::max(c.worst, sc.ms);
+        if (std::string(sc.name) == "Sim tick") {
+          tickMs += sc.ms;
+          worstTick = std::max(worstTick, sc.ms);
+          slowTicks += sc.ms > 1000.0 / TICKS_PER_SECOND;
+          ++measured;
+        }
+      }
+      peakUnits = std::max(peakUnits, sim_->unitCount());
+      if (prof::captureReady()) {
+        std::printf("%s the trace to %s\n", prof::saveTrace(opt_.trace) ? "Wrote" : "Could not write", opt_.trace.c_str());
+        prof::discardCapture();
+        prof::setEnabled(true);
+      }
+    }
     for (const SimEvent& ev : sim_->events()) {
       if (ev.owner >= MAX_PLAYERS) continue;
       Tally& t = tally[ev.owner];
@@ -972,6 +1009,21 @@ void GameScene::runBench() {
               (ended ? ended : total) / 15 % 60, static_cast<double>(SDL_GetTicks() - t0) / 1000.0);
   for (uint8_t p = 0; p < MAX_PLAYERS; ++p)
     if (players_[p].active) std::printf("  %u %s: %s\n", p, players_[p].faction.c_str(), sim_->playerState(p).defeated ? "defeated" : "standing");
+  if (measured > 0) {
+    const double budget = 1000.0 / TICKS_PER_SECOND;
+    std::printf("=== where the ticks went: %u ticks on %d thread(s), most units at once %zu ===\n", measured,
+                jobs::system().threadCount(), peakUnits);
+    std::printf("  a tick took %.3f ms on average, %.2f ms at worst (the budget at %d ticks a second is %.1f ms; %u ticks went over)\n",
+                tickMs / measured, worstTick, TICKS_PER_SECOND, budget, slowTicks);
+    std::vector<std::pair<std::string, StepCost>> rows(steps.begin(), steps.end());
+    std::sort(rows.begin(), rows.end(), [](const auto& a, const auto& b) { return a.second.ms > b.second.ms; });
+    for (const auto& [name, c] : rows) {
+      if (name == "Sim tick") continue;
+      std::printf("  %-34s %8.3f ms a tick  %8.2f ms at worst  %5.1f%%\n", name.c_str(), c.ms / measured, c.worst,
+                  tickMs > 0 ? c.ms * 100.0 / tickMs : 0.0);
+    }
+  }
+  prof::setEnabled(wasMeasuring);
   std::fflush(stdout);
 }
 

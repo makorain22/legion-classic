@@ -1,3 +1,4 @@
+#include "pioneer/core/profiler.hpp"
 #include "pioneer/platform/app.hpp"
 
 #include <algorithm>
@@ -177,6 +178,8 @@ int App::run(Scene& scene) {
   bool running = true;
 
   while (running && !scene.wantsQuit()) {
+    prof::beginFrame();
+    PNR_PROFILE("Frame");
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
       ImGui_ImplSDL3_ProcessEvent(&e);
@@ -203,6 +206,7 @@ int App::run(Scene& scene) {
     acc += dt * scene.timeScale();
     int ticks = 0;
     while (acc >= kTickSeconds && ticks < kMaxTicksPerFrame) {
+      PNR_PROFILE("Tick");
       scene.onTick();
       acc -= kTickSeconds;
       ++ticks;
@@ -211,20 +215,28 @@ int App::run(Scene& scene) {
     if (simBehind_) acc = 0;
     ticksLastFrame_ = ticks;
 
-    scene.onUpdate(static_cast<float>(dt), static_cast<float>(acc / kTickSeconds));
+    {
+      PNR_PROFILE("Update");
+      scene.onUpdate(static_cast<float>(dt), static_cast<float>(acc / kTickSeconds));
+    }
 
     glViewport(0, 0, pw_, ph_);
     glDisable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    scene.onRender();
-
-    ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplSDL3_NewFrame();
-    ImGui::NewFrame();
-    scene.onImGui();
-    ImGui::Render();
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    {
+      PNR_PROFILE("Render");
+      scene.onRender();
+    }
+    {
+      PNR_PROFILE("Interface");
+      ImGui_ImplOpenGL3_NewFrame();
+      ImGui_ImplSDL3_NewFrame();
+      ImGui::NewFrame();
+      scene.onImGui();
+      ImGui::Render();
+      ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    }
 
     ++frame;
     if (rec_ && frame % recEvery_ == 0) {
@@ -241,11 +253,17 @@ int App::run(Scene& scene) {
       if (!cfg_.screenshotOnExit.empty()) saveScreenshot(cfg_.screenshotOnExit);
       running = false;
     }
-    SDL_GL_SwapWindow(window_);
+    {
+      PNR_PROFILE("Present");
+      SDL_GL_SwapWindow(window_);
+    }
     if (fpsLimit_ > 0 && !cfg_.offscreen) {
       const uint64_t frameNs = 1000000000ull / static_cast<uint64_t>(fpsLimit_);
       const uint64_t spent = SDL_GetTicksNS() - now;
-      if (spent < frameNs) SDL_DelayPrecise(frameNs - spent);
+      if (spent < frameNs) {
+        PNR_PROFILE("Frame limiter (idle)");
+        SDL_DelayPrecise(frameNs - spent);
+      }
     }
 
     ++fpsFrames;

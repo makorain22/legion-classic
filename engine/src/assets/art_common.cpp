@@ -6,6 +6,7 @@
 #include <cstring>
 #include <thread>
 
+#include "pioneer/core/jobs.hpp"
 #include "pioneer/core/rng.hpp"
 #include "pioneer/map/map.hpp"
 
@@ -477,22 +478,18 @@ int BakeQueue::pushShadowed(VoxelModel model, VoxelModel shadow, const VoxelPale
 
 void BakeQueue::run() {
   std::vector<BakedSprite> out(jobs_.size());
-  std::atomic<size_t> next{0};
-  auto worker = [&] {
-    for (;;) {
-      const size_t i = next.fetch_add(1);
-      if (i >= jobs_.size()) return;
-      Job& j = jobs_[i];
-      BakeOptions o = j.o;
-      if (j.ownShadow) o.shadowModel = &j.shadow;
-      out[i] = bakeVoxels(j.model, *j.pal, o);
-    }
-  };
-  const unsigned n = std::max(1u, std::min(16u, std::thread::hardware_concurrency()));
-  std::vector<std::thread> threads;
-  for (unsigned t = 1; t < n; ++t) threads.emplace_back(worker);
-  worker();
-  for (std::thread& t : threads) t.join();
+  // One sprite per job, each writing only its own slot.
+  jobs::system().parallelFor(
+      jobs_.size(), 1,
+      [&](size_t first, size_t last, size_t, int) {
+        for (size_t i = first; i < last; ++i) {
+          Job& j = jobs_[i];
+          BakeOptions o = j.o;
+          if (j.ownShadow) o.shadowModel = &j.shadow;
+          out[i] = bakeVoxels(j.model, *j.pal, o);
+        }
+      },
+      "Bake sprite");
   for (size_t k = 0; k < out.size(); ++k) {
     BakedSprite& s = out[k];
     // Trim empty margins: sprites are baked in the bounds of the whole voxel

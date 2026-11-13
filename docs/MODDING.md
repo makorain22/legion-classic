@@ -306,6 +306,22 @@ the sidebar's pictures. Sprite overrides in a mod's `art/` folder still load
 (see [ART_PIPELINE.md](ART_PIPELINE.md)), and `--export-sprites` still writes
 the sprites out for painting.
 
+## The console, for testing a mod
+
+Press **`** or **F9** in the game. For mod work the useful lines are:
+
+| Type | To |
+| --- | --- |
+| `cheats 1` | Allow the testing commands below |
+| `spawn my_new_tank 4` | Put units under the mouse (Tab lists every unit and building id, your mod's included) |
+| `credits 20000`, `side 1`, `reveal` | Give a side supplies, command another side, see everything |
+| `speed 8`, `pause`, `restart` | Run the battle fast, stop it, start again |
+| `log.level content debug` | Make the content loader say more in the log |
+| `bind f6 "spawn my_new_tank 4"` | Put a line you type often on a key |
+
+Lines you want at every start (binds, `cheats 1`) go in `autoexec.cfg` in the
+user folder. The full list of commands is in [ENGINE.md](ENGINE.md).
+
 ## Saves, replays and mods
 
 Saved games and replays record the mods they were made with and a fingerprint

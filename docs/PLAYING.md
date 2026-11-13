@@ -569,6 +569,8 @@ These are the defaults:
 | F3 | Debug panel: spawn tools (up to 10,000 units at once), reveal map, all health bars, simulation timings |
 | F11 or Alt+Enter | Fullscreen |
 | F12 | Screenshot |
+| ` (the key under Esc) or F9 | Developer console |
+| F8 | Profiler: where each frame's time goes |
 
 **Settings → Display** sets the frame rate limit (30 to 240, or unlimited;
 144 by default), vsync, whether the mouse is kept inside the window while you
@@ -579,6 +581,32 @@ khaki for the Soviets, service brown and stone (with the roundel) for the Britis
 
 Screenshots, settings and the log file (`legion.log`) are saved in
 `%APPDATA%\Makorain\LegionClassic\`.
+
+## The developer console
+
+Press **`** (the key under Esc) or **F9** anywhere, menus included. The
+console shows the game's log and takes commands; **Tab** completes what you
+are typing, **Up/Down** bring back earlier lines, **Esc** closes it.
+
+| Type | To |
+| --- | --- |
+| `help`, `find speed`, `cmdlist`, `cvarlist` | See what there is and what it does |
+| `speed 4`, `pause`, `restart`, `screenshot` | Control the battle |
+| `status`, `hash`, `map`, `goto 64 64` | Look at the battle: sides and supplies, the state checksum, the map, move the camera |
+| `r.showfps 1` | Show frames per second in the corner (remembered) |
+| `sys.threads 1` | Use no extra threads (old machines); `0` = one per core (remembered) |
+| `con.height 0.6` | How far down the console reaches (remembered) |
+| `profiler` (or F8) | Open the profiler; `prof.capture 300` writes a trace file you can send with a bug report |
+| `log.level ai debug` | Make one part of the game say more in the log |
+| `mem.report`, `jobs.info` | Memory by system; what the worker threads did |
+| `bind f6 "speed 8"` | Run any command on a key; `unbind f6` |
+| `alias fast "speed 8"` | Give a command a name of your own |
+| `cheats 1`, then `spawn ger_heavy_tank 3`, `credits 9999`, `reveal`, `kill`, `side 1` | Testing tools: units under the mouse, supplies, see everything, destroy the selection, command another side |
+
+Settings marked *remembered* are written to `console.cfg` in the user folder
+when the game closes. Lines of your own (binds, aliases) belong in a file
+called `autoexec.cfg` beside it: the game runs it at every start and never
+overwrites it.
 
 ## Mods and creation tools
 
@@ -766,4 +794,9 @@ or `--tool mods` (open a creation tool at start),
 `--mods-selftest` (checks the rules editor and mods through the
 real game), `--no-sound`, `--campaign gbr` or `--campaign gbr:2` (open a
 campaign, or a mission's briefing), `--mission tutorial:1` (play a mission
-straight away).
+straight away), `--threads 1` (no extra threads, for old machines; `0`, the
+default, uses one per processor core), `--exec "speed 4; r.showfps 1"` (console
+commands to run once the game is up), `--profile` (measure from the first
+frame and open the profiler), `--trace out.json` with `--trace-frames 300`
+(write a trace of the first frames, or with `--bench` of the middle of the
+battle; open it in chrome://tracing or ui.perfetto.dev).

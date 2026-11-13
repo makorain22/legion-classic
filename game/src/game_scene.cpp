@@ -70,6 +70,7 @@ GameScene::GameScene(App& app, SceneOptions opt) : app_(app), opt_(opt) {
 }
 
 GameScene::~GameScene() {
+  shutdownDevTools();
   if (cursorArrow_) SDL_DestroyCursor(cursorArrow_);
   if (cursorCross_) SDL_DestroyCursor(cursorCross_);
 }
@@ -136,6 +137,7 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
     showHelp_ = false;
   }
   applySettings();
+  initDevTools();
   editor_ = std::make_unique<Editor>(*this);
   sidebar_ = std::make_unique<Sidebar>(*this);
   menus_ = std::make_unique<Menus>(*this);
@@ -1364,6 +1366,8 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
     if (e.type == SDL_EVENT_KEY_DOWN) menus_->captureKey(e.key);
     return;
   }
+  // The developer console and profiler work everywhere, menus included.
+  if (devToolsEvent(e)) return;
   // Menus take everything while open; in the main menu the battle behind is scenery.
   if (mode_ == Mode::Menu || menus_->wantsInput()) {
     if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_ESCAPE && mode_ != Mode::Menu) menus_->close();
@@ -1884,6 +1888,7 @@ void GameScene::drawStructureEffects(float dt) {
 }
 
 void GameScene::onUpdate(float dt, float alpha) {
+  updateDevTools();
   if (opt_.monkey > 0) monkeyStep();
   if (!opt_.showcase.empty() && mode_ == Mode::Game) showcaseStep(dt);
   alpha_ = alpha;
@@ -2504,6 +2509,7 @@ void GameScene::onImGui() {
     menus_->draw();
     encyclopedia_->draw();
     rulesEditor_->draw();
+    drawDevTools();
     return;
   }
   showCards_ = settings_.showCards;
@@ -2549,6 +2555,7 @@ void GameScene::onImGui() {
   if (showHelp_ && !missionInputBlocked()) drawHelp();
   if (showDebug_) drawDebug();
   if (formationPicker_) drawFormationPicker();
+  drawDevTools();
 }
 
 // Ctrl+right-click: a small menu at the cursor to move or attack-move there

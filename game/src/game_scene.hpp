@@ -29,6 +29,8 @@
 #include "pioneer/render/terrain_renderer.hpp"
 #include "pioneer/sim/savefile.hpp"
 #include "pioneer/sim/simulation.hpp"
+#include "pioneer/core/memory.hpp"
+#include "pioneer/ui/dev_ui.hpp"
 
 namespace legion {
 
@@ -110,6 +112,11 @@ struct SceneOptions {
   bool ffa = false;             // --ffa: an --ai-battle with every side for itself
   int bench = 0;                // --bench N: play an --ai-battle for N game minutes without drawing, print a report, quit
   float yaw = -1000, pitch = -1000;  // --yaw / --pitch: starting camera angles in degrees (screenshots)
+  int threads = 0;              // --threads N: threads for the job system (0 = one per core, 1 = none)
+  std::string exec;             // --exec "cmd; cmd": console commands run once the game is up
+  bool profile = false;         // --profile: measure from the first frame (and open the profiler)
+  std::string trace;            // --trace file.json: capture a Chrome trace (--bench: of the ticks in the middle)
+  int traceFrames = 300;        // --trace-frames N: how many frames (or ticks) the trace covers
 };
 
 class GameScene final : public pioneer::Scene {
@@ -458,6 +465,19 @@ class GameScene final : public pioneer::Scene {
   std::unique_ptr<Editor> editor_;
   std::unique_ptr<Sidebar> sidebar_;
   std::unique_ptr<Menus> menus_;
+  // --- Developer tools (dev_tools.cpp): the console and the profiler ---------
+  void initDevTools();
+  void shutdownDevTools();
+  bool devToolsEvent(const SDL_Event& e);  // true: the event was for the tools
+  void updateDevTools();
+  void drawDevTools();
+  void registerConsoleCommands();
+  void toggleConsole();
+  pioneer::ui::ConsoleWindow consoleWin_;
+  pioneer::ui::ProfilerWindow profilerWin_;
+  bool showConsole_ = false, showProfiler_ = false;
+  bool devToolsReady_ = false;
+  std::vector<pioneer::mem::ScopedReporter> memReporters_;
   std::unique_ptr<GameAudio> audio_;
   float audioBedsTimer_ = 0;
   void updateAudio(float dt);

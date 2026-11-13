@@ -1,6 +1,7 @@
 // Pioneer Engine - orders, path following, collision and vision.
 #include <algorithm>
 
+#include "pioneer/core/jobs.hpp"
 #include "pioneer/sim/simulation.hpp"
 
 namespace pioneer {
@@ -382,13 +383,7 @@ void Simulation::stepSeparation() {
 
 void Simulation::stepVision() {
   vision_.begin();
-  // Allies share what they see.
-  std::array<std::array<uint8_t, MAX_PLAYERS>, MAX_PLAYERS> viewers{};
-  std::array<uint8_t, MAX_PLAYERS> viewerCount{};
-  for (int a = 0; a < MAX_PLAYERS; ++a)
-    for (int b = 0; b < MAX_PLAYERS; ++b)
-      if (team_[static_cast<size_t>(a)] == team_[static_cast<size_t>(b)])
-        viewers[static_cast<size_t>(a)][viewerCount[static_cast<size_t>(a)]++] = static_cast<uint8_t>(b);
+  // Allies share what they see (see below).
   // Areas a scenario has revealed stay visible.
   for (const RevealedArea& ra : revealed_) {
     if (ra.area < 0 || ra.area >= static_cast<int32_t>(script_.areas.size())) continue;
@@ -397,12 +392,28 @@ void Simulation::stepVision() {
     for (uint8_t p = 0; p < MAX_PLAYERS; ++p)
       if (ra.player == ANY_PLAYER || p == ra.player) vision_.stamp(p, (a.x0 + a.x1) / 2, (a.y0 + a.y1) / 2, r);
   }
+  // Every unit's sight, gathered first; then each side's grid is filled by its
+  // own job. A grid is only ever written by the job of its side, and marking
+  // tiles is the same in any order, so the result does not depend on how many
+  // threads there are.
+  visionStamps_.clear();
   reg_.each<CUnit, CPosition>([&](uint32_t, CUnit& u, CPosition& p) {
     if (u.owner >= MAX_PLAYERS) return;  // neutral: nobody sees through civilians' eyes
-    const size_t o = u.owner % MAX_PLAYERS;
     const int r = types_.get(u.type).sight >> LEPTON_SHIFT;
-    for (uint8_t i = 0; i < viewerCount[o]; ++i) vision_.stamp(viewers[o][i], p.x >> LEPTON_SHIFT, p.y >> LEPTON_SHIFT, r);
+    if (r <= 0) return;
+    vision_.prepare(r);
+    visionStamps_.push_back({static_cast<int16_t>(p.x >> LEPTON_SHIFT), static_cast<int16_t>(p.y >> LEPTON_SHIFT),
+                             static_cast<int16_t>(r), u.owner});
   });
+  if (!visionStamps_.empty())
+    jobs::system().parallelFor(
+        MAX_PLAYERS, 1,
+        [&](size_t first, size_t last, size_t, int) {
+          for (size_t viewer = first; viewer < last; ++viewer)
+            for (const VisionStamp& s : visionStamps_)
+              if (team_[s.owner] == team_[viewer]) vision_.stamp(static_cast<int>(viewer), s.x, s.y, s.r);
+        },
+        "Sim: vision of one side");
   vision_.end();
 }
 

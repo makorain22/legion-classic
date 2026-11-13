@@ -1,3 +1,4 @@
+#include "pioneer/core/jobs.hpp"
 #include "pioneer/assets/placeholder_art.hpp"
 
 #include <algorithm>
@@ -915,10 +916,9 @@ void loadArtPack(AtlasBuilder& ab, SpriteCatalog& cat, const std::string& dir) {
     arts.push_back({key, art});
   }
   // Read the PNGs on all cores.
-  std::atomic<size_t> next{0};
   std::atomic<int> missing{0};
-  auto work = [&] {
-    for (size_t i; (i = next++) < wants.size();) {
+  auto work = [&](size_t first, size_t last, size_t, int) {
+    for (size_t i = first; i < last; ++i) {
       Want& w = wants[i];
       if (!w.img.loadPng(dir + "/" + w.name + ".png")) {
         w.img = Image(1, 1);
@@ -935,12 +935,7 @@ void loadArtPack(AtlasBuilder& ab, SpriteCatalog& cat, const std::string& dir) {
       w.img = fromPngColours(w.img);
     }
   };
-  {
-    std::vector<std::thread> pool;
-    const unsigned n = std::max(1u, std::min(12u, std::thread::hardware_concurrency()));
-    for (unsigned t = 0; t < n; ++t) pool.emplace_back(work);
-    for (auto& t : pool) t.join();
-  }
+  jobs::system().parallelFor(wants.size(), 4, work, "Read art pack PNG");
   for (Want& w : wants) ab.add(std::move(w.img), w.ax, w.ay);
   for (auto& [key, art] : arts) cat.units[key] = art;
   PNR_INFO("Art pack %s: %zu units, %zu sprites%s", dir.c_str(), arts.size(), wants.size(),

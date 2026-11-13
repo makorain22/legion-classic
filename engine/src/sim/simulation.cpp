@@ -1,4 +1,5 @@
 #include "pioneer/sim/simulation.hpp"
+#include "pioneer/core/profiler.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -134,14 +135,21 @@ Entity Simulation::spawnUnit(uint16_t type, uint8_t player, Vec2i pos, Angle fac
 }
 
 void Simulation::tick() {
+  PNR_PROFILE("Sim tick");
   events_.clear();
   spawnLog_.clear();
   pathfinder_.refresh();
 
-  if (ai_.any()) ai_.update(*this);  // the computer players give their orders like anyone else
-  std::vector<Command> cmds;
-  cmds.swap(pending_);
-  for (const Command& c : cmds) applyCommand(c);
+  {
+    PNR_PROFILE("Sim: computer players");
+    if (ai_.any()) ai_.update(*this);  // the computer players give their orders like anyone else
+  }
+  {
+    PNR_PROFILE("Sim: commands");
+    std::vector<Command> cmds;
+    cmds.swap(pending_);
+    for (const Command& c : cmds) applyCommand(c);
+  }
 
   // Timing is for the profiler only; it never feeds back into the game.
   using Clock = std::chrono::steady_clock;
@@ -151,34 +159,68 @@ void Simulation::tick() {
     out = std::chrono::duration<float, std::milli>(now - t).count();
     t = now;
   };
-  processPathQueue();
+  {
+    PNR_PROFILE("Sim: paths");
+    processPathQueue();
+  }
   lap(stats_.msPaths);
-  stepOrders();
-  stepFormations();
-  stepGarrisons();
+  {
+    PNR_PROFILE("Sim: orders and formations");
+    stepOrders();
+    stepFormations();
+    stepGarrisons();
+  }
   lap(stats_.msOrders);
-  stepEconomy();
-  stepScript();
-  stepMission();
+  {
+    PNR_PROFILE("Sim: economy and scripts");
+    stepEconomy();
+    stepScript();
+    stepMission();
+  }
   lap(stats_.msEconomy);
-  stepMovement();
+  {
+    PNR_PROFILE("Sim: movement");
+    stepMovement();
+  }
   lap(stats_.msMove);
-  rebuildSpatial();
+  {
+    PNR_PROFILE("Sim: spatial hash");
+    rebuildSpatial();
+  }
   lap(stats_.msSpatial);
-  stepSeparation();
+  {
+    PNR_PROFILE("Sim: separation");
+    stepSeparation();
+  }
   lap(stats_.msSeparation);
-  if (tick_ % 4 == 0) stepVision();
+  if (tick_ % 4 == 0) {
+    PNR_PROFILE("Sim: vision");
+    stepVision();
+  }
   lap(stats_.msVision);
-  stepTargeting();
-  stepScouts();
+  {
+    PNR_PROFILE("Sim: targeting");
+    stepTargeting();
+    stepScouts();
+  }
   lap(stats_.msTargeting);
-  stepWeapons();
+  {
+    PNR_PROFILE("Sim: weapons");
+    stepWeapons();
+  }
   lap(stats_.msWeapons);
-  stepProjectiles();
+  {
+    PNR_PROFILE("Sim: projectiles");
+    stepProjectiles();
+  }
   lap(stats_.msProjectiles);
-  stepGroups();
-  removeDead();
+  {
+    PNR_PROFILE("Sim: groups and the dead");
+    stepGroups();
+    removeDead();
+  }
   stats_.projectiles = static_cast<uint32_t>(reg_.pool<CProjectile>().size());
+  PNR_COUNTER("Units", reg_.pool<CUnit>().size());
   ++tick_;
 }
 

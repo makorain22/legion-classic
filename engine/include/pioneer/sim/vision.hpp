@@ -22,7 +22,12 @@ class Vision {
   // Starts a new update: clears "visible" for every player.
   void begin();
   // Marks a circle of `radiusTiles` around tile (tx, ty) for a player.
+  // Several players' grids may be stamped at the same time from different
+  // threads, as long as each radius used was announced with prepare() first
+  // and no two threads stamp the same player.
   void stamp(int player, int tx, int ty, int radiusTiles);
+  // Builds the circle table for a radius (not thread-safe; call before stamping in parallel).
+  void prepare(int radiusTiles) { if (radiusTiles > 0) circle(radiusTiles); }
   void end() { ++revision_; }
 
   bool visible(int player, int tx, int ty) const {

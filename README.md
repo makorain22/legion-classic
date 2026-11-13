@@ -113,7 +113,7 @@ load, replay), `--editor-selftest` and `--mods-selftest`.
 | `mods/` | Mods that ship with the game (an example) |
 | `tests/` | Unit tests (doctest), including determinism, combat, maps and mods |
 | `tools/` | Build-time tools (`make_scenarios.cpp` writes the bundled scenario) |
-| `docs/` | Player guide, modding guide, art pipeline and the design document |
+| `docs/` | Player guide, modding guide, art pipeline, the engine guide ([ENGINE.md](docs/ENGINE.md)) and the design document |
 
 - **Deterministic simulation:** integer and fixed-point maths only, seeded
   random numbers, 15 ticks a second. The same orders always give the same
