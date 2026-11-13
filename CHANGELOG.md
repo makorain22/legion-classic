@@ -1,6 +1,13 @@
 # Changelog
 
-## 0.9.1 – in progress (edits after Milestone 9; Milestones 9.1–9.10)
+## 0.9.1 – in progress (edits after Milestone 9; Milestones 9.1–9.12)
+
+- **Range circles** (13 Nov): selected units and the unit under the mouse
+  show how far their guns reach as a circle on the ground, green for yours,
+  blue for allies, red for enemies in sight; scouts add a dotted circle for
+  their sight; a defensive building being placed shows its reach. **T**
+  cycles selection / every unit in view / off (Settings > Game).
+- **Scouts see twice as far again:** scout cars 48 tiles (Russia 44).
 
 - **Fixed a crash** in skirmish (seen in a 1v1v1 at high game speed, and
   probably the old "2v2 crash after five minutes"): a man killed inside a

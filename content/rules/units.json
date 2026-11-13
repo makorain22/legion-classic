@@ -139,7 +139,7 @@
       "animTicks": 1,
       "health": 80,
       "armor": "soft",
-      "sight": 24,
+      "sight": 48,
       "weapons": [
         "mg_light"
       ],
@@ -492,7 +492,7 @@
       "animTicks": 1,
       "health": 80,
       "armor": "soft",
-      "sight": 22,
+      "sight": 44,
       "weapons": [
         "mg_light"
       ],
@@ -845,7 +845,7 @@
       "animTicks": 1,
       "health": 80,
       "armor": "soft",
-      "sight": 24,
+      "sight": 48,
       "weapons": [
         "mg_light"
       ],

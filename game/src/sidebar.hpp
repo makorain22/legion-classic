@@ -36,6 +36,8 @@ class Sidebar {
 
   bool busy() const { return placeType_ >= 0 || sellMode_; }
   int placingType() const { return placeType_; }
+  // Where a building of `type` would stand with the mouse over `ground` (snapped to tiles).
+  slave::Vec2i snappedCentre(int type, slave::Vec2f ground) const;
   int hoveredType() const { return hoveredType_; }  // mouse belongs to the sidebar mode
   void cancel();
   void startPlacing(int type);
@@ -49,7 +51,6 @@ class Sidebar {
   void rebuildMinimap();
   // Tiles a fortification line covers from a to b (tile coordinates).
   std::vector<slave::Vec2i> lineTiles(slave::Vec2i a, slave::Vec2i b) const;
-  slave::Vec2i snappedCentre(int type, slave::Vec2f ground) const;
   bool validAt(int type, slave::Vec2i centre) const;
 
   GameScene& scene_;

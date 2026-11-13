@@ -507,6 +507,7 @@ class GameScene final : public slave::Scene {
   void updateMission(float dt);
   void drawMission();
   void drawMissionMarkers(ImDrawList* dl);
+  void drawRangeRings(ImDrawList* dl);  // weapon range circles on the ground
   void drawMissionDebug();
   bool missionInputBlocked() const;
   float attractTime_ = 0;

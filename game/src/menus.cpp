@@ -673,6 +673,11 @@ void Menus::drawSettings() {
       changed |= ImGui::Checkbox("Unit cards over fireteams, platoons and companies", &st.showCards);
       changed |= ImGui::Checkbox("Unit cards over the other sides' units too", &st.showEnemyCards);
       changed |= ImGui::Checkbox("Chips for enemy forces out of sight", &st.showChips);
+      {
+        static const char* ringNames[] = {"Off", "Selection and the unit under the mouse", "Every unit in view"};
+        ImGui::SetNextItemWidth(260);
+        changed |= ImGui::Combo("Range circles (T)", &st.rangeRings, ringNames, 3);
+      }
       changed |= ImGui::Checkbox("Atmosphere: period colour grading and a vignette", &st.atmosphere);
       changed |= ImGui::Checkbox("3D battlefield (off: the classic 2D view)", &st.view3D);
       if (st.view3D) changed |= ImGui::Checkbox("Shadows", &st.shadows);

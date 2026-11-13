@@ -443,8 +443,14 @@ guns and towers are built and placed like other structures.
 - **Artillery** reaches 24–28 tiles (emplaced guns 34–38), far beyond its
   own sight: it fires at whatever your side can see.
 - **Spotting.** Tanks see about 8 tiles, less than their gun range; scout cars
-  see 22–24. Every unit shoots at whatever its side (and its allies) can see,
+  see 44–48. Every unit shoots at whatever its side (and its allies) can see,
   so put scouts forward to let the tanks fire at full range.
+- **Range circles.** Selected units, and the unit under the mouse, show a
+  circle on the ground: how far their guns reach (green yours, blue allies,
+  red enemies in sight). Scouts add a dotted circle for how far they see. A
+  gun pit or bunker being placed shows the reach it will have. **T** cycles
+  between the selection, every unit in view, and off (also in Settings >
+  Game).
 - **Orders.** Right-click an enemy to attack it: your units drive into range,
   chase it if it moves, and stop when it dies. **Attack-move** (press **Ctrl+A** or **F**,
   then left-click the ground, or pick it in the Ctrl+right-click menu) advances to a point and
@@ -534,6 +540,7 @@ These are the defaults:
 | Ctrl+1…9 / 1…9 | Set / recall a control group |
 | Tab | Switch which side you command (and see) |
 | L | Radio log: the mission's messages so far |
+| T | Range circles: selection, every unit in view, off |
 | Home or C | Centre the view on the selection |
 | Sidebar minimap | Click/drag to look; right-click to send the selection; wheel or + / − to zoom (1× to 8×) |
 | Middle mouse drag | Turn the view (sideways) and tilt it (up and down); classic view: pan |

@@ -1521,6 +1521,13 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
         showDebug_ = !showDebug_;
       } else if (K.pressed(InputAction::RadioLog, e.key)) {
         showRadioLog_ = !showRadioLog_;
+      } else if (K.pressed(InputAction::RangeRings, e.key)) {
+        // Selection -> every unit -> off -> selection.
+        settings_.rangeRings = settings_.rangeRings == 1 ? 2 : settings_.rangeRings == 2 ? 0 : 1;
+        static const char* names[] = {"Range circles off", "Range circles: selection and the unit under the mouse",
+                                      "Range circles: every unit in view"};
+        showStatus(names[settings_.rangeRings]);
+        saveSettings();
       } else if (K.pressed(InputAction::ToggleInfo, e.key)) {
         settings_.showInfoPanel = !settings_.showInfoPanel;
         saveSettings();
