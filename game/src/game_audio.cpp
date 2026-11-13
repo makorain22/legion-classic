@@ -5,10 +5,10 @@
 #include <filesystem>
 #include <fstream>
 
-#include "slave/core/log.hpp"
+#include "pioneer/core/log.hpp"
 
-using namespace slave;
-using namespace slave::audio;
+using namespace pioneer;
+using namespace pioneer::audio;
 
 namespace legion {
 
@@ -62,7 +62,7 @@ bool GameAudio::init(const std::vector<std::string>& dirs, std::string& error) {
     std::string err;
     const std::string path = resolve(rel);
     if (path.empty() || !loadSound(path, s, err)) {
-      SLV_WARN("Sound %s: %s", rel.c_str(), path.empty() ? "missing" : err.c_str());
+      PNR_WARN("Sound %s: %s", rel.c_str(), path.empty() ? "missing" : err.c_str());
       return loaded[rel] = -1;
     }
     return loaded[rel] = mixer_->addSound(std::move(s));
@@ -98,15 +98,15 @@ bool GameAudio::init(const std::vector<std::string>& dirs, std::string& error) {
         auto bytes = std::make_shared<std::vector<uint8_t>>();
         const std::string path = resolve(tr.file);
         if (path.empty() || !readFileBytes(path, *bytes)) {
-          SLV_WARN("Music %s missing", tr.file.c_str());
+          PNR_WARN("Music %s missing", tr.file.c_str());
           continue;
         }
         tr.bytes = std::move(bytes);
         playlists_[mood].push_back(std::move(tr));
       }
   std::string devErr;
-  if (!device_.open(*mixer_, devErr)) SLV_WARN("No sound: %s", devErr.c_str());
-  else SLV_INFO("Sound: %d sounds, %d music tracks, 48 kHz", mixer_->soundCount(),
+  if (!device_.open(*mixer_, devErr)) PNR_WARN("No sound: %s", devErr.c_str());
+  else PNR_INFO("Sound: %d sounds, %d music tracks, 48 kHz", mixer_->soundCount(),
                 static_cast<int>(playlists_["menu"].size() + playlists_["calm"].size() + playlists_["battle"].size()));
   return true;
 }
@@ -300,7 +300,7 @@ void GameAudio::startMusic(MusicMood m, float fade) {
   if (list.size() > 1 && list[pick].file == lastTrack_) pick = (pick + 1) % list.size();
   const Track& t = list[pick];
   mixer_->playMusic(t.bytes, fade, t.volume);
-  SLV_INFO("Music: %s (%s)", t.title.c_str(), key);
+  PNR_INFO("Music: %s (%s)", t.title.c_str(), key);
   lastTrack_ = t.file;
   nowPlaying_ = t.title;
   musicVolume_ = t.volume;
@@ -336,7 +336,7 @@ void GameAudio::scriptMusic(const std::string& what) {
         lastTrack_ = t.file;
         return;
       }
-  SLV_WARN("Mission music: no track or mood called '%s'", what.c_str());
+  PNR_WARN("Mission music: no track or mood called '%s'", what.c_str());
   scripted_ = false;
 }
 

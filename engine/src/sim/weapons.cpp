@@ -1,11 +1,11 @@
 #include <algorithm>
-#include "slave/sim/weapons.hpp"
+#include "pioneer/sim/weapons.hpp"
 
 #include <cmath>
 #include <fstream>
 #include <nlohmann/json.hpp>
 
-namespace slave {
+namespace pioneer {
 
 bool parseArmor(const std::string& s, ArmorClass& out) {
   if (s == "infantry") out = ArmorClass::Infantry;
@@ -115,4 +115,4 @@ int WeaponRegistry::find(const std::string& id) const {
   return -1;
 }
 
-}  // namespace slave
+}  // namespace pioneer

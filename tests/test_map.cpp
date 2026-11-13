@@ -4,10 +4,10 @@
 
 #include <nlohmann/json.hpp>
 
-#include "slave/map/map_io.hpp"
-#include "slave/sim/simulation.hpp"
+#include "pioneer/map/map_io.hpp"
+#include "pioneer/sim/simulation.hpp"
 
-using namespace slave;
+using namespace pioneer;
 
 TEST_CASE("map sizes are rounded to multiples of 32 and clamped") {
   CHECK(Map::roundSize(10) == 32);

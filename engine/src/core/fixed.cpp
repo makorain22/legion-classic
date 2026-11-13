@@ -1,6 +1,6 @@
-#include "slave/core/fixed.hpp"
+#include "pioneer/core/fixed.hpp"
 
-namespace slave {
+namespace pioneer {
 
 namespace {
 constexpr int32_t kSinQuarter[1025] = {
@@ -65,4 +65,4 @@ uint32_t isqrt64(uint64_t v) {
   return static_cast<uint32_t>(res);
 }
 
-}  // namespace slave
+}  // namespace pioneer

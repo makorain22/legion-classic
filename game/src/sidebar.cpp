@@ -8,9 +8,9 @@
 #include <cstdio>
 
 #include "game_scene.hpp"
-#include "slave/math/iso.hpp"
+#include "pioneer/math/iso.hpp"
 
-using namespace slave;
+using namespace pioneer;
 
 namespace legion {
 

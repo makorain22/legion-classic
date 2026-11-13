@@ -1,9 +1,9 @@
-#include "slave/render/shadow.hpp"
+#include "pioneer/render/shadow.hpp"
 
 #include <algorithm>
 #include <cmath>
 
-namespace slave {
+namespace pioneer {
 
 ShadowMap::~ShadowMap() {
   if (depth_) glDeleteTextures(1, &depth_);
@@ -116,4 +116,4 @@ void ShadowMap::setUniforms(const gl::Shader& s, int unit, bool on, float dark) 
   if (on && fbo_) bind(unit);
 }
 
-}  // namespace slave
+}  // namespace pioneer

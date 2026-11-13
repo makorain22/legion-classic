@@ -1,4 +1,4 @@
-// Slave Engine - makes an art pack from Blitzkrieg's data (see art_pack.hpp).
+// Pioneer Engine - makes an art pack from Blitzkrieg's data (see art_pack.hpp).
 //
 // Scale: Blitzkrieg's map is a grid of 32-unit cells, each drawn 32x16
 // pixels; our tile is two cells each way. Vehicles are rendered at 72 units
@@ -19,11 +19,11 @@
 #include <nlohmann/json.hpp>
 
 #include "blitzkrieg.hpp"
-#include "slave/assets/art_pack.hpp"
-#include "slave/core/log.hpp"
-#include "slave/core/fixed.hpp"
+#include "pioneer/assets/art_pack.hpp"
+#include "pioneer/core/log.hpp"
+#include "pioneer/core/fixed.hpp"
 
-namespace slave {
+namespace pioneer {
 namespace {
 
 namespace fs = std::filesystem;
@@ -671,8 +671,8 @@ bool importBlitzkrieg(const BlitzkriegImport& job, std::string& error, std::stri
          "by Nival, in which case use must stop. Do not sell, publish or bundle this\n"
          "pack with anything sold. It is for personal use with Legion Classic.\n";
   report += std::to_string(unitsMade) + " units, " + std::to_string(written) + " sprites written to " + job.outDir + "\n";
-  SLV_INFO("Blitzkrieg import: %d units, %d sprites", unitsMade, written);
+  PNR_INFO("Blitzkrieg import: %d units, %d sprites", unitsMade, written);
   return true;
 }
 
-}  // namespace slave
+}  // namespace pioneer

@@ -6,19 +6,19 @@
 #include <cstdio>
 #include <cstdlib>
 
-#include "slave/platform/crash.hpp"
+#include "pioneer/platform/crash.hpp"
 #include <cstring>
 #include <string>
 
 #include "game_scene.hpp"
-#include "slave/assets/art_pack.hpp"
-#include "slave/core/log.hpp"
-#include "slave/platform/app.hpp"
-#include "slave/sim/unit_types.hpp"
+#include "pioneer/assets/art_pack.hpp"
+#include "pioneer/core/log.hpp"
+#include "pioneer/platform/app.hpp"
+#include "pioneer/sim/unit_types.hpp"
 
 namespace {
 void usage() {
-  SLV_INFO("Options: --windowed WxH | --fullscreen | --map N | --seed N | --zoom 0.5|1|2 | --spawn N\n"
+  PNR_INFO("Options: --windowed WxH | --fullscreen | --map N | --seed N | --zoom 0.5|1|2 | --spawn N\n"
            "         --offscreen --frames N --screenshot out.png --demo --fixed-dt --no-help --debug\n"
            "         --dump-atlas atlas.png --editor --open map.lmap --editor-demo --live-demo\n"
            "         --tool rules[:unit_id]|mods --mods-selftest\n"
@@ -30,21 +30,21 @@ void usage() {
 
 // Renders the Blitzkrieg art pack into content/art/blitzkrieg (no window needed).
 int importBlitzkrieg(const std::string& dataDir, const std::string& contentDir) {
-  slave::BlitzkriegImport job;
+  pioneer::BlitzkriegImport job;
   job.dataDir = dataDir;
   job.mappingFile = contentDir + "art/blitzkrieg.json";
   job.outDir = contentDir + "art/blitzkrieg";
-  slave::UnitTypeRegistry types;
+  pioneer::UnitTypeRegistry types;
   std::string error;
   if (!types.loadFile(contentDir + "rules/buildings.json", error)) {
     std::fprintf(stderr, "Can't read the building rules: %s\n", error.c_str());
     return 1;
   }
-  for (const slave::UnitTypeDef& t : types.all())
+  for (const pioneer::UnitTypeDef& t : types.all())
     if (t.isStructure()) job.footprints[t.model] = {t.footW, t.footH};
   std::string report;
   std::printf("Importing Blitzkrieg art from %s ...\n", dataDir.c_str());
-  if (!slave::importBlitzkrieg(job, error, report)) {
+  if (!pioneer::importBlitzkrieg(job, error, report)) {
     std::fprintf(stderr, "Import failed: %s\n", error.c_str());
     return 1;
   }
@@ -55,7 +55,7 @@ int importBlitzkrieg(const std::string& dataDir, const std::string& contentDir) 
 }  // namespace
 
 int main(int argc, char** argv) {
-  slave::AppConfig cfg;
+  pioneer::AppConfig cfg;
   cfg.title = "Legion Classic";
   legion::SceneOptions opt;
   std::string dumpAtlas, importDir;
@@ -136,12 +136,12 @@ int main(int argc, char** argv) {
     else if (a == "--campaign") opt.campaign = next();
     else if (a == "--mission") opt.mission = next();
     else if (a == "--biome") {
-      slave::Biome b;
-      if (slave::parseBiome(next(), b)) opt.biome = static_cast<int>(b);
+      pioneer::Biome b;
+      if (pioneer::parseBiome(next(), b)) opt.biome = static_cast<int>(b);
     }
     else if (a == "--open") opt.loadMap = next();
     else if (a == "--help" || a == "-h") { usage(); return 0; }
-    else SLV_WARN("Unknown option: %s", a.c_str());
+    else PNR_WARN("Unknown option: %s", a.c_str());
   }
 
   if (!importDir.empty()) {
@@ -150,11 +150,11 @@ int main(int argc, char** argv) {
     return importBlitzkrieg(importDir, contentDir);
   }
 
-  slave::App app;
+  pioneer::App app;
   if (!app.init(cfg)) return 1;
-  slave::log::init((app.userDir() + "legion.log").c_str());
-  slave::crash::install(app.userDir(), "0.9.0");
-  SLV_INFO("Legion Classic 0.9.0 on Slave Engine 1.0");
+  pioneer::log::init((app.userDir() + "legion.log").c_str());
+  pioneer::crash::install(app.userDir(), "0.9.0");
+  PNR_INFO("Legion Classic 0.9.0 on Pioneer Engine 2.0");
 
   std::string contentDir = "content/";
   if (const char* base = SDL_GetBasePath()) contentDir = std::string(base) + "content/";
@@ -166,7 +166,7 @@ int main(int argc, char** argv) {
     legion::GameScene scene(app, opt);
     std::string error;
     if (!scene.init(contentDir, error)) {
-      SLV_ERROR("Startup failed: %s", error.c_str());
+      PNR_ERROR("Startup failed: %s", error.c_str());
       if (!cfg.offscreen)
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Legion Classic", ("Could not start:\n" + error).c_str(),
                                  app.window());
@@ -177,6 +177,6 @@ int main(int argc, char** argv) {
     }
   }
   app.shutdown();
-  slave::log::shutdown();
+  pioneer::log::shutdown();
   return exitCode;
 }

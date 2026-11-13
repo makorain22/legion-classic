@@ -1,14 +1,14 @@
-// Slave Engine - the computer player. See ai.hpp.
-#include "slave/sim/ai.hpp"
-#include "slave/core/rng.hpp"
+// Pioneer Engine - the computer player. See ai.hpp.
+#include "pioneer/sim/ai.hpp"
+#include "pioneer/core/rng.hpp"
 
 #include <algorithm>
 #include <string>
 
-#include "slave/core/bytes.hpp"
-#include "slave/sim/simulation.hpp"
+#include "pioneer/core/bytes.hpp"
+#include "pioneer/sim/simulation.hpp"
 
-namespace slave {
+namespace pioneer {
 
 namespace {
 struct Tuning {
@@ -1427,4 +1427,4 @@ bool SkirmishAi::load(ByteReader& r, int version) {
   return r.ok();
 }
 
-}  // namespace slave
+}  // namespace pioneer

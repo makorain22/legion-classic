@@ -1,4 +1,4 @@
-#include "slave/assets/placeholder_art.hpp"
+#include "pioneer/assets/placeholder_art.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -10,11 +10,11 @@
 #include <nlohmann/json.hpp>
 
 #include "art_common.hpp"
-#include "slave/assets/voxel.hpp"
-#include "slave/core/log.hpp"
-#include "slave/core/rng.hpp"
+#include "pioneer/assets/voxel.hpp"
+#include "pioneer/core/log.hpp"
+#include "pioneer/core/rng.hpp"
 
-namespace slave {
+namespace pioneer {
 
 using namespace art;
 
@@ -806,7 +806,7 @@ void applyArtOverrides(AtlasBuilder& ab, const SpriteCatalog& cat, const std::st
   if (std::ifstream in(dir + "/sprites.json"); in) {
     anchors = nlohmann::json::parse(in, nullptr, false);
     if (!anchors.is_object()) {
-      SLV_WARN("Art overrides: %s/sprites.json is not valid JSON; using default anchors", dir.c_str());
+      PNR_WARN("Art overrides: %s/sprites.json is not valid JSON; using default anchors", dir.c_str());
       anchors = nlohmann::json::object();
     }
   }
@@ -817,7 +817,7 @@ void applyArtOverrides(AtlasBuilder& ab, const SpriteCatalog& cat, const std::st
     if (!fs::exists(path, ec)) return;
     Image img;
     if (!img.loadPng(path)) {
-      SLV_WARN("Art overrides: can't read %s", path.c_str());
+      PNR_WARN("Art overrides: can't read %s", path.c_str());
       return;
     }
     int ax = ab.anchorX(frame), ay = ab.anchorY(frame);
@@ -831,7 +831,7 @@ void applyArtOverrides(AtlasBuilder& ab, const SpriteCatalog& cat, const std::st
     ab.replace(frame, fromPngColours(img), ax, ay);
     ++replaced;
   });
-  if (replaced) SLV_INFO("Art overrides: %d sprites replaced from %s", replaced, dir.c_str());
+  if (replaced) PNR_INFO("Art overrides: %d sprites replaced from %s", replaced, dir.c_str());
 }
 
 void exportArt(const AtlasBuilder& ab, const SpriteCatalog& cat, const std::string& dir) {
@@ -846,7 +846,7 @@ void exportArt(const AtlasBuilder& ab, const SpriteCatalog& cat, const std::stri
     anchors[name] = {ab.anchorX(frame), ab.anchorY(frame)};
   });
   std::ofstream(dir + "/sprites.json") << anchors.dump(1) << "\n";
-  SLV_INFO("Exported %d sprites to %s", written, dir.c_str());
+  PNR_INFO("Exported %d sprites to %s", written, dir.c_str());
 }
 
 
@@ -860,7 +860,7 @@ void loadArtPack(AtlasBuilder& ab, SpriteCatalog& cat, const std::string& dir) {
   if (!in) return;
   const nlohmann::json meta = nlohmann::json::parse(in, nullptr, false);
   if (!meta.is_object() || !meta.contains("_units") || !meta["_units"].is_object()) {
-    SLV_WARN("Art pack %s: sprites.json has no _units block", dir.c_str());
+    PNR_WARN("Art pack %s: sprites.json has no _units block", dir.c_str());
     return;
   }
   auto two = [](int v) { return (v < 10 ? std::string("0") : std::string()) + std::to_string(v); };
@@ -943,7 +943,7 @@ void loadArtPack(AtlasBuilder& ab, SpriteCatalog& cat, const std::string& dir) {
   }
   for (Want& w : wants) ab.add(std::move(w.img), w.ax, w.ay);
   for (auto& [key, art] : arts) cat.units[key] = art;
-  SLV_INFO("Art pack %s: %zu units, %zu sprites%s", dir.c_str(), arts.size(), wants.size(),
+  PNR_INFO("Art pack %s: %zu units, %zu sprites%s", dir.c_str(), arts.size(), wants.size(),
            missing ? (" (" + std::to_string(missing.load()) + " missing)").c_str() : "");
 }
 }  // namespace
@@ -1119,7 +1119,7 @@ bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error, const ArtOption
 
   for (int size : {1024, 2048, 4096, 8192}) {
     if (ab.build(size, cat.atlas, cat.frames)) {
-      SLV_INFO("Placeholder art: %zu sprites packed into a %dx%d atlas", ab.count(), size, size);
+      PNR_INFO("Placeholder art: %zu sprites packed into a %dx%d atlas", ab.count(), size, size);
       return true;
     }
   }
@@ -1127,4 +1127,4 @@ bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error, const ArtOption
   return false;
 }
 
-}  // namespace slave
+}  // namespace pioneer

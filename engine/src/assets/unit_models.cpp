@@ -1,4 +1,4 @@
-// Slave Engine - the detailed unit models: soldiers and fighting vehicles of
+// Pioneer Engine - the detailed unit models: soldiers and fighting vehicles of
 // both armies, built voxel by voxel and baked in 16 facings.
 //
 // Vehicles: one voxel = 1/36 tile (about 14 cm at true scale). Soldiers: one
@@ -13,9 +13,9 @@
 #include <cmath>
 
 #include "art_common.hpp"
-#include "slave/core/rng.hpp"
+#include "pioneer/core/rng.hpp"
 
-namespace slave::art {
+namespace pioneer::art {
 
 namespace {
 
@@ -1462,4 +1462,4 @@ void addUnitModels(BakeQueue& q, SpriteCatalog& cat) {
   addUnit(q, cat, "mcv", &constructionTruck, 3);
 }
 
-}  // namespace slave::art
+}  // namespace pioneer::art

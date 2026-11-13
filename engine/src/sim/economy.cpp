@@ -1,4 +1,4 @@
-// Slave Engine - structures, the economy and production.
+// Pioneer Engine - structures, the economy and production.
 //
 // Structures sit on the tile grid and mark their tiles in the map's block
 // layer, so pathfinding goes around them. Supplies come from income buildings
@@ -7,9 +7,9 @@
 // progresses and runs at half speed when the side lacks power.
 #include <algorithm>
 
-#include "slave/sim/simulation.hpp"
+#include "pioneer/sim/simulation.hpp"
 
-namespace slave {
+namespace pioneer {
 
 Queue queueFor(UnitCategory c) {
   switch (c) {
@@ -673,4 +673,4 @@ void Simulation::checkDefeat() {
   }
 }
 
-}  // namespace slave
+}  // namespace pioneer

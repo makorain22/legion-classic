@@ -5,7 +5,7 @@
 Legion Classic plays like the RTS games of the late 1990s and looks like
 the classics of the era: build a base, run supply trucks, train fireteams and tank platoons,
 and dig in behind trenches, wire and tank traps. It runs on its own engine,
-**Slave Engine**, and has a scenario editor you can open in the middle of a
+**Pioneer Engine**, and has a scenario editor you can open in the middle of a
 battle and change anything, the rules included.
 
 ![A German and a Soviet force meet on a river crossing](docs/images/battle.jpg)
@@ -106,7 +106,7 @@ load, replay), `--editor-selftest` and `--mods-selftest`.
 
 | Folder | What it holds |
 | --- | --- |
-| `engine/` | Slave Engine: the deterministic simulation (`sim/`, `core/`, `ecs/`, `map/`) and presentation (`render/`, `assets/`, `platform/`) |
+| `engine/` | Pioneer Engine: the deterministic simulation (`sim/`, `core/`, `ecs/`, `map/`) and presentation (`render/`, `assets/`, `platform/`) |
 | `game/` | The game itself: battle scene, sidebar, unit cards, menus, encyclopedia |
 | `editor/` | The Live Scenario Editor and the rules editor |
 | `content/` | All game data: unit, building and weapon rules, scenarios, art overrides |

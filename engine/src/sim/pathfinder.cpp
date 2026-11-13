@@ -1,10 +1,10 @@
-#include "slave/sim/pathfinder.hpp"
+#include "pioneer/sim/pathfinder.hpp"
 
 #include <algorithm>
 #include <cstdlib>
 #include <queue>
 
-namespace slave {
+namespace pioneer {
 
 namespace {
 constexpr int kDX[8] = {1, -1, 0, 0, 1, 1, -1, -1};
@@ -258,4 +258,4 @@ void Pathfinder::smooth(Vec2i from, std::vector<Vec2i>& path, Locomotor loco) co
   path = std::move(out);
 }
 
-}  // namespace slave
+}  // namespace pioneer

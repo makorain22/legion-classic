@@ -1,12 +1,12 @@
-// Slave Engine - how armies organise themselves: fireteams, squads, platoons
+// Pioneer Engine - how armies organise themselves: fireteams, squads, platoons
 // and companies (and armoured platoons, companies and battalions); infantry
 // in buildings, bunkers and trenches; and the supplies a depot on a supply
 // point earns.
 #include <algorithm>
 
-#include "slave/sim/simulation.hpp"
+#include "pioneer/sim/simulation.hpp"
 
-namespace slave {
+namespace pioneer {
 
 namespace {
 // Size at which each echelon forms, by kind (index = Echelon).
@@ -554,4 +554,4 @@ void Simulation::stepIncome() {
   }
 }
 
-}  // namespace slave
+}  // namespace pioneer

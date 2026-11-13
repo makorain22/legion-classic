@@ -2,10 +2,10 @@
 
 #include <nlohmann/json.hpp>
 
-#include "slave/ecs/registry.hpp"
-#include "slave/sim/simulation.hpp"
+#include "pioneer/ecs/registry.hpp"
+#include "pioneer/sim/simulation.hpp"
 
-using namespace slave;
+using namespace pioneer;
 
 namespace {
 UnitTypeRegistry makeTypes() {

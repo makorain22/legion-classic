@@ -1,4 +1,4 @@
-// Slave Engine - landmarks for the campaigns (9.10): a radio transmitter, an
+// Pioneer Engine - landmarks for the campaigns (9.10): a radio transmitter, an
 // aircraft hangar and a transport aeroplane for the airfields, a steelworks
 // with its blast furnace, a government ministry, and the concrete flak tower
 // that guards a capital. Building voxels are 1/12 tile, as in world_models.cpp.
@@ -6,9 +6,9 @@
 #include <cmath>
 
 #include "art_common.hpp"
-#include "slave/core/rng.hpp"
+#include "pioneer/core/rng.hpp"
 
-namespace slave::art {
+namespace pioneer::art {
 
 namespace {
 void lattice(VoxelModel& m, float cx, float cy, int z0, int z1, float r0, float r1, uint8_t c) {
@@ -364,4 +364,4 @@ VoxelModel makeOilRefinery(const FactionLook&) {
   return m;
 }
 
-}  // namespace slave::art
+}  // namespace pioneer::art

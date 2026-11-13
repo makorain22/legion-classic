@@ -19,7 +19,7 @@
 #include "mission_battle.hpp"
 
 namespace campaignkit {
-using namespace slave;
+using namespace pioneer;
 using namespace legion;
 using testkit::Battle;
 using testkit::kContent;

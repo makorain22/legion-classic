@@ -6,10 +6,10 @@
 #include <cstring>
 #include <thread>
 
-#include "slave/core/rng.hpp"
-#include "slave/map/map.hpp"
+#include "pioneer/core/rng.hpp"
+#include "pioneer/map/map.hpp"
 
-namespace slave::art {
+namespace pioneer::art {
 
 // Germany: dunkelgelb under olive and red-brown stripes, field-grey uniforms.
 // The Soviet Union: plain 4BO green armour and khaki uniforms.
@@ -582,4 +582,4 @@ void addUnit(BakeQueue& q, SpriteCatalog& cat, const std::string& name, UnitBuil
   }
 }
 
-}  // namespace slave::art
+}  // namespace pioneer::art

@@ -7,9 +7,9 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 
-#include "slave/audio/audio.hpp"
+#include "pioneer/audio/audio.hpp"
 
-using namespace slave::audio;
+using namespace pioneer::audio;
 
 namespace {
 Sound tone(float hz, float seconds, int rate = 48000, float amp = 0.5f) {

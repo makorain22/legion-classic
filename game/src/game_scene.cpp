@@ -17,16 +17,16 @@
 #include <filesystem>
 #include <nlohmann/json.hpp>
 
-#include "slave/sim/factions.hpp"
+#include "pioneer/sim/factions.hpp"
 
 #include "editor.hpp"
 #include "menus.hpp"
 #include "rules_editor.hpp"
-#include "slave/core/log.hpp"
-#include "slave/core/rng.hpp"
-#include "slave/math/iso.hpp"
+#include "pioneer/core/log.hpp"
+#include "pioneer/core/rng.hpp"
+#include "pioneer/math/iso.hpp"
 
-using namespace slave;
+using namespace pioneer;
 
 namespace legion {
 
@@ -85,7 +85,7 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
     settings_.mods.clear();
     if (!loadRules(error)) return false;
     modWarnings_ += "The mods were switched off: " + why + "\n";
-    SLV_WARN("Mods switched off: %s", why.c_str());
+    PNR_WARN("Mods switched off: %s", why.c_str());
   }
   const ArtOptions artOpt = artOptions();
   artPack_ = !artOpt.packDirs.empty();
@@ -95,7 +95,7 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
   if (!meshes_.init(error)) return false;
   {
     std::string serr;
-    if (!shadow_.init(2048, serr)) SLV_WARN("No shadows: %s", serr.c_str());
+    if (!shadow_.init(2048, serr)) PNR_WARN("No shadows: %s", serr.c_str());
   }
   renderer_.setAtlas(art_.atlas, art_.frames);
   frameMesh_.assign(art_.frames.size(), -2);
@@ -104,7 +104,7 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
     const auto t0 = std::chrono::steady_clock::now();
     for (size_t i = 0; i < art_.frames.size(); ++i) meshOf(static_cast<int>(i));
     const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
-    SLV_INFO("Meshed %zu models in %.0f ms: %.1f MB, %.0fk triangles", meshes_.meshCount(), ms, meshes_.vertexBytes() / 1048576.0,
+    PNR_INFO("Meshed %zu models in %.0f ms: %.1f MB, %.0fk triangles", meshes_.meshCount(), ms, meshes_.vertexBytes() / 1048576.0,
              meshes_.vertexBytes() / 20.0 / 3.0 / 1000.0);
   }
 
@@ -114,7 +114,7 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
   audio_ = std::make_unique<GameAudio>();
   if (!opt_.noSound && (!app_.offscreen() || opt_.forceSound)) {
     std::string aerr;
-    if (!audio_->init(content_.all("audio/"), aerr)) SLV_WARN("Sound off: %s", aerr.c_str());
+    if (!audio_->init(content_.all("audio/"), aerr)) PNR_WARN("Sound off: %s", aerr.c_str());
     ui::setClickSound([this](bool tab) { audio_->ui(tab ? "ui_tab" : "ui_click"); });
   }
   fx_.init(&art_, &unitArt_, &types_, &weapons_, [](float lx, float ly) { return iso::worldToScreen(lx, ly); },
@@ -180,7 +180,7 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
       while (at < f.size() && i < s.sides.size()) {
         const size_t comma = std::min(f.find(',', at), f.size());
         const std::string id = f.substr(at, comma - at);
-        if (slave::factionIndex(id) != 0 || id == "ger") s.sides[i].faction = id;
+        if (pioneer::factionIndex(id) != 0 || id == "ger") s.sides[i].faction = id;
         ++i;
         at = comma + 1;
       }
@@ -238,10 +238,10 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
   if (!opt_.mission.empty()) {
     const auto [id, n] = split(opt_.mission);
     std::string err;
-    if (!startMission(id, std::max(1, n) - 1, err)) SLV_WARN("--mission %s: %s", opt_.mission.c_str(), err.c_str());
+    if (!startMission(id, std::max(1, n) - 1, err)) PNR_WARN("--mission %s: %s", opt_.mission.c_str(), err.c_str());
     else menus_->close();
   }
-  SLV_INFO("Map %dx%d, %zu props, %zu units", map_.width(), map_.height(), map_.props().size(), sim_->unitCount());
+  PNR_INFO("Map %dx%d, %zu props, %zu units", map_.width(), map_.height(), map_.props().size(), sim_->unitCount());
   return true;
 }
 
@@ -283,7 +283,7 @@ void GameScene::replaceWorld(MapFile&& file, bool keepCamera) {
   map_.recomputeInfo();
   {
     std::string err;
-    if (!pickUnitArt(err)) SLV_WARN("%s", err.c_str());
+    if (!pickUnitArt(err)) PNR_WARN("%s", err.c_str());
   }
   sim_ = std::make_unique<Simulation>(map_, types_, weapons_, opt_.seed);
   sim_->setFlags(std::move(nextFlags_));
@@ -327,7 +327,7 @@ void GameScene::replaceWorld(MapFile&& file, bool keepCamera) {
     for (const UnitPlacement& u : file.units) {
       const int t = types_.find(u.type);
       if (t < 0) {
-        SLV_WARN("Map uses unknown unit type '%s' - skipped", u.type.c_str());
+        PNR_WARN("Map uses unknown unit type '%s' - skipped", u.type.c_str());
         continue;
       }
       if (!u.name.empty() || u.flags || u.stance) {
@@ -439,7 +439,7 @@ void GameScene::restoreSnapshot() {
   const uint8_t me = player_;
   const uint64_t t0 = SDL_GetTicksNS();
   replaceWorld(std::move(copy), true);
-  SLV_INFO("Snapshot restored in %.0f ms", (SDL_GetTicksNS() - t0) / 1e6);
+  PNR_INFO("Snapshot restored in %.0f ms", (SDL_GetTicksNS() - t0) / 1e6);
   if (players_[me].active) player_ = me;
   showStatus("Snapshot restored", 2.5f);
 }
@@ -1635,7 +1635,7 @@ void GameScene::orderSound(bool attack) {
 // Where the ear is, and what is moving and burning around it.
 void GameScene::updateAudio(float dt) {
   if (!audio_ || !sim_) return;
-  slave::audio::Listener ear;
+  pioneer::audio::Listener ear;
   const Vec2f g = cam_.is3D() ? cameraFocus() : iso::screenToWorld(cam_.center());
   ear.x = g.x / LEPTONS_PER_TILE;
   ear.y = g.y / LEPTONS_PER_TILE;
@@ -2668,7 +2668,7 @@ void GameScene::drawHud() {
   if (settings_.showInfoPanel) {
     ImGui::TextColored(ImVec4(0.92f, 0.78f, 0.36f, 1), "LEGION CLASSIC");
     ImGui::SameLine();
-    ImGui::TextDisabled("Slave Engine 1.0  |  build 0.9.0");
+    ImGui::TextDisabled("Pioneer Engine 2.0  |  build 0.9.0");
     ImGui::Text("Map: %s (%dx%d)", map_.name.c_str(), map_.width(), map_.height());
     ImGui::Text("Commanding:");
     ImGui::SameLine();

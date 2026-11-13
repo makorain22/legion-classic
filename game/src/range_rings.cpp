@@ -19,7 +19,7 @@
 #include "sidebar.hpp"
 
 namespace legion {
-using namespace slave;
+using namespace pioneer;
 
 namespace {
 constexpr float kTwoPi = 6.28318530718f;

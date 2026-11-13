@@ -7,12 +7,12 @@
 #include <algorithm>
 #include <nlohmann/json.hpp>
 
-#include "slave/core/bytes.hpp"
-#include "slave/map/map.hpp"
-#include "slave/map/map_io.hpp"
-#include "slave/sim/simulation.hpp"
+#include "pioneer/core/bytes.hpp"
+#include "pioneer/map/map.hpp"
+#include "pioneer/map/map_io.hpp"
+#include "pioneer/sim/simulation.hpp"
 
-using namespace slave;
+using namespace pioneer;
 
 namespace {
 constexpr int T = 256;

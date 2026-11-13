@@ -1,8 +1,8 @@
-#include "slave/sim/spatial_hash.hpp"
+#include "pioneer/sim/spatial_hash.hpp"
 
 #include <algorithm>
 
-namespace slave {
+namespace pioneer {
 
 void SpatialHash::reset(int32_t worldW, int32_t worldH) {
   cellsX_ = std::max(1, (worldW >> kCellShift) + 1);
@@ -29,4 +29,4 @@ void SpatialHash::endCount() {
 
 void SpatialHash::insert(uint32_t id, int32_t x, int32_t y) { items_[fill_[cellOf(x, y)]++] = id; }
 
-}  // namespace slave
+}  // namespace pioneer

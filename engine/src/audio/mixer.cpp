@@ -1,5 +1,5 @@
-// Slave Engine - the software mixer. See audio.hpp.
-#include "slave/audio/audio.hpp"
+// Pioneer Engine - the software mixer. See audio.hpp.
+#include "pioneer/audio/audio.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -8,7 +8,7 @@
 #define STB_VORBIS_HEADER_ONLY
 #include "stb_vorbis.c"
 
-namespace slave::audio {
+namespace pioneer::audio {
 
 namespace {
 constexpr float kPi = 3.14159265f;
@@ -567,4 +567,4 @@ void Mixer::mix(float* out, int frames) {
   lastPeak_ = peak;
 }
 
-}  // namespace slave::audio
+}  // namespace pioneer::audio

@@ -1,4 +1,4 @@
-// Slave Editor - the Script tab: named areas, triggers and objectives.
+// Pioneer Editor - the Script tab: named areas, triggers and objectives.
 #include <imgui.h>
 #include <imgui_stdlib.h>
 
@@ -8,7 +8,7 @@
 #include "editor.hpp"
 #include "game_scene.hpp"
 
-using namespace slave;
+using namespace pioneer;
 
 namespace legion {
 

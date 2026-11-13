@@ -8,9 +8,9 @@
 #include "editor.hpp"
 #include "game_scene.hpp"
 #include "rules_editor.hpp"
-#include "slave/core/log.hpp"
+#include "pioneer/core/log.hpp"
 
-using namespace slave;
+using namespace pioneer;
 
 namespace legion {
 
@@ -41,7 +41,7 @@ bool GameScene::loadRules(std::string& error) {
   types_ = std::move(types);
   content_ = std::move(layers);
   for (int i = 0; i < kRuleFileCount; ++i) rules_[i] = std::move(docs[i]);
-  rulesHash_ = slave::rulesHash(rules_);
+  rulesHash_ = pioneer::rulesHash(rules_);
   rulesEditedLive_ = false;
   trenchTypes_.assign(types_.size(), false);
   for (size_t i = 0; i < types_.size(); ++i) trenchTypes_[i] = types_.get(static_cast<int>(i)).model == "trench";
@@ -50,7 +50,7 @@ bool GameScene::loadRules(std::string& error) {
   if (!order.empty()) {
     std::string list;
     for (const std::string& id : order) list += (list.empty() ? "" : ", ") + id;
-    SLV_INFO("Mods: %s (rules %s)", list.c_str(), rulesHash_.c_str());
+    PNR_INFO("Mods: %s (rules %s)", list.c_str(), rulesHash_.c_str());
   }
   return true;
 }
@@ -73,7 +73,7 @@ bool GameScene::setMods(const std::vector<std::string>& enabled, std::string& er
   if (!loadRules(error)) {
     settings_.mods = before;
     std::string again;
-    if (!loadRules(again)) SLV_ERROR("Can't go back to the previous mods: %s", again.c_str());
+    if (!loadRules(again)) PNR_ERROR("Can't go back to the previous mods: %s", again.c_str());
     return false;
   }
   saveSettings();
@@ -93,7 +93,7 @@ bool GameScene::reloadArt(std::string& error) {
   frameMesh_.assign(art_.frames.size(), -2);
   renderer_.setWhiteFrame(art_.white);
   std::string err;
-  if (!pickUnitArt(err)) SLV_WARN("%s", err.c_str());
+  if (!pickUnitArt(err)) PNR_WARN("%s", err.c_str());
   return true;
 }
 
@@ -119,7 +119,7 @@ bool GameScene::pickUnitArt(std::string& error) {
     if (!artFor(t, a)) {
       // A mod naming a model that doesn't exist: draw a rifleman rather than refuse to run.
       error = "unit '" + t.id + "' uses unknown model '" + t.model + "'";
-      SLV_WARN("%s", error.c_str());
+      PNR_WARN("%s", error.c_str());
       auto it = art_.units.find("rifleman@ger");
       if (it == art_.units.end()) return false;
       a = it->second;
@@ -161,7 +161,7 @@ bool GameScene::applyRules(const nlohmann::json (&docs)[kRuleFileCount], std::st
   weapons_ = std::move(weapons);
   types_ = std::move(types);
   for (int i = 0; i < kRuleFileCount; ++i) rules_[i] = std::move(next[i]);
-  rulesHash_ = slave::rulesHash(rules_);
+  rulesHash_ = pioneer::rulesHash(rules_);
   rulesEditedLive_ = true;
   trenchTypes_.assign(types_.size(), false);
   for (size_t i = 0; i < types_.size(); ++i) trenchTypes_[i] = types_.get(static_cast<int>(i)).model == "trench";
@@ -189,7 +189,7 @@ namespace legion {
 void GameScene::runModsSelfTest() {
   auto check = [&](bool ok, const std::string& what) {
     if (!ok) ++selfTestFailures_;
-    SLV_INFO("MODS SELFTEST %s: %s", ok ? "ok  " : "FAIL", what.c_str());
+    PNR_INFO("MODS SELFTEST %s: %s", ok ? "ok  " : "FAIL", what.c_str());
   };
   const std::string modId = "selftest_mod";
   std::string msg, err;
@@ -261,7 +261,7 @@ void GameScene::runModsSelfTest() {
     std::filesystem::remove_all(userModsDir() + modId, ec);
     std::filesystem::remove(savesDir_ + "selftest_mods.lsav", ec);
     rescanMods();
-    SLV_INFO("MODS SELFTEST %s (%d failures)", selfTestFailures_ ? "FAILED" : "PASSED", selfTestFailures_);
+    PNR_INFO("MODS SELFTEST %s (%d failures)", selfTestFailures_ ? "FAILED" : "PASSED", selfTestFailures_);
     quit_ = true;
   }
 }

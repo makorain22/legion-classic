@@ -1,4 +1,4 @@
-// Slave Editor - the unit, side and battle tools of the Live Scenario Editor.
+// Pioneer Editor - the unit, side and battle tools of the Live Scenario Editor.
 #include <imgui.h>
 #include <imgui_stdlib.h>
 
@@ -10,11 +10,11 @@
 #include "editor.hpp"
 #include "rules_editor.hpp"
 #include "game_scene.hpp"
-#include "slave/core/rng.hpp"
-#include "slave/math/iso.hpp"
-#include "slave/sim/factions.hpp"
+#include "pioneer/core/rng.hpp"
+#include "pioneer/math/iso.hpp"
+#include "pioneer/sim/factions.hpp"
 
-using namespace slave;
+using namespace pioneer;
 
 namespace legion {
 

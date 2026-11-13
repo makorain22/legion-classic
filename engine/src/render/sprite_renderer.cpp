@@ -1,9 +1,9 @@
-#include "slave/render/sprite_renderer.hpp"
+#include "pioneer/render/sprite_renderer.hpp"
 
 #include <cmath>
 #include <cstddef>
 
-namespace slave {
+namespace pioneer {
 
 namespace {
 const char* kVertex = R"(#version 330 core
@@ -329,4 +329,4 @@ void SpriteRenderer::flush() {
   queue_.clear();
 }
 
-}  // namespace slave
+}  // namespace pioneer

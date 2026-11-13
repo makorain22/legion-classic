@@ -10,10 +10,10 @@
 #include <vector>
 
 #include "game_scene.hpp"
-#include "slave/math/iso.hpp"
+#include "pioneer/math/iso.hpp"
 #include "ui_style.hpp"
 
-using namespace slave;
+using namespace pioneer;
 
 namespace legion {
 

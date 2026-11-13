@@ -1,10 +1,10 @@
-// Slave Engine - reading sound files: Ogg Vorbis (stb_vorbis) and WAV.
+// Pioneer Engine - reading sound files: Ogg Vorbis (stb_vorbis) and WAV.
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
 
-#include "slave/audio/audio.hpp"
+#include "pioneer/audio/audio.hpp"
 
 #if defined(__GNUC__)
 #pragma GCC diagnostic push
@@ -24,7 +24,7 @@
 #pragma warning(pop)
 #endif
 
-namespace slave::audio {
+namespace pioneer::audio {
 
 bool readFileBytes(const std::string& path, std::vector<uint8_t>& out) {
   std::ifstream f(path, std::ios::binary);
@@ -122,4 +122,4 @@ bool loadSound(const std::string& path, Sound& out, std::string& error) {
   return wav ? decodeWav(bytes.data(), bytes.size(), out, error) : decodeOgg(bytes.data(), bytes.size(), out, error);
 }
 
-}  // namespace slave::audio
+}  // namespace pioneer::audio

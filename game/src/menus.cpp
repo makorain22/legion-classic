@@ -12,10 +12,10 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 
-#include "slave/core/rng.hpp"
-#include "slave/sim/factions.hpp"
+#include "pioneer/core/rng.hpp"
+#include "pioneer/sim/factions.hpp"
 
-using namespace slave;
+using namespace pioneer;
 
 namespace legion {
 
@@ -181,7 +181,7 @@ void Menus::drawMain() {
   if (menuButton("About", w)) page_ = Page::About;
   if (menuButton("Quit", w)) scene_.quit();
   ImGui::Dummy(ImVec2(0, 6));
-  ImGui::TextDisabled("Slave Engine 1.0  -  build 0.9.0");
+  ImGui::TextDisabled("Pioneer Engine 2.0  -  build 0.9.0");
   if (scene_.content().modIds().size() > 1)
     ImGui::TextDisabled("%zu mod%s enabled", scene_.content().modIds().size() - 1,
                         scene_.content().modIds().size() > 2 ? "s" : "");
@@ -403,10 +403,10 @@ void Menus::drawSkirmish() {
       if (w >= 2) s.difficulty = w - 2;
     }
     ImGui::SameLine();
-    int f = slave::factionIndex(s.faction);
+    int f = pioneer::factionIndex(s.faction);
     ImGui::SetNextItemWidth(120);
     ImGui::BeginDisabled(!s.open);
-    if (ImGui::Combo("##faction", &f, slave::factionComboItems())) s.faction = slave::kPlayableFactions[f].id;
+    if (ImGui::Combo("##faction", &f, pioneer::factionComboItems())) s.faction = pioneer::kPlayableFactions[f].id;
     ImGui::SameLine();
     int team = s.team + 1;
     ImGui::SetNextItemWidth(100);
@@ -614,7 +614,7 @@ void Menus::drawAbout() {
   centredWindow("##about", ImVec2(560, 0));
   title("About");
   ImGui::TextWrapped("Legion Classic - a 2.5D real-time strategy game set in an alternate 1940s, "
-                     "on its own engine, Slave Engine 1.0.");
+                     "on its own engine, Pioneer Engine 2.0.");
   ImGui::Dummy(ImVec2(0, 6));
   ImGui::TextWrapped("Built with SDL3, OpenGL, Dear ImGui, nlohmann/json, stb and miniz.");
   ImGui::TextWrapped("Controls and the editor are described in docs/PLAYING.md. Press F1 in a game for the key list.");

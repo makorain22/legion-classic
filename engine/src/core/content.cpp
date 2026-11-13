@@ -1,4 +1,4 @@
-#include "slave/core/content.hpp"
+#include "pioneer/core/content.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -8,7 +8,7 @@
 #include <functional>
 #include <set>
 
-namespace slave {
+namespace pioneer {
 
 namespace fs = std::filesystem;
 using nlohmann::json;
@@ -392,4 +392,4 @@ void stabiliseRules(json (&next)[kRuleFileCount], const json (&current)[kRuleFil
   next[2]["units"] = json(ordered.begin() + static_cast<std::ptrdiff_t>(firstFile), ordered.end());
 }
 
-}  // namespace slave
+}  // namespace pioneer

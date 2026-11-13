@@ -1,9 +1,9 @@
-// Slave Engine - the sound card, through SDL3.
+// Pioneer Engine - the sound card, through SDL3.
 #include <SDL3/SDL.h>
 
-#include "slave/audio/audio.hpp"
+#include "pioneer/audio/audio.hpp"
 
-namespace slave::audio {
+namespace pioneer::audio {
 
 AudioDevice::~AudioDevice() { close(); }
 
@@ -49,4 +49,4 @@ void AudioDevice::close() {
   mixer_ = nullptr;
 }
 
-}  // namespace slave::audio
+}  // namespace pioneer::audio

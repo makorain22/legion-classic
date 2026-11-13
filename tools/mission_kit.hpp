@@ -13,12 +13,12 @@
 
 #include <nlohmann/json.hpp>
 
-#include "slave/map/map_io.hpp"
-#include "slave/sim/script.hpp"
-#include "slave/sim/simulation.hpp"
+#include "pioneer/map/map_io.hpp"
+#include "pioneer/sim/script.hpp"
+#include "pioneer/sim/simulation.hpp"
 
 namespace mk {
-using namespace slave;
+using namespace pioneer;
 constexpr int32_t T = LEPTONS_PER_TILE;
 
 struct Builder {

@@ -1,15 +1,15 @@
-#include "slave/render/terrain_renderer.hpp"
+#include "pioneer/render/terrain_renderer.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
 
-#include "slave/assets/ground_textures.hpp"
-#include "slave/core/log.hpp"
-#include "slave/math/iso.hpp"
-#include "slave/render/shadow.hpp"
+#include "pioneer/assets/ground_textures.hpp"
+#include "pioneer/core/log.hpp"
+#include "pioneer/math/iso.hpp"
+#include "pioneer/render/shadow.hpp"
 
-namespace slave {
+namespace pioneer {
 
 namespace {
 
@@ -91,7 +91,7 @@ vec3 applyFog(vec3 col, float v) {
   vec3 dim = mix(vec3(dot(col, vec3(0.30, 0.59, 0.11))), col, 0.45) * 0.48;
   return v < 0.5 ? dim * smoothstep(0.0, 0.5, v) : mix(dim, col, smoothstep(0.5, 1.0, v));
 }
-)" SLAVE_SHADOW_GLSL R"(
+)" PIONEER_SHADOW_GLSL R"(
 void main() {
   vec2 suv = vTile / uMapSize;
   vec4 s0 = texture(uSplat0, suv);
@@ -756,4 +756,4 @@ void TerrainRenderer::heightRange(float& zMin, float& zMax) const {
   }
 }
 
-}  // namespace slave
+}  // namespace pioneer

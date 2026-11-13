@@ -1,8 +1,8 @@
-#include "slave/sim/vision.hpp"
+#include "pioneer/sim/vision.hpp"
 
 #include <algorithm>
 
-namespace slave {
+namespace pioneer {
 
 void Vision::resize(int w, int h) {
   w_ = w;
@@ -46,4 +46,4 @@ void Vision::stamp(int player, int tx, int ty, int radiusTiles) {
   }
 }
 
-}  // namespace slave
+}  // namespace pioneer

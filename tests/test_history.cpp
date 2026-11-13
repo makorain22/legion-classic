@@ -1,9 +1,9 @@
 #include <doctest/doctest.h>
 
 #include "history.hpp"
-#include "slave/core/rng.hpp"
+#include "pioneer/core/rng.hpp"
 
-using namespace slave;
+using namespace pioneer;
 using legion::History;
 
 namespace {

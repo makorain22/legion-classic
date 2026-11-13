@@ -12,7 +12,7 @@
 
 #include <nlohmann/json.hpp>
 
-#include "slave/core/content.hpp"
+#include "pioneer/core/content.hpp"
 
 namespace legion {
 
@@ -34,7 +34,7 @@ class RulesEditor {
   void select(Kind kind, const std::string& id);
   nlohmann::json* entry(Kind kind, const std::string& id);
   void edited();                                  // after changing entry() or working() from code
-  nlohmann::json& working(int file) { return work_[file]; }  // slave::kRuleFiles order
+  nlohmann::json& working(int file) { return work_[file]; }  // pioneer::kRuleFiles order
   bool apply(std::string& message);               // into the running battle
   bool saveToMod(const std::string& modId, std::string& message);
   const std::string& problem() const { return problem_; }
@@ -55,8 +55,8 @@ class RulesEditor {
   GameScene& scene_;
   bool open_ = false;
   bool loaded_ = false;
-  nlohmann::json work_[slave::kRuleFileCount];  // what is being edited
-  nlohmann::json orig_[slave::kRuleFileCount];  // the rules when the editor opened (for "changed")
+  nlohmann::json work_[pioneer::kRuleFileCount];  // what is being edited
+  nlohmann::json orig_[pioneer::kRuleFileCount];  // the rules when the editor opened (for "changed")
   Kind kind_ = Units;
   bool syncTab_ = true;       // show kind_'s tab (chosen from code) on the next frame
   std::string selected_;

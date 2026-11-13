@@ -1,11 +1,11 @@
-#include "slave/assets/image.hpp"
+#include "pioneer/assets/image.hpp"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image_write.h>
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
-namespace slave {
+namespace pioneer {
 
 void Image::blit(const Image& src, int dx, int dy) {
   for (int y = 0; y < src.h; ++y)
@@ -28,4 +28,4 @@ bool Image::loadPng(const std::string& path) {
   return true;
 }
 
-}  // namespace slave
+}  // namespace pioneer

@@ -1,4 +1,4 @@
-// Slave Engine - logistics (Milestone 9.6).
+// Pioneer Engine - logistics (Milestone 9.6).
 //
 // Money comes from three places. Buildings in the base pay a steady income
 // (post office, logistics warehouse, strategic fuel depot; so many of each
@@ -11,9 +11,9 @@
 // from a logistics warehouse.
 #include <algorithm>
 
-#include "slave/sim/simulation.hpp"
+#include "pioneer/sim/simulation.hpp"
 
-namespace slave {
+namespace pioneer {
 
 namespace {
 constexpr int32_t kT = LEPTONS_PER_TILE;
@@ -333,4 +333,4 @@ void Simulation::stepConvoys() {
       });
 }
 
-}  // namespace slave
+}  // namespace pioneer

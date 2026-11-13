@@ -1,4 +1,4 @@
-#include "slave/map/map.hpp"
+#include "pioneer/map/map.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -6,9 +6,9 @@
 #include <cmath>
 #include <functional>
 
-#include "slave/core/rng.hpp"
+#include "pioneer/core/rng.hpp"
 
-namespace slave {
+namespace pioneer {
 
 const char* layerName(Layer l) {
   static const char* names[] = {"Grass", "Dry grass", "Dirt", "Mud", "Sand", "Rock", "Snow", "Dirt road"};
@@ -1872,4 +1872,4 @@ void Map::generateTerrain(uint64_t seed, Biome b, int layoutIndex, bool settleme
   }
 }
 
-}  // namespace slave
+}  // namespace pioneer

@@ -1,4 +1,4 @@
-// Slave Engine - formations (Milestone 9.5).
+// Pioneer Engine - formations (Milestone 9.5).
 //
 // A group ordered to move marches as one body. The order lays out a slot for
 // every unit in the chosen shape (armour in front, wheels behind it, men at
@@ -17,9 +17,9 @@
 // simulation, so replays and saved games stay exact.
 #include <algorithm>
 
-#include "slave/sim/simulation.hpp"
+#include "pioneer/sim/simulation.hpp"
 
-namespace slave {
+namespace pioneer {
 
 namespace {
 constexpr int32_t kT = LEPTONS_PER_TILE;
@@ -789,4 +789,4 @@ void Simulation::stepFormations() {
   for (Entity f : finished) reg_.destroy(f);
 }
 
-}  // namespace slave
+}  // namespace pioneer

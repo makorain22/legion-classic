@@ -10,9 +10,9 @@
 #include <vector>
 
 #include "../engine/src/assets/blitzkrieg.hpp"
-#include "slave/assets/placeholder_art.hpp"
+#include "pioneer/assets/placeholder_art.hpp"
 
-using namespace slave;
+using namespace pioneer;
 
 namespace {
 using Bytes = std::vector<uint8_t>;

@@ -1,9 +1,9 @@
-// Slave Engine - targeting, turrets, firing, projectiles and damage.
+// Pioneer Engine - targeting, turrets, firing, projectiles and damage.
 #include <algorithm>
 
-#include "slave/sim/simulation.hpp"
+#include "pioneer/sim/simulation.hpp"
 
-namespace slave {
+namespace pioneer {
 
 
 void Simulation::stepTargeting() {
@@ -355,4 +355,4 @@ void Simulation::removeDead() {
   dead_.clear();
 }
 
-}  // namespace slave
+}  // namespace pioneer

@@ -1,11 +1,11 @@
-// Slave Engine - the mission engine (9.9): play area, countdowns, markers,
+// Pioneer Engine - the mission engine (9.9): play area, countdowns, markers,
 // counters, named units and script flags, patrols, kills and losses. The
 // trigger language that drives them is in script.cpp.
 #include <algorithm>
 
-#include "slave/sim/simulation.hpp"
+#include "pioneer/sim/simulation.hpp"
 
-namespace slave {
+namespace pioneer {
 
 // --- Play area ------------------------------------------------------------------
 TileRect Simulation::playArea(uint8_t player) const {
@@ -278,4 +278,4 @@ bool Simulation::loadMission(ByteReader& r) {
   return ai_.loadOrders(r) && r.ok();
 }
 
-}  // namespace slave
+}  // namespace pioneer

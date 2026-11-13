@@ -9,9 +9,9 @@
 
 #include "editor.hpp"
 #include "game_scene.hpp"
-#include "slave/core/rng.hpp"
+#include "pioneer/core/rng.hpp"
 
-using namespace slave;
+using namespace pioneer;
 
 namespace legion {
 

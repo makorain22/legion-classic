@@ -3,9 +3,9 @@
 
 #include <nlohmann/json.hpp>
 
-#include "slave/sim/simulation.hpp"
+#include "pioneer/sim/simulation.hpp"
 
-using namespace slave;
+using namespace pioneer;
 
 namespace {
 struct World {

@@ -1,12 +1,12 @@
-// Slave Engine - crash reports. See crash.hpp.
-#include "slave/platform/crash.hpp"
+// Pioneer Engine - crash reports. See crash.hpp.
+#include "pioneer/platform/crash.hpp"
 
 #include <csignal>
 #include <cstdio>
 #include <cstring>
 #include <exception>
 
-#include "slave/core/log.hpp"
+#include "pioneer/core/log.hpp"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -22,7 +22,7 @@
 #include <unistd.h>
 #endif
 
-namespace slave::crash {
+namespace pioneer::crash {
 
 namespace {
 char gDir[1024] = "";
@@ -38,7 +38,7 @@ FILE* openReport() {
 
 void both(FILE* f, const char* line) {
   if (f) std::fputs(line, f);
-  SLV_ERROR("%s", line);
+  PNR_ERROR("%s", line);
 }
 
 #ifdef _WIN32
@@ -201,4 +201,4 @@ void install(const std::string& dir, const char* version) {
 
 void note(const char* what) { std::snprintf(gNote, sizeof gNote, "%s", what ? what : ""); }
 
-}  // namespace slave::crash
+}  // namespace pioneer::crash

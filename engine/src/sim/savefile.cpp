@@ -1,4 +1,4 @@
-#include "slave/sim/savefile.hpp"
+#include "pioneer/sim/savefile.hpp"
 
 #include <cstring>
 #include <fstream>
@@ -6,7 +6,7 @@
 #define MINIZ_NO_ZLIB_COMPATIBLE_NAMES
 #include <miniz.h>
 
-namespace slave {
+namespace pioneer {
 
 namespace {
 const char* magic(bool replay) { return replay ? "LREP" : "LSAV"; }
@@ -132,4 +132,4 @@ bool readSaveMeta(const std::string& path, std::string& metaJson, bool replay) {
   return static_cast<bool>(in.read(metaJson.data(), metaSize));
 }
 
-}  // namespace slave
+}  // namespace pioneer

@@ -1,11 +1,11 @@
-#include "slave/core/log.hpp"
+#include "pioneer/core/log.hpp"
 
 #include <chrono>
 #include <cstdarg>
 #include <cstdio>
 #include <mutex>
 
-namespace slave::log {
+namespace pioneer::log {
 
 namespace {
 std::mutex g_mutex;
@@ -59,4 +59,4 @@ void write(Level level, const char* fmt, ...) {
   }
 }
 
-}  // namespace slave::log
+}  // namespace pioneer::log

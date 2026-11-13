@@ -16,7 +16,7 @@ essentials. Keep both in sync when decisions change.
 | Facings | 16 visible facings, animations at 8–10 fps (heavy retro feel) |
 | Sidebar | Classic right sidebar, minimap on top |
 | Language | English |
-| Names | Game: Legion Classic. Engine: Slave Engine 1.0 |
+| Names | Game: Legion Classic. Engine: Pioneer Engine 2.0 |
 | Code | Private GitHub repo `makorain22/legion-classic`; Windows builds via GitHub Actions |
 
 ## Top priority: the Live Scenario Editor

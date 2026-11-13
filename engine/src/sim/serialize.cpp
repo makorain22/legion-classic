@@ -1,4 +1,4 @@
-// Slave Engine - saving and loading the simulation state, and commands.
+// Pioneer Engine - saving and loading the simulation state, and commands.
 //
 // The format is a straight binary dump in a fixed order, versioned by the save
 // file around it. Component pools are written with their entities in storage
@@ -6,9 +6,9 @@
 // simulation continues identically (the tests check the state hash).
 #include <nlohmann/json.hpp>
 
-#include "slave/sim/simulation.hpp"
+#include "pioneer/sim/simulation.hpp"
 
-namespace slave {
+namespace pioneer {
 
 namespace {
 constexpr uint32_t kStateMagic = 0x53494D38;  // "SIM8": the mission engine (play area, countdowns, named units...)
@@ -526,4 +526,4 @@ bool Simulation::loadState(ByteReader& r, std::string& error, const std::vector<
   return true;
 }
 
-}  // namespace slave
+}  // namespace pioneer

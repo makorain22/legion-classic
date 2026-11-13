@@ -1,4 +1,4 @@
-// Slave Engine - the world's furniture: trees and rocks for every biome, and
+// Pioneer Engine - the world's furniture: trees and rocks for every biome, and
 // the civilian houses, churches and ruins of villages and towns.
 //
 // Props: one voxel = 1/32 tile. Buildings: one voxel = 1/12 tile, so a
@@ -8,9 +8,9 @@
 #include <cmath>
 
 #include "art_common.hpp"
-#include "slave/core/rng.hpp"
+#include "pioneer/core/rng.hpp"
 
-namespace slave::art {
+namespace pioneer::art {
 
 namespace {
 
@@ -1382,4 +1382,4 @@ VoxelModel makeBridgeSpan(int mask, bool wood) {
   }
   return m;
 }
-}  // namespace slave::art
+}  // namespace pioneer::art

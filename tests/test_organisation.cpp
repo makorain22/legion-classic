@@ -2,9 +2,9 @@
 // supply points.
 #include <doctest/doctest.h>
 
-#include "slave/sim/simulation.hpp"
+#include "pioneer/sim/simulation.hpp"
 
-using namespace slave;
+using namespace pioneer;
 
 namespace {
 struct Rules {

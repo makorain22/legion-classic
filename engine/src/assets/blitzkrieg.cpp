@@ -1,4 +1,4 @@
-// Slave Engine - reader and renderer for Blitzkrieg data (see blitzkrieg.hpp).
+// Pioneer Engine - reader and renderer for Blitzkrieg data (see blitzkrieg.hpp).
 //
 // File layout, from Nival's released source (StreamIO/StructureSaver2.cpp):
 // everything is nested chunks. A chunk is [id: 1 byte][length], where the
@@ -14,7 +14,7 @@
 #include <cstring>
 #include <fstream>
 
-namespace slave::bk {
+namespace pioneer::bk {
 namespace {
 
 // --- Chunks ---------------------------------------------------------------------------------------
@@ -733,4 +733,4 @@ BakedSprite composeSquares(const Image& tex, const std::vector<Square>& squares,
   return out;
 }
 
-}  // namespace slave::bk
+}  // namespace pioneer::bk

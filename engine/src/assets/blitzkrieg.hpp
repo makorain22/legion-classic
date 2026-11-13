@@ -1,5 +1,5 @@
 #pragma once
-// Slave Engine - reader for the data of Nival's "Blitzkrieg" (2003), released
+// Pioneer Engine - reader for the data of Nival's "Blitzkrieg" (2003), released
 // by Nival for non-commercial use in 2025 (github.com/nival/Blitzkrieg).
 //
 // Reads the game's own files from a copy of its Data folder:
@@ -15,10 +15,10 @@
 #include <string>
 #include <vector>
 
-#include "slave/assets/image.hpp"
-#include "slave/assets/voxel.hpp"
+#include "pioneer/assets/image.hpp"
+#include "pioneer/assets/voxel.hpp"
 
-namespace slave::bk {
+namespace pioneer::bk {
 
 // --- Files ------------------------------------------------------------------------------
 bool loadDds(const std::string& path, Image& out);
@@ -90,4 +90,4 @@ BakedSprite cutSprite(const Image& tex, const SpriteRect& r, float scale, float 
 // A building picture assembled from squares (scaled), anchored at its centre.
 BakedSprite composeSquares(const Image& tex, const std::vector<Square>& squares, float scale, float brightness = 1.0f);
 
-}  // namespace slave::bk
+}  // namespace pioneer::bk

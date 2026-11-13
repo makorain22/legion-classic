@@ -11,9 +11,9 @@
 #include "editor.hpp"
 #include "sidebar.hpp"
 #include "ui_style.hpp"
-#include "slave/core/log.hpp"
+#include "pioneer/core/log.hpp"
 
-using namespace slave;
+using namespace pioneer;
 
 namespace legion {
 
@@ -51,7 +51,7 @@ void GameScene::onMissionEvent(const SimEvent& ev) {
       }
       // Long enough to read: about fifteen characters a second, at least four seconds.
       t.duration = ev.amount > 0 ? static_cast<float>(ev.amount) : std::clamp(2.5f + t.text.size() / 15.0f, 4.0f, 14.0f);
-      SLV_INFO("Radio: %s: %s", t.speaker.c_str(), t.text.c_str());
+      PNR_INFO("Radio: %s: %s", t.speaker.c_str(), t.text.c_str());
       transmissions_.push_back(t);
       radioLog_.push_back({t.speaker + ": " + t.text, static_cast<float>(sim_->tickCount()) / TICKS_PER_SECOND});
       if (radioLog_.size() > 40) radioLog_.erase(radioLog_.begin());

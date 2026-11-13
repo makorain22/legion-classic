@@ -1,11 +1,11 @@
-#include "slave/assets/ground_textures.hpp"
+#include "pioneer/assets/ground_textures.hpp"
 
 #include <algorithm>
 #include <cmath>
 
-#include "slave/core/rng.hpp"
+#include "pioneer/core/rng.hpp"
 
-namespace slave {
+namespace pioneer {
 
 namespace {
 
@@ -199,4 +199,4 @@ GroundTextureSet makeGroundTextures(int size) {
   return set;
 }
 
-}  // namespace slave
+}  // namespace pioneer

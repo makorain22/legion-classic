@@ -1,14 +1,14 @@
-#include "slave/render/mesh_renderer.hpp"
+#include "pioneer/render/mesh_renderer.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
 
-#include "slave/assets/voxel_mesh.hpp"
-#include "slave/render/shadow.hpp"
-#include "slave/render/terrain_renderer.hpp"
+#include "pioneer/assets/voxel_mesh.hpp"
+#include "pioneer/render/shadow.hpp"
+#include "pioneer/render/terrain_renderer.hpp"
 
-namespace slave {
+namespace pioneer {
 
 namespace {
 
@@ -87,7 +87,7 @@ uniform float uShadowOn;
 uniform float uShadowDark;
 out vec4 fragColor;
 const vec3 kNormals[6] = vec3[6](vec3(1, 0, 0), vec3(-1, 0, 0), vec3(0, 1, 0), vec3(0, -1, 0), vec3(0, 0, 1), vec3(0, 0, -1));
-)" SLAVE_SHADOW_GLSL R"(
+)" PIONEER_SHADOW_GLSL R"(
 // The ground's colour at a point (the terrain shader's mix, simplified).
 vec3 groundColour(vec2 tile) {
   vec2 suv = tile / uMapSize;
@@ -421,4 +421,4 @@ void MeshRenderer::drawDepth(const Mat4& vp) {
   drawBatches(depthShader_, true);
 }
 
-}  // namespace slave
+}  // namespace pioneer

@@ -1,12 +1,12 @@
-// Slave Engine - scenario triggers: file format and runtime.
-#include "slave/sim/script.hpp"
+// Pioneer Engine - scenario triggers: file format and runtime.
+#include "pioneer/sim/script.hpp"
 
 #include <algorithm>
 #include <nlohmann/json.hpp>
 
-#include "slave/sim/simulation.hpp"
+#include "pioneer/sim/simulation.hpp"
 
-namespace slave {
+namespace pioneer {
 
 namespace {
 const char* kCondNames[] = {"Always", "Timer", "Units in area", "No units in area", "Unit count at most",
@@ -879,4 +879,4 @@ void Simulation::stepScript() {
   }
 }
 
-}  // namespace slave
+}  // namespace pioneer

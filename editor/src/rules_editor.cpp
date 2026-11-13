@@ -11,10 +11,10 @@
 #include <set>
 
 #include "game_scene.hpp"
-#include "slave/core/log.hpp"
-#include "slave/sim/unit_types.hpp"
+#include "pioneer/core/log.hpp"
+#include "pioneer/sim/unit_types.hpp"
 
-using namespace slave;
+using namespace pioneer;
 using nlohmann::json;
 
 namespace legion {

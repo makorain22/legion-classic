@@ -1,9 +1,9 @@
-// Slave Engine - orders, path following, collision and vision.
+// Pioneer Engine - orders, path following, collision and vision.
 #include <algorithm>
 
-#include "slave/sim/simulation.hpp"
+#include "pioneer/sim/simulation.hpp"
 
-namespace slave {
+namespace pioneer {
 
 namespace {
 constexpr int kPathBudgetPerTick = 60000;  // A* node expansions per tick, all units together
@@ -410,4 +410,4 @@ bool Simulation::canSee(uint8_t player, int32_t x, int32_t y) const {
   return vision_.visible(player, x >> LEPTON_SHIFT, y >> LEPTON_SHIFT);
 }
 
-}  // namespace slave
+}  // namespace pioneer

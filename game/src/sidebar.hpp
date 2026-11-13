@@ -13,10 +13,10 @@
 
 #include <vector>
 
-#include "slave/math/vec.hpp"
-#include "slave/render/gl.hpp"
-#include "slave/render/sprite_renderer.hpp"
-#include "slave/sim/simulation.hpp"
+#include "pioneer/math/vec.hpp"
+#include "pioneer/render/gl.hpp"
+#include "pioneer/render/sprite_renderer.hpp"
+#include "pioneer/sim/simulation.hpp"
 
 namespace legion {
 
@@ -32,17 +32,17 @@ class Sidebar {
   void update(float dt);
   // Placement and sell-mode clicks on the battlefield. True if used.
   bool onEvent(const SDL_Event& e, bool uiWantsMouse);
-  void renderWorld(slave::SpriteRenderer& r);  // placement ghost
+  void renderWorld(pioneer::SpriteRenderer& r);  // placement ghost
 
   bool busy() const { return placeType_ >= 0 || sellMode_; }
   int placingType() const { return placeType_; }
   // Where a building of `type` would stand with the mouse over `ground` (snapped to tiles).
-  slave::Vec2i snappedCentre(int type, slave::Vec2f ground) const;
+  pioneer::Vec2i snappedCentre(int type, pioneer::Vec2f ground) const;
   int hoveredType() const { return hoveredType_; }  // mouse belongs to the sidebar mode
   void cancel();
   void startPlacing(int type);
   // Placement for scripted sessions.
-  bool placeAt(slave::Vec2i groundLeptons);
+  bool placeAt(pioneer::Vec2i groundLeptons);
 
  private:
   void drawMinimap(float width);
@@ -50,18 +50,18 @@ class Sidebar {
   void drawOrders(float width);
   void rebuildMinimap();
   // Tiles a fortification line covers from a to b (tile coordinates).
-  std::vector<slave::Vec2i> lineTiles(slave::Vec2i a, slave::Vec2i b) const;
-  bool validAt(int type, slave::Vec2i centre) const;
+  std::vector<pioneer::Vec2i> lineTiles(pioneer::Vec2i a, pioneer::Vec2i b) const;
+  bool validAt(int type, pioneer::Vec2i centre) const;
 
   GameScene& scene_;
   int tab_ = 0;
   int hoveredType_ = -1;  // cameo under the mouse (for the encyclopedia)
   int placeType_ = -1;
   bool dragging_ = false;  // fortification line being dragged
-  slave::Vec2i dragFrom_;
+  pioneer::Vec2i dragFrom_;
   bool sellMode_ = false;
 
-  slave::gl::Texture minimap_;
+  pioneer::gl::Texture minimap_;
   std::vector<uint32_t> minimapPixels_;
   std::vector<uint32_t> terrainColors_;  // per tile, cached
   uint32_t terrainRevision_ = UINT32_MAX;

@@ -20,12 +20,12 @@
 
 #include <nlohmann/json.hpp>
 
-#include "slave/map/map_io.hpp"
-#include "slave/sim/script.hpp"
-#include "slave/sim/simulation.hpp"
+#include "pioneer/map/map_io.hpp"
+#include "pioneer/sim/script.hpp"
+#include "pioneer/sim/simulation.hpp"
 #include "mission_kit.hpp"
 
-using namespace slave;
+using namespace pioneer;
 
 namespace {
 using namespace mk;

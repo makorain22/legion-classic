@@ -1,4 +1,4 @@
-#include "slave/map/map_io.hpp"
+#include "pioneer/map/map_io.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -8,7 +8,7 @@
 #include <miniz.h>
 #include <nlohmann/json.hpp>
 
-namespace slave {
+namespace pioneer {
 
 namespace {
 void putU32(std::vector<uint8_t>& b, uint32_t v) {
@@ -22,7 +22,7 @@ uint32_t getU32(const uint8_t* p) {
 std::vector<uint8_t> encodeMap(const Map& map, const std::vector<UnitPlacement>& units,
                                const std::vector<PlayerSetup>& players, const std::string& scriptJson) {
   nlohmann::json j;
-  j["engine"] = "Slave Engine 1.0";
+  j["engine"] = "Pioneer Engine 2.0";
   j["name"] = map.name;
   j["author"] = map.author;
   j["description"] = map.description;
@@ -257,4 +257,4 @@ bool loadMap(const std::string& path, MapFile& out, std::string& error) {
   return decodeMap(bytes, out, error);
 }
 
-}  // namespace slave
+}  // namespace pioneer

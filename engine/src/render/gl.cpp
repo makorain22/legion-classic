@@ -1,11 +1,11 @@
-#include "slave/render/gl.hpp"
+#include "pioneer/render/gl.hpp"
 
 #include <algorithm>
 #include <cstring>
 
-#include "slave/core/log.hpp"
+#include "pioneer/core/log.hpp"
 
-namespace slave::gl {
+namespace pioneer::gl {
 
 namespace {
 GLuint compileStage(GLenum type, const char* src, std::string& error) {
@@ -146,8 +146,8 @@ namespace {
 void GLAD_API_PTR debugCallback(GLenum, GLenum type, GLuint, GLenum severity, GLsizei, const GLchar* msg,
                             const void*) {
   if (severity == GL_DEBUG_SEVERITY_NOTIFICATION) return;
-  if (type == GL_DEBUG_TYPE_ERROR) SLV_ERROR("GL: %s", msg);
-  else SLV_DEBUG("GL: %s", msg);
+  if (type == GL_DEBUG_TYPE_ERROR) PNR_ERROR("GL: %s", msg);
+  else PNR_DEBUG("GL: %s", msg);
 }
 }  // namespace
 #endif
@@ -161,4 +161,4 @@ void installDebugOutput() {
 #endif
 }
 
-}  // namespace slave::gl
+}  // namespace pioneer::gl

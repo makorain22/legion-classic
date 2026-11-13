@@ -1,10 +1,10 @@
-#include "slave/sim/unit_types.hpp"
+#include "pioneer/sim/unit_types.hpp"
 
 #include <algorithm>
 #include <fstream>
 #include <nlohmann/json.hpp>
 
-namespace slave {
+namespace pioneer {
 
 const char* categoryName(UnitCategory c) {
   static const char* names[] = {"Infantry", "Vehicles", "Buildings", "Defences", "Fortifications"};
@@ -228,4 +228,4 @@ int UnitTypeRegistry::find(const std::string& id) const {
   return -1;
 }
 
-}  // namespace slave
+}  // namespace pioneer

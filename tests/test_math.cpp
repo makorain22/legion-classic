@@ -2,11 +2,11 @@
 
 #include <cmath>
 
-#include "slave/core/fixed.hpp"
-#include "slave/core/rng.hpp"
-#include "slave/math/iso.hpp"
+#include "pioneer/core/fixed.hpp"
+#include "pioneer/core/rng.hpp"
+#include "pioneer/math/iso.hpp"
 
-using namespace slave;
+using namespace pioneer;
 
 TEST_CASE("sine table matches std::sin within 1/65536") {
   for (int a = 0; a < ANGLE_FULL; a += 7) {

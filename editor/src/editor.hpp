@@ -1,5 +1,5 @@
 #pragma once
-// Slave Editor - the Live Scenario Editor, opened with F2 over the running world.
+// Pioneer Editor - the Live Scenario Editor, opened with F2 over the running world.
 //
 // Everything is edited while the battle runs (pause with Space):
 //   Terrain   sculpting, ground painting, water, props
@@ -21,10 +21,10 @@
 #include <vector>
 
 #include "history.hpp"
-#include "slave/map/map.hpp"
-#include "slave/math/vec.hpp"
-#include "slave/render/sprite_renderer.hpp"
-#include "slave/sim/simulation.hpp"
+#include "pioneer/map/map.hpp"
+#include "pioneer/math/vec.hpp"
+#include "pioneer/render/sprite_renderer.hpp"
+#include "pioneer/sim/simulation.hpp"
 
 namespace legion {
 
@@ -59,10 +59,10 @@ class Editor {
   // Returns true when the editor used the event (so the game ignores it).
   bool onEvent(const SDL_Event& e, bool uiWantsMouse, bool uiWantsKeyboard);
   void update(float dt);
-  void renderWorld(slave::SpriteRenderer& r);  // brush outline, ghosts, in the world pass
+  void renderWorld(pioneer::SpriteRenderer& r);  // brush outline, ghosts, in the world pass
   void imgui();
   void onWorldReplaced();  // new or loaded map: clear history
-  void onSimTick(const std::vector<slave::SpawnRecord>& spawned);
+  void onSimTick(const std::vector<pioneer::SpawnRecord>& spawned);
   // While the select tool is out, box and click selection pick any side's units.
   bool selectsAnyOwner() const { return active_ && tool_ == Tool::SelectUnits; }
 
@@ -70,10 +70,10 @@ class Editor {
   void setTool(Tool t);
   Tool tool() const { return tool_; }
   void setBrush(float radiusTiles, float strength) { radius_ = radiusTiles; strength_ = strength; }
-  void setPaintLayer(slave::Layer l) { paintLayer_ = l; }
+  void setPaintLayer(pioneer::Layer l) { paintLayer_ = l; }
   void setPlaceUnit(const std::string& typeId, uint8_t owner, PlaceMode mode, int blockCount = 25);
   void setPlaceFacing(int facing) { placeFacing_ = facing & 15; }
-  void strokeAt(slave::Vec2f groundLeptons, float dt);  // one brush application
+  void strokeAt(pioneer::Vec2f groundLeptons, float dt);  // one brush application
   void beginStroke();
   void endStroke();
   bool save(const std::string& path);
@@ -86,8 +86,8 @@ class Editor {
   void rotateSelection(int steps);
   void setSelectionOwner(uint8_t owner);
   void setSelectionHealth(float fraction);
-  void moveSelection(slave::Vec2i delta);
-  void artilleryAt(slave::Vec2i at);
+  void moveSelection(pioneer::Vec2i delta);
+  void artilleryAt(pioneer::Vec2i at);
 
  private:
   struct PresenceAction;
@@ -96,11 +96,11 @@ class Editor {
   friend struct EditAction;
 
   // terrain (editor.cpp)
-  void applyHeightTool(slave::Vec2f c, float dt);
-  void applyPaint(slave::Vec2f c, float dt);
-  void applyProps(slave::Vec2f c, float dt);
-  void applyErase(slave::Vec2f c);
-  void applyOil(slave::Vec2f c, float dt);
+  void applyHeightTool(pioneer::Vec2f c, float dt);
+  void applyPaint(pioneer::Vec2f c, float dt);
+  void applyProps(pioneer::Vec2f c, float dt);
+  void applyErase(pioneer::Vec2f c);
+  void applyOil(pioneer::Vec2f c, float dt);
   void afterTerrainEdit(int tx0, int ty0, int tx1, int ty1, bool heights, bool splat);
   void applyRegion(const History::Region& r);
   void drawToolPanel();
@@ -116,37 +116,37 @@ class Editor {
   void drawSidesTab();
   void drawBattleTab();
   void drawScriptTab();  // script_tab.cpp
-  void renderAreas(slave::SpriteRenderer& r);
+  void renderAreas(pioneer::SpriteRenderer& r);
   void drawAreaLabels();
-  bool editCondition(slave::Condition& c);
+  bool editCondition(pioneer::Condition& c);
   void drawMissionProperties();
   bool pickByName_ = false;  // Script tab: the action being edited picks its units by name
   static const char* condGroup(int g);
   static const char* actionGroup(int g);
   static std::vector<int> condOrder();    // condition types in menu order; -n-1 = heading n
   static std::vector<int> actionOrder();
-  slave::Entity unitNameFor_;
+  pioneer::Entity unitNameFor_;
   std::string unitNameEdit_;
-  bool editAction(slave::Action& a);
+  bool editAction(pioneer::Action& a);
   bool playerCombo(const char* label, uint8_t& p, bool allowAny);
   bool areaCombo(const char* label, int32_t& area);
   bool unitCombo(const char* label, int32_t& type, bool allowAny);
   bool triggerCombo(const char* label, int32_t& trigger);
   void drawInspector();
   void drawUnitPalette();
-  void applyUnitBrush(slave::Vec2f c, float dt);
-  void applyGodTool(slave::Vec2f c, float dt);
-  void renderUnitGhosts(slave::SpriteRenderer& r, slave::Vec2f mouseGround);
+  void applyUnitBrush(pioneer::Vec2f c, float dt);
+  void applyGodTool(pioneer::Vec2f c, float dt);
+  void renderUnitGhosts(pioneer::SpriteRenderer& r, pioneer::Vec2f mouseGround);
   void beginUnitStroke();
   void endUnitStroke();
-  bool placeable(int type, slave::Vec2i at) const;
+  bool placeable(int type, pioneer::Vec2i at) const;
   // Queues a SpawnList for `action` entries [first, end) and remembers the tag.
   void spawnFor(const std::shared_ptr<PresenceAction>& action, size_t first);
-  void removeEntities(const std::vector<slave::Entity>& units);
-  void queueEdits(std::vector<slave::UnitEdit> edits);
-  slave::Entity resolve(slave::Entity e) const;  // follows respawns made by undo/redo
-  std::vector<slave::SpawnSpec> specsOf(const std::vector<slave::Entity>& units) const;
-  void pushEdit(const std::string& label, std::vector<slave::UnitEdit> before, std::vector<slave::UnitEdit> after);
+  void removeEntities(const std::vector<pioneer::Entity>& units);
+  void queueEdits(std::vector<pioneer::UnitEdit> edits);
+  pioneer::Entity resolve(pioneer::Entity e) const;  // follows respawns made by undo/redo
+  std::vector<pioneer::SpawnSpec> specsOf(const std::vector<pioneer::Entity>& units) const;
+  void pushEdit(const std::string& label, std::vector<pioneer::UnitEdit> before, std::vector<pioneer::UnitEdit> after);
   bool facingPicker(const char* id, int& facing);
   void unitIcon(int type, uint8_t owner, float size);
 
@@ -160,8 +160,8 @@ class Editor {
   float strength_ = 40.0f;  // 1..100
   bool softEdge_ = true;
   bool gridPaint_ = false;  // paint whole tiles in a square, snapped to the grid
-  slave::Layer paintLayer_ = slave::Layer::Dirt;
-  slave::PropKind propKind_ = slave::PropKind::Tree;
+  pioneer::Layer paintLayer_ = pioneer::Layer::Dirt;
+  pioneer::PropKind propKind_ = pioneer::PropKind::Tree;
   float propDensity_ = 20.0f;  // props per second while dragging
   float propAccum_ = 0;
   bool stroking_ = false;
@@ -183,9 +183,9 @@ class Editor {
 
   // Select-tool dragging.
   bool movePending_ = false, moving_ = false;
-  slave::Vec2f moveStartMouse_;
-  slave::Vec2f moveStartGround_;
-  slave::Entity moveClicked_;
+  pioneer::Vec2f moveStartMouse_;
+  pioneer::Vec2f moveStartGround_;
+  pioneer::Entity moveClicked_;
 
   // Battle tools.
   int strikeRounds_ = 12;
@@ -193,21 +193,21 @@ class Editor {
   int selectedTrigger_ = -1;
   int editingCond_ = -1, editingAction_ = -1;  // Script tab: the line opened for editing
   int scriptPage_ = 0;                          // Script tab: 0 quick start, 1 areas, 2 triggers, 3 objectives
-  std::string describeCondition(const slave::Condition& c) const;
-  std::string describeAction(const slave::Action& a) const;
+  std::string describeCondition(const pioneer::Condition& c) const;
+  std::string describeAction(const pioneer::Action& a) const;
   void addTemplate(int which);
   void drawTriggerPage(bool& changed);
   void drawAreaPage(bool& changed);
   int selectedArea_ = -1;
   bool drawingArea_ = false;
-  slave::Vec2i areaStart_, areaEnd_;
+  pioneer::Vec2i areaStart_, areaEnd_;
   float godAccum_ = 0;
   uint32_t nextTag_ = 1;
   std::unordered_map<uint32_t, std::weak_ptr<PresenceAction>> pendingTags_;
-  std::unordered_map<uint64_t, slave::Entity> remap_;  // old entity -> respawned entity
+  std::unordered_map<uint64_t, pioneer::Entity> remap_;  // old entity -> respawned entity
   uint32_t selectTag_ = 0;  // units spawned under this tag get selected (duplicate)
   struct HealStroke {
-    std::vector<slave::UnitEdit> before, after;
+    std::vector<pioneer::UnitEdit> before, after;
     std::vector<uint64_t> seen;
   } heal_;
 

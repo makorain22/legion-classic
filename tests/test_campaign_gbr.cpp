@@ -2,7 +2,7 @@
 // soundly and opens without trouble; and a bot plays each mission through by
 // its objectives to victory (tests/campaign_bot.hpp).
 //
-//   LEGION_PLAYTHROUGH=b01,b16 ./slave_tests -tc="*British*playthrough*"
+//   LEGION_PLAYTHROUGH=b01,b16 ./pioneer_tests -tc="*British*playthrough*"
 #include "campaign_bot.hpp"
 
 namespace {

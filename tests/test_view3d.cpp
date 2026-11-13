@@ -5,11 +5,11 @@
 #include <algorithm>
 #include <cmath>
 
-#include "slave/assets/voxel.hpp"
-#include "slave/assets/voxel_mesh.hpp"
-#include "slave/render/camera.hpp"
+#include "pioneer/assets/voxel.hpp"
+#include "pioneer/assets/voxel_mesh.hpp"
+#include "pioneer/render/camera.hpp"
 
-using namespace slave;
+using namespace pioneer;
 
 namespace {
 Camera camera3D() {

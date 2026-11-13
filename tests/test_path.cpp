@@ -2,9 +2,9 @@
 
 #include <nlohmann/json.hpp>
 
-#include "slave/sim/simulation.hpp"
+#include "pioneer/sim/simulation.hpp"
 
-using namespace slave;
+using namespace pioneer;
 
 namespace {
 // A wall across the map with one gap near the bottom.

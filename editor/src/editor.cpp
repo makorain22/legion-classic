@@ -10,11 +10,11 @@
 #include <filesystem>
 
 #include "game_scene.hpp"
-#include "slave/core/log.hpp"
-#include "slave/core/rng.hpp"
-#include "slave/map/map_io.hpp"
+#include "pioneer/core/log.hpp"
+#include "pioneer/core/rng.hpp"
+#include "pioneer/map/map_io.hpp"
 
-using namespace slave;
+using namespace pioneer;
 
 namespace legion {
 
@@ -474,7 +474,7 @@ bool Editor::save(const std::string& path) {
   }
   scene_.setCurrentMapPath(path);
   scene_.showStatus("Saved " + std::filesystem::path(path).filename().string(), 3);
-  SLV_INFO("Saved map %s", path.c_str());
+  PNR_INFO("Saved map %s", path.c_str());
   return true;
 }
 

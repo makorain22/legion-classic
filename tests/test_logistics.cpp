@@ -4,11 +4,11 @@
 
 #include <algorithm>
 
-#include "slave/core/bytes.hpp"
-#include "slave/map/map.hpp"
-#include "slave/sim/simulation.hpp"
+#include "pioneer/core/bytes.hpp"
+#include "pioneer/map/map.hpp"
+#include "pioneer/sim/simulation.hpp"
 
-using namespace slave;
+using namespace pioneer;
 
 namespace {
 constexpr int T = 256;

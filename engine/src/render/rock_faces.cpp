@@ -1,9 +1,9 @@
-#include "slave/render/rock_faces.hpp"
+#include "pioneer/render/rock_faces.hpp"
 
 #include <algorithm>
 #include <cmath>
 
-namespace slave {
+namespace pioneer {
 
 namespace {
 
@@ -150,4 +150,4 @@ RockMesh buildRockFaces(const Map& m, int tx0, int ty0, int tx1, int ty1) {
   return out;
 }
 
-}  // namespace slave
+}  // namespace pioneer

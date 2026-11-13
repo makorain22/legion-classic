@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.24)
 project(LegionClassic VERSION 0.1.0 LANGUAGES C CXX)
 
 # ---------------------------------------------------------------------------
-# Legion Classic, built on Slave Engine 1.0
+# Legion Classic, built on Pioneer Engine 2.0
 # ---------------------------------------------------------------------------
 
 set(CMAKE_CXX_STANDARD 20)
@@ -106,37 +106,37 @@ function(legion_warnings target)
 endfunction()
 
 # ---------------------------------------------------------------------------
-# Slave Engine core: deterministic code with no graphics (used by tests too)
+# Pioneer Engine core: deterministic code with no graphics (used by tests too)
 # ---------------------------------------------------------------------------
-file(GLOB_RECURSE SLAVE_CORE_SOURCES CONFIGURE_DEPENDS
+file(GLOB_RECURSE PIONEER_CORE_SOURCES CONFIGURE_DEPENDS
   engine/src/core/*.cpp
   engine/src/math/*.cpp
   engine/src/ecs/*.cpp
   engine/src/sim/*.cpp
   engine/src/map/*.cpp)
-add_library(slave_core STATIC ${SLAVE_CORE_SOURCES})
-target_include_directories(slave_core PUBLIC engine/include)
-target_link_libraries(slave_core PUBLIC nlohmann_json::nlohmann_json PRIVATE miniz)
-legion_warnings(slave_core)
+add_library(pioneer_core STATIC ${PIONEER_CORE_SOURCES})
+target_include_directories(pioneer_core PUBLIC engine/include)
+target_link_libraries(pioneer_core PUBLIC nlohmann_json::nlohmann_json PRIVATE miniz)
+legion_warnings(pioneer_core)
 
 # ---------------------------------------------------------------------------
-# Slave Engine presentation: window, renderer, assets, UI
+# Pioneer Engine presentation: window, renderer, assets, UI
 # ---------------------------------------------------------------------------
 if(LEGION_BUILD_GAME)
-  file(GLOB_RECURSE SLAVE_GFX_SOURCES CONFIGURE_DEPENDS
+  file(GLOB_RECURSE PIONEER_GFX_SOURCES CONFIGURE_DEPENDS
     engine/src/platform/*.cpp
     engine/src/render/*.cpp
     engine/src/assets/*.cpp
     engine/src/audio/*.cpp
     engine/src/ui/*.cpp)
-  add_library(slave STATIC ${SLAVE_GFX_SOURCES})
-  target_include_directories(slave PUBLIC engine/include)
+  add_library(pioneer STATIC ${PIONEER_GFX_SOURCES})
+  target_include_directories(pioneer PUBLIC engine/include)
   find_package(Threads REQUIRED)  # sprites are baked on all cores
-  target_link_libraries(slave PUBLIC slave_core glad imgui stb SDL3::SDL3-static Threads::Threads)
+  target_link_libraries(pioneer PUBLIC pioneer_core glad imgui stb SDL3::SDL3-static Threads::Threads)
   if(WIN32)
-    target_link_libraries(slave PUBLIC dbghelp)  # crash reports
+    target_link_libraries(pioneer PUBLIC dbghelp)  # crash reports
   endif()
-  legion_warnings(slave)
+  legion_warnings(pioneer)
 
   # -------------------------------------------------------------------------
   # Legion Classic executable
@@ -144,12 +144,12 @@ if(LEGION_BUILD_GAME)
   file(GLOB_RECURSE LEGION_SOURCES CONFIGURE_DEPENDS game/src/*.cpp editor/src/*.cpp)
   add_executable(LegionClassic WIN32 ${LEGION_SOURCES})
   target_include_directories(LegionClassic PRIVATE game/src editor/src)
-  target_link_libraries(LegionClassic PRIVATE slave)
+  target_link_libraries(LegionClassic PRIVATE pioneer)
   legion_warnings(LegionClassic)
   if(MSVC)
     # Symbols for crash reports: a .pdb beside the .exe, same optimised code.
-    target_compile_options(slave PRIVATE $<$<CONFIG:Release>:/Zi>)
-    target_compile_options(slave_core PRIVATE $<$<CONFIG:Release>:/Zi>)
+    target_compile_options(pioneer PRIVATE $<$<CONFIG:Release>:/Zi>)
+    target_compile_options(pioneer_core PRIVATE $<$<CONFIG:Release>:/Zi>)
     target_compile_options(LegionClassic PRIVATE $<$<CONFIG:Release>:/Zi>)
     target_link_options(LegionClassic PRIVATE $<$<CONFIG:Release>:/DEBUG /OPT:REF /OPT:ICF>)
   endif()
@@ -177,21 +177,21 @@ if(LEGION_BUILD_TESTS)
   # So is the Blitzkrieg file reader (it needs no graphics either).
   # And the sound mixer and decoders (no sound card needed).
   # And the 3D camera and voxel meshing (pure maths, no GL calls).
-  add_executable(slave_tests ${TEST_SOURCES} editor/src/history.cpp engine/src/assets/blitzkrieg.cpp
+  add_executable(pioneer_tests ${TEST_SOURCES} editor/src/history.cpp engine/src/assets/blitzkrieg.cpp
                  engine/src/audio/mixer.cpp engine/src/audio/decode.cpp game/src/campaign.cpp
                  engine/src/render/camera.cpp engine/src/assets/voxel.cpp engine/src/assets/voxel_mesh.cpp
                  engine/src/assets/image.cpp)
-  target_include_directories(slave_tests PRIVATE editor/src game/src)
-  target_link_libraries(slave_tests PRIVATE slave_core doctest::doctest stb)
-  target_compile_definitions(slave_tests PRIVATE LEGION_CONTENT_DIR="${CMAKE_SOURCE_DIR}/content/")
+  target_include_directories(pioneer_tests PRIVATE editor/src game/src)
+  target_link_libraries(pioneer_tests PRIVATE pioneer_core doctest::doctest stb)
+  target_compile_definitions(pioneer_tests PRIVATE LEGION_CONTENT_DIR="${CMAKE_SOURCE_DIR}/content/")
   # Some tests play whole games with the real rules.
-  target_compile_definitions(slave_tests PRIVATE LEGION_RULES_DIR="${CMAKE_SOURCE_DIR}/content/rules/")
-  legion_warnings(slave_tests)
-  add_test(NAME slave_tests COMMAND slave_tests)
+  target_compile_definitions(pioneer_tests PRIVATE LEGION_RULES_DIR="${CMAKE_SOURCE_DIR}/content/rules/")
+  legion_warnings(pioneer_tests)
+  add_test(NAME pioneer_tests COMMAND pioneer_tests)
 
   # Builds the shipped maps: tutorial, campaigns, scenarios, skirmish maps (tools/make_content.cpp).
   file(GLOB MAKE_CONTENT_SOURCES CONFIGURE_DEPENDS tools/make_content.cpp tools/campaign_*.cpp)
   add_executable(make_content EXCLUDE_FROM_ALL ${MAKE_CONTENT_SOURCES})
-  target_link_libraries(make_content PRIVATE slave_core)
+  target_link_libraries(make_content PRIVATE pioneer_core)
   legion_warnings(make_content)
 endif()

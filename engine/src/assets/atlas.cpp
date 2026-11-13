@@ -1,9 +1,9 @@
-#include "slave/assets/atlas.hpp"
+#include "pioneer/assets/atlas.hpp"
 
 #include <algorithm>
 #include <numeric>
 
-namespace slave {
+namespace pioneer {
 
 int AtlasBuilder::add(Image image, int anchorX, int anchorY) {
   items_.push_back({std::move(image), anchorX, anchorY, nullptr, 0.0f});
@@ -44,4 +44,4 @@ bool AtlasBuilder::build(int size, Image& atlas, std::vector<AtlasFrame>& frames
   return true;
 }
 
-}  // namespace slave
+}  // namespace pioneer

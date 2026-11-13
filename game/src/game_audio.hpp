@@ -18,9 +18,9 @@
 
 #include <nlohmann/json.hpp>
 
-#include "slave/audio/audio.hpp"
-#include "slave/map/map.hpp"
-#include "slave/sim/simulation.hpp"
+#include "pioneer/audio/audio.hpp"
+#include "pioneer/map/map.hpp"
+#include "pioneer/sim/simulation.hpp"
 
 namespace legion {
 
@@ -43,16 +43,16 @@ class GameAudio {
   // `dirs`: audio folders, base first, mods after (a later folder's file wins).
   bool init(const std::vector<std::string>& dirs, std::string& error);
   bool deviceOpen() const { return device_.isOpen(); }
-  slave::audio::Mixer& mixer() { return *mixer_; }
+  pioneer::audio::Mixer& mixer() { return *mixer_; }
 
   void setVolumes(const AudioVolumes& v);
-  void setBiome(slave::Biome b);
+  void setBiome(pioneer::Biome b);
   // Plays a named sound (audio.json). Positional when `at` is.
-  slave::audio::VoiceId play(const std::string& name, const slave::audio::Emitter& at = {}, float volume = 1.0f);
+  pioneer::audio::VoiceId play(const std::string& name, const pioneer::audio::Emitter& at = {}, float volume = 1.0f);
   void ui(const char* name) { play(name); }
 
   // One simulation event, seen from `player`'s seat.
-  void onEvent(const slave::SimEvent& ev, const slave::Simulation& sim, uint8_t player, bool playing);
+  void onEvent(const pioneer::SimEvent& ev, const pioneer::Simulation& sim, uint8_t player, bool playing);
   // An order given by the player: `infantry` and `vehicles` in it, where they are (tiles).
   void onOrder(bool attack, int infantry, int vehicles, float x, float y);
   // The battle is over for the player: a fanfare or a lament, then quiet music.
@@ -60,7 +60,7 @@ class GameAudio {
 
   // Once a frame. `menu`: the main menu is up (the battle behind it is muffled, the menu theme plays).
   // `overlay`: an in-game menu or pause. `speed`: game speed (sounds thin out when it is high).
-  void update(float dt, const slave::audio::Listener& ear, bool menu, bool overlay, bool paused, float speed,
+  void update(float dt, const pioneer::audio::Listener& ear, bool menu, bool overlay, bool paused, float speed,
               const AudioBeds& beds);
   // A fresh battle (new map, loaded game): calm music, no lingering fights.
   void newBattle();
@@ -76,12 +76,12 @@ class GameAudio {
  private:
   struct Cls {
     std::vector<int> sounds;
-    slave::audio::Bus bus = slave::audio::Bus::Sfx;
+    pioneer::audio::Bus bus = pioneer::audio::Bus::Sfx;
     float volume = 1, range = 12, reverb = 0.15f, pitch = 0.05f;
     int priority = 0, perSecond = 8, limit = 4;
     bool loop = false;
     std::deque<double> starts;
-    std::vector<slave::audio::VoiceId> voices;
+    std::vector<pioneer::audio::VoiceId> voices;
   };
   struct Track {
     std::string file, title;
@@ -91,17 +91,17 @@ class GameAudio {
   std::string resolve(const std::string& rel) const;
   Cls* cls(const std::string& name);
   void startMusic(MusicMood m, float fade);
-  void bed(slave::audio::VoiceId& v, const char* name, bool on, float volume, float x, float y, bool positional, float fade);
+  void bed(pioneer::audio::VoiceId& v, const char* name, bool on, float volume, float x, float y, bool positional, float fade);
   void addHeat(float x, float y, float weight);
 
-  std::unique_ptr<slave::audio::Mixer> mixer_;
-  slave::audio::AudioDevice device_;
+  std::unique_ptr<pioneer::audio::Mixer> mixer_;
+  pioneer::audio::AudioDevice device_;
   std::vector<std::string> dirs_;
   std::unordered_map<std::string, Cls> classes_;
   std::unordered_map<std::string, std::vector<Track>> playlists_;
   std::unordered_map<std::string, int> ambience_;  // biome id -> sound
   int battleBed_ = -1;
-  slave::audio::Listener ear_;
+  pioneer::audio::Listener ear_;
   double now_ = 0;
   std::mt19937 rng_{1940};
   float speed_ = 1.0f;
@@ -114,8 +114,8 @@ class GameAudio {
   std::string lastTrack_, nowPlaying_;
   float musicVolume_ = 1;
   double lastOrderSound_ = -10, lastWhistle_ = -10;
-  slave::audio::VoiceId ambienceVoice_ = 0, battleVoice_ = 0, tankVoice_ = 0, truckVoice_ = 0, marchVoice_ = 0, fireVoice_ = 0;
-  slave::Biome biome_ = slave::Biome::Temperate;
+  pioneer::audio::VoiceId ambienceVoice_ = 0, battleVoice_ = 0, tankVoice_ = 0, truckVoice_ = 0, marchVoice_ = 0, fireVoice_ = 0;
+  pioneer::Biome biome_ = pioneer::Biome::Temperate;
   int ambienceSound_ = -1;
   bool menu_ = false;
   bool scripted_ = false;       // a mission script holds the music

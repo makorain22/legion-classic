@@ -5,12 +5,12 @@
 
 #include <algorithm>
 
-#include "slave/map/map.hpp"
-#include "slave/map/map_io.hpp"
-#include "slave/sim/script.hpp"
-#include "slave/sim/simulation.hpp"
+#include "pioneer/map/map.hpp"
+#include "pioneer/map/map_io.hpp"
+#include "pioneer/sim/script.hpp"
+#include "pioneer/sim/simulation.hpp"
 
-using namespace slave;
+using namespace pioneer;
 
 namespace {
 struct Rules {

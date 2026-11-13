@@ -3,9 +3,9 @@
 #include <algorithm>
 #include <cmath>
 
-#include "slave/math/iso.hpp"
+#include "pioneer/math/iso.hpp"
 
-using namespace slave;
+using namespace pioneer;
 
 namespace legion {
 

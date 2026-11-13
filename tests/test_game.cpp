@@ -8,10 +8,10 @@
 
 #include <nlohmann/json.hpp>
 
-#include "slave/sim/savefile.hpp"
-#include "slave/sim/simulation.hpp"
+#include "pioneer/sim/savefile.hpp"
+#include "pioneer/sim/simulation.hpp"
 
-using namespace slave;
+using namespace pioneer;
 
 namespace {
 struct Rules {

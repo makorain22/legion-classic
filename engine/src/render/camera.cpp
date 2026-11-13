@@ -1,9 +1,9 @@
-#include "slave/render/camera.hpp"
+#include "pioneer/render/camera.hpp"
 
 #include <algorithm>
 #include <cmath>
 
-namespace slave {
+namespace pioneer {
 
 void Camera::pan(Vec2f screenDelta) {
   if (!threeD_) {
@@ -165,4 +165,4 @@ float Camera::pixelsPerTileAt(Vec3f w) const {
   return static_cast<float>(vh_) / (2.0f * std::tan(kFovY * 0.5f) * depth);
 }
 
-}  // namespace slave
+}  // namespace pioneer

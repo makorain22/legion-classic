@@ -1,9 +1,9 @@
-#include "slave/assets/voxel_mesh.hpp"
+#include "pioneer/assets/voxel_mesh.hpp"
 
 #include <algorithm>
 #include <cmath>
 
-namespace slave {
+namespace pioneer {
 
 namespace {
 
@@ -138,4 +138,4 @@ VoxelModel halveVoxels(const VoxelModel& m) {
   return out;
 }
 
-}  // namespace slave
+}  // namespace pioneer

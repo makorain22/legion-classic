@@ -1,4 +1,4 @@
-#include "slave/platform/app.hpp"
+#include "pioneer/platform/app.hpp"
 
 #include <algorithm>
 #include <utility>
@@ -8,11 +8,11 @@
 #include <imgui_impl_opengl3.h>
 #include <imgui_impl_sdl3.h>
 
-#include "slave/assets/image.hpp"
-#include "slave/core/log.hpp"
-#include "slave/render/gl.hpp"
+#include "pioneer/assets/image.hpp"
+#include "pioneer/core/log.hpp"
+#include "pioneer/render/gl.hpp"
 
-namespace slave {
+namespace pioneer {
 
 namespace {
 constexpr double kTickSeconds = 1.0 / 15.0;
@@ -49,7 +49,7 @@ bool App::init(const AppConfig& cfg) {
   cfg_ = cfg;
   if (cfg.offscreen) SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "offscreen");
   if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
-    SLV_ERROR("SDL_Init failed: %s", SDL_GetError());
+    PNR_ERROR("SDL_Init failed: %s", SDL_GetError());
     return false;
   }
 
@@ -82,12 +82,12 @@ bool App::init(const AppConfig& cfg) {
     window_ = nullptr;
   }
   if (!window_) {
-    SLV_ERROR("SDL_CreateWindow failed: %s", SDL_GetError());
+    PNR_ERROR("SDL_CreateWindow failed: %s", SDL_GetError());
     return false;
   }
   fullscreen_ = cfg.fullscreen;
   if (!gl_) {
-    SLV_ERROR("Could not create an OpenGL 3.3 context: %s", SDL_GetError());
+    PNR_ERROR("Could not create an OpenGL 3.3 context: %s", SDL_GetError());
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Legion Classic",
                              "Your graphics driver does not support OpenGL 3.3.\n"
                              "Please update your graphics driver.",
@@ -96,12 +96,12 @@ bool App::init(const AppConfig& cfg) {
   }
   SDL_GL_MakeCurrent(window_, gl_);
   if (!gladLoadGL(reinterpret_cast<GLADloadfunc>(SDL_GL_GetProcAddress))) {
-    SLV_ERROR("Failed to load OpenGL functions");
+    PNR_ERROR("Failed to load OpenGL functions");
     return false;
   }
   SDL_GL_SetSwapInterval(cfg.vsync && !cfg.offscreen ? 1 : 0);
   gl::installDebugOutput();
-  SLV_INFO("OpenGL %s | %s", reinterpret_cast<const char*>(glGetString(GL_VERSION)),
+  PNR_INFO("OpenGL %s | %s", reinterpret_cast<const char*>(glGetString(GL_VERSION)),
            reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
 
   IMGUI_CHECKVERSION();
@@ -140,8 +140,8 @@ bool App::startRecording(const std::string& path, int everyN, int fps) {
   rec_ = popen(cmd.c_str(), "w");
 #endif
   recEvery_ = std::max(1, everyN);
-  if (rec_) SLV_INFO("Recording to %s", path.c_str());
-  else SLV_ERROR("Could not start ffmpeg for %s", path.c_str());
+  if (rec_) PNR_INFO("Recording to %s", path.c_str());
+  else PNR_ERROR("Could not start ffmpeg for %s", path.c_str());
   return rec_ != nullptr;
 }
 
@@ -153,7 +153,7 @@ void App::stopRecording() {
   pclose(rec_);
 #endif
   rec_ = nullptr;
-  SLV_INFO("Recording finished");
+  PNR_INFO("Recording finished");
 }
 
 bool App::saveScreenshot(const std::string& path) const {
@@ -165,8 +165,8 @@ bool App::saveScreenshot(const std::string& path) const {
     for (int x = 0; x < pw_; ++x) std::swap(img.at(x, y), img.at(x, ph_ - 1 - y));
   for (auto& p : img.px) p.a = 255;
   const bool ok = img.savePng(path);
-  if (ok) SLV_INFO("Screenshot saved: %s", path.c_str());
-  else SLV_ERROR("Could not save screenshot: %s", path.c_str());
+  if (ok) PNR_INFO("Screenshot saved: %s", path.c_str());
+  else PNR_ERROR("Could not save screenshot: %s", path.c_str());
   return ok;
 }
 
@@ -281,4 +281,4 @@ void App::shutdown() {
   SDL_Quit();
 }
 
-}  // namespace slave
+}  // namespace pioneer

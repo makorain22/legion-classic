@@ -8,10 +8,10 @@
 
 #include <nlohmann/json.hpp>
 
-#include "slave/core/content.hpp"
-#include "slave/sim/simulation.hpp"
+#include "pioneer/core/content.hpp"
+#include "pioneer/sim/simulation.hpp"
 
-using namespace slave;
+using namespace pioneer;
 using nlohmann::json;
 namespace fs = std::filesystem;
 

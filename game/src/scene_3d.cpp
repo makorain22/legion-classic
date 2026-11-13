@@ -8,15 +8,15 @@
 #include <cmath>
 #include <cstdlib>
 
-#include "slave/core/log.hpp"
+#include "pioneer/core/log.hpp"
 
 #include "editor.hpp"
 #include "game_scene.hpp"
-#include "slave/core/rng.hpp"
-#include "slave/math/iso.hpp"
-#include "slave/render/rock_faces.hpp"
+#include "pioneer/core/rng.hpp"
+#include "pioneer/math/iso.hpp"
+#include "pioneer/render/rock_faces.hpp"
 
-using namespace slave;
+using namespace pioneer;
 
 namespace legion {
 
@@ -396,7 +396,7 @@ void GameScene::render3D() {
 
   meshes_.draw(cam_, shadows ? &shadow_ : nullptr);
   if (std::getenv("LEGION_STATS3D") && frame_ % 30 == 0)
-    SLV_INFO("3D: %zu models drawn, %.0fk triangles, %zu meshes, zoom %.2f", meshes_.instancesLastFrame(),
+    PNR_INFO("3D: %zu models drawn, %.0fk triangles, %zu meshes, zoom %.2f", meshes_.instancesLastFrame(),
              meshes_.trianglesLastFrame() / 1000.0, meshes_.meshCount(), cam_.zoom());
   terrain_.drawWater3D(cam_, time_);
 

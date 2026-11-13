@@ -1,4 +1,4 @@
-// Slave Engine - scouts keep their distance (Milestone 9.3).
+// Pioneer Engine - scouts keep their distance (Milestone 9.3).
 //
 // A scout that is standing watch (no orders of its own) and sees an armed
 // enemy come within kThreat falls back kFallBack tiles straight away from it,
@@ -8,9 +8,9 @@
 
 #include <algorithm>
 
-#include "slave/sim/simulation.hpp"
+#include "pioneer/sim/simulation.hpp"
 
-namespace slave {
+namespace pioneer {
 
 namespace {
 constexpr int32_t kThreat = 6 * LEPTONS_PER_TILE;
@@ -69,4 +69,4 @@ void Simulation::stepScouts() {
   }
 }
 
-}  // namespace slave
+}  // namespace pioneer

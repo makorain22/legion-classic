@@ -1,9 +1,9 @@
-#include "slave/sim/simulation.hpp"
+#include "pioneer/sim/simulation.hpp"
 
 #include <algorithm>
 #include <chrono>
 
-namespace slave {
+namespace pioneer {
 
 Simulation::Simulation(Map& map, const UnitTypeRegistry& types, const WeaponRegistry& weapons, uint64_t seed)
     : map_(map), types_(types), weapons_(weapons), rng_(seed), pathfinder_(map) {
@@ -448,4 +448,4 @@ uint64_t Simulation::stateHash() {
   return h;
 }
 
-}  // namespace slave
+}  // namespace pioneer

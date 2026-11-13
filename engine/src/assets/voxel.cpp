@@ -1,10 +1,10 @@
-#include "slave/assets/voxel.hpp"
+#include "pioneer/assets/voxel.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
 
-namespace slave {
+namespace pioneer {
 
 void VoxelModel::ellipsoid(float cx, float cy, float cz, float rx, float ry, float rz, uint8_t c) {
   for (int z = 0; z < sz_; ++z)
@@ -307,9 +307,9 @@ BakedSprite bakeVoxels(const VoxelModel& model, const VoxelPalette& pal, const B
   return out;
 }
 
-}  // namespace slave
+}  // namespace pioneer
 
-namespace slave {
+namespace pioneer {
 
 VoxelSourcePtr VoxelSourceCache::get(const VoxelModel& model, const VoxelPalette& pal, const BakeOptions& opt) {
   auto same = [&](const VoxelSource& s) {
@@ -344,4 +344,4 @@ VoxelSourcePtr VoxelSourceCache::get(const VoxelModel& model, const VoxelPalette
   return s;
 }
 
-}  // namespace slave
+}  // namespace pioneer

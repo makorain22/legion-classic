@@ -1,5 +1,5 @@
 #pragma once
-// Slave Editor - undo / redo.
+// Pioneer Editor - undo / redo.
 //
 // Terrain changes are recorded per 32 x 32-tile chunk: the first time a stroke
 // touches a chunk, that chunk's heights and ground layers are copied. Undo and
@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-#include "slave/map/map.hpp"
+#include "pioneer/map/map.hpp"
 
 namespace legion {
 
@@ -35,10 +35,10 @@ class History {
 
   void begin(const std::string& label);
   // Call before modifying anything inside tiles [tx0..tx1] x [ty0..ty1].
-  void touchTerrain(const slave::Map& map, int tx0, int ty0, int tx1, int ty1);
-  void touchProps(const slave::Map& map);
-  void touchWater(const slave::Map& map);
-  void touchOil(const slave::Map& map);
+  void touchTerrain(const pioneer::Map& map, int tx0, int ty0, int tx1, int ty1);
+  void touchProps(const pioneer::Map& map);
+  void touchWater(const pioneer::Map& map);
+  void touchOil(const pioneer::Map& map);
   void end();  // commits the step (dropped if nothing was touched)
   // Commits a step holding just an action (already done by the caller).
   void push(const std::string& label, std::shared_ptr<Action> action);
@@ -48,8 +48,8 @@ class History {
   bool canRedo() const { return !redo_.empty(); }
   const std::string& undoLabel() const { return undo_.back().label; }
   const std::string& redoLabel() const { return redo_.back().label; }
-  Region undo(slave::Map& map);
-  Region redo(slave::Map& map);
+  Region undo(pioneer::Map& map);
+  Region redo(pioneer::Map& map);
   void clear();
   size_t memoryBytes() const;
 
@@ -63,15 +63,15 @@ class History {
     std::string label;
     std::vector<ChunkCopy> chunks;
     bool hasProps = false;
-    std::vector<slave::Prop> props;
+    std::vector<pioneer::Prop> props;
     bool hasWater = false;
     uint16_t water = 0;
     bool hasOil = false;
     std::vector<uint8_t> oil;
     std::shared_ptr<Action> action;
   };
-  static void swapChunk(slave::Map& map, ChunkCopy& c);
-  static Region swapStep(slave::Map& map, Step& s, bool undo);
+  static void swapChunk(pioneer::Map& map, ChunkCopy& c);
+  static Region swapStep(pioneer::Map& map, Step& s, bool undo);
 
   bool recording_ = false;
   Step current_;

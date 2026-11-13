@@ -1,5 +1,5 @@
 #pragma once
-// Slave Engine - shared pieces of the procedural art: the voxel palette, the
+// Pioneer Engine - shared pieces of the procedural art: the voxel palette, the
 // faction looks, noise, a small modelling toolkit for vehicles, soldiers and
 // props, and a parallel bake queue.
 //
@@ -10,11 +10,11 @@
 #include <string>
 #include <vector>
 
-#include "slave/assets/atlas.hpp"
-#include "slave/assets/placeholder_art.hpp"
-#include "slave/assets/voxel.hpp"
+#include "pioneer/assets/atlas.hpp"
+#include "pioneer/assets/placeholder_art.hpp"
+#include "pioneer/assets/voxel.hpp"
 
-namespace slave::art {
+namespace pioneer::art {
 
 // ---------------------------------------------------------------------------
 // Voxel palette. Faction colours (BASE*, CAMO*, UNIFORM*, HELMET) change per
@@ -273,4 +273,4 @@ VoxelModel makeBridgeSpan(int mask, bool wood);
 // The detailed vehicles and soldiers (unit_models.cpp).
 void addUnitModels(BakeQueue& q, SpriteCatalog& cat);
 
-}  // namespace slave::art
+}  // namespace pioneer::art

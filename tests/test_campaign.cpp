@@ -9,11 +9,11 @@
 
 #include "campaign.hpp"
 #include "mission_battle.hpp"
-#include "slave/map/map_io.hpp"
-#include "slave/sim/script.hpp"
-#include "slave/sim/simulation.hpp"
+#include "pioneer/map/map_io.hpp"
+#include "pioneer/sim/script.hpp"
+#include "pioneer/sim/simulation.hpp"
 
-using namespace slave;
+using namespace pioneer;
 using namespace legion;
 
 namespace {

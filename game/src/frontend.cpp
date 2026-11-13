@@ -12,11 +12,11 @@
 #include "editor.hpp"
 #include "game_scene.hpp"
 #include "menus.hpp"
-#include "slave/core/log.hpp"
-#include "slave/math/iso.hpp"
-#include "slave/sim/factions.hpp"
+#include "pioneer/core/log.hpp"
+#include "pioneer/math/iso.hpp"
+#include "pioneer/sim/factions.hpp"
 
-using namespace slave;
+using namespace pioneer;
 
 namespace legion {
 
@@ -139,7 +139,7 @@ void GameScene::startSkirmish(const SkirmishSetup& s) {
   if (!s.mapFile.empty()) {
     std::string err;
     if (loadMap(s.mapFile, f, err)) readyMade = true;
-    else SLV_WARN("Skirmish map %s: %s - making a random one instead", s.mapFile.c_str(), err.c_str());
+    else PNR_WARN("Skirmish map %s: %s - making a random one instead", s.mapFile.c_str(), err.c_str());
   }
   if (!readyMade) {
     f = MapFile{};
@@ -161,7 +161,7 @@ void GameScene::startSkirmish(const SkirmishSetup& s) {
     p.difficulty = static_cast<uint8_t>(side.difficulty);
     p.credits = s.credits;
     static const char* aiNames[3] = {"easy", "normal", "hard"};
-    p.name = std::string(slave::factionName(side.faction)) +
+    p.name = std::string(pioneer::factionName(side.faction)) +
              (side.human ? "" : std::string(" (computer, ") + aiNames[std::clamp(side.difficulty, 0, 2)] + ")");
     f.players[static_cast<size_t>(i)] = p;
     if (side.open) ++slot;
@@ -307,7 +307,7 @@ void GameScene::startAttract() {
 void GameScene::loadCampaigns() {
   std::string warn;
   campaigns_ = scanCampaigns(content_.all("campaigns/"), warn);
-  if (!warn.empty()) SLV_WARN("%s", warn.c_str());
+  if (!warn.empty()) PNR_WARN("%s", warn.c_str());
   progress_.load(app_.userDir() + "progress.json");
 }
 
@@ -502,7 +502,7 @@ bool GameScene::saveReplay(const std::string& path, std::string& error) {
 void GameScene::autosaveReplay() {
   if (mode_ != Mode::Game || !sim_ || !replayValid_ || sim_->tickCount() < TICKS_PER_SECOND * 30) return;
   std::string err;
-  if (!saveReplay(replaysDir_ + "last_game.lrep", err)) SLV_WARN("Couldn't keep the replay: %s", err.c_str());
+  if (!saveReplay(replaysDir_ + "last_game.lrep", err)) PNR_WARN("Couldn't keep the replay: %s", err.c_str());
 }
 
 bool GameScene::playReplay(const std::string& path, std::string& error) {

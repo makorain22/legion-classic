@@ -7,9 +7,9 @@
 
 #include "editor.hpp"
 #include "game_scene.hpp"
-#include "slave/core/log.hpp"
+#include "pioneer/core/log.hpp"
 
-using namespace slave;
+using namespace pioneer;
 
 namespace legion {
 
@@ -50,7 +50,7 @@ void GameScene::runEditorSelfTest() {
   auto count = [&]() { return static_cast<int>(reg.pool<CUnit>().size()); };
   auto check = [&](bool ok, const char* what) {
     if (!ok) ++selfTestFailures_;
-    SLV_INFO("EDITOR SELFTEST %s: %s (units %d)", ok ? "ok  " : "FAIL", what, count());
+    PNR_INFO("EDITOR SELFTEST %s: %s (units %d)", ok ? "ok  " : "FAIL", what, count());
   };
   auto selectAll = [&]() {
     selection_.clear();
@@ -156,7 +156,7 @@ void GameScene::runEditorSelfTest() {
     case 13: check(count() == placed, "redo the placement once more"); restoreSnapshot(); break;
     case 14:
       check(count() == 0, "restore the empty snapshot");
-      SLV_INFO("EDITOR SELFTEST %s (%d failures)", selfTestFailures_ ? "FAILED" : "PASSED", selfTestFailures_);
+      PNR_INFO("EDITOR SELFTEST %s (%d failures)", selfTestFailures_ ? "FAILED" : "PASSED", selfTestFailures_);
       quit_ = true;
       break;
     default: break;
@@ -321,7 +321,7 @@ void GameScene::runEconomyDemo() {
 void GameScene::runFlowSelfTest() {
   auto check = [&](bool ok, const char* what) {
     if (!ok) ++selfTestFailures_;
-    SLV_INFO("FLOW SELFTEST %s: %s", ok ? "ok  " : "FAIL", what);
+    PNR_INFO("FLOW SELFTEST %s: %s", ok ? "ok  " : "FAIL", what);
   };
   std::string err;
   if (frame_ == 20) {
@@ -348,7 +348,7 @@ void GameScene::runFlowSelfTest() {
   }
   if (frame_ > 402 && mode_ == Mode::Replay && sim_->tickCount() >= replayEnd_ && flowHash_ != 0) {
     check(sim_->stateHash() == flowHash_, "the replay ends exactly where the game was saved");
-    SLV_INFO("FLOW SELFTEST %s (%d failures)", selfTestFailures_ ? "FAILED" : "PASSED", selfTestFailures_);
+    PNR_INFO("FLOW SELFTEST %s (%d failures)", selfTestFailures_ ? "FAILED" : "PASSED", selfTestFailures_);
     flowHash_ = 0;
     quit_ = true;
   }
