@@ -18,7 +18,10 @@ bool polders(Builder& b, const std::string& out) {
               "September 1947. Between the rivers lies the Betuwe, land below the water. The Reich has opened the sluices; the "
               "Wessex Rifles must advance along the dykes and take the pumping stations to drain the way forward.", false);
   b.flatten(0, 0, 287, 159);
-  b.water();
+  // The water stands just under the land, held off by the dykes: flooded, the
+  // polders sink only a man's waist deep (not into canyons).
+  b.file.map.setWaterLevel(static_cast<uint16_t>(b.ground(0, 0) - 8));
+  b.finishTerrain();
   // The dykes: three along the polder, one across it; the roads run on top.
   for (int y : {40, 80, 120}) b.road({{0, y}, {287, y}}, 3);
   b.road({{144, 0}, {144, 159}}, 3);

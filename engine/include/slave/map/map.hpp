@@ -200,7 +200,7 @@ class Map {
   // them back. Both return the corners changed and note a height edit.
   int flood(int x0, int y0, int x1, int y1);
   int drain(int x0, int y0, int x1, int y1);
-  static constexpr int kFloodDepth = 8;  // height units under the water
+  static constexpr int kFloodDepth = 11;  // height units under the water: as deep as men can wade (12)
   const std::vector<std::pair<uint32_t, uint16_t>>& floodMemory() const { return floodMemory_; }
   void setFloodMemory(std::vector<std::pair<uint32_t, uint16_t>> m) { floodMemory_ = std::move(m); }
   // --- Supply points ---------------------------------------------------------------
