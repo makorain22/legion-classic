@@ -115,6 +115,34 @@ TEST_CASE("campaign progress: missions open in order, flags carry over, and it s
   CHECK(lines.back().kind == BriefingLine::Quote);
 }
 
+TEST_CASE("wins of missions renumbered when their campaign grew still count") {
+  const std::string path = (std::filesystem::temp_directory_path() / "legion_progress_renamed.json").string();
+  {
+    std::ofstream f(path);
+    f << R"({"campaigns": {"rus": {"won": ["r1", "r2"]}, "gbr": {"won": ["b1"]}, "ger": {"won": ["g2"]}}})";
+  }
+  CampaignProgress p;
+  REQUIRE(p.load(path));
+  CHECK(p.won("rus", "r01"));
+  CHECK(p.won("rus", "r02"));
+  CHECK_FALSE(p.won("rus", "r1"));
+  CHECK(p.won("gbr", "b06"));
+  CHECK(p.won("ger", "g10"));
+  std::filesystem::remove(path);
+}
+
+TEST_CASE("Soviet flags reach later missions: Adler comes to the Elbe only if he was taken") {
+  Rules R;
+  for (bool taken : {false, true}) {
+    Battle b(R);
+    std::map<std::string, int32_t> flags;
+    if (taken) flags["adler_captured"] = 1;
+    REQUIRE(b.load(kContent + "campaigns/rus/r25_elbe.lmap", flags));
+    for (int i = 0; i < 15 * 3; ++i) b.sim->tick();
+    CHECK(b.sim->named("Adler").size() == (taken ? 1u : 0u));
+  }
+}
+
 TEST_CASE("flags from earlier missions reach the later ones") {
   Rules R;
   for (bool tiger : {false, true}) {

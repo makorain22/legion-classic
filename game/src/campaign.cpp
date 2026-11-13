@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <sstream>
 
 #include <nlohmann/json.hpp>
@@ -69,9 +70,24 @@ bool CampaignProgress::load(const std::string& path) {
   done.clear();
   flags.clear();
   const nlohmann::json campaigns = j.value("campaigns", nlohmann::json::object());
+  // Missions renumbered when their campaign grew (9.10-9.12): an old win counts
+  // for the mission it became.
+  static const std::map<std::string, std::map<std::string, std::string>> kRenamed = {
+      {"ger", {{"g1", "g09"}, {"g2", "g10"}, {"g3", "g12"}}},
+      {"rus", {{"r1", "r01"}, {"r2", "r02"}, {"r3", "r10"}}},
+      {"gbr", {{"b1", "b06"}, {"b2", "b07"}, {"b3", "b18"}}},
+  };
   for (const auto& [id, c] : campaigns.items()) {
+    const auto renames = kRenamed.find(id);
     for (const auto& m : c.value("won", nlohmann::json::array()))
-      if (m.is_string()) done[id].insert(m.get<std::string>());
+      if (m.is_string()) {
+        std::string mid = m.get<std::string>();
+        if (renames != kRenamed.end()) {
+          const auto r = renames->second.find(mid);
+          if (r != renames->second.end()) mid = r->second;
+        }
+        done[id].insert(mid);
+      }
     const nlohmann::json f = c.value("flags", nlohmann::json::object());
     for (const auto& [k, v] : f.items())
       if (v.is_number_integer()) flags[id][k] = v.get<int32_t>();
