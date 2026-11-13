@@ -10,8 +10,8 @@ battle and change anything, the rules included.
 
 ![A German and a Soviet force meet on a river crossing](docs/images/battle.jpg)
 
-> **Status: in development (0.9.1).** Milestones 1–9 and 9.1–9.10 are done: three armies,
-> skirmish against the computer, a tutorial, a 25-mission German campaign and two short ones, sound
+> **Status: in development (0.9.1).** Milestones 1–9 and 9.1–9.12 are done: three armies,
+> skirmish against the computer, a tutorial, three campaigns of 25 missions each, sound
 > and an orchestral score, the Live Scenario Editor, the tools for making
 > mods, a real 3D battlefield with a free camera, terrain with cliffs and
 > bridges, intel instead of fog, armour and artillery on a new scale,
@@ -19,8 +19,8 @@ battle and change anything, the rules included.
 > logistics points and convoys, and a computer player that fights in bound
 > battle groups and raids every enemy, and compact villages and towns of
 > houses built wall to wall, and a mission engine for scripted stories
-> (radio, cinematics, set pieces, clocks, a battlefield that opens up). Next: the Soviet
-> and British campaigns and big scenarios in small milestones; tuning
+> (radio, cinematics, set pieces, clocks, a battlefield that opens up), river
+> ice, floods and coasts. Next: big scenarios; tuning
 > and debugging always come last. The game is built together
 > with Claude (Anthropic's AI); see [How it is made](#how-it-is-made).
 
@@ -30,9 +30,11 @@ battle and change anything, the rules included.
   roster: riflemen, MG and anti-tank teams, snipers, engineers, scout cars,
   half-tracks and carriers, light, medium and heavy tanks, tank destroyers,
   howitzers, rocket trucks and self-propelled guns.
-- **A tutorial and three campaigns.** Four lessons to learn the game, then
-  three missions each for Germany, the Soviet Union and Britain, with
-  briefings, and what you achieve carrying over from mission to mission.
+- **A tutorial and three campaigns of 25 missions each.** Four lessons to
+  learn the game, then Germany's *The Long Road Home*, Britain's *Hold Fast*
+  (the same war, from the other side of the Channel) and the Soviet Union's
+  *The Road West* (a what-if), with briefings, radio, set pieces, and what you
+  achieve carrying over from mission to mission.
 - **Sound that follows the camera, and an orchestral score.** A fight on
   screen is loud and sharp; one across the map is a distant rumble. Nine
   pieces of music, written for the game, follow the fighting near you.

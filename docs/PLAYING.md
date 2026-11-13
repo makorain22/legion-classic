@@ -21,11 +21,18 @@ players on a random map.
 - **Tutorial: Basic Training.** New to the game? Start here: four short
   lessons (giving orders, cover and armour, digging in, building a base).
   Hints appear at the top of the screen and the button you need glows.
-- **Campaigns.** Germany's *The Long Road Home* is the main story: 25
-  missions in five acts, from the failed coup of July 1944 to the fall of the
-  regency in Berlin in 1948, fought by four formations in turn. The Soviet
-  Union (*Guards Rifle Corps*) and Britain (*The Desert Rats*) have three
-  missions each for now. Read the briefing, then Begin. Missions open one
+- **Campaigns.** Three campaigns of 25 missions each, five acts apiece, four
+  formations taking turns:
+  - **Germany, *The Long Road Home*** (the main story): from the failed coup of
+    July 1944 to the fall of the regency in Berlin in 1948.
+  - **Britain, *Hold Fast*** (the same war): the cities of the Low Countries
+    held at a terrible price, Libya beside Sonnenberg's Germans, Norway and
+    Denmark, then over the border with allies to the armistice on Lüneburg
+    Heath. Several missions show a German one from the other side.
+  - **The Soviet Union, *The Road West*** (a what-if): the ring at Morozovsk
+    holds, the coalition's army group surrenders, and the Red Army drives
+    across the Dnieper, through Poland and over the Oder to Berlin and the Elbe.
+  Read the briefing, then Begin. Missions open one
   after another, and what you achieve in one can help in a later one (a tank
   that survives comes back, men you save fight again, a bridge you take
   brings more allies).
@@ -445,6 +452,10 @@ guns and towers are built and placed like other structures.
 - **Spotting.** Tanks see about 8 tiles, less than their gun range; scout cars
   see 44–48. Every unit shoots at whatever its side (and its allies) can see,
   so put scouts forward to let the tanks fire at full range.
+- **Ice and floods.** Frozen rivers carry men (at 70%) and lorries (60%) but
+  not tanks. Heavy shells and rocket salvoes break the ice where they land,
+  and whoever stands there goes under. Flooded land is waist deep: men wade
+  it at half pace, vehicles can't cross it until it is pumped dry.
 - **Range circles.** Selected units, and the unit under the mouse, show a
   circle on the ground: how far their guns reach (green yours, blue allies,
   red enemies in sight). Scouts add a dotted circle for how far they see. A
@@ -681,7 +692,7 @@ save, load and replay exactly.
   sides defeated, their supplies, kills, losses and alliances. Any condition
   can be negated ("not"), and a trigger can fire on **any one** of its
   conditions instead of all of them.
-- **Actions** (62): messages, radio messages, objectives (marked on the map),
+- **Actions** (66): messages, radio messages, objectives (marked on the map),
   victory and defeat; cinematic letterbox, camera cuts and glides, markers,
   sounds and music; spawning units (also named, by difficulty, or as many as
   a campaign flag says), moving, patrolling, garrisoning, binding, damaging,
@@ -689,8 +700,9 @@ save, load and replay exactly.
   from the computer, never targeted, locked from orders); telling a computer
   player to attack or defend a place and what it may do (build, train,
   attack, raid, capture, fortify, scout, repair) and how big its attacks are;
-  alliances made and broken; the play area; artillery barrages; logistics
-  points; income; clocks, counters and flags; firing and resetting triggers.
+  alliances made and broken; the play area; artillery barrages; freezing
+  water and breaking the ice; flooding and draining land; logistics points;
+  income; clocks, counters and flags; firing and resetting triggers.
   The full list is in docs/MODDING.md.
 - **Ready-made triggers** on the Quick start page include a set piece
   (unkillable until released), a held position with a clock, a cinematic

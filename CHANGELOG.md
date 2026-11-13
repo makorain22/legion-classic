@@ -8,6 +8,29 @@
   their sight; a defensive building being placed shows its reach. **T**
   cycles selection / every unit in view / off (Settings > Game).
 - **Scouts see twice as far again:** scout cars 48 tiles (Russia 44).
+- **Milestone 9.11, the Soviet campaign *The Road West*** (13 Nov): 25
+  missions in five acts, a what-if that splits from *The Long Road Home* at
+  the Morozovsk pocket: the ring holds, the coalition's army group
+  surrenders, and the Red Army goes on over the Dnieper, through Poland (here
+  it comes to Warsaw's rising) and over the Oder to Berlin, ending with the
+  meeting on the Elbe. Four formations, briefings, carry-over flags; a bot
+  plays all 25 to victory in the tests. Old Soviet missions 1-3 became 1, 2
+  and 10, and a win of an old mission counts for the new one.
+- **River ice:** frozen water carries men and lorries but not tanks; heavy
+  shells and rocket salvoes break it, drowning whoever stands there. Script
+  actions *Freeze water* and *Break the ice*.
+- **Milestone 9.12, the British campaign *Hold Fast*** (13 Nov): 25 missions
+  in five acts on the German campaign's timeline: Antwerp, Nijmegen,
+  Walcheren and the cities held in 1944-45; the desert beside Sonnenberg;
+  Narvik, Trondheim, Esbjerg and the Danish rising; the polders, Arnhem,
+  Hellenthal, Rotterdam and the Reichswald; the Rhine, the Ruhr, the Elbe
+  bridges, Hamburg and Lüneburg Heath. Old British missions 1-3 became 6, 7
+  and 18.
+- **Floods and coasts:** script actions *Flood the land* and *Drain the land*
+  (waist deep: men wade, vehicles can't cross); missions can have a coastline
+  with beaches. New landmarks: brick fort, landing craft, harbour crane,
+  U-boat pen, coastal casemate (it has to be taken), pumping station,
+  lighthouse.
 
 - **Fixed a crash** in skirmish (seen in a 1v1v1 at high game speed, and
   probably the old "2v2 crash after five minutes"): a man killed inside a

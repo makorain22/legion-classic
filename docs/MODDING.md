@@ -154,6 +154,8 @@ side, area and unit type**.
 | `set_play_area` | the battle is confined to `area` (-1: the whole map) for `player`: orders, building and the camera stay inside, the rest of the ground is dimmed. Grow it as the operation develops |
 | `reveal_area` | `player` sees `area` for good |
 | `barrage` | `value` shells of weapon `text` (default `howitzer_105`) on `area`, fired by `player` |
+| `freeze_water` / `break_ice` | the water in `area` freezes (men and wheels cross it, tracks can't) / the ice in `area` breaks and whatever stands on it goes under |
+| `flood_area` / `drain_area` | the land in `area` floods, waist deep (men wade it, vehicles can't cross it) / is pumped dry again to its old height |
 | `add_logistics_point` | a new logistics point in the middle of `area` (an airdrop, a depot found) |
 | `give_supplies` / `set_income_rate` | supplies to `player` / its income at `value` percent |
 | `lock_build` / `unlock_build` | `player` can't / can build `unit` (any: everything) |

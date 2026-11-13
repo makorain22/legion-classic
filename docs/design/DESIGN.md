@@ -299,10 +299,35 @@ recognition flash on vehicles and a roundel in the interface.
      a bot plays all 25 to victory; tests/mission_battle.hpp shared with
      test_campaign.cpp). Deferred: coalition markings on the models (team
      colour tells the sides apart for now).
-   - **9.11 Campaign: Soviet Union** (next) – the alternate canon.
-   - **9.12 Campaign: Britain** – canon, on the Germany campaign's timeline, a
-     little more defensive; its later stages on a second front (the Low
-     Countries or the north). An American campaign later.
+   - **9.11 Campaign: Soviet Union** (done 13 Nov) – *The Road West*, 25
+     missions in five acts (The Guards, The Ring on the Don, The Dnieper,
+     Through Poland, Berlin), a what-if that splits from the canon at the
+     Morozovsk pocket (Feb 1947): the ring holds, Adler is taken, the Red Army
+     reaches Berlin first and meets the West on the Elbe. Formations: 5th Guards
+     Rifle Division (Gromov), 17th Guards Tank Brigade (Zharkov), partisan
+     brigade "Za Rodinu" (Orlova), 61st Assault Engineer Brigade (Nazarov).
+     Engine: river ice (`Map::setIce`, saved in .lmap; foot 70%, wheels 60%,
+     tracks barred; shells with splash >= 1 tile break it and drown what
+     stands there; actions freeze_water, break_ice); the brick fort landmark.
+     tools/campaign_rus.hpp + campaign_rus_act1..5.cpp. Flags: guards_tanks,
+     bryansk_partisans, chir_crossing, ice_road_cut, adler_captured,
+     relief_stopped, kirovsk_guns, mius_breach, dam_saved, pripet_paths,
+     vistula_held, rising_saved, narew_tanks, posen_guns, oder_bridgehead,
+     free_germans. Old r1-r3 rebuilt as r01, r02, r10 (progress carries over).
+   - **9.12 Campaign: Britain** (done 13 Nov) – *Hold Fast*, 25 missions in five
+     acts (Holding the Cities, The Desert, The North, Back to the Low
+     Countries, Over the Border), canon, defensive; links to g05, g06, g08,
+     g16, g19, g22, g24. Formations: 2nd Bn Wessex Rifles (Kerr), 7th Armoured
+     Brigade (Ashworth), No. 15 Commando (Munro), SOE (Holloway). Engine:
+     flooding (`Map::flood/drain`, depth 11, old heights kept in .lmap;
+     actions flood_area, drain_area); coasts (`Builder::sea`, sand beaches);
+     landmarks: landing craft, harbour crane, U-boat pen, coastal casemate,
+     pumping station, lighthouse. tools/campaign_gbr.hpp +
+     campaign_gbr_act1..5.cpp. Flags: antwerp_docks, nijmegen_bridge,
+     walcheren_guns, ridge_guns, lantern, sonnenberg_friends, narvik_ore,
+     danish_rising, arnhem_bridge, rotterdam_port. Old b1-b3 rebuilt as b06,
+     b07, b18. An American campaign later.
+   - Also 13 Nov: range circles for every unit (T), scouts see 44-48 tiles.
    - **9.13 Big scenarios** – large stand-alone battles inspired by great
      battles and long operations, with many units.
    - **9.14 Tuning and debugging** – always last: playtest, balance the armies
