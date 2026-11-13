@@ -783,8 +783,10 @@ int main(int argc, char** argv) {
   // The Germany campaign, act by act ("ger" builds all five, "ger3" only Act III).
   const std::string gerDir = content + "campaigns/ger/";
   bool (*acts[5])(Builder&, const std::string&) = {&gerAct1, &gerAct2, &gerAct3, &gerAct4, &gerAct5};
+  b.clearPropsInRivers = false;  // Germany's maps as they were approved (9.10)
   for (int i = 0; i < 5; ++i)
     if (want("campaigns") || want("ger") || want("ger" + std::to_string(i + 1))) ok = acts[i](b, gerDir) && ok;
+  b.clearPropsInRivers = true;
   // The Soviet campaign (9.11), the same way ("rus", "rus1".."rus5").
   const std::string rusDir = content + "campaigns/rus/";
   bool (*rusActs[5])(Builder&, const std::string&) = {&rusAct1, &rusAct2, &rusAct3, &rusAct4, &rusAct5};

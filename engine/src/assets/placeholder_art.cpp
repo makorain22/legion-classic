@@ -722,26 +722,19 @@ Image makeTrenchDecal(int mask) {
   });
 }
 
-// River ice (9.11): grey-white sheet with snow drifts and dark cracks. Whole
-// tile, nearly opaque, so the frozen river reads as one surface.
+// River ice (9.11). Variant 0 is the sheet itself, one flat grey-white
+// diamond (the classic view lays it tile by tile; the 3D view draws solid
+// quads instead). Variants 1-3 are patches laid over it: drifts of snow and
+// dark cracks, transparent elsewhere, so there are no seams to show.
 Image makeIceDecal(int variant) {
-  return tileDecal([&](float u, float v, int x, int y) -> Rgba {
-    const uint32_t sd = 1300u + static_cast<uint32_t>(variant) * 17u;
-    const float n = fbm2(u * 5.0f + variant * 3.1f, v * 5.0f, sd);
-    const float drift = fbm2(u * 2.2f, v * 2.2f + variant, sd + 5);
-    // Cracks: thin dark lines where a ridged noise crosses its middle.
-    const float c = std::abs(fbm2(u * 7.0f, v * 7.0f, sd + 9) - 0.5f);
-    float k = 0.86f + (n - 0.5f) * 0.18f;
-    Rgba col{u8(196 * k), u8(212 * k), u8(222 * k), 236};
-    if (drift > 0.58f) {  // snow lying on the ice
-      const float w = std::min(1.0f, (drift - 0.58f) * 6.0f);
-      col = {u8(col.r + (236 - col.r) * w), u8(col.g + (240 - col.g) * w), u8(col.b + (244 - col.b) * w), 240};
-    } else if (c < 0.018f) {
-      col = {u8(120 * k), u8(140 * k), u8(156 * k), 240};
-    }
-    (void)x;
-    (void)y;
-    return col;
+  if (variant == 0) return tileDecal([&](float, float, int, int) -> Rgba { return {198, 212, 220, 255}; });
+  const uint32_t sd = 1300u + static_cast<uint32_t>(variant) * 17u;
+  return tileDecal([&](float u, float v, int, int) -> Rgba {
+    const float du = u - 0.5f, dv = v - 0.5f;
+    const float r = std::sqrt(du * du + dv * dv) * 2.0f;  // 0 at the middle, 1 at the edges' midpoints
+    const float n = fbm2(u * 2.5f + variant * 1.7f, v * 2.5f, sd + 5);
+    const float a = std::clamp((0.75f - r) * 3.0f + (n - 0.5f) * 1.6f, 0.0f, 1.0f);
+    return {230, 236, 241, u8(a * 120)};
   });
 }
 

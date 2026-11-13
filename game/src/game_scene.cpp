@@ -2143,7 +2143,9 @@ void GameScene::drawGroundLayer(const RectF& view) {
     for (int tx = tx0; tx <= tx1; ++tx) {
       if (!map_.iced(tx, ty)) continue;
       const Vec2f s = project(tx * 256.0f + 128, ty * 256.0f + 128, map_.waterLevel());
-      if (view.contains(s)) renderer_.sprite(art_.ice[hash2(tx, ty, 11) & 3], s.x, s.y, kWhite, kWhite);
+      if (!view.contains(s)) continue;
+      renderer_.sprite(art_.ice[0], s.x, s.y, kWhite, kWhite);
+      if (hash2(tx, ty, 11) % 4 == 0) renderer_.sprite(art_.ice[1 + hash2(tx, ty, 13) % 3], s.x, s.y, kWhite, kWhite);
     }
   for (int ty = ty0; ty <= ty1; ++ty)
     for (int tx = tx0; tx <= tx1; ++tx) {

@@ -261,10 +261,20 @@ void GameScene::drawIce3D() {
   tx1 = std::min(map_.width() - 1, tx1);
   ty1 = std::min(map_.height() - 1, ty1);
   const float level = map_.waterLevel() / static_cast<float>(HEIGHT_UNITS_PER_TILE) + kDecalLift * 2;
-  auto flat = [&](float, float) { return level; };
+  auto flat = [&](float, float) { return level + kDecalLift; };
+  // The sheet: one solid quad per tile.
+  for (int ty = ty0; ty <= ty1; ++ty)
+    for (int tx = tx0; tx <= tx1; ++tx) {
+      if (!map_.iced(tx, ty)) continue;
+      const float x = static_cast<float>(tx), y = static_cast<float>(ty);
+      const Vec3f q[4] = {{x, y, level}, {x + 1, y, level}, {x + 1, y + 1, level}, {x, y + 1, level}};
+      renderer_.solidQuad(q, rgba8(198, 212, 220));
+    }
+  // Soft drifts of snow over it, here and there.
   for (int ty = ty0; ty <= ty1; ++ty)
     for (int tx = tx0; tx <= tx1; ++tx)
-      if (map_.iced(tx, ty)) renderer_.decal(art_.ice[hash2(tx, ty, 11) & 3], tx * 256.0f + 128, ty * 256.0f + 128, kWhite, kWhite, 1, flat);
+      if (map_.iced(tx, ty) && hash2(tx, ty, 11) % 4 == 0)
+        renderer_.decal(art_.ice[1 + hash2(tx, ty, 13) % 3], tx * 256.0f + 128, ty * 256.0f + 128, kWhite, kWhite, 1, flat);
 }
 
 // Selection rings and order markers, on the ground.

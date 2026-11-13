@@ -200,6 +200,12 @@ struct Builder {
   // wobble), `half` tiles wide either side, with fords (dry road crossings at half
   // speed) at the listed positions along it. Banks slope down over `bank` tiles.
   void river(bool alongX, int at, int half, std::vector<int> fords = {}, uint32_t seed = 7, int bank = 3, int wobble = 3) {
+    riverImpl(alongX, at, half, std::move(fords), seed, bank, wobble, clearPropsInRivers);
+  }
+  // 9.11 on: rivers dug by hand take the trees out of the water. Off while the
+  // Germany campaign builds, so its maps come out as they were approved.
+  bool clearPropsInRivers = true;
+  void riverImpl(bool alongX, int at, int half, std::vector<int> fords, uint32_t seed, int bank, int wobble, bool clearProps) {
     const int wl = water();
     const int len = alongX ? file.map.cornersX() : file.map.cornersY();
     for (int i = 0; i < len; ++i) {
@@ -223,6 +229,7 @@ struct Builder {
         }
     }
     finishTerrain();
+    if (clearProps) clearWetProps();
   }
   void paintRoad(int tx, int ty, int r = 1) {
     for (int sy = (ty - r / 2) * SPLAT_PER_TILE; sy < (ty + 1 + r / 2) * SPLAT_PER_TILE; ++sy)
@@ -269,6 +276,15 @@ struct Builder {
   void finishTerrain() {
     file.map.recomputeInfo();
     file.map.recomputeSpeeds(0, 0, file.map.width() - 1, file.map.height() - 1);
+  }
+  // Trees and rocks the generator put where a river has since been dug go (9.11:
+  // they stood up through the ice). Called by river(); Germany's maps predate it.
+  void clearWetProps() {
+    auto& props = file.map.props();
+    props.erase(std::remove_if(props.begin(), props.end(), [&](const Prop& p) {
+                  const int tx = p.x >> LEPTON_SHIFT, ty = p.y >> LEPTON_SHIFT;
+                  return file.map.inBounds(tx, ty) && file.map.info(tx, ty).waterDepth > 0;
+                }), props.end());
   }
   // Every generated village plot as a neutral building (no keep-clear).
   void allVillages() { villages({}); }
