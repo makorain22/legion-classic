@@ -747,7 +747,7 @@ bool gbrGap(Builder& b, const std::string& out) {
   const uint64_t seed = findSeed(128, Biome::Urban, static_cast<int>(MapLayout::TwinRivers), 1953,
                                  rect(8, 52, 30, 76) + rect(96, 52, 120, 76));
   b.start(128, Biome::Urban, seed, static_cast<int>(MapLayout::TwinRivers), "The Gap at Hellenthal",
-          "Rhineland, October 1946. Force the gap through the town and destroy the German garrison.");
+          "Rhineland, October 1947. Force the gap through the town and destroy the German garrison.");
   b.side(0, "7th Armoured Brigade", "gbr", kKhaki, 0, true, 6000, 16, 64);
   b.side(1, "Kampfgruppe Hellenthal", "ger", kRed, 1, false, 9000, 108, 64, 2);
   b.villages({{16, 64, 14}, {108, 64, 18}});
@@ -922,8 +922,8 @@ int main(int argc, char** argv) {
     ok = rusIronStorm(b, content + "campaigns/rus/r3_iron_storm.lmap") && ok;
     ok = gbrRidge(b, content + "campaigns/gbr/b1_point_64.lmap") && ok;
     ok = gbrRaid(b, content + "campaigns/gbr/b2_lantern.lmap") && ok;
-    ok = gbrGap(b, content + "campaigns/gbr/b3_hellenthal.lmap") && ok;
   }
+  if (want("campaigns") || want("gbr") || want("gbr3")) ok = gbrGap(b, content + "campaigns/gbr/b3_hellenthal.lmap") && ok;
   if (want("skirmish")) ok = skirmishMaps(b, content + "maps/skirmish/") && ok;
   return ok ? 0 : 1;
 }

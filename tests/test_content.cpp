@@ -77,7 +77,7 @@ TEST_CASE("the British: the same base, their own guns") {
   // Every structure the other armies build, the British build too, with the same role and footprint.
   for (size_t i = 0; i < R.types.size(); ++i) {
     const UnitTypeDef& d = R.types.get(static_cast<int>(i));
-    if (d.faction != "ger") continue;
+    if (d.faction != "ger" || d.id == "ger_flak_tower") continue;  // a mission landmark, the Reich's alone
     const std::string mine = d.id == "ger_volkssturm" ? "gbr_recruit" : "gbr_" + d.id.substr(4);  // each army's levy has its own name
     const int t = R.types.find(mine);
     CHECK_MESSAGE(t >= 0, mine);

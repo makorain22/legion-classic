@@ -1,6 +1,6 @@
 # The Gap at Hellenthal
 
-**Rhineland, October 1946.** The Brigade has come north. Between the rivers lies Hellenthal, a ruined industrial town, and behind it the only gap through the hills.
+**Rhineland, October 1947.** The Brigade has come north. Between the rivers lies Hellenthal, a ruined industrial town, and behind it the only gap through the hills.
 
 ## Orders
 

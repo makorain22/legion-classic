@@ -121,7 +121,7 @@ TEST_CASE("flags from earlier missions reach the later ones") {
     Battle b(R);
     std::map<std::string, int32_t> flags;
     if (tiger) flags["tiger_survived"] = 1;
-    REQUIRE(b.load(kContent + "campaigns/ger/g2_ice_road.lmap", flags));
+    REQUIRE(b.load(kContent + "campaigns/ger/g10_ice_road.lmap", flags));
     for (int i = 0; i < 15 * 3; ++i) b.sim->tick();
     CHECK(b.ofType(0, "ger_heavy_tank").size() == (tiger ? 1u : 0u));  // the Tiger from Kalach comes back
   }

@@ -21,10 +21,14 @@ players on a random map.
 - **Tutorial: Basic Training.** New to the game? Start here: four short
   lessons (giving orders, cover and armour, digging in, building a base).
   Hints appear at the top of the screen and the button you need glows.
-- **Campaigns.** Three missions each for Germany (*Kampfgruppe Adler*), the
-  Soviet Union (*Guards Rifle Corps*) and Britain (*The Desert Rats*). Read
-  the briefing, then Begin. Missions open one after another, and what you
-  achieve in one can help in the next (a tank that survives comes back).
+- **Campaigns.** Germany's *The Long Road Home* is the main story: 25
+  missions in five acts, from the failed coup of July 1944 to the fall of the
+  regency in Berlin in 1948, fought by four formations in turn. The Soviet
+  Union (*Guards Rifle Corps*) and Britain (*The Desert Rats*) have three
+  missions each for now. Read the briefing, then Begin. Missions open one
+  after another, and what you achieve in one can help in a later one (a tank
+  that survives comes back, men you save fight again, a bridge you take
+  brings more allies).
   Progress is kept in `progress.json` in the user folder; *Start again* on a
   campaign's page forgets it. Choose **easy, normal or hard** on the briefing
   page: it sets how many reinforcements the enemy brings and how sharp the

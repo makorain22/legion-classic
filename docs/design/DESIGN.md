@@ -286,9 +286,20 @@ recognition flash on vehicles and a roundel in the interface.
      easier/harder), `act` and `formation` per mission. Showcase: *The
      Crossing at Dawn* (96x224). Tests: test_mission.cpp + the showcase played
      through phase by phase.
-   - **9.10 Campaign: Germany** (next) – 25 missions in five acts, the main
-     canon; outline approved 12 Nov (see the handoff).
-   - **9.11 Campaign: Soviet Union** – the alternate canon.
+   - **9.10 Campaign: Germany** (done 13 Nov) – *The Long Road Home*, 25
+     missions in five acts (Walküre, The Desert, The Don, Deep Territory, The
+     Regency Falls), the main canon, four rotating formations. Built from code:
+     `tools/mission_kit.hpp` (Builder for terrain, sides, set pieces; Script
+     helpers for conditions, actions, objectives numbered in add order) and
+     one `tools/campaign_ger_act*.cpp` per act. Carry-over flags: tiger_survived,
+     brenner_men, africa_veterans, mutineers, refinery_intact, defected,
+     elbe_bridges (plus oster_escaped, bir_sidra_dumps, airfield_intact,
+     ice_road_stores). Eight landmark buildings (landmark_models.cpp). Tests:
+     test_campaign_ger.cpp (campaign.json, every mission's script and opening,
+     a bot plays all 25 to victory; tests/mission_battle.hpp shared with
+     test_campaign.cpp). Deferred: coalition markings on the models (team
+     colour tells the sides apart for now).
+   - **9.11 Campaign: Soviet Union** (next) – the alternate canon.
    - **9.12 Campaign: Britain** – canon, on the Germany campaign's timeline, a
      little more defensive; its later stages on a second front (the Low
      Countries or the north). An American campaign later.

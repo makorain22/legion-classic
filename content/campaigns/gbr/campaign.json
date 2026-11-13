@@ -7,6 +7,6 @@
  "missions": [
   {"id": "b1", "title": "Point 64", "map": "b1_point_64.lmap", "briefing": "b1_point_64.md", "place": "Libya", "date": "March 1946"},
   {"id": "b2", "title": "Operation Lantern", "map": "b2_lantern.lmap", "briefing": "b2_lantern.md", "place": "Libya", "date": "April 1946"},
-  {"id": "b3", "title": "The Gap at Hellenthal", "map": "b3_hellenthal.lmap", "briefing": "b3_hellenthal.md", "place": "Rhineland", "date": "October 1946"}
+  {"id": "b3", "title": "The Gap at Hellenthal", "map": "b3_hellenthal.lmap", "briefing": "b3_hellenthal.md", "place": "Rhineland", "date": "October 1947"}
  ]
 }

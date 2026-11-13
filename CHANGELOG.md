@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.9.1 – in progress (edits after Milestone 9; Milestones 9.1–9.9)
+## 0.9.1 – in progress (edits after Milestone 9; Milestones 9.1–9.10)
 
 - **Fixed a crash** in skirmish (seen in a 1v1v1 at high game speed, and
   probably the old "2v2 crash after five minutes"): a man killed inside a
@@ -377,6 +377,38 @@
   (`generate(..., settlements = false)`). All bundled maps rebuilt.
 - `--village-demo`: the camera on the biggest settlement (`LEGION_DEBUG_TOWN=1`
   prints a plan of each one).
+
+### Milestone 9.10: the Germany campaign, *The Long Road Home*
+
+- **Twenty-five missions in five acts, July 1944 to June 1948**, replacing
+  the three old German missions (Kalach, the Ice Road and the Donets are
+  rebuilt as missions 9, 10 and 12). The coup of 20 July 1944 fails; its
+  officers fight on from exile as the Free German Army, in the desert beside
+  the British, on the Don, in the Alpine valleys, and come home to bring down
+  the regency in Berlin. Four formations take turns: Bataillon Brenner,
+  Kampfgruppe Sonnenberg, Kampfgruppe Adler and Gruppe Weiss. The Germany
+  campaign is the main canon; the British campaign's *Gap at Hellenthal* is
+  now dated October 1947 to match.
+- **Longer missions that develop.** Every mission has several phases: the
+  battlefield opens up, new objectives arrive by radio, allied and enemy
+  computer sides attack on cue, set pieces stand invulnerable until the story
+  lets them loose. Maps of every shape: 96x320 mountain roads, a 384x96 coast
+  road, a 320x256 Berlin. Three-way battles against the Reich and the
+  Soviets; garrisons that change sides when the radio tells them to.
+- **What you keep matters later.** Campaign flags carry over: the Tiger from
+  Kalach, the men who reach the Alpine valleys, the Africa veterans, the
+  Mius mutineers, an intact refinery, the battalions that defect, the Elbe
+  bridges you save (more British tanks in Berlin).
+- **New landmark buildings** for the story, all in the editor: radio mast,
+  hangar, transport plane, steel works, ministry, flak tower (Reich, can't be
+  built, has to be taken), oil derrick and refinery.
+- Briefings for every mission; acts and formations on the Missions page.
+- Tests: every mission loads, its script references are sound, its opening
+  plays without a loss; a bot plays all 25 through to victory, phase by
+  phase, in about half a minute (`LEGION_PLAYTHROUGH=g01,g02` picks some,
+  `none` skips).
+- Missions are built from code (`make_content content/ ger`, one file per act
+  in `tools/campaign_ger_act*.cpp` on the shared `tools/mission_kit.hpp`).
 
 ## 0.9.0 – Milestone 9: Britain, sound, tutorial, campaigns (7 Nov 2026)
 

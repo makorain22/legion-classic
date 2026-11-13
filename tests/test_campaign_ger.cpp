@@ -191,12 +191,10 @@ TEST_CASE("every Germany mission loads, its script is sound, and its opening pla
 }
 
 TEST_CASE("Germany campaign playthrough: a bot follows every mission's objectives to victory") {
+  // All 25 take about half a minute; LEGION_PLAYTHROUGH=g01,g02,... picks some, =none skips.
   const char* env = std::getenv("LEGION_PLAYTHROUGH");
-  if (!env) {
-    MESSAGE("set LEGION_PLAYTHROUGH=all (or g01,g02,...) to play the missions through");
-    return;
-  }
-  const std::string want = env;
+  const std::string want = env ? env : "all";
+  if (want == "none") return;
   Rules R;
   for (const std::string& f : missionFiles()) {
     if (want != "all" && want.find(f.substr(0, 3)) == std::string::npos) continue;

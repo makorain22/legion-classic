@@ -172,6 +172,16 @@ Maps needn't be square: *New...* in the editor takes a width and a height
 of your own (steps of 32 tiles), for missions along a road, a coast or a
 valley.
 
+**Landmarks for stories.** Besides the civilian houses, the editor has
+buildings made for missions: `neutral_radio_mast`, `neutral_hangar`,
+`neutral_transport_plane`, `neutral_steelworks`, `neutral_ministry` (a
+garrison of forty), `neutral_derrick`, `neutral_refinery`, and the Reich's
+`ger_flak_tower` (heavy guns, a garrison of twenty, 9000 health; it has no
+`builtAt`, so nobody can build it). Give any of them to a side and name it,
+and a script can make it a target, a prize or something to protect. The
+Germany campaign's 25 missions are worked examples: open any of them from
+`campaigns/ger/` in the editor.
+
 `mod.json`:
 
 ```json

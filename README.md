@@ -10,8 +10,8 @@ battle and change anything, the rules included.
 
 ![A German and a Soviet force meet on a river crossing](docs/images/battle.jpg)
 
-> **Status: in development (0.9.1).** Milestones 1–9 and 9.1–9.9 are done: three armies,
-> skirmish against the computer, a tutorial and three short campaigns, sound
+> **Status: in development (0.9.1).** Milestones 1–9 and 9.1–9.10 are done: three armies,
+> skirmish against the computer, a tutorial, a 25-mission German campaign and two short ones, sound
 > and an orchestral score, the Live Scenario Editor, the tools for making
 > mods, a real 3D battlefield with a free camera, terrain with cliffs and
 > bridges, intel instead of fog, armour and artillery on a new scale,
@@ -19,8 +19,8 @@ battle and change anything, the rules included.
 > logistics points and convoys, and a computer player that fights in bound
 > battle groups and raids every enemy, and compact villages and towns of
 > houses built wall to wall, and a mission engine for scripted stories
-> (radio, cinematics, set pieces, clocks, a battlefield that opens up). Next: campaigns
-> and big scenarios in small milestones; tuning
+> (radio, cinematics, set pieces, clocks, a battlefield that opens up). Next: the Soviet
+> and British campaigns and big scenarios in small milestones; tuning
 > and debugging always come last. The game is built together
 > with Claude (Anthropic's AI); see [How it is made](#how-it-is-made).
 
