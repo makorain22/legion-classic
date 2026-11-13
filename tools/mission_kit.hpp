@@ -249,6 +249,19 @@ struct Builder {
     }
     finishTerrain();
   }
+  // Patches of a ground layer (mud after the thaw, sand, snow) over a tile
+  // rectangle: `cover` percent of it, in blotches. Speeds follow the ground.
+  void paintGround(Layer layer, int x0, int y0, int x1, int y1, int cover, uint32_t seed = 1) {
+    for (int sy = y0 * SPLAT_PER_TILE; sy < (y1 + 1) * SPLAT_PER_TILE; ++sy)
+      for (int sx = x0 * SPLAT_PER_TILE; sx < (x1 + 1) * SPLAT_PER_TILE; ++sx) {
+        if (sx < 0 || sy < 0 || sx >= file.map.splatW() || sy >= file.map.splatH()) continue;
+        // Blotches: a cheap value noise on a coarse grid, smoothed by a second octave.
+        auto h = [&](int x, int y) { return static_cast<int>((static_cast<uint32_t>(x * 73856093) ^ static_cast<uint32_t>(y * 19349663) ^ (seed * 83492791u)) % 100u); };
+        const int n = (h(sx / 6, sy / 6) * 3 + h(sx / 3, sy / 3)) / 4;
+        if (n < cover) file.map.paint(sx, sy, layer, 255);
+      }
+    finishTerrain();
+  }
   // Level ground: every corner in the rectangle at the rectangle's average height.
   void flatten(int x0, int y0, int x1, int y1) {
     long sum = 0, n = 0;
