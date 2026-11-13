@@ -283,6 +283,12 @@ void Simulation::impact(int weapon, uint8_t owner, Vec2i at, Entity directTarget
       hit = true;
     }
   }
+  // A heavy shell landing on river ice breaks it (9.11): artillery and the big
+  // guns' high explosive. Whatever stood on that tile goes through.
+  if (wd.splash >= 280) {
+    const int tx = at.x >> LEPTON_SHIFT, ty = at.y >> LEPTON_SHIFT;
+    if (map_.iced(tx, ty) && map_.setIce(tx, ty, tx, ty, false)) drownIn(tx, ty, tx, ty);
+  }
   SimEvent ev;
   ev.type = EventType::Impact;
   ev.owner = owner;

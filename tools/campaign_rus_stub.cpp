@@ -1,0 +1,8 @@
+// Temporary: Soviet acts not written yet.
+#include "mission_kit.hpp"
+namespace mk {
+bool rusAct2(Builder&, const std::string&) { return true; }
+bool rusAct3(Builder&, const std::string&) { return true; }
+bool rusAct4(Builder&, const std::string&) { return true; }
+bool rusAct5(Builder&, const std::string&) { return true; }
+}

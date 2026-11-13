@@ -128,6 +128,9 @@ enum class ActionType : uint8_t {
   ResetTrigger,     // trigger `trigger` can fire again, as if it never had (and is switched on)
   HideObjective,    // objective number `value` is taken off the list
   SpawnNamed,       // as Spawn units, and the new units are called `text`
+  // --- Terrain (9.11) ------------------------------------------------------------------
+  FreezeWater,      // the water in `area` freezes: men and wheels can cross it, tracks can't
+  BreakIce,         // the ice in `area` breaks up; whatever stands on it goes into the water
   Count
 };
 

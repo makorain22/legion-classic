@@ -2025,6 +2025,22 @@
       "autoTarget": false,
       "garrison": 16,
       "description": "An oil refinery: the column, the tanks and the pipework that turn crude into fuel. Easier to burn than to take."
+    },
+    {
+      "id": "neutral_fort",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Fort",
+      "model": "fort",
+      "footprint": [
+        5,
+        5
+      ],
+      "health": 7000,
+      "coverAround": 50,
+      "autoTarget": false,
+      "garrison": 30,
+      "description": "A brick fort of an old fortress ring: a casemate under earth and turf, embrasures all round, a ditch in front. Room for a garrison of thirty."
     }
   ]
 }

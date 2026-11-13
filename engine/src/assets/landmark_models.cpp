@@ -192,6 +192,39 @@ VoxelModel makeFlakTower(const FactionLook&) {
   return m;
 }
 
+// A brick fort of the old fortress rings (9.11: Poznan, Antwerp): a low
+// polygonal casemate of dark brick, earth and turf heaped over its roof, gun
+// embrasures all round, a gate in the gorge wall and a ditch before it.
+VoxelModel makeFort(const FactionLook&) {
+  VoxelModel m(60, 60, 22);
+  m.box(0, 0, 0, 60, 60, 1, EARTH_DARK);                  // the ditch floor
+  // The casemate: a blunted pentagon (the corners cut off).
+  for (int y = 4; y < 56; ++y)
+    for (int x = 4; x < 56; ++x) {
+      const int cut = std::max(0, 14 - std::min({x - 4, 55 - x})) + std::max(0, 10 - (55 - y));
+      if (cut > 14 && y > 40) continue;
+      m.box(x, y, 1, x + 1, y + 1, 12, (x + y * 3) % 7 == 0 ? BRICK_DARK : BRICK);
+    }
+  for (int y = 6; y < 54; ++y)                            // earth over the roof, turf on top
+    for (int x = 6; x < 54; ++x)
+      if (m.get(x, y, 11)) {
+        m.box(x, y, 12, x + 1, y + 1, 15, EARTH);
+        m.set(x, y, 15, (x * 5 + y) % 9 == 0 ? DRY_GRASS : LEAF_DARK);
+      }
+  for (int i = 8; i < 52; i += 6) {                       // embrasures on every face
+    m.box(i, 4, 5, i + 2, 5, 8, SOOT);
+    m.box(4, i, 5, 5, i + 2, 8, SOOT);
+    m.box(55, i, 5, 56, i + 2, 8, SOOT);
+  }
+  m.box(26, 54, 1, 34, 56, 9, WOOD_DARK);                 // the gate in the gorge wall
+  m.box(25, 54, 9, 35, 56, 11, CONCRETE_LIGHT);
+  m.box(28, 56, 0, 32, 60, 1, CONCRETE_DARK);             // the causeway over the ditch
+  m.box(26, 26, 15, 34, 34, 19, CONCRETE);                // an observation cupola
+  m.box(27, 26, 17, 33, 27, 18, SOOT);
+  weather(m, BRICK, BRICK_DARK, SOOT, 271, 14, 6);
+  return m;
+}
+
 // An oil derrick: a lattice tower over the well, a nodding pump beside it.
 VoxelModel makeDerrick(const FactionLook&) {
   VoxelModel m(24, 24, 60);

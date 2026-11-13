@@ -520,137 +520,6 @@ bool showcase(Builder& b, const std::string& out) {
 }
 
 // ---------------------------------------------------------------------------
-// The Soviet Union: Guards Rifle Corps
-// ---------------------------------------------------------------------------
-bool rusVillage(Builder& b, const std::string& out) {
-  const uint64_t seed = findSeed(128, Biome::Temperate, static_cast<int>(MapLayout::Steppe), 1946,
-                                 rect(8, 52, 30, 76) + rect(56, 52, 72, 76));
-  b.start(128, Biome::Temperate, seed, static_cast<int>(MapLayout::Steppe), "Counter-stroke at Sokolovo",
-          "August 1946. Retake the village the Germans seized last night, before they dig in.");
-  b.side(0, "5th Guards Rifle Division", "rus", kBlue, 0, true, 2000, 16, 64);
-  b.side(1, "Panzergrenadier Regiment 9", "ger", kRed, 1, true, 0, 110, 64);
-  b.villages({{16, 64, 12}, {64, 64, 14}});
-  const int vx = 64, vy = 64;
-  b.place("neutral_church", NEUTRAL_OWNER, vx, vy);
-  for (auto [dx, dy, id] : {std::tuple{-6, -5, "neutral_izba"}, {6, -5, "neutral_izba"}, {-6, 5, "neutral_school"},
-                            {6, 6, "neutral_izba"}, {0, -9, "neutral_well"}, {0, 9, "neutral_barn"}})
-    b.place(id, NEUTRAL_OWNER, vx + dx, vy + dy);
-  b.place("ger_bunker", 1, vx - 4, vy - 2);
-  b.line("ger_sandbags", 1, vx - 8, vy - 4, vx - 8, vy + 4);
-  b.squad("ger_rifleman", 1, vx + 1, vy - 3, 10, 8);
-  b.squad("ger_mg_team", 1, vx - 2, vy + 3, 3, 8);
-  b.place("ger_at_team", 1, vx + 3, vy + 4, 8);
-  b.place("ger_medium_tank", 1, vx + 6, vy, 8);
-  b.squad("rus_rifleman", 0, 18, 60, 16, 0);
-  b.squad("rus_mg_team", 0, 16, 68, 3, 0);
-  b.squad("rus_medium_tank", 0, 22, 64, 5, 0);
-  b.place("rus_artillery", 0, 10, 64);
-  b.place("rus_engineer", 0, 14, 72);
-  b.place("rus_engineer", 0, 16, 72);
-
-  Script s;
-  const int village = s.area("Sokolovo", vx - 9, vy - 10, vx + 9, vy + 10), east = s.area("East road", 116, 56, 124, 72);
-  s.on("Briefing", {always()},
-       {say(0, "Comrade commander: the Germans hold Sokolovo with a battalion. Take it back before their armour arrives."),
-        objective(0, "Retake Sokolovo"), objective(0, "Hold it against the counter-attack"),
-        objective(0, "Keep at least three T-34s in the fight", true), reveal(0, village)});
-  const int taken = s.on("Retaken", {inArea(0, village, 5), noneIn(1, village)},
-       {done(0), say(0, "Sokolovo is ours! German armour is coming from the east: dig in."), supplies(0, 1500)});
-  const int counter = s.on("Counter-attack", {fired(taken, 120)},
-       {spawn(1, b.t("ger_medium_tank"), east, 3), spawn(1, b.t("ger_halftrack"), east, 2), spawn(1, b.t("ger_rifleman"), east, 12),
-        attack(1, east, village), say(0, "Panzers on the east road!")});
-  s.on("Tanks kept", {fired(counter, 60), atMost(1, 0), atLeast(0, 3, b.t("rus_medium_tank"))},
-       {done(2), setFlag("guards_tanks", 1)});
-  s.on("Held", {fired(counter, 60), atMost(1, 0)},
-       {done(1), say(0, "The counter-attack is beaten. Glory to the Guards!"), win(0)});
-  s.on("Lost", {atMost(0, 0)}, {lose(0)});
-  return b.save(out, &s.s);
-}
-
-bool rusBridgehead(Builder& b, const std::string& out) {
-  const uint64_t seed = findSeed(128, Biome::Temperate, static_cast<int>(MapLayout::FrontLine), 1950,
-                                 rect(8, 52, 30, 76) + rect(76, 50, 96, 78));
-  b.start(128, Biome::Temperate, seed, static_cast<int>(MapLayout::FrontLine), "The Bridgehead",
-          "September 1946. Cross the river, take the far bank and hold it until the engineers bring up a base.");
-  b.side(0, "5th Guards Rifle Division", "rus", kBlue, 0, true, 1500, 16, 64);
-  b.side(1, "Kampfgruppe Brandt", "ger", kRed, 1, false, 5000, 112, 64, 1);
-  b.villages({{16, 64, 12}, {112, 64, 16}});
-  b.squad("rus_rifleman", 0, 18, 60, 20, 0);
-  b.squad("rus_mg_team", 0, 16, 68, 4, 0);
-  b.squad("rus_at_team", 0, 14, 60, 3, 0);
-  b.squad("rus_medium_tank", 0, 22, 64, 4, 0);
-  b.place("rus_artillery", 0, 10, 64);
-  b.place("rus_artillery", 0, 10, 68);
-  const int gx = 112, gy = 64;
-  for (auto [dx, dy, id] : {std::tuple{0, 0, "ger_yard"}, {-6, -6, "ger_power"}, {5, 7, "ger_barracks"}, {-1, 12, "ger_factory"},
-                            {-12, 0, "ger_bunker"}})
-    b.place(id, 1, gx + dx, gy + dy);
-  b.income("ger", 1, gx, gy, 64, 64);
-  b.squad("ger_rifleman", 1, 82, 62, 8, 8);
-  b.squad("ger_mg_team", 1, 84, 66, 2, 8);
-
-  Script s;
-  const int bank = s.area("Far bank", 74, 48, 98, 80), west = s.area("West road", 2, 58, 8, 70),
-            gbase = s.area("German base", gx - 8, gy - 8, std::min(127, gx + 8), gy + 8);
-  s.on("Briefing", {always()},
-       {say(0, "Find a ford, cross the river and take the far bank. Hold it; the engineers will follow with a construction truck."),
-        objective(0, "Get ten men or vehicles onto the far bank"), objective(0, "Hold the bridgehead for eight minutes"),
-        objective(0, "Destroy the German base")});
-  s.on("Guards tanks", {flagAtLeast("guards_tanks", 1)},
-       {spawn(0, b.t("rus_medium_tank"), west, 2), say(0, "The tank crews of Sokolovo rejoin the division.")});
-  const int across = s.on("Across", {inArea(0, bank, 10)},
-       {done(0), say(0, "We are across! Hold the bridgehead.")});
-  const int held = s.on("Held", {fired(across, 480), inArea(0, bank, 1)},
-       {done(1), say(0, "The engineers are here. Build a base and destroy the Germans."), spawn(0, b.t("rus_mcv"), west, 1),
-        supplies(0, 3000)});
-  s.on("Pressure", {fired(across, 120)},
-       {spawn(1, b.t("ger_medium_tank"), gbase, 2), spawn(1, b.t("ger_rifleman"), gbase, 8), attack(1, gbase, bank),
-        say(0, "German counter-attacks are coming. Dig in on the far bank.")});
-  (void)held;
-  s.on("Won", {defeated(1)}, {done(2), win(0)});
-  s.on("Lost", {defeated(0)}, {lose(0)});
-  return b.save(out, &s.s);
-}
-
-bool rusIronStorm(Builder& b, const std::string& out) {
-  const uint64_t seed = findSeed(128, Biome::Winter, static_cast<int>(MapLayout::Crossroads), 1951,
-                                 rect(8, 52, 30, 76) + rect(96, 52, 120, 76));
-  b.start(128, Biome::Winter, seed, static_cast<int>(MapLayout::Crossroads), "Iron Storm",
-          "February 1947. The Germans have turned Kirovsk into a fortress. Flatten it.");
-  b.side(0, "5th Guards Rifle Division", "rus", kBlue, 0, true, 5000, 16, 64);
-  b.side(1, "Festung Kirovsk", "ger", kRed, 1, false, 9000, 108, 64, 2);
-  b.villages({{16, 64, 14}, {108, 64, 18}});
-  b.place("rus_mcv", 0, 16, 64);
-  b.squad("rus_artillery", 0, 12, 58, 4, 0);
-  b.squad("rus_heavy_tank", 0, 22, 62, 2, 0);
-  b.squad("rus_medium_tank", 0, 22, 66, 4, 0);
-  b.squad("rus_rifleman", 0, 20, 56, 16, 0);
-  b.squad("rus_engineer", 0, 14, 70, 3, 0);
-  const int gx = 108, gy = 64;
-  for (auto [dx, dy, id] : {std::tuple{0, 0, "ger_yard"}, {-6, -6, "ger_power"}, {-6, 6, "ger_power"}, {5, 7, "ger_barracks"},
-                            {-1, 12, "ger_factory"}, {-12, -5, "ger_bunker"}, {-12, 5, "ger_bunker"}, {-12, 0, "ger_atgun"},
-                            {-10, -10, "ger_howitzer_pit"}, {-10, 10, "ger_mg_nest"}, {4, -9, "ger_tower"}})
-    b.place(id, 1, gx + dx, gy + dy);
-  b.income("ger", 1, gx, gy, 64, 64);
-  b.line("ger_trench", 1, gx - 16, gy - 10, gx - 16, gy + 10);
-  b.line("ger_wire", 1, gx - 19, gy - 10, gx - 19, gy + 10);
-  b.line("ger_traps", 1, gx - 21, gy - 6, gx - 21, gy + 6);
-  b.squad("ger_rifleman", 1, gx - 14, gy, 12, 8);
-  b.place("ger_heavy_tank", 1, gx - 4, gy, 8);
-
-  Script s;
-  const int west = s.area("West road", 2, 58, 8, 70);
-  s.on("Briefing", {always()},
-       {say(0, "Kirovsk is a fortress: trenches, wire, guns. Use the rocket trucks to break it, then send in the tanks."),
-        objective(0, "Destroy Festung Kirovsk")});
-  s.on("Veterans", {flagAtLeast("guards_tanks", 1)},
-       {spawn(0, b.t("rus_heavy_tank"), west, 1), say(0, "A new IS tank for the veterans of Sokolovo.")});
-  s.on("Won", {defeated(1)}, {done(0), win(0)});
-  s.on("Lost", {defeated(0)}, {lose(0)});
-  return b.save(out, &s.s);
-}
-
-// ---------------------------------------------------------------------------
 // Britain: the Desert Rats
 // ---------------------------------------------------------------------------
 bool gbrRidge(Builder& b, const std::string& out) {
@@ -916,10 +785,12 @@ int main(int argc, char** argv) {
   bool (*acts[5])(Builder&, const std::string&) = {&gerAct1, &gerAct2, &gerAct3, &gerAct4, &gerAct5};
   for (int i = 0; i < 5; ++i)
     if (want("campaigns") || want("ger") || want("ger" + std::to_string(i + 1))) ok = acts[i](b, gerDir) && ok;
+  // The Soviet campaign (9.11), the same way ("rus", "rus1".."rus5").
+  const std::string rusDir = content + "campaigns/rus/";
+  bool (*rusActs[5])(Builder&, const std::string&) = {&rusAct1, &rusAct2, &rusAct3, &rusAct4, &rusAct5};
+  for (int i = 0; i < 5; ++i)
+    if (want("campaigns") || want("rus") || want("rus" + std::to_string(i + 1))) ok = rusActs[i](b, rusDir) && ok;
   if (want("campaigns")) {
-    ok = rusVillage(b, content + "campaigns/rus/r1_sokolovo.lmap") && ok;
-    ok = rusBridgehead(b, content + "campaigns/rus/r2_bridgehead.lmap") && ok;
-    ok = rusIronStorm(b, content + "campaigns/rus/r3_iron_storm.lmap") && ok;
     ok = gbrRidge(b, content + "campaigns/gbr/b1_point_64.lmap") && ok;
     ok = gbrRaid(b, content + "campaigns/gbr/b2_lantern.lmap") && ok;
   }

@@ -195,6 +195,19 @@ void Simulation::destroyEntity(uint32_t e) {
   for (uint32_t o : sinking) damage(o, types_.get(reg_.pool<CUnit>().get(o).type).maxHealth * 1000, kNullEntity);
 }
 
+void Simulation::drownIn(int x0, int y0, int x1, int y1) {
+  std::vector<uint32_t> sinking;
+  auto& units = reg_.pool<CUnit>();
+  for (uint32_t o : units.entities()) {
+    const UnitTypeDef& od = types_.get(units.get(o).type);
+    if (od.isStructure() || units.get(o).health <= 0 || reg_.pool<CGarrisoned>().has(o)) continue;
+    const CPosition& op = reg_.pool<CPosition>().get(o);
+    const int tx = op.x >> LEPTON_SHIFT, ty = op.y >> LEPTON_SHIFT;
+    if (tx >= x0 && ty >= y0 && tx <= x1 && ty <= y1 && !map_.passable(tx, ty, od.locomotor)) sinking.push_back(o);
+  }
+  for (uint32_t o : sinking) damage(o, types_.get(units.get(o).type).maxHealth * 1000, kNullEntity);
+}
+
 void Simulation::recomputeCover() {
   coverDirty_ = false;
   std::fill(cover_.begin(), cover_.end(), uint8_t{0});

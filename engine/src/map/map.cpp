@@ -70,6 +70,7 @@ void Map::resize(int width, int height, uint16_t baseHeight) {
   info_.assign(static_cast<size_t>(width_) * height_, TileInfo{});
   blocks_.assign(static_cast<size_t>(width_) * height_, 0);
   oil_.assign(static_cast<size_t>(width_) * height_, 0);
+  ice_.assign(static_cast<size_t>(width_) * height_, 0);
   props_.clear();
   waterLevel_ = 0;
   recomputeInfo();
@@ -218,8 +219,9 @@ void Map::recomputeSpeeds(int tx0, int ty0, int tx1, int ty1) {
         // Slopes: down to 65% at the steepest a locomotor can climb.
         const int maxSlope = std::max<int>(1, rules_.maxSlope[li]);
         pct = pct * (100 - 35 * std::min<int>(t.slope, maxSlope) / maxSlope) / 100;
-        // Wading and fords: half speed.
-        if (t.waterDepth > 0 || t.ford) pct = std::min(pct, 50);
+        // Wading and fords: half speed. Ice: men pick their way at 70%, wheels slither at 60%.
+        if (t.waterDepth > 0 && ice_[static_cast<size_t>(ty) * width_ + tx]) pct = std::min(pct, li == 0 ? 70 : 60);
+        else if (t.waterDepth > 0 || t.ford) pct = std::min(pct, 50);
         t.speed[li] = static_cast<uint8_t>(std::clamp(pct, 10, 100));
       }
     }
@@ -231,8 +233,34 @@ bool Map::passable(int tx, int ty, Locomotor loco) const {
   const int li = static_cast<int>(loco);
   const uint8_t b = blocks_[static_cast<size_t>(ty) * width_ + tx];
   if (b & kDeck) return !(b & (1u << li));  // on a bridge
+  // On the ice: anything but tracks, whatever the water underneath.
+  if (t.waterDepth > 0 && ice_[static_cast<size_t>(ty) * width_ + tx] && loco != Locomotor::Tracked)
+    return t.slope <= rules_.maxSlope[li] && !(b & (1u << li));
   return t.slope <= rules_.maxSlope[li] && t.waterDepth <= rules_.maxWaterDepth[li] && !(b & (1u << li));
 }
+
+int Map::setIce(int x0, int y0, int x1, int y1, bool frozen) {
+  x0 = std::max(0, x0);
+  y0 = std::max(0, y0);
+  x1 = std::min(width_ - 1, x1);
+  y1 = std::min(height_ - 1, y1);
+  int n = 0;
+  for (int y = y0; y <= y1; ++y)
+    for (int x = x0; x <= x1; ++x) {
+      uint8_t& c = ice_[static_cast<size_t>(y) * width_ + x];
+      const uint8_t want = frozen && info(x, y).waterDepth > 0 ? 1 : 0;
+      if (c == want) continue;
+      c = want;
+      ++n;
+    }
+  if (n) {
+    recomputeSpeeds(x0, y0, x1, y1);
+    ++revision_;  // paths are rebuilt
+  }
+  return n;
+}
+
+bool Map::anyIce() const { return std::find(ice_.begin(), ice_.end(), uint8_t{1}) != ice_.end(); }
 
 const char* biomeName(Biome b) {
   static const char* names[] = {"Temperate", "Winter", "Desert", "Tropical", "Urban"};

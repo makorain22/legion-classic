@@ -71,6 +71,7 @@ struct SpriteCatalog {
   // sprite per neighbour mask, by model name.
   std::unordered_map<std::string, std::array<int, 16>> joined;
   std::array<int, 4> oil{};      // oil stain variants
+  std::array<int, 4> ice{};      // river ice variants (9.11)
   std::array<int, 3> rubble{};   // building rubble, 2 / 3 / 4 tiles across
   std::array<std::vector<int>, static_cast<size_t>(PropKind::Count)> props;
   int white = 0;        // solid white block, for lines, bars and boxes
@@ -140,6 +141,7 @@ void forEachSprite(const SpriteCatalog& cat, F fn) {
   fn("effects/scorch", cat.effects.scorch);
   for (size_t i = 0; i < cat.trench.size(); ++i) fn("decals/trench_" + two(static_cast<int>(i)), cat.trench[i]);
   for (size_t i = 0; i < cat.oil.size(); ++i) fn("decals/oil_" + std::to_string(i), cat.oil[i]);
+  for (size_t i = 0; i < cat.ice.size(); ++i) fn("decals/ice_" + std::to_string(i), cat.ice[i]);
   for (size_t i = 0; i < cat.rubble.size(); ++i) fn("decals/rubble_" + std::to_string(i), cat.rubble[i]);
 }
 

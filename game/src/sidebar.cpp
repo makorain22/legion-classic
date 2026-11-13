@@ -260,7 +260,7 @@ void Sidebar::rebuildMinimap() {
         if (!m.inBounds(tx, ty)) continue;
         const TileInfo& t = m.info(tx, ty);
         uint32_t c;
-        if (t.waterDepth > 0) c = t.waterDepth > 20 ? rgba8(28, 44, 50) : rgba8(54, 70, 62);
+        if (t.waterDepth > 0) c = m.iced(tx, ty) ? rgba8(190, 202, 210) : t.waterDepth > 20 ? rgba8(28, 44, 50) : rgba8(54, 70, 62);
         else {
           c = kLayerColor[static_cast<int>(m.dominantLayer(tx * SPLAT_PER_TILE, ty * SPLAT_PER_TILE))];
           // Light from the upper left, like the terrain.

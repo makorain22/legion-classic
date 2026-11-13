@@ -595,5 +595,11 @@ bool gerAct2(Builder& b, const std::string& dir);
 bool gerAct3(Builder& b, const std::string& dir);
 bool gerAct4(Builder& b, const std::string& dir);
 bool gerAct5(Builder& b, const std::string& dir);
+// The Soviet campaign (tools/campaign_rus_*.cpp, 9.11).
+bool rusAct1(Builder& b, const std::string& dir);
+bool rusAct2(Builder& b, const std::string& dir);
+bool rusAct3(Builder& b, const std::string& dir);
+bool rusAct4(Builder& b, const std::string& dir);
+bool rusAct5(Builder& b, const std::string& dir);
 
 }  // namespace mk

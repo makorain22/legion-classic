@@ -882,6 +882,7 @@ constexpr float kDeckLift = (kBridgeDeckZ - kBridgePierDepth) * kUnitsPerFineVox
 float GameScene::surfaceHeight(float lx, float ly) const {
   const float h = map_.heightAt(lx, ly);
   const int tx = static_cast<int>(lx) >> LEPTON_SHIFT, ty = static_cast<int>(ly) >> LEPTON_SHIFT;
+  if (map_.iced(tx, ty) && map_.waterLevel() > h) return map_.waterLevel();  // standing on the ice
   if (!map_.inBounds(tx, ty) || bridgeLevel_.size() != static_cast<size_t>(map_.width()) * map_.height()) return h;
   const float level = bridgeLevel_[static_cast<size_t>(ty) * map_.width() + tx];
   return level > 0 ? level + kDeckLift : h;
@@ -2138,6 +2139,12 @@ void GameScene::drawGroundLayer(const RectF& view) {
     const uint8_t c = static_cast<uint8_t>(255 * k);
     return rgba8(c, c, c, static_cast<uint8_t>(std::clamp(alpha, 0.0f, 1.0f) * 255));
   };
+  for (int ty = ty0; ty <= ty1; ++ty)  // river ice, at the water's surface (9.11)
+    for (int tx = tx0; tx <= tx1; ++tx) {
+      if (!map_.iced(tx, ty)) continue;
+      const Vec2f s = project(tx * 256.0f + 128, ty * 256.0f + 128, map_.waterLevel());
+      if (view.contains(s)) renderer_.sprite(art_.ice[hash2(tx, ty, 11) & 3], s.x, s.y, kWhite, kWhite);
+    }
   for (int ty = ty0; ty <= ty1; ++ty)
     for (int tx = tx0; tx <= tx1; ++tx) {
       const uint8_t oil = map_.oil(tx, ty);

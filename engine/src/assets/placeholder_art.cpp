@@ -722,6 +722,29 @@ Image makeTrenchDecal(int mask) {
   });
 }
 
+// River ice (9.11): grey-white sheet with snow drifts and dark cracks. Whole
+// tile, nearly opaque, so the frozen river reads as one surface.
+Image makeIceDecal(int variant) {
+  return tileDecal([&](float u, float v, int x, int y) -> Rgba {
+    const uint32_t sd = 1300u + static_cast<uint32_t>(variant) * 17u;
+    const float n = fbm2(u * 5.0f + variant * 3.1f, v * 5.0f, sd);
+    const float drift = fbm2(u * 2.2f, v * 2.2f + variant, sd + 5);
+    // Cracks: thin dark lines where a ridged noise crosses its middle.
+    const float c = std::abs(fbm2(u * 7.0f, v * 7.0f, sd + 9) - 0.5f);
+    float k = 0.86f + (n - 0.5f) * 0.18f;
+    Rgba col{u8(196 * k), u8(212 * k), u8(222 * k), 236};
+    if (drift > 0.58f) {  // snow lying on the ice
+      const float w = std::min(1.0f, (drift - 0.58f) * 6.0f);
+      col = {u8(col.r + (236 - col.r) * w), u8(col.g + (240 - col.g) * w), u8(col.b + (244 - col.b) * w), 240};
+    } else if (c < 0.018f) {
+      col = {u8(120 * k), u8(140 * k), u8(156 * k), 240};
+    }
+    (void)x;
+    (void)y;
+    return col;
+  });
+}
+
 Image makeOilDecal(int variant) {
   return tileDecal([&](float u, float v, int x, int y) -> Rgba {
     const float n = fbm2(x * 0.16f + variant * 13.0f, y * 0.32f, 600u + static_cast<uint32_t>(variant));
@@ -756,6 +779,7 @@ Image makeRubble(int size, uint32_t seed) {
 void addEconomyDecals(AtlasBuilder& ab, SpriteCatalog& cat) {
   for (int m = 0; m < 16; ++m) cat.trench[static_cast<size_t>(m)] = ab.add(makeTrenchDecal(m), 32, 16);
   for (int v = 0; v < 4; ++v) cat.oil[static_cast<size_t>(v)] = ab.add(makeOilDecal(v), 32, 16);
+  for (int v = 0; v < 4; ++v) cat.ice[static_cast<size_t>(v)] = ab.add(makeIceDecal(v), 32, 16);
   for (int s = 0; s < 3; ++s) cat.rubble[static_cast<size_t>(s)] = ab.add(makeRubble(s + 2, 70u + s), 32 * (s + 2), 16 * (s + 2));
 }
 
@@ -1014,6 +1038,7 @@ bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error, const ArtOption
   addStructure(ab, cat, "steelworks", &makeSteelworks);
   addStructure(ab, cat, "ministry", &makeMinistry);
   addStructure(ab, cat, "flak_tower", &makeFlakTower);
+  addStructure(ab, cat, "fort", &makeFort);
   addStructure(ab, cat, "derrick", &makeDerrick);
   addStructure(ab, cat, "oil_refinery", &makeOilRefinery);
   addStructure(ab, cat, "rowhouse", &makeRowPlaster);

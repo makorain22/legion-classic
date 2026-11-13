@@ -244,6 +244,29 @@ void GameScene::drawGround3D() {
   }
 }
 
+// River ice (9.11): a sheet on the water's surface over every frozen tile in view.
+void GameScene::drawIce3D() {
+  if (!map_.waterLevel()) return;
+  const float vw = static_cast<float>(app_.pixelWidth()), vh = static_cast<float>(app_.pixelHeight());
+  int tx0 = map_.width(), ty0 = map_.height(), tx1 = 0, ty1 = 0;
+  for (Vec2f c : {Vec2f{0, 0}, Vec2f{vw, 0}, Vec2f{0, vh}, Vec2f{vw, vh}}) {
+    const Vec2f g = groundAt(c);
+    tx0 = std::min(tx0, static_cast<int>(g.x / 256) - 3);
+    ty0 = std::min(ty0, static_cast<int>(g.y / 256) - 3);
+    tx1 = std::max(tx1, static_cast<int>(g.x / 256) + 3);
+    ty1 = std::max(ty1, static_cast<int>(g.y / 256) + 3);
+  }
+  tx0 = std::max(0, tx0);
+  ty0 = std::max(0, ty0);
+  tx1 = std::min(map_.width() - 1, tx1);
+  ty1 = std::min(map_.height() - 1, ty1);
+  const float level = map_.waterLevel() / static_cast<float>(HEIGHT_UNITS_PER_TILE) + kDecalLift * 2;
+  auto flat = [&](float, float) { return level; };
+  for (int ty = ty0; ty <= ty1; ++ty)
+    for (int tx = tx0; tx <= tx1; ++tx)
+      if (map_.iced(tx, ty)) renderer_.decal(art_.ice[hash2(tx, ty, 11) & 3], tx * 256.0f + 128, ty * 256.0f + 128, kWhite, kWhite, 1, flat);
+}
+
 // Selection rings and order markers, on the ground.
 void GameScene::drawSelection3D() {
   Registry& reg = sim_->registry();
@@ -369,6 +392,7 @@ void GameScene::render3D() {
 
   // In the air: sprites with no model, smoke, fire, flashes, tracers.
   renderer_.begin3D(cam_);
+  drawIce3D();  // river ice lies on the water (9.11)
   for (const DrawItem& d : billboards_)
     renderer_.billboard(d.frame, worldPoint(d.lx, d.ly, d.h), kTilesPerSpritePixel, d.team, d.tint);
   fx_.drawAir(renderer_, view, fogAt);

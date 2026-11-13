@@ -435,6 +435,9 @@ class Simulation {
   // Levels a new building's plot and eases the ground round it into the slope.
   void levelPlot(uint32_t e, const UnitTypeDef& def, Vec2i origin);
   void destroyEntity(uint32_t e);
+  // Ground units in the tile rectangle that can no longer stand where they are
+  // (the ice broke, the land flooded) go under.
+  void drownIn(int x0, int y0, int x1, int y1);
   void recomputeCover();
   void stepEconomy();
   void stepProduction(uint8_t player);

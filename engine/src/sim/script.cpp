@@ -42,7 +42,7 @@ const char* kActionNames[] = {"Message", "Add objective", "Complete objective", 
                               "Add to counter", "Add to campaign flag", "Spawn from campaign flag", "Radio message",
                               "Cinematic", "Pan camera", "Mark area", "Clear marker", "Play sound", "Play music",
                               "Income rate", "Add logistics point", "Fire trigger", "Reset trigger", "Hide objective",
-                              "Spawn named units"};
+                              "Spawn named units", "Freeze water", "Break the ice"};
 const char* kActionIds[] = {"message", "add_objective", "complete_objective", "fail_objective", "victory", "defeat",
                             "spawn_units", "give_supplies", "reveal_area", "attack_move", "move_units",
                             "change_owner", "kill_units", "enable_trigger", "disable_trigger", "set_computer",
@@ -54,7 +54,7 @@ const char* kActionIds[] = {"message", "add_objective", "complete_objective", "f
                             "ai_wave_size", "set_counter", "add_counter", "add_flag", "spawn_from_flag",
                             "transmission", "cinematic", "camera_pan", "mark_area", "clear_marker", "play_sound",
                             "play_music", "set_income_rate", "add_logistics_point", "fire_trigger", "reset_trigger",
-                            "hide_objective", "spawn_named"};
+                            "hide_objective", "spawn_named", "freeze_water", "break_ice"};
 static_assert(sizeof(kCondIds) / sizeof(kCondIds[0]) == static_cast<size_t>(CondType::Count));
 static_assert(sizeof(kCondNames) / sizeof(kCondNames[0]) == static_cast<size_t>(CondType::Count));
 static_assert(sizeof(kActionIds) / sizeof(kActionIds[0]) == static_cast<size_t>(ActionType::Count));
@@ -632,6 +632,14 @@ void Simulation::perform(const Action& a, size_t depth) {
       cmd.target = c;
       cmd.radius = std::max(s.x1 - s.x0 + 1, s.y1 - s.y0 + 1) * LEPTONS_PER_TILE / 2;
       applyCommandBody(cmd);
+      break;
+    }
+    case ActionType::FreezeWater:
+    case ActionType::BreakIce: {
+      if (a.area < 0 || a.area >= static_cast<int>(script_.areas.size())) break;
+      const ScriptArea& s = script_.areas[static_cast<size_t>(a.area)];
+      const bool frozen = a.type == ActionType::FreezeWater;
+      if (map_.setIce(s.x0, s.y0, s.x1, s.y1, frozen) && !frozen) drownIn(s.x0, s.y0, s.x1, s.y1);
       break;
     }
     case ActionType::SetAlliance: {

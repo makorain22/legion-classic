@@ -30,6 +30,20 @@ std::vector<uint8_t> encodeMap(const Map& map, const std::vector<UnitPlacement>&
   j["height"] = map.height();
   j["waterLevel"] = map.waterLevel();
   j["biome"] = biomeId(map.biome);
+  if (map.anyIce()) {  // river ice (9.11): runs of frozen tiles, [row, first column, length]
+    auto& ice = j["ice"] = nlohmann::json::array();
+    for (int y = 0; y < map.height(); ++y)
+      for (int x = 0; x < map.width();) {
+        if (!map.iced(x, y)) {
+          ++x;
+          continue;
+        }
+        int n = 0;
+        while (x + n < map.width() && map.iced(x + n, y)) ++n;
+        ice.push_back({y, x, n});
+        x += n;
+      }
+  }
   auto& sp = j["supplyPoints"] = nlohmann::json::array();
   for (const Vec2i& p : map.supplyPoints) sp.push_back({p.x, p.y});
   auto& props = j["props"] = nlohmann::json::array();
@@ -182,6 +196,11 @@ bool decodeMap(const std::vector<uint8_t>& bytes, MapFile& out, std::string& err
     }
     out.scriptJson = j.contains("script") ? j["script"].dump() : std::string();
     m.recomputeInfo();
+    for (const auto& run : j.value("ice", nlohmann::json::array()))
+      if (run.is_array() && run.size() == 3) {
+        const int y = run[0].get<int>(), x = run[1].get<int>(), n = run[2].get<int>();
+        m.setIce(x, y, x + n - 1, y, true);
+      }
   } catch (const nlohmann::json::exception& e) {
     error = std::string("map file is damaged: ") + e.what();
     return false;

@@ -184,6 +184,15 @@ class Map {
   void setOil(int tx, int ty, uint8_t v) { oil_[static_cast<size_t>(ty) * width_ + tx] = v; }
   std::vector<uint8_t>& oilData() { return oil_; }
   const std::vector<uint8_t>& oilData() const { return oil_; }
+  // --- River ice (9.11) ---------------------------------------------------------------
+  // Frozen water: men and wheels cross it (slowly), tracks are too heavy for it.
+  // Only tiles under water take ice. Saved with the map (and so in saves).
+  bool iced(int tx, int ty) const { return inBounds(tx, ty) && ice_[static_cast<size_t>(ty) * width_ + tx] != 0; }
+  // Freezes (or thaws) every water tile in the rectangle; returns the tiles changed.
+  int setIce(int x0, int y0, int x1, int y1, bool frozen);
+  bool anyIce() const;
+  std::vector<uint8_t>& iceData() { return ice_; }
+  const std::vector<uint8_t>& iceData() const { return ice_; }
   // --- Supply points ---------------------------------------------------------------
   // Sites where a Supply Depot can be built; a depot on one earns supplies.
   // Stored in tiles (the point's centre tile). Saved with the map.
@@ -239,6 +248,7 @@ class Map {
   std::vector<TileInfo> info_;
   std::vector<uint8_t> blocks_;
   std::vector<uint8_t> oil_;
+  std::vector<uint8_t> ice_;
   std::vector<Prop> props_;
   uint16_t waterLevel_ = 0;
   TerrainRules rules_;
