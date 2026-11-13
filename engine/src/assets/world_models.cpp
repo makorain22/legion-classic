@@ -194,7 +194,9 @@ VoxelModel makeSandRock(int v) {
 namespace {
 
 // Walls of a house: a box with doors and windows punched on every side.
-void houseWalls(VoxelModel& m, int x0, int y0, int x1, int y1, int h, uint8_t wall, uint8_t trim, int storeys = 1) {
+}  // namespace
+
+void houseWalls(VoxelModel& m, int x0, int y0, int x1, int y1, int h, uint8_t wall, uint8_t trim, int storeys) {
   m.box(x0, y0, 0, x1, y1, h, wall);
   m.box(x0, y0, 0, x1, y1, 1, trim);  // plinth
   const int sh = h / storeys;
@@ -228,6 +230,8 @@ void tiledRoof(VoxelModel& m, int x0, int y0, int x1, int y1, int z) {
     m.box(x1 - 1, y0 + i + 1, z + i, x1, y1 - i - 1, z + i + 1, PLASTER);
   }
 }
+
+namespace {
 
 void chimney(VoxelModel& m, int x, int y, int z0, int z1) {
   m.box(x, y, z0, x + 2, y + 2, z1, BRICK);

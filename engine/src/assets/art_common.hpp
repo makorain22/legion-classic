@@ -241,6 +241,15 @@ VoxelModel makeWindmill(const FactionLook&);
 VoxelModel makeMarket(const FactionLook&);
 VoxelModel makeVilla(const FactionLook&);
 VoxelModel makeStiltHut(const FactionLook&);
+// Landmarks for the campaigns (landmark_models.cpp).
+VoxelModel makeRadioMast(const FactionLook&);
+VoxelModel makeHangar(const FactionLook&);
+VoxelModel makeTransportPlane(const FactionLook&);
+VoxelModel makeSteelworks(const FactionLook&);
+VoxelModel makeMinistry(const FactionLook&);
+VoxelModel makeFlakTower(const FactionLook&);
+void houseWalls(VoxelModel& m, int x0, int y0, int x1, int y1, int h, uint8_t wall, uint8_t trim, int storeys = 1);
+void tiledRoof(VoxelModel& m, int x0, int y0, int x1, int y1, int z);
 // A row house by style (0 plaster, 1 brick, 2 half-timbered, 3 mud brick, 4
 // tall mud brick) and neighbour mask (12 voxels a tile, the tile at 2..14 of 16).
 VoxelModel makeRowHouse(int style, int mask);

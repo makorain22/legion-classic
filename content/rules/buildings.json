@@ -1893,6 +1893,109 @@
       "autoTarget": false,
       "garrison": 4,
       "description": "Two storeys of mud brick with a stair house on its flat roof, built into a row."
+    },
+    {
+      "id": "neutral_radio_mast",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Radio Transmitter",
+      "model": "radio_mast",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 1200,
+      "coverAround": 20,
+      "autoTarget": false,
+      "garrison": 6,
+      "sight": 14,
+      "description": "A broadcasting station: a lattice mast and the transmitter house at its foot. Whoever holds it speaks to the whole country."
+    },
+    {
+      "id": "neutral_hangar",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Hangar",
+      "model": "hangar",
+      "footprint": [
+        4,
+        3
+      ],
+      "health": 1600,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 16,
+      "description": "An aircraft hangar on an airfield."
+    },
+    {
+      "id": "neutral_transport_plane",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Transport Aircraft",
+      "model": "transport_plane",
+      "footprint": [
+        4,
+        4
+      ],
+      "health": 300,
+      "autoTarget": false,
+      "description": "A three-engined transport, parked on the field. It flies out the wounded and brings in what little supply there is."
+    },
+    {
+      "id": "neutral_steelworks",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Steelworks",
+      "model": "steelworks",
+      "footprint": [
+        4,
+        4
+      ],
+      "health": 3600,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 24,
+      "description": "A blast furnace, its stoves and casting shed: the nationalised steel that keeps the Reich's armies in shells and tanks."
+    },
+    {
+      "id": "neutral_ministry",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Ministry",
+      "model": "ministry",
+      "footprint": [
+        5,
+        3
+      ],
+      "health": 4200,
+      "coverAround": 40,
+      "autoTarget": false,
+      "garrison": 40,
+      "description": "A government ministry in pale stone: three storeys of offices behind a portico. Room for a garrison of forty."
+    },
+    {
+      "id": "ger_flak_tower",
+      "faction": "ger",
+      "armor": "structure",
+      "name": "Flak Tower",
+      "model": "flak_tower",
+      "footprint": [
+        3,
+        3
+      ],
+      "health": 9000,
+      "hidden": true,
+      "sight": 20,
+      "category": "defense",
+      "weapons": [
+        "cannon_88"
+      ],
+      "turret": {
+        "turnTicks": 2
+      },
+      "garrison": 20,
+      "coverAround": 40,
+      "description": "A fortress of reinforced concrete with heavy guns on its four corners. It can't be built; it has to be taken."
     }
   ]
 }

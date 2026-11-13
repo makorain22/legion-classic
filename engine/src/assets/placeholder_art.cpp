@@ -1008,6 +1008,12 @@ bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error, const ArtOption
   addStructure(ab, cat, "market", &makeMarket);
   addStructure(ab, cat, "villa", &makeVilla);
   addStructure(ab, cat, "stilt_hut", &makeStiltHut);
+  addStructure(ab, cat, "radio_mast", &makeRadioMast);
+  addStructure(ab, cat, "hangar", &makeHangar);
+  addStructure(ab, cat, "transport_plane", &makeTransportPlane);
+  addStructure(ab, cat, "steelworks", &makeSteelworks);
+  addStructure(ab, cat, "ministry", &makeMinistry);
+  addStructure(ab, cat, "flak_tower", &makeFlakTower);
   addStructure(ab, cat, "rowhouse", &makeRowPlaster);
   addStructure(ab, cat, "rowhouse_brick", &makeRowBrick);
   addStructure(ab, cat, "rowhouse_timber", &makeRowTimber);

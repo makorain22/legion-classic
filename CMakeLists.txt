@@ -190,7 +190,8 @@ if(LEGION_BUILD_TESTS)
   add_test(NAME slave_tests COMMAND slave_tests)
 
   # Builds the shipped maps: tutorial, campaigns, scenarios, skirmish maps (tools/make_content.cpp).
-  add_executable(make_content EXCLUDE_FROM_ALL tools/make_content.cpp)
+  file(GLOB MAKE_CONTENT_SOURCES CONFIGURE_DEPENDS tools/make_content.cpp tools/campaign_*.cpp)
+  add_executable(make_content EXCLUDE_FROM_ALL ${MAKE_CONTENT_SOURCES})
   target_link_libraries(make_content PRIVATE slave_core)
   legion_warnings(make_content)
 endif()
