@@ -1014,6 +1014,8 @@ bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error, const ArtOption
   addStructure(ab, cat, "steelworks", &makeSteelworks);
   addStructure(ab, cat, "ministry", &makeMinistry);
   addStructure(ab, cat, "flak_tower", &makeFlakTower);
+  addStructure(ab, cat, "derrick", &makeDerrick);
+  addStructure(ab, cat, "oil_refinery", &makeOilRefinery);
   addStructure(ab, cat, "rowhouse", &makeRowPlaster);
   addStructure(ab, cat, "rowhouse_brick", &makeRowBrick);
   addStructure(ab, cat, "rowhouse_timber", &makeRowTimber);

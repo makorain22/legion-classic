@@ -248,6 +248,8 @@ VoxelModel makeTransportPlane(const FactionLook&);
 VoxelModel makeSteelworks(const FactionLook&);
 VoxelModel makeMinistry(const FactionLook&);
 VoxelModel makeFlakTower(const FactionLook&);
+VoxelModel makeDerrick(const FactionLook&);
+VoxelModel makeOilRefinery(const FactionLook&);
 void houseWalls(VoxelModel& m, int x0, int y0, int x1, int y1, int h, uint8_t wall, uint8_t trim, int storeys = 1);
 void tiledRoof(VoxelModel& m, int x0, int y0, int x1, int y1, int z);
 // A row house by style (0 plaster, 1 brick, 2 half-timbered, 3 mud brick, 4

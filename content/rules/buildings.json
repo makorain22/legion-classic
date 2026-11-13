@@ -1996,6 +1996,36 @@
       "garrison": 20,
       "coverAround": 40,
       "description": "A fortress of reinforced concrete with heavy guns on its four corners. It can't be built; it has to be taken."
+    },
+    {
+      "id": "neutral_derrick",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Oil Derrick",
+      "model": "derrick",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 500,
+      "autoTarget": false,
+      "description": "A wooden derrick over a Galician oil well. Crude for the refinery, and fuel for whoever holds it."
+    },
+    {
+      "id": "neutral_refinery",
+      "faction": "neutral",
+      "armor": "structure",
+      "name": "Oil Refinery",
+      "model": "oil_refinery",
+      "footprint": [
+        4,
+        4
+      ],
+      "health": 3000,
+      "coverAround": 30,
+      "autoTarget": false,
+      "garrison": 16,
+      "description": "An oil refinery: the column, the tanks and the pipework that turn crude into fuel. Easier to burn than to take."
     }
   ]
 }

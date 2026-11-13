@@ -192,4 +192,38 @@ VoxelModel makeFlakTower(const FactionLook&) {
   return m;
 }
 
+// An oil derrick: a lattice tower over the well, a nodding pump beside it.
+VoxelModel makeDerrick(const FactionLook&) {
+  VoxelModel m(24, 24, 60);
+  m.box(2, 2, 0, 22, 22, 1, CONCRETE_DARK);
+  lattice(m, 12, 12, 1, 56, 8.5f, 1.5f, WOOD_DARK);
+  m.box(10, 10, 54, 14, 14, 58, STEEL_DARK);              // the crown block
+  m.box(15, 3, 1, 21, 6, 5, STEEL_DARK);                  // the pump and its beam
+  m.box(14, 4, 7, 22, 5, 8, STEEL);
+  m.box(17, 4, 5, 18, 5, 7, STEEL_DARK);
+  m.box(2, 16, 1, 7, 21, 6, RUST);                        // a tank of crude
+  m.box(3, 2, 0, 9, 7, 1, SOOT);                          // oil on the ground
+  weather(m, WOOD_DARK, SOOT, WOOD, 271, 18, 4);
+  return m;
+}
+
+// An oil refinery: a fractionating column, storage tanks, pipework and a flare.
+VoxelModel makeOilRefinery(const FactionLook&) {
+  VoxelModel m(48, 48, 64);
+  m.box(1, 1, 0, 47, 47, 1, CONCRETE_DARK);
+  for (int z = 1; z < 54; ++z) cylinder(m, 12, 12, z < 6 ? 4.5f : 3.4f, z, z + 1, (z % 8 == 0) ? STEEL_DARK : STEEL);
+  for (int z = 8; z < 52; z += 8) cylinder(m, 12, 12, 4.4f, z, z + 1, RUST);   // platforms round the column
+  for (int z = 1; z < 40; ++z) cylinder(m, 22, 8, 2.0f, z, z + 1, STEEL);
+  for (int i = 0; i < 3; ++i)                                                   // storage tanks
+    for (int z = 1; z < 14; ++z) cylinder(m, 12.0f + i * 13, 36, 5.6f, z, z + 1, (z == 13) ? CONCRETE : CONCRETE_LIGHT);
+  for (int x = 12; x < 40; ++x) m.box(x, 20, 6, x + 1, 22, 8, RUST);           // pipe racks
+  for (int y = 12; y < 36; ++y) m.box(38, y, 6, 40, y + 1, 8, RUST);
+  m.box(30, 4, 1, 44, 16, 9, BRICK);                                            // the pump house
+  tiledRoof(m, 30, 4, 44, 16, 9);
+  for (int z = 1; z < 62; ++z) cylinder(m, 44, 44, 1.0f, z, z + 1, STEEL_DARK);  // the flare stack
+  m.box(43, 43, 60, 46, 46, 63, MARK_RED);
+  weather(m, STEEL, STEEL_DARK, SOOT, 283, 16, 4);
+  return m;
+}
+
 }  // namespace slave::art
