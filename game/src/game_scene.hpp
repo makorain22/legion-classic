@@ -18,7 +18,9 @@
 #include "settings.hpp"
 #include "sidebar.hpp"
 #include "pioneer/assets/placeholder_art.hpp"
+#include "pioneer/core/assets.hpp"
 #include "pioneer/core/content.hpp"
+#include "pioneer/core/hot_reload.hpp"
 #include "pioneer/map/map.hpp"
 #include "pioneer/map/map_io.hpp"
 #include "pioneer/platform/app.hpp"
@@ -237,6 +239,11 @@ class GameScene final : public pioneer::Scene {
 
   // --- Content, mods and creation tools (game_content.cpp) ----------------------
   const pioneer::ContentLayers& content() const { return content_; }
+  pioneer::assets::Registry& assets() { return assets_; }
+  // Where packs are written when no folder is named (pack.build, the Mods page).
+  std::string exportsDir() const { return app_.userDir() + "exports/"; }
+  // Packs one of the installed mods into exportsDir(). `file` receives the pack's path.
+  bool packMod(const std::string& modId, std::string& file, std::string& error);
   const std::vector<pioneer::ModInfo>& installedMods() const { return mods_; }
   void rescanMods();
   std::string userModsDir() const { return app_.userDir() + "mods/"; }
@@ -478,6 +485,15 @@ class GameScene final : public pioneer::Scene {
   bool showConsole_ = false, showProfiler_ = false;
   bool devToolsReady_ = false;
   std::vector<pioneer::mem::ScopedReporter> memReporters_;
+  // --- Data (game_content.cpp): every file the game can read, and what
+  // happens when one changes on disk while the game runs.
+  pioneer::assets::Registry assets_;
+  pioneer::HotReload hotReload_;
+  void refreshAssets();        // after the content layers changed
+  void watchContent();         // who is told about which files
+  void reloadRulesFromDisk();
+  void reloadSounds();
+  void runDataSelfTest();      // the data half of --mods-selftest
   std::unique_ptr<GameAudio> audio_;
   float audioBedsTimer_ = 0;
   void updateAudio(float dt);

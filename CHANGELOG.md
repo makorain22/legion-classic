@@ -27,6 +27,32 @@
   - **Memory by system:** `mem.report`.
   - New options: `--threads N`, `--exec "commands"`, `--profile`, `--trace
     file.json`, `--trace-frames N`. `r.showfps 1` shows frames per second.
+- **Part 2, data** (14 Nov):
+  - **Mods as one file.** *Mods > Pack into one file* (or `mod.pack <id>` in
+    the console) turns a mod's folder into a `.pnpack` you can send to
+    somebody; they drop it into their mods folder and switch it on like any
+    other mod. The game reads it straight out of the file. A pack carries a
+    list of its files with checksums (`pack.verify` says whether it is
+    whole), and can say what it needs: `"requires": ["veterans >= 1.2"]`,
+    `"engine": ">=2.0"`. A plain zip of a mod folder works too. The Mission
+    Maker will export campaigns in this format.
+  - **Changes on disk reach the running game.** Edit a rules file of the
+    game or of an enabled mod in any text editor and the battle in front of
+    you takes it in within a couple of seconds; a half-saved or mistyped
+    file is reported and changes nothing. Sounds, the campaign list and
+    sprite overrides reload the same way. `content.hotreload 0` switches it
+    off.
+  - **A virtual file system** underneath: folders, packs and files in
+    memory layered by priority, one tree of paths, safe against paths that
+    try to leave it.
+  - **An asset registry:** every file the game can read with its kind,
+    where it comes from, a version, and what it uses and is used by
+    (`assets.info campaigns/tutorial/campaign.json`). A campaign that names
+    a map that is not there shows it as missing.
+  - Console: `vfs.mounts`, `vfs.ls`, `vfs.which`, `vfs.cat`, `assets.stats`,
+    `assets.list`, `assets.info`, `content.check`, `content.watches`,
+    `pack.build`, `pack.info`, `pack.verify`, `pack.extract`, `mod.list`,
+    `mod.pack`.
 
 ## 0.9.1 – in progress (edits after Milestone 9; Milestones 9.1–9.12)
 

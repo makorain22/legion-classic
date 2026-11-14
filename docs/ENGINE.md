@@ -12,8 +12,8 @@ stands.
 | Part | What | State |
 | --- | --- | --- |
 | 1 | **Core:** the rename, job system, profiler, memory tracking, logging channels, developer console | **done** |
-| 2 | **Data:** virtual file system, asset registry, hot reload, pack format | next |
-| 3 | **Simulation:** tagged-chunk saves, determinism checker, hierarchical pathfinding and flow fields, vision 2.0, suppression/morale fields | planned |
+| 2 | **Data:** virtual file system, asset registry, hot reload, pack format | **done** |
+| 3 | **Simulation:** tagged-chunk saves, determinism checker, hierarchical pathfinding and flow fields, vision 2.0, suppression/morale fields | next |
 | 4 | **Scripting:** condition/action registry, mission data model, event bus, sandboxed Lua | planned |
 | 5 | **UI framework:** docking, real fonts, UI scale, timeline and node widgets, property grids, key rebinding | planned |
 | 6 | **Renderer:** backend layer, HDR post-processing, time of day, weather, graphics presets with auto-detect | planned |
@@ -25,7 +25,8 @@ stands.
 
 ```
 engine/include/pioneer/   public headers, one folder per system
-engine/src/core/          log, jobs, profiler, memory, console, content layers, fixed-point maths
+engine/src/core/          log, jobs, profiler, memory, console, virtual file system, packs, assets,
+                          hot reload, content layers, fixed-point maths
 engine/src/{ecs,sim,map}  the deterministic simulation
 engine/src/{platform,render,assets,audio,ui}   window, OpenGL 3.3 renderer, art, mixer, developer windows
 game/src/                 Legion Classic itself
@@ -251,3 +252,163 @@ own time, worker threads and trace JSON; tagged allocations and reporters;
 log channels, ring buffer and sinks; console parsing, variables and their
 flags, commands, aliases, binds, completion, config round trip, `wait`,
 queued lines and `exec`; failed checks.
+
+---
+
+## Part 2 – Data
+
+Everything the game reads goes through four pieces that build on each other:
+the **virtual file system** says where a file is, **packs** put a whole mod
+into one file, the **asset registry** knows what every file is and what uses
+it, and **hot reload** brings changes on disk into the running game.
+
+### Virtual file system (`pioneer/core/vfs.hpp`)
+
+One tree of virtual paths (`rules/units.json`, `audio/sfx/rifle.ogg`) over
+any number of **mounts**:
+
+```cpp
+auto fs = std::make_shared<vfs::Vfs>();
+fs->mountDir("content/", "base", 0);                       // a folder
+fs->mountZip("mods/veterans.pnpack", "veterans", 1, "", err);   // a pack, read straight out of the archive
+int gen = fs->mountMemory("generated", 2);                 // files held in memory (tools, tests)
+fs->addMemoryFile(gen, "rules/extra.json", text);
+
+fs->read("rules/units.json", bytes);        // the copy of the highest mount that has it
+fs->layers("rules/units.json");             // every copy, lowest first (for data that is merged)
+fs->list("campaigns", true, ".lmap");       // the merged tree
+fs->listDirs("campaigns");
+```
+
+- Higher priority wins; of equal priorities, the mount made last. A mount can
+  sit at a point in the tree (`mountZip(file, name, prio, "mods/veterans/")`).
+- Paths use `/`, are relative and cannot leave the tree: `../x` and `C:/x` are
+  refused everywhere, also inside archives.
+- Archives fall back to ignoring case, so a pack made on Windows behaves the
+  same on every system.
+- **Writing** goes to one folder mount chosen with `setWriteMount()` (the
+  player's folder), through a temporary file that is renamed into place, so no
+  reader ever sees half a file.
+- **Old code that wants a real path** asks `diskPath(path)`: the file itself
+  for a folder mount, a copy unpacked into the cache folder
+  (`<user folder>/cache/<mount>-<fingerprint>/`) for an archive. The cache is
+  keyed by the archive's contents: nothing is unpacked twice, and copies of
+  older versions of the same pack are removed.
+- An archive under 96 MB is held in memory, so its file is not kept open and
+  can be replaced while the game runs (Windows will not overwrite an open
+  file).
+- Thread-safe for reading from any thread.
+
+`ContentLayers` (`pioneer/core/content.hpp`), the stack "base, then each
+enabled mod" the game has always had, is now a thin layer over a `Vfs`:
+`addRoot(dir)`, `addPack(file)`, `addMod(mod)`; `fileSystem()` gives the tree.
+`all("audio/")` still returns real folders, base first.
+
+### Packs (`pioneer/core/pack.hpp`)
+
+A pack is a zip (`.pnpack`, or plain `.zip`) laid out like a content folder,
+with a manifest `pack.json`: id, name, version, author, description, what it
+holds (`kinds`), the engine versions it runs on, the packs it needs, and every
+file's size and CRC plus one checksum over all of them.
+
+```cpp
+pack::Manifest m;                       // empty fields are filled from the folder's mod.json
+pack::build("mods/veterans/", "veterans-1.2.pnpack", m, err);
+pack::readManifest(file, m, err);
+pack::Report r = pack::verify(file);    // unpacks every file and compares it with the manifest
+pack::extract(file, "somewhere/", err);
+```
+
+- **Requirements with versions:** `"requires": ["base_units >= 1.1", "maps"]`
+  and `"engine": ">=2.0"`. Operators `>= > <= < = ^ ~`; a bare version means
+  "at least". A mod whose requirement is installed but too old gets a warning;
+  a pack made for a newer Pioneer is listed as broken and not loaded.
+- A folder zipped by hand works too: one top folder is skipped, and a
+  `mod.json` is enough (the file list is then taken from the archive).
+- Hidden files, editors' backups and `*.tmp` are left out; files that are
+  already compressed (`.ogg`, `.png`, `.lmap` ...) are stored as they are.
+- **Mods as packs:** drop a pack into a mods folder and it is listed like any
+  other mod (`scanMods`). In one folder, a folder wins over a pack with the
+  same id, because the folder can be edited.
+- In the game: *Mods > Pack into one file*, or `mod.pack <id>` in the console,
+  writes `<user folder>/exports/<id>-<version>.pnpack`. The Mission Maker's
+  exporter (9.14) and asset packs use the same format.
+
+### Asset registry (`pioneer/core/assets.hpp`)
+
+One record per virtual path: its kind (rules, map, campaign, briefing, sound,
+music, texture, model, shader, script, font, pack, data, text), the mount it
+comes from, how many layers have it, size, a **version** that goes up with
+every change, a content hash on request, **what it uses** and **what uses
+it**. Ids never change while the registry lives, also across mod switches.
+
+```cpp
+assets::Registry reg;
+reg.attach(fs);
+reg.rebuild();                    // look at everything mounted
+reg.scanDependencies();           // read the JSON, on all cores: campaign -> maps and briefings,
+                                  // audio.json -> its sound files, maps.json -> its maps
+reg.get("campaigns/ger/campaign.json")->uses;
+reg.usersOf(reg.find("campaigns/ger/g01_walkure.lmap"));
+reg.setScanner(assets::Type::Model, myScanner);   // other kinds declare their own
+```
+
+`reg.apply(changes)` takes what the file system found changed, gives the
+changed assets **and everything that uses them** a new version, and tells
+listeners in that order. An asset that is named but not there stays in the
+registry as *missing*, which is how a campaign with a lost map shows up
+(`assets.info`).
+
+`assets::Cache<T>` holds loaded objects by path: it loads on first use (or
+many at once on every core with `preload`), hands out shared pointers, and
+`reloadChanged()` swaps in a fresh object when the file's version moved.
+Whoever still holds the old object keeps it; a file that fails to load keeps
+its **last good version** and remembers why. Parts 6 and 7 put shaders,
+models and sound banks in such caches.
+
+### Hot reload (`pioneer/core/hot_reload.hpp`)
+
+```cpp
+hot.watch("rules", "rules/", ".json", [&](const std::vector<vfs::Change>&) { reloadRules(); });
+hot.update(fs, dt, &registry);        // once a frame
+```
+
+Every second (`content.interval`) the mounted folders are looked at **on a
+worker thread**; the frame never waits for the disk. A changed file is held
+back until one more look finds it unchanged, because editors and exporters
+write in several steps. A replaced pack is compared entry by entry, so only
+what really differs inside it is reported.
+
+What the game takes in while it runs:
+
+| Files | What happens |
+| --- | --- |
+| `rules/*.json` in the game or any enabled mod | Merged again and put into the running battle, exactly like *Apply* in the rules editor (numbers of types and weapons stay valid; such a battle can no longer be replayed). A file that can't be read changes nothing and says so. |
+| `audio/**` | The sound list and files are loaded again. |
+| `campaigns/**` | The campaign list is read again. |
+| `art/*.png` | The sprite atlas is rebuilt. |
+| `maps/skirmish/**` | Nothing to do: the list is read whenever the page opens. |
+
+Shaders, models and Lua scripts join when their parts are built (6, 7, 4).
+Automated runs (`--offscreen`) only look when told to (`content.check`).
+
+### Console
+
+`vfs.mounts`, `vfs.ls [folder] [-r]`, `vfs.which <path>`, `vfs.cat <path>`,
+`assets.stats`, `assets.list [kind|text]`, `assets.info <path>`,
+`assets.rescan`, `content.check`, `content.watches`, `pack.build <folder>
+[file]`, `pack.info <file>`, `pack.verify <file>`, `pack.extract <file>
+<folder>`, `mod.list`, `mod.pack <id>`; variables `content.hotreload` and
+`content.interval`. Paths complete with Tab; a mod's id stands for its folder.
+
+### Tests
+
+`tests/test_data.cpp` (13 cases): path cleaning; layering, mount points and
+memory mounts; writing; versions and requirements; building, verifying,
+unpacking and tampering with packs; reading from archives and the unpack
+cache; hand-zipped mods; change detection in folders and replaced packs; hot
+reload's settling; the registry's kinds, links, versions and mod switches;
+caches and their last good version; packs as mods through `ContentLayers`;
+and one over the game's real content: every file its data names exists.
+`--mods-selftest` edits a mod's rules on disk under a running battle, packs
+the mod, deletes the folder and plays on from the pack.

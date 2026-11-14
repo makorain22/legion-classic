@@ -6,9 +6,12 @@
 #include <fstream>
 
 #include "editor.hpp"
+#include "game_audio.hpp"
 #include "game_scene.hpp"
 #include "rules_editor.hpp"
 #include "pioneer/core/log.hpp"
+#include "pioneer/core/pack.hpp"
+#include "pioneer/core/version.hpp"
 
 using namespace pioneer;
 
@@ -27,8 +30,15 @@ bool GameScene::loadRules(std::string& error) {
   const std::vector<std::string> order = resolveLoadOrder(settings_.mods, mods_, warnings);
   modWarnings_ = warnings;
   ContentLayers layers;
+  layers.setCacheDir(app_.userDir() + "cache/");
   layers.addRoot(contentDir_);
-  for (const std::string& id : order) layers.addRoot(findMod(mods_, id)->dir, id);
+  for (const std::string& id : order) {
+    std::string why;
+    if (!layers.addMod(*findMod(mods_, id), why)) {
+      modWarnings_ += "Mod '" + id + "' can't be opened: " + why + "\n";
+      PNR_WARN("Mod %s can't be opened: %s", id.c_str(), why.c_str());
+    }
+  }
   nlohmann::json docs[kRuleFileCount];
   for (int i = 0; i < kRuleFileCount; ++i)
     if (!layers.loadRules(kRuleFiles[i], docs[i], error)) return false;
@@ -43,6 +53,7 @@ bool GameScene::loadRules(std::string& error) {
   for (int i = 0; i < kRuleFileCount; ++i) rules_[i] = std::move(docs[i]);
   rulesHash_ = pioneer::rulesHash(rules_);
   rulesEditedLive_ = false;
+  refreshAssets();
   trenchTypes_.assign(types_.size(), false);
   for (size_t i = 0; i < types_.size(); ++i) trenchTypes_[i] = types_.get(static_cast<int>(i)).model == "trench";
   bridgeTypes_.assign(types_.size(), false);
@@ -53,6 +64,90 @@ bool GameScene::loadRules(std::string& error) {
     PNR_INFO("Mods: %s (rules %s)", list.c_str(), rulesHash_.c_str());
   }
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// The asset registry and hot reload
+// ---------------------------------------------------------------------------
+void GameScene::refreshAssets() {
+  assets_.attach(content_.fileSystem());
+  assets_.rebuild();
+  const size_t links = assets_.scanDependencies();
+  PNR_DEBUG_CH(Assets, "%zu assets, %zu links between them", assets_.all().size(), links);
+}
+
+void GameScene::watchContent() {
+  // Automated runs look at the disk only when told to (content.check), so
+  // they behave the same on every machine.
+  hotReload_.setEnabled(!app_.offscreen());
+  hotReload_.watch("rules", "rules/", ".json", [this](const std::vector<vfs::Change>&) { reloadRulesFromDisk(); });
+  hotReload_.watch("sounds", "audio/", "", [this](const std::vector<vfs::Change>&) { reloadSounds(); });
+  hotReload_.watch("campaigns", "campaigns/", "", [this](const std::vector<vfs::Change>&) {
+    loadCampaigns();
+    PNR_INFO_CH(Content, "Campaign list read again: %zu campaigns", campaigns_.size());
+  });
+  hotReload_.watch("sprites", "art/", ".png", [this](const std::vector<vfs::Change>&) {
+    std::string err;
+    if (!reloadArt(err)) PNR_WARN_CH(Content, "Sprites not reloaded: %s", err.c_str());
+    else PNR_INFO_CH(Content, "Sprites reloaded from disk");
+  });
+}
+
+void GameScene::reloadRulesFromDisk() {
+  nlohmann::json docs[kRuleFileCount];
+  std::string error;
+  for (int i = 0; i < kRuleFileCount; ++i)
+    if (!content_.loadRules(kRuleFiles[i], docs[i], error)) {
+      // Half-saved or mistyped: keep playing on the rules we have.
+      PNR_WARN_CH(Content, "Rules not reloaded: %s", error.c_str());
+      showStatus("Rules on disk can't be read: " + error, 6.0f);
+      return;
+    }
+  if (pioneer::rulesHash(docs) == rulesHash_) return;  // saved again without a change
+  std::string notes;
+  if (!applyRules(docs, notes, error)) {
+    PNR_WARN_CH(Content, "Rules not reloaded: %s", error.c_str());
+    showStatus("Rules on disk were not taken in: " + error, 6.0f);
+    return;
+  }
+  if (rulesEditor_) rulesEditor_->reset();
+  showStatus("Rules reloaded from disk.", 4.0f);
+  PNR_INFO_CH(Content, "Rules reloaded from disk (%s)%s%s", rulesHash_.c_str(), notes.empty() ? "" : ": ",
+              notes.c_str());
+}
+
+void GameScene::reloadSounds() {
+  if (opt_.noSound || (app_.offscreen() && !opt_.forceSound)) return;
+  // The mixer's sounds are loaded once per GameAudio: start a fresh one.
+  audio_.reset();
+  audio_ = std::make_unique<GameAudio>();
+  std::string err;
+  if (!audio_->init(content_.all("audio/"), err)) {
+    PNR_WARN_CH(Content, "Sound off: %s", err.c_str());
+    return;
+  }
+  applySettings();  // the volumes
+  audio_->setBiome(map_.biome);
+  if (mode_ != Mode::Menu) audio_->newBattle();
+  PNR_INFO_CH(Content, "Sounds reloaded from disk");
+}
+
+bool GameScene::packMod(const std::string& modId, std::string& file, std::string& error) {
+  rescanMods();
+  const ModInfo* m = findMod(mods_, modId);
+  if (!m) {
+    error = "there is no mod called '" + modId + "'";
+    return false;
+  }
+  if (m->packed) {
+    error = "'" + m->name + "' is a pack already (" + m->file + ")";
+    return false;
+  }
+  pack::Manifest pm;
+  pm.id = m->id;
+  pm.engine = std::string(">=") + kEngineVersion;
+  file = exportsDir() + m->id + "-" + m->version + pack::kExtension;
+  return pack::build(m->dir, file, pm, error);
 }
 
 ArtOptions GameScene::artOptions() const {
@@ -257,8 +352,73 @@ void GameScene::runModsSelfTest() {
     check(setMods({}, err), "switch the mod off: " + err);
     check(types_.get(types_.find("ger_rifleman")).maxHealth == 100, "back to the game's own rules");
     check(loadGame(savesDir_ + "selftest_mods.lsav", err), "the save loads again without the mod: " + err);
+  }
+  if (frame_ >= 20) runDataSelfTest();
+}
+
+// The second half of --mods-selftest (Pioneer part 2): hot reload, the asset
+// registry and packs, through the real game. (A function of its own: one
+// very long function is slow to compile.)
+void GameScene::runDataSelfTest() {
+  auto check = [&](bool ok, const std::string& what) {
+    if (!ok) ++selfTestFailures_;
+    PNR_INFO("MODS SELFTEST %s: %s", ok ? "ok  " : "FAIL", what.c_str());
+  };
+  const std::string modId = "selftest_mod";
+  std::string err;
+  const std::string modDir = userModsDir() + modId + "/";
+  const std::string packFile = userModsDir() + modId + pack::kExtension;
+  if (frame_ == 20) {
+    check(setMods({modId}, err), "the mod on again: " + err);
+    hotReload_.checkNow(content_.fileSystem(), &assets_);  // what is on disk now is the starting point
+    const assets::Record* rec = assets_.get("rules/units.json");
+    check(rec && rec->present && rec->layers == 2 && rec->source == modId,
+          "the asset registry knows the mod's copy of rules/units.json wins");
+    const assets::Record* tut = assets_.get("campaigns/tutorial/campaign.json");
+    check(tut && !tut->uses.empty(), "it knows a campaign uses its missions and briefings");
+  }
+  if (frame_ == 22) {
+    // Somebody edits the mod's rules in a text editor while the game runs.
+    const uint32_t before = assets_.get("rules/units.json")->version;
+    std::ofstream(modDir + "rules/units.json") << R"({"units": [{"id": "ger_rifleman", "health": 4321}]})";
+    const size_t n = hotReload_.checkNow(content_.fileSystem(), &assets_);
+    check(n == 1, "one changed file is noticed on disk (" + std::to_string(n) + ")");
+    check(types_.get(types_.find("ger_rifleman")).maxHealth == 4321, "the running game has the edited rules");
+    check(assets_.get("rules/units.json")->version == before + 1, "the asset has a new version");
+    // A half-typed file must not hurt the game.
+    std::ofstream(modDir + "rules/units.json") << R"({"units": [{"id": "ger_rifleman", "health": )";
+    hotReload_.checkNow(content_.fileSystem(), &assets_);
+    check(types_.get(types_.find("ger_rifleman")).maxHealth == 4321, "a file that can't be read changes nothing");
+    std::ofstream(modDir + "rules/units.json") << R"({"units": [{"id": "ger_rifleman", "health": 4321}]})";
+    hotReload_.checkNow(content_.fileSystem(), &assets_);
+  }
+  if (frame_ == 24) {
+    // The mod as one file: packed, checked, the folder thrown away.
+    std::string made;
+    check(packMod(modId, made, err), "pack the mod: " + err);
+    const pack::Report rep = pack::verify(made);
+    check(rep.ok && rep.files >= 3, "the pack checks out (" + std::to_string(rep.files) + " files)");
+    check(setMods({}, err), "mods off: " + err);
     std::error_code ec;
-    std::filesystem::remove_all(userModsDir() + modId, ec);
+    std::filesystem::remove_all(modDir, ec);
+    std::filesystem::copy_file(made, packFile, std::filesystem::copy_options::overwrite_existing, ec);
+    std::filesystem::remove(made, ec);
+    rescanMods();
+    const ModInfo* m = findMod(mods_, modId);
+    check(m && m->packed && m->error.empty() && m->name == "Self-test mod",
+          "the pack is listed as a mod" + (m && !m->error.empty() ? ": " + m->error : std::string()));
+    check(setMods({modId}, err), "switch the packed mod on: " + err);
+    check(types_.get(types_.find("ger_rifleman")).maxHealth == 4321, "its rules are read straight out of the pack");
+    const std::vector<std::string> ruleDirs = content_.all("rules/");
+    check(ruleDirs.size() == 2 && std::filesystem::exists(ruleDirs[1] + "units.json"),
+          "code that needs real files gets an unpacked copy");
+  }
+  if (frame_ == 26) {
+    check(setMods({}, err), "switch the packed mod off: " + err);
+    check(types_.get(types_.find("ger_rifleman")).maxHealth == 100, "back to the game's own rules");
+    std::error_code ec;
+    std::filesystem::remove(packFile, ec);
+    std::filesystem::remove_all(modDir, ec);
     std::filesystem::remove(savesDir_ + "selftest_mods.lsav", ec);
     rescanMods();
     PNR_INFO("MODS SELFTEST %s (%d failures)", selfTestFailures_ ? "FAILED" : "PASSED", selfTestFailures_);

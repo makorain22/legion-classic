@@ -322,7 +322,7 @@ bool RulesEditor::saveToMod(const std::string& modId, std::string& message) {
   }
   scene_.rescanMods();
   const ModInfo* mod = findMod(scene_.installedMods(), modId);
-  if (!mod || !mod->user) {
+  if (!mod || !mod->user || mod->packed) {
     message = "Not saved: pick one of your own mods (or make one)";
     return false;
   }
@@ -883,7 +883,7 @@ void RulesEditor::drawBottomBar() {
   ImGui::SameLine();
   std::vector<std::string> mine;
   for (const ModInfo& m : scene_.installedMods())
-    if (m.user && m.error.empty()) mine.push_back(m.id);
+    if (m.user && !m.packed && m.error.empty()) mine.push_back(m.id);  // a pack can't be written into
   std::string& target = scene_.settings().toolMod;
   if (std::find(mine.begin(), mine.end(), target) == mine.end()) target = mine.empty() ? std::string() : mine.front();
   ImGui::SetNextItemWidth(170);

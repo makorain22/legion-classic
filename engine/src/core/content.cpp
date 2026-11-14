@@ -47,13 +47,83 @@ bool removes(const nlohmann::json& e) { return e.is_object() && e.value("_remove
 // ---------------------------------------------------------------------------
 // Mods on disk
 // ---------------------------------------------------------------------------
+namespace {
+void readRequirements(const nlohmann::json& j, ModInfo& m) {
+  if (j.contains("requires") && j["requires"].is_array())
+    for (const auto& r : j["requires"]) {
+      if (!r.is_string()) continue;
+      pack::Requirement q;
+      if (!pack::Requirement::parse(r.get<std::string>(), q)) {
+        m.error = "can't read the requirement \"" + r.get<std::string>() + "\"";
+        continue;
+      }
+      m.dependencies.push_back(q.id);
+      m.requirements.push_back(std::move(q));
+    }
+  if (j.contains("engine") && j["engine"].is_string()) {
+    pack::Manifest probe;
+    probe.engine = j["engine"].get<std::string>();
+    std::string why;
+    if (!pack::engineAllows(probe, &why)) m.error = why;
+  }
+}
+
+bool isPackFile(const fs::path& p) {
+  std::string ext = p.extension().string();
+  for (char& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  return ext == pack::kExtension || ext == ".zip";
+}
+}  // namespace
+
 std::vector<ModInfo> scanMods(const std::vector<std::string>& modDirs, size_t firstUserDir) {
   std::vector<ModInfo> mods;
   for (size_t d = 0; d < modDirs.size(); ++d) {
     std::error_code ec;
     if (!fs::is_directory(modDirs[d], ec)) continue;
+    // Packs first, folders second: of the two with one id, the folder (the copy
+    // that can be edited) is the one that counts.
+    std::vector<fs::directory_entry> packs, folders;
     for (const auto& entry : fs::directory_iterator(modDirs[d], ec)) {
-      if (!entry.is_directory(ec)) continue;
+      if (entry.is_directory(ec)) folders.push_back(entry);
+      else if (entry.is_regular_file(ec) && isPackFile(entry.path())) packs.push_back(entry);
+    }
+    auto byName = [](const fs::directory_entry& a, const fs::directory_entry& b) { return a.path() < b.path(); };
+    std::sort(packs.begin(), packs.end(), byName);
+    std::sort(folders.begin(), folders.end(), byName);
+    auto put = [&](ModInfo&& m) {
+      auto same = std::find_if(mods.begin(), mods.end(), [&](const ModInfo& o) { return o.id == m.id; });
+      if (same != mods.end()) *same = std::move(m);  // the player's own copy wins
+      else mods.push_back(std::move(m));
+    };
+    for (const auto& entry : packs) {
+      ModInfo m;
+      m.packed = true;
+      m.file = entry.path().generic_string();
+      m.id = entry.path().stem().string();
+      m.name = m.id;
+      m.user = d >= firstUserDir;
+      pack::Manifest pm;
+      std::string err;
+      if (!pack::readManifest(m.file, pm, err)) {
+        m.error = err;
+      } else {
+        if (!pm.id.empty()) m.id = pm.id;
+        m.name = pm.name.empty() ? m.id : pm.name;
+        m.version = pm.version.empty() ? m.version : pm.version;
+        m.author = pm.author;
+        m.description = pm.description;
+        m.checksum = pm.checksum;
+        m.kinds = pm.kinds;
+        for (const pack::Requirement& q : pm.requirements) {
+          m.dependencies.push_back(q.id);
+          m.requirements.push_back(q);
+        }
+        std::string why;
+        if (!pack::engineAllows(pm, &why)) m.error = why;
+      }
+      put(std::move(m));
+    }
+    for (const auto& entry : folders) {
       ModInfo m;
       m.id = entry.path().filename().string();
       m.dir = withSlash(entry.path().generic_string());
@@ -70,13 +140,9 @@ std::vector<ModInfo> scanMods(const std::vector<std::string>& modDirs, size_t fi
         m.version = j.value("version", m.version);
         m.author = j.value("author", std::string());
         m.description = j.value("description", std::string());
-        if (j.contains("requires") && j["requires"].is_array())
-          for (const auto& r : j["requires"])
-            if (r.is_string()) m.dependencies.push_back(r.get<std::string>());
+        readRequirements(j, m);
       }
-      auto same = std::find_if(mods.begin(), mods.end(), [&](const ModInfo& o) { return o.id == m.id; });
-      if (same != mods.end()) *same = std::move(m);  // the player's own copy wins
-      else mods.push_back(std::move(m));
+      put(std::move(m));
     }
   }
   std::sort(mods.begin(), mods.end(), [](const ModInfo& a, const ModInfo& b) { return a.name < b.name; });
@@ -171,6 +237,14 @@ std::vector<std::string> resolveLoadOrder(const std::vector<std::string>& enable
       if (std::find(wanted.begin(), wanted.end(), dep) == wanted.end()) {
         warnings += "Mod '" + m->name + "' needs '" + dep + "', which is not enabled.\n";
         continue;
+      }
+      // The right version of it?
+      const ModInfo* have = findMod(mods, dep);
+      for (const pack::Requirement& q : m->requirements) {
+        pack::Version v;
+        if (q.id != dep || q.op.empty() || !have || !pack::Version::parse(have->version, v) || q.allows(v)) continue;
+        warnings += "Mod '" + m->name + "' needs '" + have->name + "' " + q.wording() + "; version " +
+                    have->version + " is installed.\n";
       }
       place(dep);
     }
@@ -269,16 +343,46 @@ nlohmann::json diffRules(const nlohmann::json& base, const nlohmann::json& targe
 // ---------------------------------------------------------------------------
 // Layers
 // ---------------------------------------------------------------------------
+ContentLayers::ContentLayers() : fs_(std::make_shared<vfs::Vfs>()) {}
+
+void ContentLayers::clear() {
+  const std::string cache = fs_->cacheDir();
+  fs_ = std::make_shared<vfs::Vfs>();
+  fs_->setCacheDir(cache);
+  roots_.clear();
+  modIds_.clear();
+  mounts_.clear();
+}
+
+void ContentLayers::setCacheDir(const std::string& dir) { fs_->setCacheDir(dir); }
+
 void ContentLayers::addRoot(const std::string& dir, const std::string& modId) {
   roots_.push_back(withSlash(dir));
   modIds_.push_back(modId);
+  mounts_.push_back(fs_->mountDir(roots_.back(), modId.empty() ? "base" : modId, static_cast<int>(roots_.size())));
+}
+
+bool ContentLayers::addPack(const std::string& file, const std::string& modId, std::string& error) {
+  const int mount = fs_->mountZip(file, modId, static_cast<int>(roots_.size()) + 1, std::string(), error);
+  if (mount < 0) return false;
+  roots_.push_back(file);
+  modIds_.push_back(modId);
+  mounts_.push_back(mount);
+  return true;
+}
+
+bool ContentLayers::addMod(const ModInfo& mod, std::string& error) {
+  if (mod.packed) return addPack(mod.file, mod.id, error);
+  addRoot(mod.dir, mod.id);
+  return true;
 }
 
 std::vector<std::string> ContentLayers::all(const std::string& rel) const {
   std::vector<std::string> out;
-  std::error_code ec;
-  for (const std::string& r : roots_)
-    if (fs::exists(r + rel, ec)) out.push_back(r + rel);
+  for (int mount : mounts_) {
+    std::string p = fs_->diskPathIn(mount, rel);
+    if (!p.empty()) out.push_back(std::move(p));
+  }
   return out;
 }
 
@@ -290,15 +394,21 @@ bool ContentLayers::loadRulesBelow(const std::string& file, const std::string& s
                                    std::string& error) const {
   out = nlohmann::json::object();
   bool any = false;
-  std::error_code ec;
-  for (size_t i = 0; i < roots_.size(); ++i) {
+  const std::string rel = "rules/" + file;
+  for (size_t i = 0; i < mounts_.size(); ++i) {
     if (!stopAt.empty() && modIds_[i] == stopAt) break;
-    const std::string path = roots_[i] + "rules/" + file;
-    if (!fs::exists(path, ec)) continue;
-    nlohmann::json doc;
-    if (!readJsonFile(path, doc, error)) return false;
+    vfs::FileInfo fi;
+    if (!fs_->statIn(mounts_[i], rel, fi)) continue;
+    const std::string where = fs_->describe(mounts_[i], rel);
+    std::vector<uint8_t> bytes;
+    if (!fs_->readIn(mounts_[i], rel, bytes, &error)) return false;
+    nlohmann::json doc = nlohmann::json::parse(bytes.begin(), bytes.end(), nullptr, false, true);  // comments allowed
+    if (doc.is_discarded()) {
+      error = where + ": invalid JSON";
+      return false;
+    }
     if (!doc.is_object()) {
-      error = path + ": expected a JSON object";
+      error = where + ": expected a JSON object";
       return false;
     }
     if (!any) out = std::move(doc);

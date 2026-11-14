@@ -618,6 +618,12 @@ the two creation tools:
   second against each armour, speed, health per supply). Changes go into the
   battle behind the menu, or the one you are playing, as you type. **Save to
   mod** keeps them as a mod.
+A mod can also be a single file, a **pack** (`.pnpack`): drop it into your
+mods folder and it appears in the list. **Pack into one file** on the Mods
+page turns one of your folder mods into a pack to send to somebody (it lands
+in the `exports` folder beside your saves). While the game runs it watches
+its files: a rules file you edit and save is in the battle a moment later.
+
 The rules editor is also on the editor's **Battle** tab (F2). A mod is a folder of rule
 changes, sprites and scenarios; the game ships with a small example,
 *Veteran Grenadiers*. Saved games remember their mods. Everything about making

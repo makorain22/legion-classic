@@ -22,6 +22,50 @@ its rules and art and starts a fresh battle behind the menu. Your choice is
 remembered. **Open mods folder** opens your own mods folder; **Create mod**
 makes an empty one.
 
+## Editing while the game runs (new in 0.9.2)
+
+Leave the game open beside your text editor. When you save a `rules\*.json`
+file of the game or of a mod that is switched on, the battle on screen takes
+the change in within a couple of seconds ("Rules reloaded from disk"), the
+same way *Apply* in the rules editor does. A file that can't be read (a
+missing bracket, a half-finished save) is reported and nothing changes.
+Sounds (`audio\`), campaigns (`campaigns\`) and sprite overrides (`art\`)
+reload too. `content.hotreload 0` in the console switches this off;
+`content.check` looks at once instead of waiting.
+
+## A mod as one file: packs (new in 0.9.2)
+
+To hand a mod to somebody, pack it: **Mods → pick the mod → Pack into one
+file**, or `mod.pack my_mod` in the console. That writes
+`%APPDATA%\Makorain\LegionClassic\exports\my_mod-1.0.pnpack`. Whoever gets
+it drops the file into their mods folder and ticks it on the Mods page like
+any other mod; nothing needs unpacking.
+
+- A pack is a zip with a `pack.json` listing every file with its size and
+  checksum. `pack.verify <file>` in the console tells whether a pack is whole;
+  `pack.info <file>` shows what it says about itself; `pack.extract <file>
+  <folder>` turns it back into a folder.
+- A plain `.zip` of a mod folder works as well (with the folder itself inside
+  the zip or without).
+- If your mods folder holds both `my_mod\` and `my_mod.pnpack`, the folder is
+  used: it is the copy you can edit.
+- A pack cannot be changed by the creation tools. Unpack it into a folder to
+  work on it.
+
+**Saying what a mod needs** (in `mod.json`; packing copies it into the pack):
+
+```json
+{"name": "Elite Infantry", "version": "2.1",
+ "requires": ["example_veterans >= 1.2", "my_maps"],
+ "engine": ">=2.0"}
+```
+
+`requires` lists other mods by id, each optionally with a version: `>= 1.2`
+(at least), `= 1.0` (exactly), `^1.2` (1.2 or newer, but not 2.0), `~1.2`
+(1.2.x). A required mod that is not switched on, or too old, is named on the
+Mods page; `engine` keeps a mod made for a newer version of the game from
+loading on an older one.
+
 ## What a mod folder holds
 
 ```
@@ -317,6 +361,9 @@ Press **`** or **F9** in the game. For mod work the useful lines are:
 | `credits 20000`, `side 1`, `reveal` | Give a side supplies, command another side, see everything |
 | `speed 8`, `pause`, `restart` | Run the battle fast, stop it, start again |
 | `log.level content debug` | Make the content loader say more in the log |
+| `vfs.which rules/units.json` | Show every copy of a file, the game's and each mod's; the last one listed is the one in use |
+| `assets.info campaigns/my_war/campaign.json` | Show what a file uses and what uses it; a map or briefing the campaign names but that is not there is marked MISSING |
+| `mod.list`, `mod.pack my_mod` | List the mods; pack one into a single file |
 | `bind f6 "spawn my_new_tank 4"` | Put a line you type often on a key |
 
 Lines you want at every start (binds, `cheats 1`) go in `autoexec.cfg` in the

@@ -12,21 +12,35 @@
 //   * art/ PNG files replace sprites of the same name (later layers win).
 //   * scenarios/ add missions to the list.
 //
+// A mod can also be a single file: a pack (".pnpack" or ".zip", see pack.hpp)
+// dropped into a mods folder. It is read straight out of the archive through
+// the virtual file system (vfs.hpp), which the layers are built on.
+//
 // Everything here is plain data and file handling, with no graphics, so it is
 // shared by the game, the tools and the tests.
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include <nlohmann/json.hpp>
 
+#include "pioneer/core/pack.hpp"
+#include "pioneer/core/vfs.hpp"
+
 namespace pioneer {
 
 // A mod as described by its mod.json.
 struct ModInfo {
-  std::string id;           // folder name; what settings and saves refer to
-  std::string dir;          // full path, ending in '/'
+  std::string id;           // folder name (or a pack's id); what settings and saves refer to
+  std::string dir;          // full path, ending in '/' ("" for a pack)
+  std::string file;         // a pack: the archive's path
+  bool packed = false;      // one file instead of a folder; read-only
+  std::string checksum;     // a pack: of its contents
+  std::vector<std::string> kinds;  // a pack: what it holds ("rules", "campaigns" ...)
+  // What it needs, with versions: "requires": ["base_units >= 1.1"] and "engine": ">=2.0".
+  std::vector<pack::Requirement> requirements;
   std::string name;         // shown to players (defaults to the id)
   std::string version = "1.0";
   std::string author;
@@ -36,7 +50,8 @@ struct ModInfo {
   std::string error;        // bad mod.json: listed, but can't be enabled
 };
 
-// Every mod in these folders (later folders win for the same id), sorted by name.
+// Every mod in these folders (later folders win for the same id; in one
+// folder, a folder wins over a pack of the same id), sorted by name.
 std::vector<ModInfo> scanMods(const std::vector<std::string>& modDirs, size_t firstUserDir = 1);
 const ModInfo* findMod(const std::vector<ModInfo>& mods, const std::string& id);
 bool writeModInfo(const ModInfo& m, std::string& error);
@@ -47,8 +62,8 @@ bool createMod(const std::string& modsDir, const std::string& id, const std::str
 std::string modIdFromName(const std::string& name);
 
 // Checks an enabled list against what is installed: drops missing or broken
-// mods and moves each mod after the ones it requires. Problems are reported
-// one per line in `warnings`.
+// mods and moves each mod after the ones it requires. Problems (also a
+// required mod that is too old) are reported one per line in `warnings`.
 std::vector<std::string> resolveLoadOrder(const std::vector<std::string>& enabled, const std::vector<ModInfo>& mods,
                                           std::string& warnings);
 
@@ -63,15 +78,29 @@ void mergeRules(nlohmann::json& base, const nlohmann::json& patch);
 // The smallest patch that turns `base` into `target` (what a mod file holds).
 nlohmann::json diffRules(const nlohmann::json& base, const nlohmann::json& target);
 
-// A stack of content folders: the base first, then each enabled mod.
+// A stack of content layers: the base first, then each enabled mod. Each
+// layer is a mount of one virtual file system (fileSystem()), the base lowest.
 class ContentLayers {
  public:
-  void clear() { roots_.clear(); modIds_.clear(); }
+  ContentLayers();
+  void clear();
   void addRoot(const std::string& dir, const std::string& modId = {});
-  const std::vector<std::string>& roots() const { return roots_; }
+  // A pack as a layer. False (and nothing added) if the archive can't be read.
+  bool addPack(const std::string& file, const std::string& modId, std::string& error);
+  // A folder or a pack, whichever the mod is.
+  bool addMod(const ModInfo& mod, std::string& error);
+  // Where archives are unpacked for code that needs real files (see Vfs::diskPath).
+  void setCacheDir(const std::string& dir);
+  const std::vector<std::string>& roots() const { return roots_; }    // folders, or archive files
   const std::vector<std::string>& modIds() const { return modIds_; }  // enabled mods, in load order
+  const std::vector<int>& mounts() const { return mounts_; }          // each layer's mount id
+  // Everything the layers hold, as one tree. Shared: it outlives this object
+  // for as long as somebody (a scan on a worker thread) still uses it.
+  const std::shared_ptr<vfs::Vfs>& fileSystem() const { return fs_; }
 
-  // Every existing copy of a relative path, base first.
+  // Every existing copy of a relative path, base first, as paths on disk. A
+  // folder is asked for with a trailing '/'. For a layer that is a pack, the
+  // file or folder is unpacked into the cache first.
   std::vector<std::string> all(const std::string& rel) const;
   // The rules merged through every layer, with the "_comment" of the base kept.
   // Fails on unreadable JSON, naming the file.
@@ -81,8 +110,10 @@ class ContentLayers {
                       std::string& error) const;
 
  private:
+  std::shared_ptr<vfs::Vfs> fs_;
   std::vector<std::string> roots_;
   std::vector<std::string> modIds_;  // "" for the base
+  std::vector<int> mounts_;
 };
 
 // 64-bit FNV-1a of the merged rules, as hex: saves and replays carry it.

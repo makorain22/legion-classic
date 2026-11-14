@@ -241,18 +241,40 @@ void Menus::drawMods() {
     if (!m->description.empty()) ImGui::TextWrapped("%s", m->description.c_str());
     if (!m->dependencies.empty()) {
       std::string deps;
-      for (const std::string& d : m->dependencies) deps += (deps.empty() ? "" : ", ") + d;
+      for (size_t i = 0; i < m->dependencies.size(); ++i) {
+        // With the version it asks for, when it asks for one.
+        std::string one = m->dependencies[i];
+        for (const pioneer::pack::Requirement& q : m->requirements)
+          if (q.id == one && !q.op.empty()) one += " (" + q.wording() + ")";
+        deps += (deps.empty() ? "" : ", ") + one;
+      }
       ImGui::TextWrapped("Needs: %s", deps.c_str());
     }
     if (!m->error.empty()) ImGui::TextColored(ImVec4(0.95f, 0.45f, 0.35f, 1), "%s", m->error.c_str());
-    ImGui::TextDisabled("%s", m->user ? "In your mods folder" : "Installed with the game");
     std::string has;
-    for (const char* part : {"rules", "art", "scenarios"}) {
-      std::error_code ec;
-      if (std::filesystem::exists(m->dir + part, ec) && !std::filesystem::is_empty(m->dir + part, ec))
-        has += (has.empty() ? "" : ", ") + std::string(part);
+    if (m->packed) {
+      ImGui::TextDisabled("%s", m->user ? "A pack (one file) in your mods folder" : "A pack installed with the game");
+      for (const std::string& k : m->kinds) has += (has.empty() ? "" : ", ") + k;
+    } else {
+      ImGui::TextDisabled("%s", m->user ? "In your mods folder" : "Installed with the game");
+      for (const char* part : {"rules", "art", "scenarios", "campaigns", "maps", "audio"}) {
+        std::error_code ec;
+        if (std::filesystem::exists(m->dir + part, ec) && !std::filesystem::is_empty(m->dir + part, ec))
+          has += (has.empty() ? "" : ", ") + std::string(part);
+      }
     }
     ImGui::TextDisabled("Changes: %s", has.empty() ? "nothing yet" : has.c_str());
+    if (!m->packed && m->error.empty()) {
+      // One file to hand to somebody else: they drop it into their mods folder.
+      if (ImGui::SmallButton("Pack into one file")) {
+        std::string file, err;
+        if (scene_.packMod(m->id, file, err)) error_ = "Packed into " + file;
+        else error_ = "Not packed: " + err;
+      }
+      if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Writes %s-%s.pnpack into the exports folder.\nWhoever gets it drops it into their mods folder.",
+                          m->id.c_str(), m->version.c_str());
+    }
   } else {
     ImGui::TextDisabled("Pick a mod to see what it is.");
   }
@@ -302,7 +324,12 @@ void Menus::drawMods() {
     }
   }
   ImGui::EndDisabled();
-  if (!error_.empty()) ImGui::TextColored(ImVec4(0.95f, 0.45f, 0.35f, 1), "%s", error_.c_str());
+  if (!error_.empty()) {
+    const bool good = error_.compare(0, 11, "Packed into") == 0;
+    ImGui::PushStyleColor(ImGuiCol_Text, good ? ImVec4(0.6f, 0.95f, 0.6f, 1) : ImVec4(0.95f, 0.45f, 0.35f, 1));
+    ImGui::TextWrapped("%s", error_.c_str());
+    ImGui::PopStyleColor();
+  }
   if (!scene_.modWarnings().empty()) ImGui::TextColored(ImVec4(0.95f, 0.75f, 0.35f, 1), "%s", scene_.modWarnings().c_str());
 
   ImGui::SeparatorText("Creation tools");

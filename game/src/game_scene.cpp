@@ -138,6 +138,7 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
   }
   applySettings();
   initDevTools();
+  watchContent();
   editor_ = std::make_unique<Editor>(*this);
   sidebar_ = std::make_unique<Sidebar>(*this);
   menus_ = std::make_unique<Menus>(*this);
@@ -1889,6 +1890,7 @@ void GameScene::drawStructureEffects(float dt) {
 
 void GameScene::onUpdate(float dt, float alpha) {
   updateDevTools();
+  hotReload_.update(content_.fileSystem(), dt, &assets_);
   if (opt_.monkey > 0) monkeyStep();
   if (!opt_.showcase.empty() && mode_ == Mode::Game) showcaseStep(dt);
   alpha_ = alpha;

@@ -360,6 +360,28 @@ recognition flash on vehicles and a roundel in the interface.
        tests/test_core.cpp (18 cases, including the same battle on 1, 3 and
        4 threads). Also `core/assert.hpp` (`PNR_ASSERT`, logged and counted;
        stops debug builds only) and `core/version.hpp`.
+     - **Part 2, data (done 14 Nov):** virtual file system
+       (`core/vfs.hpp`: folder, zip and memory mounts layered by priority,
+       mount points, case-insensitive fallback in archives, safe paths, atomic
+       writes to one write mount, `diskPath()` unpacking archives into a
+       content-keyed cache for path-based code, `scan()` on a worker +
+       `apply()` for changes); packs (`core/pack.hpp`: zip + `pack.json`
+       manifest with per-file size/CRC and one checksum, `requires` with
+       version ranges and `engine`, build / readManifest / verify / extract;
+       hand-zipped mod folders accepted); `ContentLayers` rebuilt on the Vfs
+       (`addPack`, `addMod`, `fileSystem()`), `scanMods` lists packs,
+       `resolveLoadOrder` checks versions; asset registry (`core/assets.hpp`:
+       stable ids, kind, source mount, layers, version, content hash,
+       uses / usedBy from scanners run on the job system, `apply()` cascading
+       to users, `Cache<T>` with preload on all cores and last-good-version
+       reloads); hot reload (`core/hot_reload.hpp`: watches by prefix and
+       extension, background scan, settle-before-dispatch); game hooks for
+       rules (via `applyRules`), sounds, campaigns and sprite overrides;
+       console commands `vfs.*`, `assets.*`, `content.*`, `pack.*`, `mod.*`;
+       Mods page shows packs and packs a folder mod into
+       `<user>/exports/`. Zip reading is in `engine/src/core/zip_file.*`
+       (miniz). Tests: `tests/test_data.cpp`; `--mods-selftest` covers hot
+       reload and a packed mod end to end.
    - **9.14 Mission Maker foundation**, **9.15 Cutscenes and event
      sequences**, **9.16 Set pieces**, **9.17 Map, assets and terrain**,
      **9.18 Combat and controls**, (campaign finalisation when the user's

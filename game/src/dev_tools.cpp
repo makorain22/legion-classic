@@ -12,11 +12,13 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 
 #include "editor.hpp"
 #include "pioneer/core/console.hpp"
+#include "pioneer/core/data_commands.hpp"
 #include "pioneer/core/jobs.hpp"
 #include "pioneer/core/log.hpp"
 #include "pioneer/core/profiler.hpp"
@@ -33,7 +35,7 @@ namespace {
 // again when the scene goes (they hold a pointer to it).
 const char* const kGameCommands[] = {"quit",   "exit",    "screenshot", "speed", "pause", "hash", "status",
                                      "reveal", "credits", "spawn",      "kill",  "side",  "goto", "map",
-                                     "restart", "editor", "clear",      "profiler", "console"};
+                                     "restart", "editor", "clear",      "profiler", "console", "mod.list", "mod.pack"};
 
 bool readText(const std::string& path, std::string& out) {
   std::ifstream in(path, std::ios::binary);
@@ -53,6 +55,23 @@ void GameScene::toggleConsole() {
 void GameScene::initDevTools() {
   Console& con = Console::global();
   registerCoreCommands(con, app_.userDir());
+  // The data systems: what is mounted, the assets, hot reload, packs.
+  DataHooks data;
+  data.fileSystem = [this] { return content_.fileSystem(); };
+  data.registry = [this] { return &assets_; };
+  data.hotReload = &hotReload_;
+  data.resolvePath = [this](const std::string& typed, bool output) {
+    std::error_code ec;
+    const bool bare = typed.find_first_of("/\\:") == std::string::npos;
+    if (output) return bare ? exportsDir() + typed : typed;
+    if (std::filesystem::exists(typed, ec)) return typed;
+    // A mod's id stands for its folder (or its pack).
+    if (const ModInfo* m = findMod(mods_, typed)) return m->packed ? m->file : m->dir;
+    if (bare && std::filesystem::exists(exportsDir() + typed, ec)) return exportsDir() + typed;
+    if (bare && std::filesystem::exists(userModsDir() + typed, ec)) return userModsDir() + typed;
+    return typed;
+  };
+  registerDataCommands(con, std::move(data));
   registerConsoleCommands();
 
   // Automated runs (self-tests, screenshots) neither read nor write the
@@ -94,6 +113,7 @@ void GameScene::shutdownDevTools() {
   Console& con = Console::global();
   if (!app_.offscreen()) con.saveConfig(app_.userDir() + "console.cfg");
   for (const char* name : kGameCommands) con.removeCommand(name);
+  unregisterDataCommands(con);
   memReporters_.clear();
 }
 
@@ -247,6 +267,34 @@ void GameScene::registerConsoleCommands() {
                  [this, inBattle](const ConsoleArgs& a, Console& c) {
                    if (!inBattle(c) || mode_ != Mode::Game) return;
                    editor_->setActive(a.size() > 1 ? a.flag(1) : !editor_->active());
+                 });
+
+  con.addCommand("mod.list", "mod.list - the mods installed: folders and packs, and which are switched on.",
+                 [this](const ConsoleArgs&, Console& c) {
+                   rescanMods();
+                   if (mods_.empty()) return c.print("No mods are installed.");
+                   for (const ModInfo& m : mods_) {
+                     const bool on = std::find(settings_.mods.begin(), settings_.mods.end(), m.id) != settings_.mods.end();
+                     c.printFmt("  %s %-22s %-8s %s  %s%s%s", on ? "[on] " : "[off]", m.id.c_str(), m.version.c_str(),
+                                m.packed ? "pack  " : "folder", m.name.c_str(), m.error.empty() ? "" : "  BROKEN: ",
+                                m.error.c_str());
+                   }
+                 });
+  con.addCommand("mod.pack",
+                 "mod.pack <mod id> - packs one of the installed mods into a single file you can hand to someone "
+                 "else; they drop it into their mods folder.",
+                 [this](const ConsoleArgs& a, Console& c) {
+                   if (a.size() < 2) return c.error("mod.pack <mod id>   ('mod.list' shows them)");
+                   std::string file, err;
+                   if (!packMod(a[1], file, err)) return c.error("Not packed: " + err);
+                   c.print("Packed into " + file);
+                 },
+                 0,
+                 [this](const ConsoleArgs&, const std::string& partial) {
+                   std::vector<std::string> out;
+                   for (const ModInfo& m : mods_)
+                     if (!m.packed && m.id.compare(0, partial.size(), partial) == 0) out.push_back(m.id);
+                   return out;
                  });
 
   // --- Cheats: for testing. They need 'cheats 1' first. -----------------------
