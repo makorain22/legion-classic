@@ -490,6 +490,7 @@ bool GameScene::saveReplay(const std::string& path, std::string& error) {
   SaveFile f = replayStart_;
   f.commands = sim_->commandLog();
   f.endTick = sim_->tickCount();
+  f.hashes = sim_->hashLog();
   nlohmann::json meta = nlohmann::json::parse(f.metaJson, nullptr, false);
   if (meta.is_object()) {
     meta["date"] = nowString();
@@ -511,6 +512,8 @@ bool GameScene::playReplay(const std::string& path, std::string& error) {
   autosaveReplay();
   std::vector<Simulation::LoggedCommand> log = std::move(f.commands);
   const uint32_t end = f.endTick;
+  replayTrace_.setSamples(std::move(f.hashes));
+  replayDrift_ = 0;
   if (!loadFromSave(f, true, error)) return false;
   sim_->stopRecording();
   replayValid_ = false;

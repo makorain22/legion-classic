@@ -11,11 +11,12 @@
 #include <string>
 #include <vector>
 
+#include "pioneer/sim/determinism.hpp"
 #include "pioneer/sim/simulation.hpp"
 
 namespace pioneer {
 
-constexpr uint32_t SAVE_FILE_VERSION = 2;  // 2: commands carry text (9.9)
+constexpr uint32_t SAVE_FILE_VERSION = 3;  // 2: commands carry text (9.9); 3: replays carry state checksums
 
 struct SaveFile {
   std::string metaJson;             // title, date, map name, the game's own view settings...
@@ -24,6 +25,9 @@ struct SaveFile {
   // Replays only:
   std::vector<Simulation::LoggedCommand> commands;
   uint32_t endTick = 0;
+  // The state checksum once a second while the game was recorded: playing
+  // the replay back checks itself against it (empty in older replays).
+  std::vector<HashSample> hashes;
 };
 
 bool writeSaveFile(const std::string& path, const SaveFile& f, bool replay, std::string& error);

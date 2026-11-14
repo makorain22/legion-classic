@@ -24,6 +24,7 @@
 #include "pioneer/map/map.hpp"
 #include "pioneer/math/vec.hpp"
 #include "pioneer/sim/components.hpp"
+#include "pioneer/sim/determinism.hpp"
 #include "pioneer/sim/ai.hpp"
 #include "pioneer/sim/pathfinder.hpp"
 #include "pioneer/sim/script.hpp"
@@ -357,6 +358,34 @@ class Simulation {
                  bool* remapped = nullptr);
   // The unit type ids in registry order, for the save meta.
   std::vector<std::string> typeIds() const;
+  // The state is saved in sections, one per system, as tagged chunks: a
+  // system added later brings its own section and older saves still load.
+  struct SectionInfo {
+    uint32_t tag;      // fourcc
+    const char* name;  // the tag as text, without padding
+    const char* what;  // for people
+    bool required;     // a state without it is refused
+    int since;         // the old (pre-chunk) state version that first had it
+  };
+  static const std::vector<SectionInfo>& stateSections();
+  // A checksum of each section (of the bytes it would save) and of them all.
+  // Much dearer than stateHash(): for finding which system two runs differ
+  // in, not for every tick.
+  struct StateDigest {
+    struct Section {
+      uint32_t tag = 0;
+      uint64_t hash = 0;
+      uint32_t bytes = 0;
+    };
+    uint32_t tick = 0;
+    uint64_t total = 0;
+    std::vector<Section> sections;
+  };
+  StateDigest digest() const;
+  // Names of the sections two digests disagree on.
+  static std::vector<std::string> digestDifference(const StateDigest& a, const StateDigest& b);
+  // What the last loadState() left out (sections or components of a newer version).
+  const std::vector<std::string>& loadNotes() const { return loadNotes_; }
   struct LoggedCommand {
     uint32_t tick;
     Command cmd;
@@ -364,7 +393,11 @@ class Simulation {
   void startRecording() {
     recording_ = true;
     log_.clear();
+    hashLog_.clear();
   }
+  // While recording: the state checksum once a second, for replays to check
+  // themselves against (see sim/determinism.hpp).
+  const std::vector<HashSample>& hashLog() const { return hashLog_; }
   void stopRecording() { recording_ = false; }
   bool recording() const { return recording_; }
   const std::vector<LoggedCommand>& commandLog() const { return log_; }
@@ -524,6 +557,9 @@ class Simulation {
   void setScriptFlags(Entity e, uint8_t mask, uint8_t bits);
   void setUnitName(Entity e, int32_t name);
   void stepMission();  // countdowns, patrols
+  void saveSection(uint32_t tag, ByteWriter& w) const;
+  bool loadSection(uint32_t tag, ByteReader& r, int version, std::string& error);
+  void resetSection(uint32_t tag);
   void saveMission(ByteWriter& w) const;
   bool loadMission(ByteReader& r);
   void resetMission();
@@ -605,6 +641,7 @@ class Simulation {
   SkirmishAi ai_;
   bool recording_ = false;
   std::vector<LoggedCommand> log_;
+  std::vector<HashSample> hashLog_;
   friend class SkirmishAi;
   int32_t effectiveDistance(uint32_t d, uint32_t target) const;
   Pathfinder pathfinder_;
@@ -615,6 +652,7 @@ class Simulation {
   size_t pathQueueHead_ = 0;
   uint32_t nextRequest_ = 1;
   std::vector<uint32_t> dead_;
+  std::vector<std::string> loadNotes_;
   std::vector<int32_t> pushX_, pushY_;
   SimStats stats_;
 };

@@ -17,12 +17,14 @@
 #include <sstream>
 
 #include "editor.hpp"
+#include "pioneer/core/chunks.hpp"
 #include "pioneer/core/console.hpp"
 #include "pioneer/core/data_commands.hpp"
 #include "pioneer/core/jobs.hpp"
 #include "pioneer/core/log.hpp"
 #include "pioneer/core/profiler.hpp"
 #include "pioneer/core/version.hpp"
+#include "pioneer/sim/determinism.hpp"
 #include "settings.hpp"
 #include "sidebar.hpp"
 
@@ -226,6 +228,42 @@ void GameScene::registerConsoleCommands() {
                    if (!inBattle(c)) return;
                    c.printFmt("tick %u  state %016llx", sim_->tickCount(),
                             static_cast<unsigned long long>(sim_->stateHash()));
+                 });
+
+  con.addCommand("sim.digest", "sim.digest - a checksum of every section of the battle state, with its size when saved.",
+                 [this, inBattle](const ConsoleArgs&, Console& c) {
+                   if (!inBattle(c)) return;
+                   const Simulation::StateDigest d = sim_->digest();
+                   size_t total = 0;
+                   for (const auto& sec : d.sections) {
+                     const char* what = "";
+                     for (const auto& info : Simulation::stateSections())
+                       if (info.tag == sec.tag) what = info.what;
+                     c.printFmt("  %-4s %016llx %8u bytes  %s", fourccName(sec.tag).c_str(),
+                                static_cast<unsigned long long>(sec.hash), sec.bytes, what);
+                     total += sec.bytes;
+                   }
+                   c.printFmt("tick %u  all sections %016llx  %zu bytes", d.tick, static_cast<unsigned long long>(d.total),
+                              total);
+                 });
+  con.addCommand("sim.twincheck",
+                 "sim.twincheck [seconds] - saves the battle, loads it into a second simulation and runs both side by "
+                 "side (default 10 s): they must stay identical. The battle moves on by that long.",
+                 [this, inBattle](const ConsoleArgs& a, Console& c) {
+                   if (!inBattle(c)) return;
+                   const int seconds = std::clamp(a.size() > 1 ? a.integer(1) : 10, 1, 600);
+                   const TwinReport rep = twinCheck(*sim_, static_cast<uint32_t>(seconds * TICKS_PER_SECOND));
+                   if (rep.ok) c.print("OK: " + rep.text);
+                   else c.error("NOT DETERMINISTIC: " + rep.text);
+                   replayValid_ = false;  // ticks went by that no replay recorded the pace of
+                 });
+  con.addCommand("replay.check", "replay.check - while a replay plays: whether it still matches the game it recorded.",
+                 [this](const ConsoleArgs&, Console& c) {
+                   if (mode_ != Mode::Replay) return c.error("no replay is playing");
+                   if (replayTrace_.empty()) return c.print("this replay was made before checksums were recorded");
+                   if (replayDrift_) c.error("out of step since tick " + std::to_string(replayDrift_));
+                   else c.printFmt("in step: %zu checksums, playing tick %u of %u", replayTrace_.samples().size(),
+                                   sim_->tickCount(), replayEnd_);
                  });
 
   con.addCommand("status", "status - tick, units and each side's supplies.",

@@ -1757,6 +1757,20 @@ void GameScene::onTick() {
     }
   }
   sim_->tick();
+  if (mode_ == Mode::Replay && !replayDrift_) {
+    // A replay made by other rules or another version stops matching the
+    // game it recorded: say so once, rather than show a battle that never was.
+    const HashTrace::Mismatch m = replayTrace_.check(*sim_);
+    if (m.found) {
+      replayDrift_ = m.tick;
+      PNR_WARN_CH(Sim, "Replay out of step at tick %u: recorded %016llx, now %016llx", m.tick,
+                  static_cast<unsigned long long>(m.expected), static_cast<unsigned long long>(m.got));
+      showStatus("This replay no longer matches the game it recorded (from " + std::to_string(m.tick / 900) + ":" +
+                     (m.tick / 15 % 60 < 10 ? "0" : "") + std::to_string(m.tick / 15 % 60) +
+                     "). It was made with other rules or another version.",
+                 8);
+    }
+  }
   editor_->onSimTick(sim_->spawnLog());
   const auto& events = sim_->events();
   for (const SimEvent& ev : events) {

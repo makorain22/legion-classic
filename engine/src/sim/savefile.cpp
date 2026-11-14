@@ -30,6 +30,7 @@ std::vector<uint8_t> encodeSaveFile(const SaveFile& f, bool replay) {
       writeCommand(w, c.cmd);
     }
     w.u32(f.endTick);
+    w.podVector(f.hashes);
   }
   const std::vector<uint8_t>& raw = w.bytes();
   mz_ulong compSize = mz_compressBound(static_cast<mz_ulong>(raw.size()));
@@ -81,6 +82,8 @@ bool decodeSaveFile(const std::vector<uint8_t>& bytes, SaveFile& f, bool replay,
       f.commands.push_back(std::move(c));
     }
     f.endTick = r.u32();
+    f.hashes.clear();
+    if (fileVersion >= 3) f.hashes = r.podVector<HashSample>();
   }
   if (!r.ok() || !r.atEnd()) {
     error = "the file is damaged";

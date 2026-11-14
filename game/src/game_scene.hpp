@@ -517,6 +517,8 @@ class GameScene final : public pioneer::Scene {
   bool replayValid_ = false;
   std::vector<pioneer::Simulation::LoggedCommand> replayLog_;
   size_t replayNext_ = 0;
+  pioneer::HashTrace replayTrace_;  // the recorded game's checksums, to check the playback against
+  uint32_t replayDrift_ = 0;        // the tick the playback first differed at (0: in step)
   uint32_t replayEnd_ = 0;
   pioneer::ScenarioScript scenario_;
   struct Message {

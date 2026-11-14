@@ -3,12 +3,17 @@
 // network messages. Values are written little-endian; the reader never reads
 // past the end (it sets a failure flag instead), so damaged files can't crash
 // the game.
+//
+// Plain structs are written as their bytes with the padding between fields
+// blanked (see core/reflect.hpp), so equal values always give equal bytes.
 
 #include <cstdint>
 #include <cstring>
 #include <string>
 #include <type_traits>
 #include <vector>
+
+#include "pioneer/core/reflect.hpp"
 
 namespace pioneer {
 
@@ -24,7 +29,8 @@ class ByteWriter {
   template <class T>
   void pod(const T& v) {
     static_assert(std::is_trivially_copyable_v<T>, "pod() needs a trivially copyable type");
-    raw(&v, sizeof(T));
+    if constexpr (reflect::isPacked<T>) raw(&v, sizeof(T));
+    else masked(&v, sizeof(T), 1, reflect::podMask<T>().data());
   }
   void u8(uint8_t v) { pod(v); }
   void u16(uint16_t v) { pod(v); }
@@ -39,7 +45,17 @@ class ByteWriter {
   void podVector(const std::vector<T>& v) {
     static_assert(std::is_trivially_copyable_v<T>, "podVector() needs a trivially copyable type");
     u32(static_cast<uint32_t>(v.size()));
-    if (!v.empty()) raw(v.data(), v.size() * sizeof(T));
+    if (v.empty()) return;
+    if constexpr (reflect::isPacked<T>) raw(v.data(), v.size() * sizeof(T));
+    else masked(v.data(), sizeof(T), v.size(), reflect::podMask<T>().data());
+  }
+  // `count` items of `size` bytes each, keeping only the bytes `mask` marks.
+  void masked(const void* p, size_t size, size_t count, const uint8_t* mask) {
+    const size_t at = buf_.size();
+    raw(p, size * count);
+    uint8_t* out = buf_.data() + at;
+    for (size_t i = 0; i < count; ++i, out += size)
+      for (size_t b = 0; b < size; ++b) out[b] &= mask[b];
   }
   void boolVector(const std::vector<bool>& v) {
     u32(static_cast<uint32_t>(v.size()));
@@ -59,6 +75,16 @@ class ByteReader {
   bool atEnd() const { return p_ == end_; }
   size_t remaining() const { return static_cast<size_t>(end_ - p_); }
   void fail() { ok_ = false; }
+  // Where the reader stands, and stepping over `n` bytes without copying them.
+  const uint8_t* cursor() const { return p_; }
+  bool skip(size_t n) {
+    if (!ok_ || remaining() < n) {
+      ok_ = false;
+      return false;
+    }
+    p_ += n;
+    return true;
+  }
 
   bool raw(void* out, size_t n) {
     if (!ok_ || remaining() < n) {

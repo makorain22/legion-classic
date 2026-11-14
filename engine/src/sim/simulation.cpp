@@ -222,6 +222,7 @@ void Simulation::tick() {
   stats_.projectiles = static_cast<uint32_t>(reg_.pool<CProjectile>().size());
   PNR_COUNTER("Units", reg_.pool<CUnit>().size());
   ++tick_;
+  if (recording_ && tick_ % TICKS_PER_SECOND == 0) hashLog_.push_back({tick_, 0, stateHash()});
 }
 
 void Simulation::setOrderIdle(Entity e) {

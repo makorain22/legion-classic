@@ -1,17 +1,24 @@
 // Pioneer Engine - saving and loading the simulation state, and commands.
 //
-// The format is a straight binary dump in a fixed order, versioned by the save
-// file around it. Component pools are written with their entities in storage
-// order, so a loaded game iterates units in exactly the same order and the
-// simulation continues identically (the tests check the state hash).
+// The state is a list of tagged sections, one per system (see
+// stateSections()). Component pools are written with their entities in
+// storage order, so a loaded game iterates units in exactly the same order
+// and the simulation continues identically (the tests check the state hash).
+// Padding inside plain structs is blanked, so equal states give equal bytes.
+#include <algorithm>
+#include <cstring>
+
 #include <nlohmann/json.hpp>
+
+#include "pioneer/core/chunks.hpp"
 
 #include "pioneer/sim/simulation.hpp"
 
 namespace pioneer {
 
 namespace {
-constexpr uint32_t kStateMagic = 0x53494D38;  // "SIM8": the mission engine (play area, countdowns, named units...)
+constexpr uint32_t kStateMagic = 0x53494D39;  // "SIM9": tagged chunks, one section per system (Pioneer 2.0)
+constexpr uint32_t kStateMagicV8 = 0x53494D38;  // "SIM8": the mission engine (play area, countdowns, named units...)
 constexpr uint32_t kStateMagicV7 = 0x53494D37;  // "SIM7": the computer's main enemy, raid rotation and scout
 constexpr uint32_t kStateMagicV6 = 0x53494D36;  // "SIM6": logistics points
 constexpr uint32_t kStateMagicV5 = 0x53494D35;  // "SIM5": formations
@@ -30,6 +37,42 @@ void loadPool(ByteReader& r, Registry& reg) {
   std::vector<uint32_t> ents = r.podVector<uint32_t>();
   std::vector<T> data = r.podVector<T>();
   if (ents.size() != data.size()) r.fail();
+  reg.pool<T>().restore(std::move(ents), std::move(data));
+}
+
+// Plain component pools, with the tag each is saved under.
+#define PNR_POD_POOLS(X)    \
+  X(CPosition, "CPOS")      \
+  X(CPrevPosition, "CPRV")  \
+  X(CFacing, "CFAC")        \
+  X(CUnit, "CUNI")          \
+  X(CTurret, "CTUR")        \
+  X(COrder, "CORD")         \
+  X(CCombat, "CCOM")        \
+  X(CAnim, "CANI")          \
+  X(CProjectile, "CPRJ")    \
+  X(CStructure, "CSTR")     \
+  X(CProducer, "CPRD")      \
+  X(CHarvester, "CHAR")     \
+  X(CGroupMember, "CGRM")   \
+  X(CGarrisoned, "CGAR")
+
+template <class T>
+void savePoolTagged(ByteWriter& w, Registry& reg, uint32_t tag) {
+  auto& p = reg.pool<T>();
+  w.u32(tag);
+  w.u32(static_cast<uint32_t>(sizeof(T)));
+  w.podVector(p.entities());
+  if constexpr (reflect::isPacked<T>) w.raw(p.data().data(), p.data().size() * sizeof(T));
+  else w.masked(p.data().data(), sizeof(T), p.data().size(), reflect::podMask<T>().data());
+}
+// `itemSize`: the size one item had when it was saved. A component that has
+// grown since keeps its defaults in the new fields (they are at its end).
+template <class T>
+void restorePoolTagged(Registry& reg, std::vector<uint32_t> ents, const uint8_t* bytes, uint32_t itemSize) {
+  std::vector<T> data(ents.size());
+  const size_t take = std::min<size_t>(itemSize, sizeof(T));
+  for (size_t i = 0; i < data.size(); ++i) std::memcpy(static_cast<void*>(&data[i]), bytes + i * itemSize, take);
   reg.pool<T>().restore(std::move(ents), std::move(data));
 }
 
@@ -97,160 +140,245 @@ Command readCommand(ByteReader& r, bool withText) {
   return c;
 }
 
+// ---------------------------------------------------------------------------
+// Sections. The state is saved as tagged chunks (core/chunks.hpp), one per
+// system. Each system writes and reads its own section here; a state saved
+// before the chunked format (SIM2..SIM8) holds the same sections one after
+// another with no table, and is read by the same code.
+// ---------------------------------------------------------------------------
+namespace sect {
+constexpr uint32_t Head = fourcc("HEAD"), Cmds = fourcc("CMDS"), Ecs = fourcc("ECS "), Groups = fourcc("GRPS"),
+                   Movers = fourcc("MOVE"), Paths = fourcc("PATH"), Sides = fourcc("SIDE"), Tiles = fourcc("TILE"),
+                   Vision_ = fourcc("VISN"), Script = fourcc("SCRP"), Ai = fourcc("AI  "), Tutorial = fourcc("TUTR"),
+                   Formations = fourcc("FORM"), Logistics = fourcc("LOGI"), Mission = fourcc("MISN");
+}
+
+const std::vector<Simulation::SectionInfo>& Simulation::stateSections() {
+  // In the order they are written and read. `since`: the old state version
+  // that first had the section (older saves get its defaults).
+  static const std::vector<SectionInfo> list = {
+      {sect::Head, "HEAD", "map size, tick, random numbers", true, 2},
+      {sect::Cmds, "CMDS", "commands waiting for the next tick", true, 2},
+      {sect::Ecs, "ECS", "entities and their plain components", true, 2},
+      {sect::Groups, "GRPS", "bound units and garrisons", true, 2},
+      {sect::Movers, "MOVE", "routes units are following", true, 2},
+      {sect::Paths, "PATH", "route requests waiting their turn", true, 2},
+      {sect::Sides, "SIDE", "teams, supplies, production lines", true, 2},
+      {sect::Tiles, "TILE", "structures on the ground, cover, blocked tiles", true, 2},
+      {sect::Vision_, "VISN", "what each side sees and has seen", true, 2},
+      {sect::Script, "SCRP", "the scenario script, objectives", true, 2},
+      {sect::Ai, "AI", "the computer players", true, 2},
+      {sect::Tutorial, "TUTR", "hints, build locks, orders given, campaign flags", false, 4},
+      {sect::Formations, "FORM", "formations on the march", false, 5},
+      {sect::Logistics, "LOGI", "logistics points", false, 6},
+      {sect::Mission, "MISN", "the mission engine: play area, clocks, named units", false, 8},
+  };
+  return list;
+}
+
+void Simulation::saveSection(uint32_t tag, ByteWriter& w) const {
+  switch (tag) {
+    case sect::Head:
+      w.u32(static_cast<uint32_t>(map_.width()));
+      w.u32(static_cast<uint32_t>(map_.height()));
+      w.u32(tick_);
+      w.u64(rng_.state());
+      w.u64(rng_.increment());
+      break;
+    case sect::Cmds:
+      w.u32(static_cast<uint32_t>(pending_.size()));
+      for (const Command& c : pending_) writeCommand(w, c);
+      break;
+    case sect::Ecs: {
+      const Registry::State rs = reg_.state();
+      w.podVector(rs.generations);
+      w.podVector(rs.used);
+      w.podVector(rs.freeList);
+      w.u64(rs.alive);
+      // Plain components, each under its own tag with the size of one item:
+      // a reader skips pools it doesn't know and copes with a component that
+      // has grown since.
+      uint32_t count = 0;
+#define PNR_COUNT(T, TAG) ++count;
+      PNR_POD_POOLS(PNR_COUNT)
+#undef PNR_COUNT
+      w.u32(count);
+#define PNR_SAVE(T, TAG) savePoolTagged<T>(w, reg_, fourcc(TAG));
+      PNR_POD_POOLS(PNR_SAVE)
+#undef PNR_SAVE
+      break;
+    }
+    case sect::Groups: {  // Groups and garrisons hold lists, so they are written field by field.
+      auto& g = reg_.pool<CGroup>();
+      w.podVector(g.entities());
+      for (const CGroup& c : g.data()) {
+        w.u8(c.owner);
+        w.u8(c.combined ? 2 : c.vehicles ? 1 : 0);
+        w.u8(static_cast<uint8_t>(c.echelon));
+        w.u16(c.number);
+        w.podVector(c.members);
+      }
+      auto& gs = reg_.pool<CGarrison>();
+      w.podVector(gs.entities());
+      for (const CGarrison& c : gs.data()) w.podVector(c.occupants);
+      w.pod(groupNumbers_);
+      break;
+    }
+    case sect::Movers: {  // Movers hold paths, so they are written field by field.
+      auto& p = reg_.pool<CMover>();
+      w.podVector(p.entities());
+      for (const CMover& m : p.data()) {
+        w.podVector(m.path);
+        w.u32(m.index);
+        w.u8(m.active ? 1 : 0);
+        w.u32(m.request);
+        w.pod(m.requestGoal);
+        w.i32(m.bestDist);
+        w.u16(m.stuckTicks);
+        w.u8(m.repaths);
+        w.u8(m.failures);
+        w.u32(m.retryTick);
+      }
+      break;
+    }
+    case sect::Paths: {
+      std::vector<PathRequest> waiting(pathQueue_.begin() + static_cast<long>(pathQueueHead_), pathQueue_.end());
+      w.podVector(waiting);
+      w.u32(nextRequest_);
+      break;
+    }
+    case sect::Sides:
+      w.pod(team_);
+      for (const PlayerState& ps : players_) {
+        w.i32(ps.credits);
+        w.i32(ps.powerMade);
+        w.i32(ps.powerUsed);
+        for (const ProductionQueue& q : ps.queues) writeQueue(w, q);
+        w.u8(ps.defeated ? 1 : 0);
+        w.u8(ps.won ? 1 : 0);
+        w.i32(ps.incomeAcc);
+      }
+      w.pod(playedOnce_);
+      w.pod(scriptDefeated_);
+      break;
+    case sect::Tiles:
+      w.podVector(tileStructure_);
+      w.podVector(cover_);
+      w.u8(coverDirty_ ? 1 : 0);
+      w.i32(structureReach_);
+      w.podVector(const_cast<Map&>(map_).blockData());
+      break;
+    case sect::Vision_: {
+      Vision& v = const_cast<Vision&>(vision_);
+      for (const auto& g : v.grids()) w.podVector(g);
+      w.pod(v.revealFlags());
+      w.pod(v.activeFlags());
+      break;
+    }
+    case sect::Script:
+      w.str(scriptToJson(script_, &types_).dump());
+      w.podVector(triggerState_);
+      w.u32(static_cast<uint32_t>(objectives_.size()));
+      for (const Objective& o : objectives_) {
+        w.str(o.text);
+        w.u8(o.player);
+        w.u8(o.state);
+        w.u8(o.optional ? 1 : 0);
+      }
+      w.podVector(revealed_);
+      break;
+    case sect::Ai:
+      ai_.save(w);
+      break;
+    case sect::Tutorial:
+      for (uint8_t p = 0; p < MAX_PLAYERS; ++p) {
+        w.str(hints_[p]);
+        w.str(highlights_[p]);
+        w.podVector(buildLocks_[p]);
+        w.pod(ordersGiven_[p]);
+      }
+      w.u32(static_cast<uint32_t>(flags_.size()));
+      for (const auto& [k, v] : flags_) {
+        w.str(k);
+        w.i32(v);
+      }
+      break;
+    case sect::Formations: {  // formations on the march, and what shape each unit was last given
+      savePool<CFormationMember>(w, reg_);
+      auto& fp = reg_.pool<CFormation>();
+      w.podVector(fp.entities());
+      for (const CFormation& f : fp.data()) {
+        w.u8(f.owner);
+        w.u8(f.shape);
+        w.u8(f.loco);
+        w.u8(static_cast<uint8_t>((f.reverse ? 1 : 0) | (f.moving ? 2 : 0) | (f.pursuing ? 4 : 0)));
+        w.podVector(f.path);
+        w.u32(f.index);
+        w.pod(f.start);
+        w.pod(f.anchor);
+        w.pod(f.dest);
+        w.pod(f.leash);
+        w.u16(f.facing);
+        w.u16(f.finalFacing);
+        w.i32(f.remaining);
+        w.u16(f.stall);
+        w.u16(f.fight);
+        w.podVector(f.members);
+      }
+      break;
+    }
+    case sect::Logistics:  // who is taking each point, and how far along
+      w.u32(static_cast<uint32_t>(points_.size()));
+      for (const PointState& ps : points_) {
+        w.u8(ps.side);
+        w.u16(ps.progress);
+      }
+      break;
+    case sect::Mission:
+      saveMission(w);
+      break;
+    default:
+      break;
+  }
+}
+
 void Simulation::saveState(ByteWriter& w) const {
   w.u32(kStateMagic);
-  w.u32(static_cast<uint32_t>(map_.width()));
-  w.u32(static_cast<uint32_t>(map_.height()));
-  w.u32(tick_);
-  w.u64(rng_.state());
-  w.u64(rng_.increment());
-  w.u32(static_cast<uint32_t>(pending_.size()));
-  for (const Command& c : pending_) writeCommand(w, c);
-
-  // Entities and components.
-  const Registry::State rs = reg_.state();
-  w.podVector(rs.generations);
-  w.podVector(rs.used);
-  w.podVector(rs.freeList);
-  w.u64(rs.alive);
-  savePool<CPosition>(w, reg_);
-  savePool<CPrevPosition>(w, reg_);
-  savePool<CFacing>(w, reg_);
-  savePool<CUnit>(w, reg_);
-  savePool<CTurret>(w, reg_);
-  savePool<COrder>(w, reg_);
-  savePool<CCombat>(w, reg_);
-  savePool<CAnim>(w, reg_);
-  savePool<CProjectile>(w, reg_);
-  savePool<CStructure>(w, reg_);
-  savePool<CProducer>(w, reg_);
-  savePool<CHarvester>(w, reg_);
-  savePool<CGroupMember>(w, reg_);
-  savePool<CGarrisoned>(w, reg_);
-  {  // Groups and garrisons hold lists, so they are written field by field.
-    auto& g = reg_.pool<CGroup>();
-    w.podVector(g.entities());
-    for (const CGroup& c : g.data()) {
-      w.u8(c.owner);
-      w.u8(c.combined ? 2 : c.vehicles ? 1 : 0);
-      w.u8(static_cast<uint8_t>(c.echelon));
-      w.u16(c.number);
-      w.podVector(c.members);
-    }
-    auto& gs = reg_.pool<CGarrison>();
-    w.podVector(gs.entities());
-    for (const CGarrison& c : gs.data()) w.podVector(c.occupants);
+  ChunkWriter chunks(w);
+  for (const SectionInfo& s : stateSections()) {
+    chunks.begin(s.tag, 1, s.required ? chunk::kRequired : 0);
+    saveSection(s.tag, w);
+    chunks.end();
   }
-  w.pod(groupNumbers_);
-  {  // Movers hold paths, so they are written field by field.
-    auto& p = reg_.pool<CMover>();
-    w.podVector(p.entities());
-    for (const CMover& m : p.data()) {
-      w.podVector(m.path);
-      w.u32(m.index);
-      w.u8(m.active ? 1 : 0);
-      w.u32(m.request);
-      w.pod(m.requestGoal);
-      w.i32(m.bestDist);
-      w.u16(m.stuckTicks);
-      w.u8(m.repaths);
-      w.u8(m.failures);
-      w.u32(m.retryTick);
-    }
+}
+
+Simulation::StateDigest Simulation::digest() const {
+  StateDigest d;
+  d.tick = tick_;
+  uint64_t total = 1469598103934665603ULL;
+  for (const SectionInfo& s : stateSections()) {
+    ByteWriter w;
+    saveSection(s.tag, w);
+    const uint64_t h = hashBytes(w.bytes().data(), w.bytes().size());
+    d.sections.push_back({s.tag, h, static_cast<uint32_t>(w.bytes().size())});
+    total = hashBytes(reinterpret_cast<const uint8_t*>(&h), sizeof(h), total);
   }
+  d.total = total;
+  return d;
+}
 
-  // Path requests waiting for their turn.
-  std::vector<PathRequest> waiting(pathQueue_.begin() + static_cast<long>(pathQueueHead_), pathQueue_.end());
-  w.podVector(waiting);
-  w.u32(nextRequest_);
-
-  // Sides.
-  w.pod(team_);
-  for (const PlayerState& ps : players_) {
-    w.i32(ps.credits);
-    w.i32(ps.powerMade);
-    w.i32(ps.powerUsed);
-    for (const ProductionQueue& q : ps.queues) writeQueue(w, q);
-    w.u8(ps.defeated ? 1 : 0);
-    w.u8(ps.won ? 1 : 0);
-    w.i32(ps.incomeAcc);
+std::vector<std::string> Simulation::digestDifference(const StateDigest& a, const StateDigest& b) {
+  std::vector<std::string> out;
+  for (const SectionInfo& s : stateSections()) {
+    const StateDigest::Section* x = nullptr;
+    const StateDigest::Section* y = nullptr;
+    for (const auto& q : a.sections)
+      if (q.tag == s.tag) x = &q;
+    for (const auto& q : b.sections)
+      if (q.tag == s.tag) y = &q;
+    if ((x == nullptr) != (y == nullptr) || (x && y && x->hash != y->hash)) out.push_back(s.name);
   }
-  w.pod(playedOnce_);
-  w.pod(scriptDefeated_);
-
-  // The ground: structure tiles, cover, the map's block layer.
-  w.podVector(tileStructure_);
-  w.podVector(cover_);
-  w.u8(coverDirty_ ? 1 : 0);
-  w.i32(structureReach_);
-  w.podVector(const_cast<Map&>(map_).blockData());
-
-  // Fog of war.
-  Vision& v = const_cast<Vision&>(vision_);
-  for (const auto& g : v.grids()) w.podVector(g);
-  w.pod(v.revealFlags());
-  w.pod(v.activeFlags());
-
-  // Script.
-  w.str(scriptToJson(script_, &types_).dump());
-  w.podVector(triggerState_);
-  w.u32(static_cast<uint32_t>(objectives_.size()));
-  for (const Objective& o : objectives_) {
-    w.str(o.text);
-    w.u8(o.player);
-    w.u8(o.state);
-    w.u8(o.optional ? 1 : 0);
-  }
-  w.podVector(revealed_);
-
-  // Computer players.
-  ai_.save(w);
-
-  // Tutorials and campaigns.
-  for (uint8_t p = 0; p < MAX_PLAYERS; ++p) {
-    w.str(hints_[p]);
-    w.str(highlights_[p]);
-    w.podVector(buildLocks_[p]);
-    w.pod(ordersGiven_[p]);
-  }
-  w.u32(static_cast<uint32_t>(flags_.size()));
-  for (const auto& [k, v] : flags_) {
-    w.str(k);
-    w.i32(v);
-  }
-
-  // Formations on the march, and what shape each unit was last given.
-  savePool<CFormationMember>(w, reg_);
-  {
-    auto& fp = reg_.pool<CFormation>();
-    w.podVector(fp.entities());
-    for (const CFormation& f : fp.data()) {
-      w.u8(f.owner);
-      w.u8(f.shape);
-      w.u8(f.loco);
-      w.u8(static_cast<uint8_t>((f.reverse ? 1 : 0) | (f.moving ? 2 : 0) | (f.pursuing ? 4 : 0)));
-      w.podVector(f.path);
-      w.u32(f.index);
-      w.pod(f.start);
-      w.pod(f.anchor);
-      w.pod(f.dest);
-      w.pod(f.leash);
-      w.u16(f.facing);
-      w.u16(f.finalFacing);
-      w.i32(f.remaining);
-      w.u16(f.stall);
-      w.u16(f.fight);
-      w.podVector(f.members);
-    }
-  }
-  // Logistics points: who is taking each, and how far along.
-  w.u32(static_cast<uint32_t>(points_.size()));
-  for (const PointState& ps : points_) {
-    w.u8(ps.side);
-    w.u16(ps.progress);
-  }
-  // The mission engine (9.9).
-  saveMission(w);
+  return out;
 }
 
 std::vector<std::string> Simulation::typeIds() const {
@@ -260,224 +388,310 @@ std::vector<std::string> Simulation::typeIds() const {
   return ids;
 }
 
+// Reads one section. `version`: the state format (2..8: the old single
+// stream; 9: chunks).
+bool Simulation::loadSection(uint32_t tag, ByteReader& r, int version, std::string& error) {
+  const size_t tiles = static_cast<size_t>(map_.width()) * map_.height();
+  auto damaged = [&](const char* where) {
+    error = std::string("saved state is damaged (") + where + ")";
+    return false;
+  };
+  switch (tag) {
+    case sect::Head: {
+      if (static_cast<int>(r.u32()) != map_.width() || static_cast<int>(r.u32()) != map_.height()) {
+        error = "saved state doesn't match the map";
+        return false;
+      }
+      tick_ = r.u32();
+      const uint64_t st = r.u64(), inc = r.u64();
+      rng_.restore(st, inc);
+      return r.ok() || damaged("header");
+    }
+    case sect::Cmds: {
+      pending_.clear();
+      const uint32_t nPending = r.u32();
+      for (uint32_t i = 0; i < nPending && r.ok(); ++i) pending_.push_back(readCommand(r, version >= 8));
+      return r.ok() || damaged("commands");
+    }
+    case sect::Ecs: {
+      Registry::State rs;
+      rs.generations = r.podVector<uint32_t>();
+      rs.used = r.podVector<uint8_t>();
+      rs.freeList = r.podVector<uint32_t>();
+      rs.alive = r.u64();
+      reg_.clear();
+      reg_.restoreState(std::move(rs));
+      if (version >= 9) {
+        const uint32_t pools = r.u32();
+        for (uint32_t i = 0; i < pools && r.ok(); ++i) {
+          const uint32_t poolTag = r.u32();
+          const uint32_t itemSize = r.u32();
+          std::vector<uint32_t> ents = r.podVector<uint32_t>();
+          const uint64_t bytes = static_cast<uint64_t>(ents.size()) * itemSize;
+          if (!r.ok() || bytes > r.remaining()) return damaged("components");
+          const uint8_t* data = r.cursor();
+          r.skip(static_cast<size_t>(bytes));
+          bool known = false;
+#define PNR_LOAD(T, TAG)                                                \
+  if (poolTag == fourcc(TAG)) {                                         \
+    restorePoolTagged<T>(reg_, std::move(ents), data, itemSize);        \
+    known = true;                                                       \
+  }
+          PNR_POD_POOLS(PNR_LOAD)
+#undef PNR_LOAD
+          if (!known) loadNotes_.push_back("components '" + fourccName(poolTag) + "' are not known to this version and were left out");
+        }
+      } else {
+#define PNR_LOAD(T, TAG) loadPool<T>(r, reg_);
+        PNR_POD_POOLS(PNR_LOAD)
+#undef PNR_LOAD
+      }
+      return r.ok() || damaged("entities");
+    }
+    case sect::Groups: {
+      std::vector<uint32_t> ents = r.podVector<uint32_t>();
+      std::vector<CGroup> groups(ents.size());
+      for (CGroup& c : groups) {
+        c.owner = r.u8();
+        const uint8_t kind = r.u8();
+        c.vehicles = kind != 0;
+        c.combined = kind == 2;
+        c.echelon = static_cast<Echelon>(r.u8());
+        c.number = r.u16();
+        c.members = r.podVector<Entity>();
+      }
+      reg_.pool<CGroup>().restore(std::move(ents), std::move(groups));
+      std::vector<uint32_t> gents = r.podVector<uint32_t>();
+      std::vector<CGarrison> gars(gents.size());
+      for (CGarrison& c : gars) c.occupants = r.podVector<Entity>();
+      reg_.pool<CGarrison>().restore(std::move(gents), std::move(gars));
+      groupNumbers_ = r.pod<decltype(groupNumbers_)>();
+      return r.ok() || damaged("groups");
+    }
+    case sect::Movers: {
+      std::vector<uint32_t> ents = r.podVector<uint32_t>();
+      std::vector<CMover> movers(ents.size());
+      for (CMover& m : movers) {
+        m.path = r.podVector<Vec2i>();
+        m.index = r.u32();
+        m.active = r.u8() != 0;
+        m.request = r.u32();
+        m.requestGoal = r.pod<Vec2i>();
+        m.bestDist = r.i32();
+        m.stuckTicks = r.u16();
+        m.repaths = r.u8();
+        m.failures = r.u8();
+        m.retryTick = r.u32();
+      }
+      reg_.pool<CMover>().restore(std::move(ents), std::move(movers));
+      return r.ok() || damaged("routes");
+    }
+    case sect::Paths:
+      pathQueue_ = r.podVector<PathRequest>();
+      pathQueueHead_ = 0;
+      nextRequest_ = r.u32();
+      return r.ok() || damaged("route requests");
+    case sect::Sides:
+      team_ = r.pod<std::array<uint8_t, MAX_PLAYERS>>();
+      for (PlayerState& ps : players_) {
+        ps.credits = r.i32();
+        ps.powerMade = r.i32();
+        ps.powerUsed = r.i32();
+        for (ProductionQueue& q : ps.queues) readQueue(r, q);
+        ps.defeated = r.u8() != 0;
+        ps.won = r.u8() != 0;
+        ps.incomeAcc = r.i32();
+      }
+      playedOnce_ = r.pod<std::array<bool, MAX_PLAYERS>>();
+      scriptDefeated_ = r.pod<std::array<bool, MAX_PLAYERS>>();
+      return r.ok() || damaged("sides");
+    case sect::Tiles: {
+      tileStructure_ = r.podVector<uint32_t>();
+      cover_ = r.podVector<uint8_t>();
+      coverDirty_ = r.u8() != 0;
+      structureReach_ = r.i32();
+      std::vector<uint8_t> blocks = r.podVector<uint8_t>();
+      if (blocks.size() != tiles || tileStructure_.size() != tiles || cover_.size() != tiles) return damaged("tile layers");
+      map_.blockData() = std::move(blocks);
+      map_.blocksChanged();  // paths are rebuilt around the structures
+      return r.ok() || damaged("tile layers");
+    }
+    case sect::Vision_:
+      for (auto& g : vision_.grids()) {
+        g = r.podVector<uint8_t>();
+        if (g.size() != tiles) g.assign(tiles, 0);
+      }
+      vision_.revealFlags() = r.pod<std::array<bool, Vision::kMaxPlayers>>();
+      vision_.activeFlags() = r.pod<std::array<bool, Vision::kMaxPlayers>>();
+      vision_.touch();
+      return r.ok() || damaged("vision");
+    case sect::Script: {
+      const std::string scriptText = r.str();
+      const nlohmann::json sj = nlohmann::json::parse(scriptText, nullptr, false);
+      script_ = sj.is_discarded() ? ScenarioScript{} : scriptFromJson(sj, &types_);
+      triggerState_ = r.podVector<TriggerState>();
+      triggerState_.resize(script_.triggers.size());
+      objectives_.clear();
+      const uint32_t nObj = r.u32();
+      for (uint32_t i = 0; i < nObj && r.ok() && i < 1000; ++i) {
+        Objective o;
+        o.text = r.str();
+        o.player = r.u8();
+        o.state = r.u8();
+        o.optional = r.u8() != 0;
+        objectives_.push_back(std::move(o));
+      }
+      revealed_ = r.podVector<RevealedArea>();
+      return r.ok() || damaged("script");
+    }
+    case sect::Ai:
+      return (ai_.load(r, std::min(version, 8)) && r.ok()) || damaged("computer players");
+    case sect::Tutorial: {
+      for (uint8_t p = 0; p < MAX_PLAYERS; ++p) {
+        hints_[p] = r.str();
+        highlights_[p] = r.str();
+        buildLocks_[p] = r.podVector<uint8_t>();
+        ordersGiven_[p] = r.pod<std::array<uint32_t, 32>>();
+      }
+      flags_.clear();
+      const uint32_t nf = r.u32();
+      for (uint32_t i = 0; i < nf && r.ok() && i < 10000; ++i) {
+        std::string k = r.str();
+        flags_[k] = r.i32();
+      }
+      return r.ok() || damaged("campaign flags");
+    }
+    case sect::Formations: {
+      loadPool<CFormationMember>(r, reg_);
+      std::vector<uint32_t> ents = r.podVector<uint32_t>();
+      std::vector<CFormation> forms(ents.size());
+      for (CFormation& f : forms) {
+        f.owner = r.u8();
+        f.shape = r.u8();
+        f.loco = static_cast<uint8_t>(r.u8() % 3);
+        const uint8_t bits = r.u8();
+        f.reverse = (bits & 1) != 0;
+        f.moving = (bits & 2) != 0;
+        f.pursuing = (bits & 4) != 0;
+        f.path = r.podVector<Vec2i>();
+        f.index = r.u32();
+        f.start = r.pod<Vec2i>();
+        f.anchor = r.pod<Vec2i>();
+        f.dest = r.pod<Vec2i>();
+        f.leash = r.pod<Vec2i>();
+        f.facing = r.u16();
+        f.finalFacing = r.u16();
+        f.remaining = r.i32();
+        f.stall = r.u16();
+        if (version >= 6) f.fight = r.u16();
+        f.members = r.podVector<Entity>();
+      }
+      reg_.pool<CFormation>().restore(std::move(ents), std::move(forms));
+      return r.ok() || damaged("formations");
+    }
+    case sect::Logistics: {
+      const uint32_t n = r.u32();
+      if (n > 4096) return damaged("logistics points");
+      points_.resize(n);
+      for (PointState& ps : points_) {
+        ps.side = r.u8();
+        ps.progress = r.u16();
+      }
+      return r.ok() || damaged("logistics points");
+    }
+    case sect::Mission:
+      return loadMission(r) || damaged("mission");
+    default:
+      return true;
+  }
+}
+
+// A section the saved state doesn't have: its system starts fresh.
+void Simulation::resetSection(uint32_t tag) {
+  switch (tag) {
+    case sect::Tutorial:
+      for (uint8_t p = 0; p < MAX_PLAYERS; ++p) {
+        hints_[p].clear();
+        highlights_[p].clear();
+        buildLocks_[p].clear();
+        ordersGiven_[p] = {};
+      }
+      flags_.clear();
+      break;
+    case sect::Formations:
+      break;  // the pools were emptied with the registry
+    case sect::Logistics:
+      points_.clear();
+      // Before 9.6 supply trucks hauled oil: none were in the rules, but be safe.
+      for (CHarvester& h : reg_.pool<CHarvester>().data()) h = CHarvester{};
+      break;
+    case sect::Mission:
+      resetMission();
+      break;
+    default:
+      break;
+  }
+}
+
 bool Simulation::loadState(ByteReader& r, std::string& error, const std::vector<std::string>* savedTypes,
                            bool* remapped) {
   if (remapped) *remapped = false;
+  loadNotes_.clear();
   const uint32_t magic = r.u32();
-  const int version = magic == kStateMagic ? 8 : magic == kStateMagicV7 ? 7 : magic == kStateMagicV6 ? 6 : magic == kStateMagicV5 ? 5 : magic == kStateMagicV4 ? 4 : magic == kStateMagicV3 ? 3 : magic == kStateMagicV2 ? 2 : 0;
+  const int version = magic == kStateMagic ? 9 : magic == kStateMagicV8 ? 8 : magic == kStateMagicV7 ? 7 : magic == kStateMagicV6 ? 6 : magic == kStateMagicV5 ? 5 : magic == kStateMagicV4 ? 4 : magic == kStateMagicV3 ? 3 : magic == kStateMagicV2 ? 2 : 0;
   if (version == 0) {
     error = "not a saved game state";
     return false;
   }
-  if (static_cast<int>(r.u32()) != map_.width() || static_cast<int>(r.u32()) != map_.height()) {
-    error = "saved state doesn't match the map";
-    return false;
-  }
-  tick_ = r.u32();
-  const uint64_t st = r.u64(), inc = r.u64();
-  rng_.restore(st, inc);
-  pending_.clear();
-  const uint32_t nPending = r.u32();
-  for (uint32_t i = 0; i < nPending && r.ok(); ++i) pending_.push_back(readCommand(r, version >= 8));
-
-  Registry::State rs;
-  rs.generations = r.podVector<uint32_t>();
-  rs.used = r.podVector<uint8_t>();
-  rs.freeList = r.podVector<uint32_t>();
-  rs.alive = r.u64();
-  reg_.clear();
-  reg_.restoreState(std::move(rs));
-  loadPool<CPosition>(r, reg_);
-  loadPool<CPrevPosition>(r, reg_);
-  loadPool<CFacing>(r, reg_);
-  loadPool<CUnit>(r, reg_);
-  loadPool<CTurret>(r, reg_);
-  loadPool<COrder>(r, reg_);
-  loadPool<CCombat>(r, reg_);
-  loadPool<CAnim>(r, reg_);
-  loadPool<CProjectile>(r, reg_);
-  loadPool<CStructure>(r, reg_);
-  loadPool<CProducer>(r, reg_);
-  loadPool<CHarvester>(r, reg_);
-  loadPool<CGroupMember>(r, reg_);
-  loadPool<CGarrisoned>(r, reg_);
-  {
-    std::vector<uint32_t> ents = r.podVector<uint32_t>();
-    std::vector<CGroup> groups(ents.size());
-    for (CGroup& c : groups) {
-      c.owner = r.u8();
-      const uint8_t kind = r.u8();
-      c.vehicles = kind != 0;
-      c.combined = kind == 2;
-      c.echelon = static_cast<Echelon>(r.u8());
-      c.number = r.u16();
-      c.members = r.podVector<Entity>();
-    }
-    reg_.pool<CGroup>().restore(std::move(ents), std::move(groups));
-    std::vector<uint32_t> gents = r.podVector<uint32_t>();
-    std::vector<CGarrison> gars(gents.size());
-    for (CGarrison& c : gars) c.occupants = r.podVector<Entity>();
-    reg_.pool<CGarrison>().restore(std::move(gents), std::move(gars));
-  }
-  groupNumbers_ = r.pod<decltype(groupNumbers_)>();
-  {
-    std::vector<uint32_t> ents = r.podVector<uint32_t>();
-    std::vector<CMover> movers(ents.size());
-    for (CMover& m : movers) {
-      m.path = r.podVector<Vec2i>();
-      m.index = r.u32();
-      m.active = r.u8() != 0;
-      m.request = r.u32();
-      m.requestGoal = r.pod<Vec2i>();
-      m.bestDist = r.i32();
-      m.stuckTicks = r.u16();
-      m.repaths = r.u8();
-      m.failures = r.u8();
-      m.retryTick = r.u32();
-    }
-    reg_.pool<CMover>().restore(std::move(ents), std::move(movers));
-  }
-
-  pathQueue_ = r.podVector<PathRequest>();
-  pathQueueHead_ = 0;
-  nextRequest_ = r.u32();
-
-  team_ = r.pod<std::array<uint8_t, MAX_PLAYERS>>();
-  for (PlayerState& ps : players_) {
-    ps.credits = r.i32();
-    ps.powerMade = r.i32();
-    ps.powerUsed = r.i32();
-    for (ProductionQueue& q : ps.queues) readQueue(r, q);
-    ps.defeated = r.u8() != 0;
-    ps.won = r.u8() != 0;
-    ps.incomeAcc = r.i32();
-  }
-  playedOnce_ = r.pod<std::array<bool, MAX_PLAYERS>>();
-  scriptDefeated_ = r.pod<std::array<bool, MAX_PLAYERS>>();
-
-  tileStructure_ = r.podVector<uint32_t>();
-  cover_ = r.podVector<uint8_t>();
-  coverDirty_ = r.u8() != 0;
-  structureReach_ = r.i32();
-  std::vector<uint8_t> blocks = r.podVector<uint8_t>();
-  const size_t tiles = static_cast<size_t>(map_.width()) * map_.height();
-  if (blocks.size() != tiles || tileStructure_.size() != tiles || cover_.size() != tiles) {
-    error = "saved state is damaged (tile layers)";
-    return false;
-  }
-  map_.blockData() = std::move(blocks);
-  map_.blocksChanged();  // paths are rebuilt around the structures
-
-  for (auto& g : vision_.grids()) {
-    g = r.podVector<uint8_t>();
-    if (g.size() != tiles) g.assign(tiles, 0);
-  }
-  vision_.revealFlags() = r.pod<std::array<bool, Vision::kMaxPlayers>>();
-  vision_.activeFlags() = r.pod<std::array<bool, Vision::kMaxPlayers>>();
-  vision_.touch();
-
-  const std::string scriptText = r.str();
-  const nlohmann::json sj = nlohmann::json::parse(scriptText, nullptr, false);
-  script_ = sj.is_discarded() ? ScenarioScript{} : scriptFromJson(sj, &types_);
-  triggerState_ = r.podVector<TriggerState>();
-  triggerState_.resize(script_.triggers.size());
-  objectives_.clear();
-  const uint32_t nObj = r.u32();
-  for (uint32_t i = 0; i < nObj && r.ok() && i < 1000; ++i) {
-    Objective o;
-    o.text = r.str();
-    o.player = r.u8();
-    o.state = r.u8();
-    o.optional = r.u8() != 0;
-    objectives_.push_back(std::move(o));
-  }
-  revealed_ = r.podVector<RevealedArea>();
-  if (!ai_.load(r, version) || !r.ok()) {
-    error = "saved state is damaged";
-    return false;
-  }
-  for (uint8_t p = 0; p < MAX_PLAYERS; ++p) {
-    hints_[p].clear();
-    highlights_[p].clear();
-    buildLocks_[p].clear();
-    ordersGiven_[p] = {};
-  }
-  flags_.clear();
-  if (version >= 4) {
-    for (uint8_t p = 0; p < MAX_PLAYERS; ++p) {
-      hints_[p] = r.str();
-      highlights_[p] = r.str();
-      buildLocks_[p] = r.podVector<uint8_t>();
-      ordersGiven_[p] = r.pod<std::array<uint32_t, 32>>();
-    }
-    const uint32_t nf = r.u32();
-    for (uint32_t i = 0; i < nf && r.ok() && i < 10000; ++i) {
-      std::string k = r.str();
-      flags_[k] = r.i32();
-    }
-    if (!r.ok()) {
-      error = "saved state is damaged";
+  if (version >= 9) {
+    ChunkReader chunks;
+    if (!chunks.parse(r)) {
+      error = "saved state is damaged (sections)";
       return false;
     }
-  }
-  if (version >= 5) {
-    loadPool<CFormationMember>(r, reg_);
-    std::vector<uint32_t> ents = r.podVector<uint32_t>();
-    std::vector<CFormation> forms(ents.size());
-    for (CFormation& f : forms) {
-      f.owner = r.u8();
-      f.shape = r.u8();
-      f.loco = static_cast<uint8_t>(r.u8() % 3);
-      const uint8_t bits = r.u8();
-      f.reverse = (bits & 1) != 0;
-      f.moving = (bits & 2) != 0;
-      f.pursuing = (bits & 4) != 0;
-      f.path = r.podVector<Vec2i>();
-      f.index = r.u32();
-      f.start = r.pod<Vec2i>();
-      f.anchor = r.pod<Vec2i>();
-      f.dest = r.pod<Vec2i>();
-      f.leash = r.pod<Vec2i>();
-      f.facing = r.u16();
-      f.finalFacing = r.u16();
-      f.remaining = r.i32();
-      f.stall = r.u16();
-      if (version >= 6) f.fight = r.u16();
-      f.members = r.podVector<Entity>();
+    for (const SectionInfo& s : stateSections()) {
+      const ChunkInfo* c = chunks.find(s.tag);
+      if (!c) {
+        if (!s.required) {
+          resetSection(s.tag);
+          continue;
+        }
+        error = std::string("saved state is damaged (no ") + s.name + " section)";
+        return false;
+      }
+      if (c->version > 1) {
+        error = std::string("the ") + s.name + " section was written by a newer version of the game";
+        return false;
+      }
+      ByteReader sub = c->reader();
+      if (!loadSection(s.tag, sub, version, error)) return false;
+      if (!sub.ok()) {
+        error = std::string("saved state is damaged (") + s.name + ")";
+        return false;
+      }
     }
-    reg_.pool<CFormation>().restore(std::move(ents), std::move(forms));
-    if (!r.ok()) {
-      error = "saved state is damaged";
-      return false;
-    }
-  }
-  points_.clear();
-  if (version >= 6) {
-    const uint32_t n = r.u32();
-    if (n > 4096) {
-      error = "saved state is damaged";
-      return false;
-    }
-    points_.resize(n);
-    for (PointState& ps : points_) {
-      ps.side = r.u8();
-      ps.progress = r.u16();
-    }
-    if (!r.ok()) {
-      error = "saved state is damaged";
-      return false;
+    for (const ChunkInfo& c : chunks.chunks()) {
+      bool known = false;
+      for (const SectionInfo& s : stateSections()) known = known || s.tag == c.tag;
+      if (known) continue;
+      if (c.flags & chunk::kRequired) {
+        error = "the saved state needs a newer version of the game (section " + c.name() + ")";
+        return false;
+      }
+      loadNotes_.push_back("section '" + c.name() + "' is not known to this version and was left out");
     }
   } else {
-    // Before 9.6 supply trucks hauled oil: none were in the rules, but be safe.
-    for (CHarvester& h : reg_.pool<CHarvester>().data()) h = CHarvester{};
-  }
-  if (version >= 8) {
-    if (!loadMission(r)) {
-      error = "saved state is damaged (mission)";
+    for (const SectionInfo& s : stateSections()) {
+      if (version < s.since) {
+        resetSection(s.tag);
+        continue;
+      }
+      if (!loadSection(s.tag, r, version, error)) return false;
+    }
+    if (!r.ok()) {
+      error = "saved state is damaged";
       return false;
     }
-  } else {
-    resetMission();
   }
   // Saved with the unit types in another order (a newer roster, other mods)?
   // Renumber by id; a type these rules don't have at all refuses the load.
