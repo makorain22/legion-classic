@@ -7,11 +7,15 @@
 // simulation, so scripted missions replay and save exactly like the rest of
 // the game. Stored in the map file as JSON, edited in the editor's Script tab.
 
+#include <array>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <nlohmann/json_fwd.hpp>
+
+#include "pioneer/math/vec.hpp"
 
 namespace pioneer {
 
@@ -58,6 +62,11 @@ enum class CondType : uint8_t {
   SuppliesAtMost,  // `player` has at most `value` supplies
   HealthBelow,     // `player`'s units (of `unitType`, or any) in `area` have less than `value` percent of their health in total
   AlliedWith,      // `player` is allied with player `value`
+  // --- Mission model (Pioneer) --------------------------------------------------------
+  PhaseIs,         // the mission is in phase number `value`
+  PhaseElapsed,    // the current phase began at least `value` seconds ago
+  GoalDone,        // goal number `value` of the mission model is done
+  GoalFailed,      // goal number `value` has failed
   Count
 };
 
@@ -133,6 +142,10 @@ enum class ActionType : uint8_t {
   BreakIce,         // the ice in `area` breaks up; whatever stands on it goes into the water
   FloodArea,        // the land in `area` floods (9.12): men can wade it, vehicles can't cross it
   DrainArea,        // the flooded land in `area` is pumped dry again
+  // --- Mission model (Pioneer) --------------------------------------------------------
+  GotoPhase,        // the mission moves to phase number `value`
+  SendWave,         // wave number `value` of the mission model is sent (after its delay, as often as it says)
+  FollowPath,       // the units follow path number `value` point by point; `player2` 1: fighting what they meet
   Count
 };
 
@@ -177,14 +190,108 @@ struct Trigger {
   bool enabled = true;
   bool repeat = false;
   bool any = false;     // fires when any one condition holds (else all of them must)
+  int32_t phase = -1;   // checked only while the mission is in this phase (-1: always)
   std::vector<Condition> conditions;
   std::vector<Action> actions;
+};
+
+// --- The mission model (Pioneer) -------------------------------------------------
+// What a mission is made of beyond single triggers, as data of its own: the
+// editor shows and edits these as such, and the simulation runs them.
+
+// A stage of the mission. Exactly one phase is current; triggers that belong
+// to a phase are checked only while it is.
+struct MissionPhase {
+  std::string name = "Phase";
+  // The phase that must be current for this one to begin by itself:
+  // -1 the one before it in the list, -2 any, else that phase's number.
+  int32_t from = -1;
+  std::vector<Condition> enter;  // it begins when these hold (none: only by a Go to phase action)
+  bool any = false;              // any one of them is enough
+  std::vector<Action> onEnter;   // run as it begins
+  std::string music;             // a track or mood to play from here on ("": leave it)
+};
+
+// A named route across the map, point by point (tiles).
+struct MissionPath {
+  std::string name = "Path";
+  std::vector<Vec2i> points;
+  bool loop = false;  // from the last point back to the first, for ever
+};
+
+// Reinforcements that arrive together, and what they do on arrival.
+struct MissionWave {
+  enum Order : uint8_t { Stay = 0, AttackTo, MoveTo, AlongPath, AttackAlongPath };
+  struct Entry {
+    int32_t unitType = -1;
+    std::array<int32_t, 3> count{3, 5, 7};  // on easy, normal and hard
+  };
+  std::string name = "Wave";
+  uint8_t player = 1;
+  int32_t area = -1;           // where it appears
+  std::vector<Entry> units;
+  int32_t delay = 0;           // seconds from being sent to arriving
+  int32_t interval = 0;        // seconds between arrivals when it comes more than once
+  int32_t times = 1;           // how many times it comes
+  uint8_t order = AttackTo;
+  int32_t target = -1;         // the area it goes for (AttackTo, MoveTo)
+  int32_t path = -1;           // the path it follows (AlongPath, AttackAlongPath)
+  std::string unitName;        // its units are called this ("": "wave:<name>")
+  uint8_t flags = 0;           // ScriptFlag bits for its units
+  int32_t stance = -1;         // a Stance, or -1: as they come
+  bool bind = false;           // bound into one fighting unit
+};
+
+// A goal the simulation keeps score of itself (it shows as an objective).
+//   destroy  every unit named `unit` is dead
+//   reach    `player` has at least `value` (min 1) units in `area`
+//   clear    `player` has units in `area` and no enemy of it has any
+//   hold     `player` controls `area` (as "clear") for `value` seconds without a break
+//   survive  `value` seconds have passed since the goal began
+//   escort   at least `value` (min 1) units named `unit` are in `area`; failed if all are dead
+//   protect  failed when no unit named `unit` is alive; done when its phase ends (or the mission is won)
+struct MissionGoal {
+  std::string type = "reach";
+  std::string text = "Objective";
+  uint8_t player = 0;
+  bool optional = false;
+  int32_t area = -1;
+  int32_t value = 0;
+  std::string unit;
+  int32_t phase = -1;            // it begins with this phase (-1: with the mission)
+  std::vector<Action> onDone, onFail;
+};
+extern const char* const kGoalTypes[7];
+int goalTypeFromId(const std::string& id);
+
+// A cutscene or event sequence: events on tracks along a timeline. The data
+// model is here so missions and packs can carry sequences; they are played by
+// the sequencer of Milestone 9.15.
+struct MissionSequence {
+  struct Event {
+    int32_t at = 0;     // tenths of a second from the start
+    std::string track;  // camera, actor, effects, dialogue, screen, flow
+    std::string kind;   // what happens (cut, pan, move, say, fade...)
+    std::vector<std::pair<std::string, std::string>> params;
+  };
+  std::string name = "Sequence";
+  bool cinematic = true;   // letterbox, the player gives no orders
+  bool skippable = true;
+  std::vector<Event> events;
 };
 
 struct ScenarioScript {
   std::vector<ScriptArea> areas;
   std::vector<Trigger> triggers;
-  bool empty() const { return areas.empty() && triggers.empty(); }
+  // The mission model.
+  std::vector<MissionPhase> phases;
+  std::vector<MissionPath> paths;
+  std::vector<MissionWave> waves;
+  std::vector<MissionGoal> goals;
+  std::vector<MissionSequence> sequences;
+  bool empty() const {
+    return areas.empty() && triggers.empty() && phases.empty() && paths.empty() && waves.empty() && goals.empty() && sequences.empty();
+  }
 };
 
 // Unit types are stored by id in files, so scenarios survive rule changes.

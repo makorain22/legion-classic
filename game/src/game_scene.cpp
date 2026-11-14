@@ -1850,6 +1850,14 @@ void GameScene::announce(const SimEvent& ev) {
     case EventType::PlayAreaChanged:
       onMissionEvent(ev);
       break;
+    case EventType::PhaseChanged:
+      // (The chapter card belongs to the cutscene tools of 9.15; for now the phase is announced in a line.)
+      if (mode_ != Mode::Menu && ev.amount > 0 && !ev.text.empty()) showStatus(ev.text, 5.0f);
+      PNR_INFO_CH(Script, "Phase %d: %s", ev.amount, ev.text.c_str());
+      break;
+    case EventType::WaveArrived:
+      PNR_DEBUG_CH(Script, "Wave '%s': %d units for side %u", ev.text.c_str(), ev.amount, ev.owner);
+      break;
     case EventType::PlayerWon:
       if (mode_ == Mode::Menu) break;
       banner_ = sim_->allied(ev.owner, player_) ? "VICTORY" : players_[ev.owner].name + " wins";

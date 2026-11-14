@@ -150,6 +150,270 @@ void Simulation::stepMission() {
     }
     std::erase_if(patrols_, [](const Patrol& pt) { return pt.units.empty(); });
   }
+  // Waves that are due arrive.
+  for (size_t i = 0; i < waveRuns_.size(); ++i) {
+    if (tick_ < waveRuns_[i].nextTick) continue;
+    const int32_t wi = waveRuns_[i].wave;
+    if (wi < 0 || wi >= static_cast<int32_t>(script_.waves.size())) {
+      waveRuns_[i].left = 0;
+      continue;
+    }
+    const MissionWave w = script_.waves[static_cast<size_t>(wi)];  // a copy: its actions may change the script
+    launchWave(w);
+    WaveRun& run = waveRuns_[i];  // (launching may have added runs: look it up again)
+    --run.left;
+    run.nextTick = tick_ + static_cast<uint32_t>(std::max(1, w.interval)) * TICKS_PER_SECOND;
+  }
+  std::erase_if(waveRuns_, [](const WaveRun& r) { return r.left <= 0; });
+  // Routes: when everybody on one has arrived at a point (or stopped), on to the next.
+  if (tick_ % TICKS_PER_SECOND == 0 && !routes_.empty()) {
+    for (Route& rt : routes_) {
+      std::erase_if(rt.units, [&](Entity e) { return !reg_.alive(e) || !reg_.has<CUnit>(e) || reg_.get<CUnit>(e).health <= 0; });
+      if (rt.units.empty() || rt.path < 0 || rt.path >= static_cast<int32_t>(script_.paths.size())) {
+        rt.units.clear();
+        continue;
+      }
+      const MissionPath& path = script_.paths[static_cast<size_t>(rt.path)];
+      bool moving = false, onOrder = false;
+      for (Entity e : rt.units) {
+        const COrder& o = reg_.get<COrder>(e);
+        if (o.type == OrderType::Move || o.type == OrderType::AttackMove) moving = true;
+        if (o.type == OrderType::Idle || o.type == OrderType::Move || o.type == OrderType::AttackMove) onOrder = true;
+      }
+      if (moving || !onOrder) continue;
+      if (++rt.next >= path.points.size()) {
+        if (!path.loop || path.points.empty()) {
+          rt.units.clear();  // arrived at the end
+          continue;
+        }
+        rt.next = 0;
+      }
+      const Vec2i p = path.points[rt.next];
+      Command cmd;
+      scriptCommand_ = true;
+      orderMove(rt.units, {p.x * LEPTONS_PER_TILE + 128, p.y * LEPTONS_PER_TILE + 128}, rt.attack ? OrderType::AttackMove : OrderType::Move, cmd);
+      scriptCommand_ = false;
+    }
+    std::erase_if(routes_, [](const Route& rt) { return rt.units.empty(); });
+  }
+}
+
+// --- The mission model -----------------------------------------------------------
+void Simulation::enterPhase(int32_t p) {
+  if (p < 0 || p >= static_cast<int32_t>(script_.phases.size())) return;
+  const int32_t left = phase_;
+  phase_ = p;
+  phaseTick_ = tick_;
+  const MissionPhase ph = script_.phases[static_cast<size_t>(p)];  // a copy: its actions may change the script
+  SimEvent ev;
+  ev.type = EventType::PhaseChanged;
+  ev.owner = ANY_PLAYER;
+  ev.amount = p;
+  ev.text = ph.name;
+  events_.push_back(ev);
+  if (!ph.music.empty()) {
+    SimEvent m;
+    m.type = EventType::PlayMusic;
+    m.owner = ANY_PLAYER;
+    m.text = ph.music;
+    events_.push_back(m);
+  }
+  // Goals of the phase just left that only asked for something to be kept safe are met.
+  for (size_t i = 0; i < script_.goals.size() && i < goalState_.size(); ++i) {
+    const MissionGoal& g = script_.goals[i];
+    GoalState& gs = goalState_[i];
+    if (gs.state != 1 || g.type != "protect" || g.phase < 0 || g.phase != left) continue;
+    gs.state = 2;
+    if (gs.objective >= 0 && gs.objective < static_cast<int32_t>(objectives_.size())) objectives_[static_cast<size_t>(gs.objective)].state = 1;
+    SimEvent oc;
+    oc.type = EventType::ObjectivesChanged;
+    oc.owner = g.player;
+    events_.push_back(oc);
+    const std::vector<Action> acts = g.onDone;
+    for (const Action& a : acts) perform(a);
+  }
+  for (const Action& a : ph.onEnter) perform(a);
+}
+
+void Simulation::stepPhases() {
+  // The mission begins in its first phase.
+  if (!script_.phases.empty() && phase_ < 0) enterPhase(0);
+  // A phase begins when the one it follows is current and its conditions hold.
+  for (int32_t p = 0; p < static_cast<int32_t>(script_.phases.size()); ++p) {
+    if (p == phase_) continue;
+    const MissionPhase& ph = script_.phases[static_cast<size_t>(p)];
+    if (ph.enter.empty()) continue;  // only by a Go to phase action
+    const int32_t from = ph.from == -1 ? p - 1 : ph.from;
+    if (ph.from != -2 && from != phase_) continue;
+    bool ok = !ph.any;
+    for (const Condition& c : ph.enter) ok = ph.any ? (ok || evaluate(c, SIZE_MAX)) : (ok && evaluate(c, SIZE_MAX));
+    if (!ok) continue;
+    enterPhase(p);
+    break;
+  }
+  // The model's goals.
+  if (goalState_.size() != script_.goals.size()) goalState_.resize(script_.goals.size());
+  for (size_t i = 0; i < script_.goals.size(); ++i) {
+    const MissionGoal g = script_.goals[i];  // a copy: its actions may change the script
+    GoalState gs = goalState_[i];
+    auto objective = [&](uint8_t state) {
+      if (gs.objective >= 0 && gs.objective < static_cast<int32_t>(objectives_.size())) objectives_[static_cast<size_t>(gs.objective)].state = state;
+      SimEvent ev;
+      ev.type = EventType::ObjectivesChanged;
+      ev.owner = g.player;
+      events_.push_back(ev);
+    };
+    if (gs.state == 0) {
+      if (g.phase >= 0 && g.phase != phase_) continue;
+      Objective o;
+      o.text = g.text;
+      o.player = g.player;
+      o.optional = g.optional;
+      o.area = g.area;
+      objectives_.push_back(std::move(o));
+      gs.objective = static_cast<int32_t>(objectives_.size()) - 1;
+      gs.since = tick_;
+      gs.state = 1;
+      goalState_[i] = gs;
+      objective(0);
+      continue;
+    }
+    if (gs.state != 1) continue;
+    const int type = goalTypeFromId(g.type);
+    const uint8_t who = g.player;
+    auto controls = [&]() {
+      if (g.area < 0 || g.area >= static_cast<int32_t>(script_.areas.size())) return false;
+      bool own = false, enemy = false;
+      for (Entity e : unitsIn(ANY_PLAYER, g.area, -1)) {
+        const CUnit& u = reg_.get<CUnit>(e);
+        if (u.health <= 0 || u.owner >= MAX_PLAYERS || types_.get(u.type).isStructure()) continue;
+        (allied(u.owner, who) ? own : enemy) = true;
+      }
+      return own && !enemy;
+    };
+    bool done = false, failed = false;
+    switch (type) {
+      case 0:  // destroy
+        done = named(g.unit).empty() && tick_ > gs.since;
+        break;
+      case 1:  // reach
+        done = g.area >= 0 && countUnits(who, g.area, -1) >= std::max(1, g.value);
+        break;
+      case 2:  // clear
+        done = controls();
+        break;
+      case 3:  // hold
+        if (controls()) {
+          if (!gs.held) gs.held = tick_;
+          done = tick_ >= gs.held + static_cast<uint32_t>(std::max(0, g.value)) * TICKS_PER_SECOND;
+        } else {
+          gs.held = 0;
+        }
+        break;
+      case 4:  // survive
+        done = tick_ >= gs.since + static_cast<uint32_t>(std::max(0, g.value)) * TICKS_PER_SECOND;
+        break;
+      case 5: {  // escort
+        const std::vector<Entity> units = named(g.unit);
+        int in = 0;
+        for (Entity e : units) {
+          const CPosition& p = reg_.get<CPosition>(e);
+          in += g.area >= 0 && g.area < static_cast<int32_t>(script_.areas.size()) &&
+                script_.areas[static_cast<size_t>(g.area)].contains(p.x >> LEPTON_SHIFT, p.y >> LEPTON_SHIFT);
+        }
+        done = in >= std::max(1, g.value);
+        failed = !done && units.empty() && tick_ > gs.since;
+        break;
+      }
+      case 6:  // protect
+        failed = named(g.unit).empty() && tick_ > gs.since;
+        break;
+      default:
+        break;
+    }
+    if (done || failed) gs.state = done ? 2 : 3;
+    goalState_[i] = gs;
+    if (!done && !failed) continue;
+    objective(done ? 1 : 2);
+    for (const Action& a : done ? g.onDone : g.onFail) perform(a);
+  }
+}
+
+void Simulation::sendWave(int32_t wave) {
+  if (wave < 0 || wave >= static_cast<int32_t>(script_.waves.size()) || waveRuns_.size() >= 256) return;
+  const MissionWave& w = script_.waves[static_cast<size_t>(wave)];
+  waveRuns_.push_back({wave, tick_ + static_cast<uint32_t>(std::max(0, w.delay)) * TICKS_PER_SECOND, std::clamp(w.times, 1, 1000)});
+}
+
+// A wave arrives: its units are created under one name, then given what the
+// wave says (flags, stance, binding, orders) through the ordinary actions.
+void Simulation::launchWave(const MissionWave& w) {
+  const std::string tag = w.unitName.empty() ? "wave:" + w.name : w.unitName;
+  const size_t before = named(tag).size();
+  for (const MissionWave::Entry& e : w.units) {
+    const int32_t n = e.count[std::min<uint8_t>(difficulty_, 2)];
+    if (e.unitType < 0 || n <= 0) continue;
+    Action a;
+    a.type = ActionType::SpawnNamed;
+    a.player = w.player;
+    a.area = w.area;
+    a.unitType = e.unitType;
+    a.value = n;
+    a.text = tag;
+    perform(a);
+  }
+  auto byName = [&](ActionType t, int32_t value) {
+    Action a;
+    a.type = t;
+    a.text = tag;
+    a.value = value;
+    return a;
+  };
+  if (w.flags & kScriptInvulnerable) perform(byName(ActionType::SetInvulnerable, 1));
+  if (w.flags & kScriptNoAi) perform(byName(ActionType::SetAiControl, 0));
+  if (w.flags & kScriptUntargetable) perform(byName(ActionType::SetTargetable, 0));
+  if (w.flags & kScriptLocked) perform(byName(ActionType::SetLocked, 1));
+  if (w.stance >= 0 && w.stance < static_cast<int32_t>(Stance::Count)) perform(byName(ActionType::SetStance, w.stance));
+  if (w.bind) perform(byName(ActionType::BindUnits, 0));
+  if (w.order == MissionWave::AttackTo || w.order == MissionWave::MoveTo) {
+    Action a = byName(w.order == MissionWave::AttackTo ? ActionType::AttackMove : ActionType::MoveUnits, 0);
+    a.area2 = w.target;
+    if (w.target >= 0) perform(a);
+  } else if (w.order == MissionWave::AlongPath || w.order == MissionWave::AttackAlongPath) {
+    followPath(named(tag), w.path, w.order == MissionWave::AttackAlongPath);
+  }
+  const std::vector<Entity> units = named(tag);
+  SimEvent ev;
+  ev.type = EventType::WaveArrived;
+  ev.owner = w.player;
+  ev.text = w.name;
+  ev.amount = static_cast<int32_t>(units.size() - std::min(before, units.size()));
+  if (!units.empty()) {
+    const CPosition& p = reg_.get<CPosition>(units.back());
+    ev.at = {p.x, p.y};
+  }
+  events_.push_back(ev);
+}
+
+void Simulation::followPath(const std::vector<Entity>& units, int32_t path, bool attack) {
+  if (units.empty() || path < 0 || path >= static_cast<int32_t>(script_.paths.size())) return;
+  const MissionPath& p = script_.paths[static_cast<size_t>(path)];
+  if (p.points.empty()) return;
+  // Units put on a new route leave the one they were on.
+  for (Route& rt : routes_)
+    std::erase_if(rt.units, [&](Entity e) { return std::find(units.begin(), units.end(), e) != units.end(); });
+  std::erase_if(routes_, [](const Route& rt) { return rt.units.empty(); });
+  Route rt;
+  rt.units = units;
+  rt.path = path;
+  rt.next = 0;
+  rt.attack = attack;
+  Command cmd;
+  scriptCommand_ = true;
+  orderMove(rt.units, {p.points[0].x * LEPTONS_PER_TILE + 128, p.points[0].y * LEPTONS_PER_TILE + 128},
+            attack ? OrderType::AttackMove : OrderType::Move, cmd);
+  scriptCommand_ = false;
+  routes_.push_back(std::move(rt));
 }
 
 void Simulation::resetMission() {
@@ -164,6 +428,11 @@ void Simulation::resetMission() {
   names_.assign(1, std::string());
   patrols_.clear();
   ai_.clearOrders();
+  phase_ = -1;
+  phaseTick_ = 0;
+  waveRuns_.clear();
+  routes_.clear();
+  goalState_.assign(script_.goals.size(), {});
 }
 
 // --- Saving (state version 8) ------------------------------------------------------

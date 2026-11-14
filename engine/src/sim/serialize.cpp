@@ -152,7 +152,7 @@ constexpr uint32_t Head = fourcc("HEAD"), Cmds = fourcc("CMDS"), Ecs = fourcc("E
                    Movers = fourcc("MOVE"), Paths = fourcc("PATH"), Sides = fourcc("SIDE"), Tiles = fourcc("TILE"),
                    Vision_ = fourcc("VISN"), Script = fourcc("SCRP"), Ai = fourcc("AI  "), Tutorial = fourcc("TUTR"),
                    Formations = fourcc("FORM"), Logistics = fourcc("LOGI"), Mission = fourcc("MISN"),
-                   Vision2 = fourcc("VIS2");
+                   Vision2 = fourcc("VIS2"), Mission2 = fourcc("MIS2");
 }
 
 const std::vector<Simulation::SectionInfo>& Simulation::stateSections() {
@@ -175,6 +175,7 @@ const std::vector<Simulation::SectionInfo>& Simulation::stateSections() {
       {sect::Logistics, "LOGI", "logistics points", false, 6},
       {sect::Mission, "MISN", "the mission engine: play area, clocks, named units", false, 8},
       {sect::Vision2, "VIS2", "vision rules (woodland, line of sight, weather) and smoke", false, 9},
+      {sect::Mission2, "MIS2", "the mission model: phase, waves on their way, routes, goals", false, 9},
   };
   return list;
 }
@@ -339,6 +340,19 @@ void Simulation::saveSection(uint32_t tag, ByteWriter& w) const {
       break;
     case sect::Mission:
       saveMission(w);
+      break;
+    case sect::Mission2:
+      w.i32(phase_);
+      w.u32(phaseTick_);
+      w.podVector(waveRuns_);
+      w.u32(static_cast<uint32_t>(routes_.size()));
+      for (const Route& rt : routes_) {
+        w.podVector(rt.units);
+        w.i32(rt.path);
+        w.u32(rt.next);
+        w.u8(rt.attack ? 1 : 0);
+      }
+      w.podVector(goalState_);
       break;
     case sect::Vision2:
       w.u16(visionRules_.flags);
@@ -611,6 +625,24 @@ bool Simulation::loadSection(uint32_t tag, ByteReader& r, int version, std::stri
     }
     case sect::Mission:
       return loadMission(r) || damaged("mission");
+    case sect::Mission2: {
+      phase_ = r.i32();
+      phaseTick_ = r.u32();
+      waveRuns_ = r.podVector<WaveRun>(256);
+      routes_.clear();
+      const uint32_t n = r.u32();
+      if (n > 4096) return damaged("routes");
+      routes_.resize(n);
+      for (Route& rt : routes_) {
+        rt.units = r.podVector<Entity>();
+        rt.path = r.i32();
+        rt.next = r.u32();
+        rt.attack = r.u8() != 0;
+      }
+      goalState_ = r.podVector<GoalState>(4096);
+      goalState_.resize(script_.goals.size());
+      return r.ok() || damaged("mission model");
+    }
     case sect::Vision2:
       visionRules_.flags = r.u16();
       visionRules_.sightPercent = static_cast<uint16_t>(std::clamp<int>(r.u16(), 10, 200));
@@ -644,6 +676,13 @@ void Simulation::resetSection(uint32_t tag) {
       break;
     case sect::Mission:
       resetMission();
+      break;
+    case sect::Mission2:
+      phase_ = -1;
+      phaseTick_ = 0;
+      waveRuns_.clear();
+      routes_.clear();
+      goalState_.assign(script_.goals.size(), {});
       break;
     case sect::Vision2:
       visionRules_ = VisionRules{};

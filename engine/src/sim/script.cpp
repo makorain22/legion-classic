@@ -16,7 +16,8 @@ const char* kCondNames[] = {"Always", "Timer", "Units in area", "No units in are
                             "Structures at most", "Structures at least", "Units in area at most", "Area controlled",
                             "Countdown ran out", "Countdown below", "Counter at least", "Counter at most",
                             "Kills at least", "Losses at least", "Objective done", "Objective failed",
-                            "Difficulty at least", "Chance", "Supplies at most", "Health below", "Allied with"};
+                            "Difficulty at least", "Chance", "Supplies at most", "Health below", "Allied with",
+                            "Phase is", "Phase running for", "Goal done", "Goal failed"};
 const char* kCondIds[] = {"always", "timer", "units_in_area", "no_units_in_area", "unit_count_at_most",
                           "player_defeated", "supplies", "trigger_fired", "unit_count_at_least", "in_cover",
                           "order_given", "flag_at_least",
@@ -24,7 +25,8 @@ const char* kCondIds[] = {"always", "timer", "units_in_area", "no_units_in_area"
                           "structures_at_most", "structures_at_least", "units_in_area_at_most", "area_controlled",
                           "countdown_done", "countdown_below", "counter_at_least", "counter_at_most",
                           "kills_at_least", "losses_at_least", "objective_done", "objective_failed",
-                          "difficulty_at_least", "chance", "supplies_at_most", "health_below", "allied_with"};
+                          "difficulty_at_least", "chance", "supplies_at_most", "health_below", "allied_with",
+                          "phase_is", "phase_elapsed", "goal_done", "goal_failed"};
 const char* kOrderIds[] = {"move", "attack_move", "attack", "stop", "spawn", "remove", "spawn_list", "edit", "kill",
                            "strike", "set_team", "set_stance", "produce", "place_building", "place_walls", "sell",
                            "deploy", "harvest", "set_rally", "set_credits", "set_controller", "repair", "bind_group",
@@ -42,7 +44,8 @@ const char* kActionNames[] = {"Message", "Add objective", "Complete objective", 
                               "Add to counter", "Add to campaign flag", "Spawn from campaign flag", "Radio message",
                               "Cinematic", "Pan camera", "Mark area", "Clear marker", "Play sound", "Play music",
                               "Income rate", "Add logistics point", "Fire trigger", "Reset trigger", "Hide objective",
-                              "Spawn named units", "Freeze water", "Break the ice", "Flood the land", "Drain the land"};
+                              "Spawn named units", "Freeze water", "Break the ice", "Flood the land", "Drain the land",
+                              "Go to phase", "Send wave", "Follow path"};
 const char* kActionIds[] = {"message", "add_objective", "complete_objective", "fail_objective", "victory", "defeat",
                             "spawn_units", "give_supplies", "reveal_area", "attack_move", "move_units",
                             "change_owner", "kill_units", "enable_trigger", "disable_trigger", "set_computer",
@@ -54,7 +57,8 @@ const char* kActionIds[] = {"message", "add_objective", "complete_objective", "f
                             "ai_wave_size", "set_counter", "add_counter", "add_flag", "spawn_from_flag",
                             "transmission", "cinematic", "camera_pan", "mark_area", "clear_marker", "play_sound",
                             "play_music", "set_income_rate", "add_logistics_point", "fire_trigger", "reset_trigger",
-                            "hide_objective", "spawn_named", "freeze_water", "break_ice", "flood_area", "drain_area"};
+                            "hide_objective", "spawn_named", "freeze_water", "break_ice", "flood_area", "drain_area",
+                            "goto_phase", "send_wave", "follow_path"};
 static_assert(sizeof(kCondIds) / sizeof(kCondIds[0]) == static_cast<size_t>(CondType::Count));
 static_assert(sizeof(kCondNames) / sizeof(kCondNames[0]) == static_cast<size_t>(CondType::Count));
 static_assert(sizeof(kActionIds) / sizeof(kActionIds[0]) == static_cast<size_t>(ActionType::Count));
@@ -80,7 +84,7 @@ bool actionTakesUnits(ActionType t) {
     case ActionType::AttackMove: case ActionType::MoveUnits: case ActionType::ChangeOwner: case ActionType::KillUnits:
     case ActionType::SetInvulnerable: case ActionType::SetAiControl: case ActionType::SetTargetable:
     case ActionType::SetLocked: case ActionType::SetHealth: case ActionType::DamageUnits: case ActionType::SetStance:
-    case ActionType::Patrol: case ActionType::Garrison: case ActionType::BindUnits:
+    case ActionType::Patrol: case ActionType::Garrison: case ActionType::BindUnits: case ActionType::FollowPath:
       return true;
     default:
       return false;
@@ -110,37 +114,158 @@ const char* actionName(ActionType t) { return kActionNames[static_cast<int>(t) %
 const char* condId(CondType t) { return kCondIds[static_cast<int>(t) % static_cast<int>(CondType::Count)]; }
 const char* actionId(ActionType t) { return kActionIds[static_cast<int>(t) % static_cast<int>(ActionType::Count)]; }
 
+const char* const kGoalTypes[7] = {"destroy", "reach", "clear", "hold", "survive", "escort", "protect"};
+int goalTypeFromId(const std::string& id) {
+  for (int i = 0; i < 7; ++i)
+    if (id == kGoalTypes[i]) return i;
+  return -1;
+}
+
+namespace {
+using Json = nlohmann::json;
+Json typeIdOf(int t, const UnitTypeRegistry* types) {
+  if (t < 0 || !types || t >= static_cast<int>(types->size())) return nullptr;
+  return types->get(t).id;
+}
+int unitOf(const Json& v, const UnitTypeRegistry* types) {
+  if (!v.is_string() || !types) return -1;
+  return types->find(v.get<std::string>());
+}
+Json condToJson(const Condition& c, const UnitTypeRegistry* types) {
+  Json cj{{"type", kCondIds[static_cast<int>(c.type)]}, {"player", c.player}, {"area", c.area},
+          {"value", c.value}, {"unit", typeIdOf(c.unitType, types)}, {"trigger", c.trigger}};
+  if (c.type == CondType::OrderGiven) cj["order"] = orderId(c.order);
+  if (!c.text.empty()) cj["text"] = c.text;
+  if (c.negate) cj["not"] = true;
+  return cj;
+}
+Json actionToJson(const Action& a, const UnitTypeRegistry* types) {
+  Json aj{{"type", kActionIds[static_cast<int>(a.type)]}, {"player", a.player}, {"player2", a.player2},
+          {"area", a.area}, {"area2", a.area2}, {"value", a.value}, {"unit", typeIdOf(a.unitType, types)},
+          {"trigger", a.trigger}, {"text", a.text}};
+  if (a.scaled) aj["scaled"] = true;
+  return aj;
+}
+// False for a condition or action of a newer game: it is skipped.
+bool condFromJson(const Json& cj, const UnitTypeRegistry* types, Condition& c) {
+  const int type = indexOf(kCondIds, cj.value("type", std::string()));
+  if (type < 0) return false;
+  c.type = static_cast<CondType>(type);
+  c.player = cj.value("player", uint8_t{0});
+  c.area = cj.value("area", -1);
+  c.value = cj.value("value", 0);
+  c.unitType = cj.contains("unit") ? unitOf(cj["unit"], types) : -1;
+  c.trigger = cj.value("trigger", -1);
+  c.order = cj.contains("order") ? orderFromId(cj.value("order", std::string())) : -1;
+  c.text = cj.value("text", std::string());
+  c.negate = cj.value("not", false);
+  return true;
+}
+bool actionFromJson(const Json& aj, const UnitTypeRegistry* types, Action& a) {
+  const int type = indexOf(kActionIds, aj.value("type", std::string()));
+  if (type < 0) return false;
+  a.type = static_cast<ActionType>(type);
+  a.player = aj.value("player", ANY_PLAYER);
+  a.player2 = aj.value("player2", uint8_t{0});
+  a.area = aj.value("area", -1);
+  a.area2 = aj.value("area2", -1);
+  a.value = aj.value("value", 0);
+  a.unitType = aj.contains("unit") ? unitOf(aj["unit"], types) : -1;
+  a.trigger = aj.value("trigger", -1);
+  a.text = aj.value("text", std::string());
+  a.scaled = aj.value("scaled", false);
+  return true;
+}
+Json condsToJson(const std::vector<Condition>& v, const UnitTypeRegistry* types) {
+  Json out = Json::array();
+  for (const Condition& c : v) out.push_back(condToJson(c, types));
+  return out;
+}
+Json actionsToJson(const std::vector<Action>& v, const UnitTypeRegistry* types) {
+  Json out = Json::array();
+  for (const Action& a : v) out.push_back(actionToJson(a, types));
+  return out;
+}
+std::vector<Condition> condsFromJson(const Json& j, const char* key, const UnitTypeRegistry* types) {
+  std::vector<Condition> out;
+  for (const auto& cj : j.value(key, Json::array())) {
+    Condition c;
+    if (condFromJson(cj, types, c)) out.push_back(std::move(c));
+  }
+  return out;
+}
+std::vector<Action> actionsFromJson(const Json& j, const char* key, const UnitTypeRegistry* types) {
+  std::vector<Action> out;
+  for (const auto& aj : j.value(key, Json::array())) {
+    Action a;
+    if (actionFromJson(aj, types, a)) out.push_back(std::move(a));
+  }
+  return out;
+}
+}  // namespace
+
 nlohmann::json scriptToJson(const ScenarioScript& s, const UnitTypeRegistry* types) {
-  auto typeId = [&](int t) -> nlohmann::json {
-    if (t < 0 || !types || t >= static_cast<int>(types->size())) return nullptr;
-    return types->get(t).id;
-  };
-  nlohmann::json j;
-  auto& areas = j["areas"] = nlohmann::json::array();
+  Json j;
+  auto& areas = j["areas"] = Json::array();
   for (const ScriptArea& a : s.areas) areas.push_back({{"name", a.name}, {"rect", {a.x0, a.y0, a.x1, a.y1}}});
-  auto& triggers = j["triggers"] = nlohmann::json::array();
+  auto& triggers = j["triggers"] = Json::array();
   for (const Trigger& t : s.triggers) {
-    nlohmann::json tj{{"name", t.name}, {"enabled", t.enabled}, {"repeat", t.repeat}};
+    Json tj{{"name", t.name}, {"enabled", t.enabled}, {"repeat", t.repeat}};
     if (t.any) tj["any"] = true;
-    auto& cs = tj["conditions"] = nlohmann::json::array();
-    for (const Condition& c : t.conditions)
-    {
-      nlohmann::json cj{{"type", kCondIds[static_cast<int>(c.type)]}, {"player", c.player}, {"area", c.area},
-                        {"value", c.value}, {"unit", typeId(c.unitType)}, {"trigger", c.trigger}};
-      if (c.type == CondType::OrderGiven) cj["order"] = orderId(c.order);
-      if (!c.text.empty()) cj["text"] = c.text;
-      if (c.negate) cj["not"] = true;
-      cs.push_back(std::move(cj));
-    }
-    auto& as = tj["actions"] = nlohmann::json::array();
-    for (const Action& a : t.actions) {
-      nlohmann::json aj{{"type", kActionIds[static_cast<int>(a.type)]}, {"player", a.player}, {"player2", a.player2},
-                        {"area", a.area}, {"area2", a.area2}, {"value", a.value}, {"unit", typeId(a.unitType)},
-                        {"trigger", a.trigger}, {"text", a.text}};
-      if (a.scaled) aj["scaled"] = true;
-      as.push_back(std::move(aj));
-    }
+    if (t.phase >= 0) tj["phase"] = t.phase;
+    tj["conditions"] = condsToJson(t.conditions, types);
+    tj["actions"] = actionsToJson(t.actions, types);
     triggers.push_back(std::move(tj));
+  }
+  // The mission model: written only when there is some, so older maps stay as they were.
+  if (!s.phases.empty()) {
+    auto& out = j["phases"] = Json::array();
+    for (const MissionPhase& p : s.phases) {
+      Json pj{{"name", p.name}, {"from", p.from}, {"enter", condsToJson(p.enter, types)}, {"on_enter", actionsToJson(p.onEnter, types)}};
+      if (p.any) pj["any"] = true;
+      if (!p.music.empty()) pj["music"] = p.music;
+      out.push_back(std::move(pj));
+    }
+  }
+  if (!s.paths.empty()) {
+    auto& out = j["paths"] = Json::array();
+    for (const MissionPath& p : s.paths) {
+      Json pts = Json::array();
+      for (const Vec2i& v : p.points) pts.push_back({v.x, v.y});
+      Json pj{{"name", p.name}, {"points", std::move(pts)}};
+      if (p.loop) pj["loop"] = true;
+      out.push_back(std::move(pj));
+    }
+  }
+  if (!s.waves.empty()) {
+    auto& out = j["waves"] = Json::array();
+    static const char* kOrders[] = {"stay", "attack_to", "move_to", "along_path", "attack_along_path"};
+    for (const MissionWave& w : s.waves) {
+      Json units = Json::array();
+      for (const MissionWave::Entry& e : w.units) units.push_back({{"unit", typeIdOf(e.unitType, types)}, {"count", {e.count[0], e.count[1], e.count[2]}}});
+      out.push_back({{"name", w.name}, {"player", w.player}, {"area", w.area}, {"units", std::move(units)}, {"delay", w.delay},
+                     {"interval", w.interval}, {"times", w.times}, {"order", kOrders[w.order % 5]}, {"target", w.target},
+                     {"path", w.path}, {"unit_name", w.unitName}, {"flags", w.flags}, {"stance", w.stance}, {"bind", w.bind}});
+    }
+  }
+  if (!s.goals.empty()) {
+    auto& out = j["goals"] = Json::array();
+    for (const MissionGoal& g : s.goals)
+      out.push_back({{"type", g.type}, {"text", g.text}, {"player", g.player}, {"optional", g.optional}, {"area", g.area},
+                     {"value", g.value}, {"unit_name", g.unit}, {"phase", g.phase}, {"on_done", actionsToJson(g.onDone, types)},
+                     {"on_fail", actionsToJson(g.onFail, types)}});
+  }
+  if (!s.sequences.empty()) {
+    auto& out = j["sequences"] = Json::array();
+    for (const MissionSequence& q : s.sequences) {
+      Json events = Json::array();
+      for (const MissionSequence::Event& e : q.events) {
+        Json params = Json::object();
+        for (const auto& [k, v] : e.params) params[k] = v;
+        events.push_back({{"at", e.at}, {"track", e.track}, {"kind", e.kind}, {"params", std::move(params)}});
+      }
+      out.push_back({{"name", q.name}, {"cinematic", q.cinematic}, {"skippable", q.skippable}, {"events", std::move(events)}});
+    }
   }
   return j;
 }
@@ -148,12 +273,8 @@ nlohmann::json scriptToJson(const ScenarioScript& s, const UnitTypeRegistry* typ
 ScenarioScript scriptFromJson(const nlohmann::json& j, const UnitTypeRegistry* types) {
   ScenarioScript s;
   if (!j.is_object()) return s;
-  auto unitOf = [&](const nlohmann::json& v) {
-    if (!v.is_string() || !types) return -1;
-    return types->find(v.get<std::string>());
-  };
   try {
-    for (const auto& a : j.value("areas", nlohmann::json::array())) {
+    for (const auto& a : j.value("areas", Json::array())) {
       ScriptArea area;
       area.name = a.value("name", "Area");
       const auto& r = a.at("rect");
@@ -165,44 +286,88 @@ ScenarioScript scriptFromJson(const nlohmann::json& j, const UnitTypeRegistry* t
       if (area.y1 < area.y0) std::swap(area.y0, area.y1);
       s.areas.push_back(std::move(area));
     }
-    for (const auto& tj : j.value("triggers", nlohmann::json::array())) {
+    for (const auto& tj : j.value("triggers", Json::array())) {
       Trigger t;
       t.name = tj.value("name", "Trigger");
       t.enabled = tj.value("enabled", true);
       t.repeat = tj.value("repeat", false);
       t.any = tj.value("any", false);
-      for (const auto& cj : tj.value("conditions", nlohmann::json::array())) {
-        const int type = indexOf(kCondIds, cj.value("type", std::string()));
-        if (type < 0) continue;  // a condition from a newer game: skip it
-        Condition c;
-        c.type = static_cast<CondType>(type);
-        c.player = cj.value("player", uint8_t{0});
-        c.area = cj.value("area", -1);
-        c.value = cj.value("value", 0);
-        c.unitType = cj.contains("unit") ? unitOf(cj["unit"]) : -1;
-        c.trigger = cj.value("trigger", -1);
-        c.order = cj.contains("order") ? orderFromId(cj.value("order", std::string())) : -1;
-        c.text = cj.value("text", std::string());
-        c.negate = cj.value("not", false);
-        t.conditions.push_back(c);
-      }
-      for (const auto& aj : tj.value("actions", nlohmann::json::array())) {
-        const int type = indexOf(kActionIds, aj.value("type", std::string()));
-        if (type < 0) continue;
-        Action a;
-        a.type = static_cast<ActionType>(type);
-        a.player = aj.value("player", ANY_PLAYER);
-        a.player2 = aj.value("player2", uint8_t{0});
-        a.area = aj.value("area", -1);
-        a.area2 = aj.value("area2", -1);
-        a.value = aj.value("value", 0);
-        a.unitType = aj.contains("unit") ? unitOf(aj["unit"]) : -1;
-        a.trigger = aj.value("trigger", -1);
-        a.text = aj.value("text", std::string());
-        a.scaled = aj.value("scaled", false);
-        t.actions.push_back(std::move(a));
-      }
+      t.phase = tj.value("phase", -1);
+      t.conditions = condsFromJson(tj, "conditions", types);
+      t.actions = actionsFromJson(tj, "actions", types);
       s.triggers.push_back(std::move(t));
+    }
+    for (const auto& pj : j.value("phases", Json::array())) {
+      MissionPhase p;
+      p.name = pj.value("name", "Phase");
+      p.from = pj.value("from", -1);
+      p.any = pj.value("any", false);
+      p.music = pj.value("music", std::string());
+      p.enter = condsFromJson(pj, "enter", types);
+      p.onEnter = actionsFromJson(pj, "on_enter", types);
+      s.phases.push_back(std::move(p));
+    }
+    for (const auto& pj : j.value("paths", Json::array())) {
+      MissionPath p;
+      p.name = pj.value("name", "Path");
+      p.loop = pj.value("loop", false);
+      for (const auto& pt : pj.value("points", Json::array())) p.points.push_back({pt.at(0).get<int32_t>(), pt.at(1).get<int32_t>()});
+      s.paths.push_back(std::move(p));
+    }
+    for (const auto& wj : j.value("waves", Json::array())) {
+      static const char* kOrders[] = {"stay", "attack_to", "move_to", "along_path", "attack_along_path"};
+      MissionWave w;
+      w.name = wj.value("name", "Wave");
+      w.player = wj.value("player", uint8_t{1});
+      w.area = wj.value("area", -1);
+      for (const auto& uj : wj.value("units", Json::array())) {
+        MissionWave::Entry e;
+        e.unitType = uj.contains("unit") ? unitOf(uj["unit"], types) : -1;
+        if (uj.contains("count") && uj["count"].is_array() && uj["count"].size() == 3)
+          for (size_t i = 0; i < 3; ++i) e.count[i] = uj["count"][i].get<int32_t>();
+        w.units.push_back(e);
+      }
+      w.delay = wj.value("delay", 0);
+      w.interval = wj.value("interval", 0);
+      w.times = wj.value("times", 1);
+      w.order = static_cast<uint8_t>(std::max(0, indexOf(kOrders, wj.value("order", std::string("attack_to")))));
+      w.target = wj.value("target", -1);
+      w.path = wj.value("path", -1);
+      w.unitName = wj.value("unit_name", std::string());
+      w.flags = wj.value("flags", uint8_t{0});
+      w.stance = wj.value("stance", -1);
+      w.bind = wj.value("bind", false);
+      s.waves.push_back(std::move(w));
+    }
+    for (const auto& gj : j.value("goals", Json::array())) {
+      MissionGoal g;
+      g.type = gj.value("type", std::string("reach"));
+      g.text = gj.value("text", std::string("Objective"));
+      g.player = gj.value("player", uint8_t{0});
+      g.optional = gj.value("optional", false);
+      g.area = gj.value("area", -1);
+      g.value = gj.value("value", 0);
+      g.unit = gj.value("unit_name", std::string());
+      g.phase = gj.value("phase", -1);
+      g.onDone = actionsFromJson(gj, "on_done", types);
+      g.onFail = actionsFromJson(gj, "on_fail", types);
+      s.goals.push_back(std::move(g));
+    }
+    for (const auto& qj : j.value("sequences", Json::array())) {
+      MissionSequence q;
+      q.name = qj.value("name", "Sequence");
+      q.cinematic = qj.value("cinematic", true);
+      q.skippable = qj.value("skippable", true);
+      for (const auto& ej : qj.value("events", Json::array())) {
+        MissionSequence::Event e;
+        e.at = ej.value("at", 0);
+        e.track = ej.value("track", std::string());
+        e.kind = ej.value("kind", std::string());
+        if (ej.contains("params") && ej["params"].is_object())
+          for (const auto& [k, v] : ej["params"].items()) e.params.emplace_back(k, v.is_string() ? v.get<std::string>() : v.dump());
+        q.events.push_back(std::move(e));
+      }
+      s.sequences.push_back(std::move(q));
     }
   } catch (const nlohmann::json::exception&) {
     // A damaged script: keep whatever was read.
@@ -224,7 +389,15 @@ void Simulation::setScript(const ScenarioScript& s, bool keepProgress) {
       triggerState_[i].lastFire = old[i].lastFire;
     }
   }
-  if (!keepProgress) objectives_.clear();
+  goalState_.resize(script_.goals.size());
+  if (!keepProgress) {
+    objectives_.clear();
+    phase_ = -1;
+    phaseTick_ = 0;
+    waveRuns_.clear();
+    routes_.clear();
+    goalState_.assign(script_.goals.size(), {});
+  }
 }
 
 std::vector<Entity> Simulation::unitsIn(uint8_t player, int area, int unitType) const {
@@ -299,6 +472,8 @@ bool Simulation::test(const Condition& c, size_t trigger) const {
   switch (c.type) {
     case CondType::Always: return true;
     case CondType::Timer: {
+      // In a phase's own conditions (no trigger): seconds since the current phase began.
+      if (trigger >= triggerState_.size()) return tick_ >= phaseTick_ + static_cast<uint32_t>(std::max(0, c.value)) * TICKS_PER_SECOND;
       const TriggerState& ts = triggerState_[trigger];
       const uint32_t since = (script_.triggers[trigger].repeat && ts.fires) ? ts.lastFire : 0;
       return tick_ >= since + static_cast<uint32_t>(std::max(0, c.value)) * TICKS_PER_SECOND;
@@ -389,6 +564,10 @@ bool Simulation::test(const Condition& c, size_t trigger) const {
       return have * 100 < full * c.value || full == 0;
     }
     case CondType::AlliedWith: return c.value >= 0 && c.value < MAX_PLAYERS && allied(c.player, static_cast<uint8_t>(c.value));
+    case CondType::PhaseIs: return phase_ == c.value;
+    case CondType::PhaseElapsed: return phase_ >= 0 && tick_ >= phaseTick_ + static_cast<uint32_t>(std::max(0, c.value)) * TICKS_PER_SECOND;
+    case CondType::GoalDone: return goalState(c.value) == 2;
+    case CondType::GoalFailed: return goalState(c.value) == 3;
     default: return false;
   }
 }
@@ -832,6 +1011,15 @@ void Simulation::perform(const Action& a, size_t depth) {
       event(EventType::PlayMusic, a.player).text = a.text;
       break;
     // --- Triggers ---------------------------------------------------------------------------
+    case ActionType::GotoPhase:
+      if (a.value >= 0 && a.value < static_cast<int32_t>(script_.phases.size()) && a.value != phase_) enterPhase(a.value);
+      break;
+    case ActionType::SendWave:
+      sendWave(a.value);
+      break;
+    case ActionType::FollowPath:
+      followPath(actionUnits(a), a.value, a.player2 != 0);
+      break;
     case ActionType::FireTrigger:
       if (a.trigger >= 0 && a.trigger < static_cast<int>(triggerState_.size()) && depth < 8) {
         TriggerState& ts = triggerState_[static_cast<size_t>(a.trigger)];
@@ -856,11 +1044,13 @@ void Simulation::perform(const Action& a, size_t depth) {
 }
 
 void Simulation::stepScript() {
-  if (script_.triggers.empty() || tick_ % 5 != 0) return;  // three checks a second is plenty
+  if (tick_ % 5 != 0) return;  // three checks a second is plenty
+  stepPhases();
   for (size_t i = 0; i < script_.triggers.size(); ++i) {
     const Trigger& t = script_.triggers[i];
     TriggerState& ts = triggerState_[i];
     if (!ts.enabled || (ts.fires && !t.repeat)) continue;
+    if (t.phase >= 0 && t.phase != phase_) continue;  // it belongs to another phase
     // A repeating trigger waits at least a second between firings.
     if (ts.fires && tick_ < ts.lastFire + TICKS_PER_SECOND) continue;
     bool ok;

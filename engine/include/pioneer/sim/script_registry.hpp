@@ -51,6 +51,10 @@ enum class Kind : uint8_t {
   Weapon,       // a weapon id
   Interface,    // an interface element ("tab.train", "build:<id>"...)
   AiBehaviour,  // build, train, attack, raid, capture, fortify, scout, repair
+  Phase,        // a phase of the mission model, by number
+  Wave,         // a wave of the mission model, by number
+  Path,         // a path of the mission model, by number
+  Goal,         // a goal of the mission model, by number
 };
 
 struct Field {
@@ -112,6 +116,24 @@ struct CheckContext {
   std::vector<std::string> sounds, weapons;    // known ids (empty: not checked)
 };
 std::vector<Issue> check(const ScenarioScript& s, const CheckContext& ctx);
+
+// The kinds of goal the mission model keeps score of (MissionGoal::type).
+struct GoalType {
+  const char* id;
+  const char* name;
+  const char* summary;
+  bool usesArea, usesValue, usesUnit;
+  const char* valueLabel;
+};
+const std::vector<GoalType>& goalTypes();
+// The tracks a sequence can hold and the kinds of event on each (data for the
+// sequencer of 9.15; listed so tools and packs agree on the names).
+struct SequenceTrack {
+  const char* id;
+  const char* summary;
+  const char* kinds;  // "cut|pan|orbit|..."
+};
+const std::vector<SequenceTrack>& sequenceTracks();
 
 // The whole registry as a Markdown document (docs/SCRIPT_REFERENCE.md).
 std::string referenceMarkdown();

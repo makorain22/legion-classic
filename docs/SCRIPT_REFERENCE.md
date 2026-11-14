@@ -441,6 +441,55 @@ True while the side has at least this many structures (of the type) in the area 
 
 *Watch out:* With no type, field works are not counted.
 
+### Mission model
+
+#### Phase is (`phase_is`)
+
+True while the mission is in this phase.
+
+| Field | In files | Kind | What |
+| --- | --- | --- | --- |
+| Phase | `value` | phase number | The phase's number: the first phase is 0. |
+
+*Example:* Phase is 2 (with 'not': any phase but the second).
+
+*Watch out:* A trigger can simply belong to a phase instead: then it is only checked while that phase is current.
+
+#### Phase running for (`phase_elapsed`)
+
+True once the current phase has been running this many seconds.
+
+| Field | In files | Kind | What |
+| --- | --- | --- | --- |
+| Seconds | `value` | seconds | Since the phase began. |
+
+*Example:* Phase running for 120 s: two minutes into the defence, the tanks arrive.
+
+*Watch out:* It is about whichever phase is current. Put the trigger in the phase you mean.
+
+#### Goal done (`goal_done`)
+
+True once a goal of the mission model is done.
+
+| Field | In files | Kind | What |
+| --- | --- | --- | --- |
+| Goal | `value` | goal number | The goal's number: the first goal is 0. |
+
+*Example:* Goal 0 done: the bridge is taken, go to the next phase.
+
+*Watch out:* Goals can run actions of their own when done; this condition is for everything else that should wait on one.
+
+#### Goal failed (`goal_failed`)
+
+True once a goal of the mission model has failed.
+
+| Field | In files | Kind | What |
+| --- | --- | --- | --- |
+| Goal | `value` | goal number | The goal's number: the first goal is 0. |
+
+*Example:* Goal 1 failed: the convoy is lost.
+
+
 ## Actions
 
 ### Messages and story
@@ -1332,3 +1381,89 @@ Creates units and gives them a name in one go.
 
 *Example:* 3 'ger_heavy_tank' in 'Hill' called 'Tigers'.
 
+
+### Mission model
+
+#### Go to phase (`goto_phase`)
+
+The mission moves to a phase: its on-entry actions run, its triggers and goals begin.
+
+| Field | In files | Kind | What |
+| --- | --- | --- | --- |
+| Phase | `value` | phase number | The phase's number: the first phase is 0. |
+
+*Example:* When the bridge is blown: go to phase 'Ford crossing' instead of 'Over the bridge'.
+
+*Watch out:* Triggers that belong to the phase left stop being checked at once, even later ones in the same check.
+
+#### Send wave (`send_wave`)
+
+Sends a wave of the mission model: after its delay its units arrive where it says, as often as it says, and carry out its orders.
+
+| Field | In files | Kind | What |
+| --- | --- | --- | --- |
+| Wave | `value` | wave number | The wave's number: the first wave is 0. |
+
+*Example:* Send wave 'Northern attack' when the village falls.
+
+*Watch out:* Sending a wave that is still coming sends it a second time alongside the first.
+
+#### Follow path (`follow_path`)
+
+The units follow a path of the mission model point by point, to its end (or round and round, if the path loops).
+
+| Field | In files | Kind | What |
+| --- | --- | --- | --- |
+| Unit name | `text` | text (may be empty) | Act on the units with this name. Leave empty to pick them by side, area and type instead. |
+| Side | `player` | side 0-7 or everyone | Whose units, or every side's (when not picked by name). |
+| In area | `area` | area or none | Units in this area, or anywhere on the map. |
+| Unit type | `unit` | unit type or any | Only this type of unit, or any. |
+| Path | `value` | path number | The path's number: the first path is 0. |
+| On the way | `player2` | march/fight | March, or fight what they meet. |
+
+*Example:* 'Convoy' follows path 'Supply road'.
+
+*Watch out:* They go on to the next point when all of them have arrived or stopped. Any other order takes units off the path for good.
+
+## The mission model
+
+Beside triggers a mission can hold phases, paths, waves, goals and sequences as data of their own, in the script's `phases`, `paths`, `waves`, `goals` and `sequences` lists. All are numbered from 0 in the order they are listed.
+
+### Phases
+
+A mission with phases is always in exactly one of them, starting in the first. A phase begins by itself when the phase it follows (`from`: -1 the one before it, -2 any, or a number) is current and its `enter` conditions hold (all, or `any` one); a phase without conditions begins only by *Go to phase*. Two phases that follow the same one with different conditions make a branch: the first whose conditions hold wins. As a phase begins its `on_enter` actions run and its `music` (a track or mood) starts. A trigger with a `phase` is checked only while that phase is current. In a phase's own conditions *Timer* counts from the moment the current phase began.
+
+### Paths
+
+A named list of `points` (tiles), with `loop` to go round for ever. *Follow path* and waves use them.
+
+### Waves
+
+Units that arrive together: `units` (a type and three counts: easy, normal, hard), the `player` they belong to, the `area` they appear in, `delay` seconds after being sent, `times` they come and the `interval` between, and what they do: `order` `stay`, `attack_to` or `move_to` the `target` area, `along_path` or `attack_along_path` the `path`. `unit_name` names them (else `wave:<name>`), `flags` makes them set pieces (1 invulnerable, 2 kept from the computer, 4 untargetable, 8 locked), `stance` and `bind` as for the actions.
+
+### Goals
+
+A goal shows as an objective and keeps its own score. It begins with its `phase` (-1: with the mission) and runs its `on_done` or `on_fail` actions when it ends.
+
+| Type | Done / failed | Area | Value | Unit name |
+| --- | --- | --- | --- | --- |
+| `destroy` | Done when every unit of the name is dead. |  |  | yes |
+| `reach` | Done when the side has at least so many units in the area. | yes | Units (at least 1) |  |
+| `clear` | Done when the side has units in the area and no enemy of it has any. | yes |  |  |
+| `hold` | Done when the side has controlled the area (as for Clear) for so many seconds without a break. | yes | Seconds |  |
+| `survive` | Done so many seconds after the goal began. |  | Seconds |  |
+| `escort` | Done when at least so many units of the name are in the area; failed if all of them are dead. | yes | Units (at least 1) | yes |
+| `protect` | Failed when no unit of the name is left alive; done when its phase ends. |  |  | yes |
+
+### Sequences
+
+A sequence is a timeline of events on tracks, for cutscenes and scripted scenes. Missions and packs can carry them now; they are played by the sequencer of Milestone 9.15. Each event has `at` (tenths of a second), a `track`, a `kind` and `params`.
+
+| Track | What | Kinds of event |
+| --- | --- | --- |
+| `camera` | Where the view is and how it moves. | cut, pan, dolly, orbit, crane, zoom, follow, shake |
+| `actor` | What a unit, a group or a set piece does. | spawn, despawn, move, turn, stop, prone, mount, dismount, fire, damage, die, explode, surrender, enter, leave |
+| `effects` | Things that happen on the map. | explosion, barrage, smoke, fire, collapse, demolish, flyover, flare, flash |
+| `dialogue` | Words and sound. | radio, subtitle, voice, sound, music, ambience |
+| `screen` | What lies over the picture. | fade, title, caption, overlay, objective, letterbox |
+| `flow` | The order of things. | wait, wait_for, branch, action, end |

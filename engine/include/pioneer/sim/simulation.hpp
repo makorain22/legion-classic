@@ -190,6 +190,9 @@ enum class EventType : uint8_t {
   PlayMusic,        // track or mood `text` for owner (empty: automatic again)
   CountdownDone,    // countdown `text` ran out
   PlayAreaChanged,  // the play area changed (see Simulation::playArea)
+  // --- Mission model (Pioneer) -------------------------------------------------------
+  PhaseChanged,     // the mission entered phase `amount`, called `text`
+  WaveArrived,      // wave `text` arrived for owner at `at`: `amount` units
 };
 
 struct SimEvent {
@@ -357,6 +360,15 @@ class Simulation {
     uint8_t leg = 0;  // 0: heading for b, 1: heading for a
   };
   const std::vector<Patrol>& patrols() const { return patrols_; }
+  // --- The mission model: phases, waves, paths, goals (mission.cpp) -------------
+  // The current phase's number (-1: the mission has no phases, or has not begun).
+  int32_t missionPhase() const { return phase_; }
+  uint32_t phaseSeconds() const { return phase_ >= 0 ? (tick_ - phaseTick_) / TICKS_PER_SECOND : 0; }
+  // A goal's state: 0 not begun, 1 open, 2 done, 3 failed; and the objective it shows as (-1: none yet).
+  uint8_t goalState(int goal) const { return goal >= 0 && goal < static_cast<int>(goalState_.size()) ? goalState_[static_cast<size_t>(goal)].state : 0; }
+  int32_t goalObjective(int goal) const { return goal >= 0 && goal < static_cast<int>(goalState_.size()) ? goalState_[static_cast<size_t>(goal)].objective : -1; }
+  size_t wavesPending() const { return waveRuns_.size(); }
+  size_t routesRunning() const { return routes_.size(); }
 
   // --- Computer players ---------------------------------------------------------
   const SkirmishAi& ai() const { return ai_; }
@@ -588,7 +600,12 @@ class Simulation {
   std::vector<Entity> structuresIn(uint8_t player, int area, int unitType) const;
   void setScriptFlags(Entity e, uint8_t mask, uint8_t bits);
   void setUnitName(Entity e, int32_t name);
-  void stepMission();  // countdowns, patrols
+  void stepMission();  // countdowns, patrols, waves, routes
+  void stepPhases();   // phase changes and the model's goals (with the script, three times a second)
+  void enterPhase(int32_t p);
+  void sendWave(int32_t wave);
+  void launchWave(const MissionWave& w);
+  void followPath(const std::vector<Entity>& units, int32_t path, bool attack);
   void saveSection(uint32_t tag, ByteWriter& w) const;
   bool loadSection(uint32_t tag, ByteReader& r, int version, std::string& error);
   void resetSection(uint32_t tag);
@@ -675,6 +692,30 @@ class Simulation {
   uint8_t difficulty_ = 1;
   std::vector<std::string> names_{std::string()};
   std::vector<Patrol> patrols_;
+  // The mission model's run-time state (saved in section MIS2).
+  int32_t phase_ = -1;
+  uint32_t phaseTick_ = 0;
+  struct WaveRun {
+    int32_t wave = 0;
+    uint32_t nextTick = 0;
+    int32_t left = 1;
+  };
+  std::vector<WaveRun> waveRuns_;
+  struct Route {
+    std::vector<Entity> units;
+    int32_t path = 0;
+    uint32_t next = 0;  // the point they are making for
+    bool attack = false;
+  };
+  std::vector<Route> routes_;
+  struct GoalState {
+    int32_t objective = -1;
+    uint32_t since = 0;  // when it began
+    uint32_t held = 0;   // hold: since when the area has been held (0: not held)
+    uint8_t state = 0;
+    uint8_t pad[3] = {0, 0, 0};
+  };
+  std::vector<GoalState> goalState_;
   bool scriptDamage_ = false;
   bool scriptCommand_ = false;  // a script is giving the orders: locks and computer control don't apply  // a script is hurting units: invulnerability doesn't count
   SkirmishAi ai_;

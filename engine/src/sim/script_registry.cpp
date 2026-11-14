@@ -65,6 +65,9 @@ Field text(Kind kind, const char* label, const char* help, bool optional = false
 Field unitName(const char* help = "The name the units were given (Name units, Spawn named, or in the editor's inspector).") {
   return text(Kind::UnitName, "Unit name", help);
 }
+Field model(Kind kind, const char* label, const char* help) {
+  return {Slot::Value, kind, "value", label, help, 0, 0, INT32_MAX, "", false};
+}
 Field scaled() {
   return {Slot::Scaled, Kind::Bool, "scaled", "Scale with difficulty", "70% as many on easy, 135% on hard.", 0, 0, 1, "", true};
 }
@@ -194,6 +197,19 @@ std::vector<Entry> buildConditions() {
     {anySide(), area(), unitType(), percent("Below", "Percent of their full health in total.", 50)});
   C(CondType::AlliedWith, kSides, "True while the side is allied with another.", "Side 2 is allied with side 0: the mutineers have come over.", "",
     {side(), {Slot::Value, Kind::Player, "value", "With side", "The other side.", 0, 0, 7, "", false}});
+  const char* kModel = "Mission model";
+  C(CondType::PhaseIs, kModel, "True while the mission is in this phase.", "Phase is 2 (with 'not': any phase but the second).",
+    "A trigger can simply belong to a phase instead: then it is only checked while that phase is current.",
+    {model(Kind::Phase, "Phase", "The phase's number: the first phase is 0.")});
+  C(CondType::PhaseElapsed, kModel, "True once the current phase has been running this many seconds.",
+    "Phase running for 120 s: two minutes into the defence, the tanks arrive.",
+    "It is about whichever phase is current. Put the trigger in the phase you mean.",
+    {seconds("Seconds", "Since the phase began.", 60)});
+  C(CondType::GoalDone, kModel, "True once a goal of the mission model is done.", "Goal 0 done: the bridge is taken, go to the next phase.",
+    "Goals can run actions of their own when done; this condition is for everything else that should wait on one.",
+    {model(Kind::Goal, "Goal", "The goal's number: the first goal is 0.")});
+  C(CondType::GoalFailed, kModel, "True once a goal of the mission model has failed.", "Goal 1 failed: the convoy is lost.", "",
+    {model(Kind::Goal, "Goal", "The goal's number: the first goal is 0.")});
   return v;
 }
 
@@ -381,6 +397,20 @@ std::vector<Entry> buildActions() {
   A(ActionType::FloodArea, kMap, "The land in an area floods waist deep: men wade, vehicles can't cross.", "Flood 'Polder' when the dyke is blown.",
     "Units standing there that can't wade are lost.", {area()});
   A(ActionType::DrainArea, kMap, "Flooded land in an area is pumped dry again.", "Drain 'Polder' when the pumping station is taken.", "", {area()});
+  const char* kModel = "Mission model";
+  A(ActionType::GotoPhase, kModel, "The mission moves to a phase: its on-entry actions run, its triggers and goals begin.",
+    "When the bridge is blown: go to phase 'Ford crossing' instead of 'Over the bridge'.",
+    "Triggers that belong to the phase left stop being checked at once, even later ones in the same check.",
+    {model(Kind::Phase, "Phase", "The phase's number: the first phase is 0.")});
+  A(ActionType::SendWave, kModel, "Sends a wave of the mission model: after its delay its units arrive where it says, as often as it says, and carry out its orders.",
+    "Send wave 'Northern attack' when the village falls.",
+    "Sending a wave that is still coming sends it a second time alongside the first.",
+    {model(Kind::Wave, "Wave", "The wave's number: the first wave is 0.")});
+  A(ActionType::FollowPath, kModel, "The units follow a path of the mission model point by point, to its end (or round and round, if the path loops).",
+    "'Convoy' follows path 'Supply road'.",
+    "They go on to the next point when all of them have arrived or stopped. Any other order takes units off the path for good.",
+    {model(Kind::Path, "Path", "The path's number: the first path is 0."),
+     {Slot::Player2, Kind::Choice, "player2", "On the way", "March, or fight what they meet.", 0, 0, 1, "march|fight", false}});
   return v;
 }
 }  // namespace
@@ -584,8 +614,141 @@ std::vector<Issue> check(const ScenarioScript& s, const CheckContext& ctx) {
         break;
       case Kind::Order:
         break;
+      case Kind::Phase:
+        if (v < 0 || v >= static_cast<int>(s.phases.size())) add(Issue::Error, ti, item, e.action, where + "the mission has no phase " + std::to_string(v));
+        break;
+      case Kind::Wave:
+        if (v < 0 || v >= static_cast<int>(s.waves.size())) add(Issue::Error, ti, item, e.action, where + "the mission has no wave " + std::to_string(v));
+        break;
+      case Kind::Path:
+        if (v < 0 || v >= static_cast<int>(s.paths.size())) add(Issue::Error, ti, item, e.action, where + "the mission has no path " + std::to_string(v));
+        break;
+      case Kind::Goal:
+        if (v < 0 || v >= static_cast<int>(s.goals.size())) add(Issue::Error, ti, item, e.action, where + "the mission has no goal " + std::to_string(v));
+        break;
     }
   };
+  // Conditions and actions wherever they stand (triggers, phases, goals). `ti`: the trigger, or -1.
+  auto checkCondition = [&](const Condition& c, int ti, int item) {
+    if (c.type >= CondType::Count) return add(Issue::Error, ti, item, false, "unknown condition");
+    const Entry& e = entry(c.type);
+    for (const Field& f : e.fields) field(e, f, f.slot == Slot::Text ? 0 : get(c, f.slot), c.text, ti, item);
+  };
+  auto checkAction = [&](const Action& a, int ti, int item) {
+    if (a.type >= ActionType::Count) return add(Issue::Error, ti, item, true, "unknown action");
+    const Entry& e = entry(a.type);
+    const bool byName = e.takesUnits && !actionUsesText(a.type) && !a.text.empty();
+    for (const Field& f : e.fields) {
+      if (byName && (f.slot == Slot::Player || f.slot == Slot::Area || f.slot == Slot::UnitType)) continue;
+      field(e, f, f.slot == Slot::Text ? 0 : get(a, f.slot), a.text, ti, item);
+    }
+  };
+  // --- The mission model -----------------------------------------------------
+  const int nPhases = static_cast<int>(s.phases.size());
+  std::vector<char> phaseEntered(s.phases.size(), 0);
+  auto notePhase = [&](const std::vector<Action>& acts) {
+    for (const Action& a : acts)
+      if (a.type == ActionType::GotoPhase && a.value >= 0 && a.value < nPhases) phaseEntered[static_cast<size_t>(a.value)] = 1;
+  };
+  for (const Trigger& t : s.triggers) notePhase(t.actions);
+  for (const MissionPhase& p : s.phases) notePhase(p.onEnter);
+  for (const MissionGoal& g : s.goals) {
+    notePhase(g.onDone);
+    notePhase(g.onFail);
+  }
+  for (int pi = 0; pi < nPhases; ++pi) {
+    const MissionPhase& p = s.phases[static_cast<size_t>(pi)];
+    const std::string where = "phase '" + p.name + "': ";
+    if (p.from < -2 || p.from >= nPhases) add(Issue::Error, -1, -1, false, where + "it follows a phase that doesn't exist");
+    if (p.from == pi) add(Issue::Error, -1, -1, false, where + "it can't follow itself");
+    if (pi > 0 && p.enter.empty() && !phaseEntered[static_cast<size_t>(pi)])
+      add(Issue::Warning, -1, -1, false, where + "it has no conditions to begin on and no Go to phase action leads to it");
+    const size_t before = out.size();
+    for (const Condition& c : p.enter) checkCondition(c, -1, -1);
+    for (const Action& a : p.onEnter) checkAction(a, -1, -1);
+    for (size_t i = before; i < out.size(); ++i) out[i].text = where + out[i].text;
+  }
+  for (const Trigger& t : s.triggers)
+    if (t.phase >= nPhases) add(Issue::Error, static_cast<int>(&t - s.triggers.data()), -1, false, "'" + t.name + "' belongs to a phase that doesn't exist");
+  for (const MissionPath& p : s.paths) {
+    const std::string where = "path '" + p.name + "': ";
+    if (p.points.size() < 2) add(Issue::Warning, -1, -1, false, where + "a path needs at least two points");
+    if (ctx.map) {
+      Pathfinder pf(*ctx.map);
+      pf.refresh();
+      for (size_t i = 0; i < p.points.size(); ++i) {
+        const Vec2i pt = p.points[i];
+        if (!ctx.map->inBounds(pt.x, pt.y)) add(Issue::Error, -1, -1, false, where + "point " + std::to_string(i + 1) + " is off the map");
+        else if (!ctx.map->passable(pt.x, pt.y, Locomotor::Foot)) add(Issue::Warning, -1, -1, false, where + "point " + std::to_string(i + 1) + " is on ground nobody can stand on");
+        else if (i > 0 && ctx.map->inBounds(p.points[i - 1].x, p.points[i - 1].y) &&
+                 pf.region(pt.x, pt.y, Locomotor::Foot) != pf.region(p.points[i - 1].x, p.points[i - 1].y, Locomotor::Foot))
+          add(Issue::Warning, -1, -1, false, where + "there is no way on foot from point " + std::to_string(i) + " to point " + std::to_string(i + 1));
+      }
+    }
+  }
+  std::vector<char> waveSent(s.waves.size(), 0);
+  auto noteWave = [&](const std::vector<Action>& acts) {
+    for (const Action& a : acts)
+      if (a.type == ActionType::SendWave && a.value >= 0 && a.value < static_cast<int>(s.waves.size())) waveSent[static_cast<size_t>(a.value)] = 1;
+  };
+  for (const Trigger& t : s.triggers) noteWave(t.actions);
+  for (const MissionPhase& p : s.phases) noteWave(p.onEnter);
+  for (const MissionGoal& g : s.goals) {
+    noteWave(g.onDone);
+    noteWave(g.onFail);
+  }
+  for (size_t wi = 0; wi < s.waves.size(); ++wi) {
+    const MissionWave& w = s.waves[wi];
+    const std::string where = "wave '" + w.name + "': ";
+    if (w.area < 0 || w.area >= nAreas) add(Issue::Error, -1, -1, false, where + "no area to arrive in");
+    else ++areaUses[static_cast<size_t>(w.area)];
+    if (w.player > 7) add(Issue::Error, -1, -1, false, where + "a side from 0 to 7 is needed");
+    if (w.units.empty()) add(Issue::Warning, -1, -1, false, where + "it has no units");
+    for (const MissionWave::Entry& e : w.units) {
+      if (e.unitType < 0 || (ctx.types && e.unitType >= static_cast<int>(ctx.types->size()))) add(Issue::Error, -1, -1, false, where + "a unit type is missing or unknown");
+      if (e.count[0] > e.count[2]) add(Issue::Note, -1, -1, false, where + "more units on easy than on hard");
+    }
+    if ((w.order == MissionWave::AttackTo || w.order == MissionWave::MoveTo)) {
+      if (w.target < 0 || w.target >= nAreas) add(Issue::Error, -1, -1, false, where + "no area to go for");
+      else ++areaUses[static_cast<size_t>(w.target)];
+    }
+    if ((w.order == MissionWave::AlongPath || w.order == MissionWave::AttackAlongPath) && (w.path < 0 || w.path >= static_cast<int>(s.paths.size())))
+      add(Issue::Error, -1, -1, false, where + "no path to follow");
+    if (w.times > 1 && w.interval <= 0) add(Issue::Warning, -1, -1, false, where + "it comes " + std::to_string(w.times) + " times with no interval: a second apart");
+    if (!waveSent[wi]) add(Issue::Warning, -1, -1, false, where + "nothing sends it");
+    if (!w.unitName.empty()) namesGiven.insert(w.unitName);
+  }
+  for (size_t gi = 0; gi < s.goals.size(); ++gi) {
+    const MissionGoal& g = s.goals[gi];
+    const std::string where = "goal '" + g.text + "': ";
+    const int type = goalTypeFromId(g.type);
+    if (type < 0) {
+      add(Issue::Error, -1, -1, false, where + "'" + g.type + "' is not a kind of goal");
+      continue;
+    }
+    const GoalType& gt = goalTypes()[static_cast<size_t>(type)];
+    if (gt.usesArea) {
+      if (g.area < 0 || g.area >= nAreas) add(Issue::Error, -1, -1, false, where + "it needs an area");
+      else ++areaUses[static_cast<size_t>(g.area)];
+    }
+    if (gt.usesUnit) {
+      if (g.unit.empty()) add(Issue::Error, -1, -1, false, where + "it needs the name of the units it is about");
+      else if (!namesGiven.count(g.unit)) add(Issue::Warning, -1, -1, false, where + "nothing is ever named '" + g.unit + "'");
+    }
+    if (g.phase >= nPhases) add(Issue::Error, -1, -1, false, where + "it belongs to a phase that doesn't exist");
+    if (type == 6 && g.phase < 0) add(Issue::Note, -1, -1, false, where + "a protect goal outside any phase stays open to the end of the mission");
+    const size_t before = out.size();
+    for (const Action& a : g.onDone) checkAction(a, -1, -1);
+    for (const Action& a : g.onFail) checkAction(a, -1, -1);
+    for (size_t i = before; i < out.size(); ++i) out[i].text = where + out[i].text;
+    objectivesAdded += 1;
+  }
+  for (const MissionSequence& q : s.sequences)
+    for (const MissionSequence::Event& e : q.events) {
+      bool known = false;
+      for (const SequenceTrack& t : sequenceTracks()) known = known || e.track == t.id;
+      if (!known) add(Issue::Warning, -1, -1, false, "sequence '" + q.name + "': there is no track '" + e.track + "'");
+    }
 
   for (int ti = 0; ti < nTriggers; ++ti) {
     const Trigger& t = s.triggers[static_cast<size_t>(ti)];
@@ -671,6 +834,31 @@ std::vector<Issue> check(const ScenarioScript& s, const CheckContext& ctx) {
   return out;
 }
 
+const std::vector<GoalType>& goalTypes() {
+  static const std::vector<GoalType> v = {
+      {"destroy", "Destroy", "Done when every unit of the name is dead.", false, false, true, ""},
+      {"reach", "Reach", "Done when the side has at least so many units in the area.", true, true, false, "Units (at least 1)"},
+      {"clear", "Clear", "Done when the side has units in the area and no enemy of it has any.", true, false, false, ""},
+      {"hold", "Hold", "Done when the side has controlled the area (as for Clear) for so many seconds without a break.", true, true, false, "Seconds"},
+      {"survive", "Survive", "Done so many seconds after the goal began.", false, true, false, "Seconds"},
+      {"escort", "Escort", "Done when at least so many units of the name are in the area; failed if all of them are dead.", true, true, true, "Units (at least 1)"},
+      {"protect", "Protect", "Failed when no unit of the name is left alive; done when its phase ends.", false, false, true, ""},
+  };
+  return v;
+}
+
+const std::vector<SequenceTrack>& sequenceTracks() {
+  static const std::vector<SequenceTrack> v = {
+      {"camera", "Where the view is and how it moves.", "cut|pan|dolly|orbit|crane|zoom|follow|shake"},
+      {"actor", "What a unit, a group or a set piece does.", "spawn|despawn|move|turn|stop|prone|mount|dismount|fire|damage|die|explode|surrender|enter|leave"},
+      {"effects", "Things that happen on the map.", "explosion|barrage|smoke|fire|collapse|demolish|flyover|flare|flash"},
+      {"dialogue", "Words and sound.", "radio|subtitle|voice|sound|music|ambience"},
+      {"screen", "What lies over the picture.", "fade|title|caption|overlay|objective|letterbox"},
+      {"flow", "The order of things.", "wait|wait_for|branch|action|end"},
+  };
+  return v;
+}
+
 // ---------------------------------------------------------------------------
 // The reference document
 // ---------------------------------------------------------------------------
@@ -702,6 +890,10 @@ std::string referenceMarkdown() {
       case Kind::Trigger: return "trigger";
       case Kind::Order: return "order or any";
       case Kind::Objective: return "objective number";
+      case Kind::Phase: return "phase number";
+      case Kind::Wave: return "wave number";
+      case Kind::Path: return "path number";
+      case Kind::Goal: return "goal number";
       default: return f.optional ? "text (may be empty)" : "text";
     }
   };
@@ -728,6 +920,41 @@ std::string referenceMarkdown() {
   };
   section("Conditions", conditions());
   section("Actions", actions());
+  md += "\n## The mission model\n\n"
+        "Beside triggers a mission can hold phases, paths, waves, goals and sequences as data of their own, in the "
+        "script's `phases`, `paths`, `waves`, `goals` and `sequences` lists. All are numbered from 0 in the order they "
+        "are listed.\n\n"
+        "### Phases\n\n"
+        "A mission with phases is always in exactly one of them, starting in the first. A phase begins by itself when "
+        "the phase it follows (`from`: -1 the one before it, -2 any, or a number) is current and its `enter` conditions "
+        "hold (all, or `any` one); a phase without conditions begins only by *Go to phase*. Two phases that follow the "
+        "same one with different conditions make a branch: the first whose conditions hold wins. As a phase begins its "
+        "`on_enter` actions run and its `music` (a track or mood) starts. A trigger with a `phase` is checked only "
+        "while that phase is current. In a phase's own conditions *Timer* counts from the moment the current phase began.\n\n"
+        "### Paths\n\n"
+        "A named list of `points` (tiles), with `loop` to go round for ever. *Follow path* and waves use them.\n\n"
+        "### Waves\n\n"
+        "Units that arrive together: `units` (a type and three counts: easy, normal, hard), the `player` they belong "
+        "to, the `area` they appear in, `delay` seconds after being sent, `times` they come and the `interval` between, "
+        "and what they do: `order` `stay`, `attack_to` or `move_to` the `target` area, `along_path` or "
+        "`attack_along_path` the `path`. `unit_name` names them (else `wave:<name>`), `flags` makes them set pieces "
+        "(1 invulnerable, 2 kept from the computer, 4 untargetable, 8 locked), `stance` and `bind` as for the actions.\n\n"
+        "### Goals\n\n"
+        "A goal shows as an objective and keeps its own score. It begins with its `phase` (-1: with the mission) and "
+        "runs its `on_done` or `on_fail` actions when it ends.\n\n"
+        "| Type | Done / failed | Area | Value | Unit name |\n| --- | --- | --- | --- | --- |\n";
+  for (const GoalType& g : goalTypes())
+    md += std::string("| `") + g.id + "` | " + g.summary + " | " + (g.usesArea ? "yes" : "") + " | " + (g.usesValue ? g.valueLabel : "") + " | " +
+          (g.usesUnit ? "yes" : "") + " |\n";
+  md += "\n### Sequences\n\n"
+        "A sequence is a timeline of events on tracks, for cutscenes and scripted scenes. Missions and packs can carry "
+        "them now; they are played by the sequencer of Milestone 9.15. Each event has `at` (tenths of a second), a "
+        "`track`, a `kind` and `params`.\n\n| Track | What | Kinds of event |\n| --- | --- | --- |\n";
+  for (const SequenceTrack& t : sequenceTracks()) {
+    std::string kinds = t.kinds;
+    for (size_t i = 0; (i = kinds.find('|', i)) != std::string::npos; i += 2) kinds.replace(i, 1, ", ");
+    md += std::string("| `") + t.id + "` | " + t.summary + " | " + kinds + " |\n";
+  }
   return md;
 }
 

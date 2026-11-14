@@ -501,6 +501,9 @@ uint64_t Simulation::stateHash() {
     mix(c.suppression | (uint64_t{c.morale} << 16) | (uint64_t(c.posture) << 32) | (uint64_t{c.flags} << 40) | (uint64_t{c.experience} << 48));
     mix(c.revealedTick);
   });
+  if (phase_ >= 0) mix(uint64_t(uint32_t(phase_)) | (uint64_t{phaseTick_} << 32));
+  for (const GoalState& g : goalState_) mix(g.state | (uint64_t{g.held} << 8));
+  for (const WaveRun& wr : waveRuns_) mix(uint64_t(uint32_t(wr.wave)) ^ (uint64_t{wr.nextTick} << 20) ^ (uint64_t(uint32_t(wr.left)) << 52));
   if (visionRules_.flags || visionRules_.sightPercent != 100) mix(visionRules_.flags | (uint64_t{visionRules_.sightPercent} << 16));
   for (const SmokeCloud& c : smoke_) mix(uint64_t(uint32_t(c.at.x)) ^ (uint64_t(uint32_t(c.at.y)) << 20) ^ (uint64_t{c.until} << 40));
   for (const MissionCountdown& d : countdowns_) mix(d.endTick ^ (uint64_t{d.done} << 40));
