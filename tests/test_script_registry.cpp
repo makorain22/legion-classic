@@ -2,6 +2,7 @@
 // once, the script checker, and the reference document written from it.
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -201,6 +202,8 @@ TEST_CASE("script reference: docs/SCRIPT_REFERENCE.md is what the registry says"
   std::ifstream in(path, std::ios::binary);
   std::stringstream ss;
   ss << in.rdbuf();
-  CHECK_MESSAGE(ss.str() == now, "docs/SCRIPT_REFERENCE.md is out of date: run the tests once with LEGION_WRITE_DOCS=1");
+  std::string onDisk = ss.str();
+  onDisk.erase(std::remove(onDisk.begin(), onDisk.end(), '\r'), onDisk.end());  // a Windows checkout has CRLF line ends
+  CHECK_MESSAGE(onDisk == now, "docs/SCRIPT_REFERENCE.md is out of date: run the tests once with LEGION_WRITE_DOCS=1");
   CHECK(now.find("#### Spawn units (`spawn_units`)") != std::string::npos);
 }
