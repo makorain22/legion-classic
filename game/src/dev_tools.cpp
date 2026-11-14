@@ -25,6 +25,7 @@
 #include "pioneer/core/profiler.hpp"
 #include "pioneer/core/version.hpp"
 #include "pioneer/sim/determinism.hpp"
+#include "pioneer/sim/script_registry.hpp"
 #include "settings.hpp"
 #include "sidebar.hpp"
 
@@ -246,6 +247,38 @@ void GameScene::registerConsoleCommands() {
                    c.printFmt("tick %u  all sections %016llx  %zu bytes", d.tick, static_cast<unsigned long long>(d.total),
                               total);
                  });
+  con.addCommand("script.help", "script.help [id or word] - what a condition or action does (the script registry); without a word, the list.",
+                 [](const ConsoleArgs& a, Console& c) {
+                   const std::string want = a.str(1);
+                   int shown = 0;
+                   for (int pass = 0; pass < 2; ++pass)
+                     for (const script::Entry& e : pass ? script::actions() : script::conditions()) {
+                       if (want.empty()) {
+                         c.printFmt("  %-9s %-22s %s", pass ? "action" : "condition", e.id, e.name);
+                         continue;
+                       }
+                       if (want != e.id && std::string(e.name).find(want) == std::string::npos && std::string(e.id).find(want) == std::string::npos) continue;
+                       ++shown;
+                       c.printFmt("%s '%s' (%s): %s", pass ? "Action" : "Condition", e.name, e.id, e.summary);
+                       for (const script::Field& f : e.fields) c.printFmt("    %-8s %s: %s", f.key, f.label, f.help);
+                       if (*e.example) c.printFmt("    e.g. %s", e.example);
+                       if (*e.pitfalls) c.printFmt("    watch out: %s", e.pitfalls);
+                     }
+                   if (!want.empty() && !shown) c.error("nothing called '" + want + "'");
+                 });
+  con.addCommand("script.check", "script.check - looks for mistakes in the mission's script.", [this, inBattle](const ConsoleArgs&, Console& c) {
+    if (!inBattle(c)) return;
+    script::CheckContext ctx;
+    ctx.types = &types_;
+    ctx.map = &sim_->map();
+    for (const std::string& n : sim_->names())
+      if (!n.empty()) ctx.placedNames.push_back(n);
+    const std::vector<script::Issue> issues = script::check(sim_->script(), ctx);
+    for (const script::Issue& i : issues)
+      c.printFmt("%s %s%s", i.severity == script::Issue::Error ? "ERROR  " : i.severity == script::Issue::Warning ? "warning" : "note   ",
+                 i.trigger >= 0 ? ("[" + sim_->script().triggers[static_cast<size_t>(i.trigger)].name + "] ").c_str() : "", i.text.c_str());
+    c.printFmt("%zu findings in %zu triggers", issues.size(), sim_->script().triggers.size());
+  });
   con.addCommand("sim.vision",
                  "sim.vision [woodland 0|1] [los 0|1] [sight percent] - how sight works in this battle: men inside "
                  "woods seen only by scouts, rising ground hiding what is behind it, and every sight radius scaled "

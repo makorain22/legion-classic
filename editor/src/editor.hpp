@@ -13,6 +13,7 @@
 // Terrain and unit edits share one undo history (Ctrl+Z / Ctrl+Y). Unit edits
 // go through simulation commands, so they stay deterministic.
 
+#include "pioneer/sim/script_registry.hpp"
 #include <SDL3/SDL.h>
 
 #include <memory>
@@ -116,6 +117,14 @@ class Editor {
   void drawSidesTab();
   void drawBattleTab();
   void drawScriptTab();  // script_tab.cpp
+  // script_help.cpp: help from the script registry.
+  bool helpSelectable(const pioneer::script::Entry& e);  // a menu line with the entry's help on hover
+  void drawScriptReference();
+  void drawScriptCheck();
+  void runScriptCheck();
+  bool showScriptRef_ = false, showScriptCheck_ = false;
+  std::string scriptRefFilter_;
+  std::vector<pioneer::script::Issue> scriptIssues_;
   void renderAreas(pioneer::SpriteRenderer& r);
   void drawAreaLabels();
   bool editCondition(pioneer::Condition& c);

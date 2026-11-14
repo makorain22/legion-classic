@@ -7,6 +7,7 @@
 
 #include "editor.hpp"
 #include "game_scene.hpp"
+#include "pioneer/sim/script_registry.hpp"
 
 using namespace pioneer;
 
@@ -1258,7 +1259,7 @@ void Editor::drawTriggerPage(bool& changed) {
     for (int i : condOrder())
       if (i < 0) {
         ImGui::SeparatorText(condGroup(-i - 1));
-      } else if (ImGui::Selectable(condName(static_cast<CondType>(i)))) {
+      } else if (helpSelectable(script::entry(static_cast<CondType>(i)))) {
         Condition c;
         c.type = static_cast<CondType>(i);
         if (c.type == CondType::Timer) c.value = 60;
@@ -1296,7 +1297,7 @@ void Editor::drawTriggerPage(bool& changed) {
     for (int i : actionOrder())
       if (i < 0) {
         ImGui::SeparatorText(actionGroup(-i - 1));
-      } else if (ImGui::Selectable(actionName(static_cast<ActionType>(i)))) {
+      } else if (helpSelectable(script::entry(static_cast<ActionType>(i)))) {
         Action a;
         a.type = static_cast<ActionType>(i);
         if (!s.areas.empty()) a.area = selectedArea_ >= 0 ? selectedArea_ : 0;
@@ -1384,9 +1385,22 @@ void Editor::drawScriptTab() {
   if (ImGui::IsItemHovered())
     ImGui::SetTooltip("While the battle runs: every trigger and when it fired, the clocks, counters and flags,\n"
                       "what each computer player has been told, and the named units.");
+  const float half = (ImGui::GetContentRegionAvail().x - 6) / 2.0f;
+  if (ImGui::Button("Script reference", ImVec2(half, 0))) showScriptRef_ = !showScriptRef_;
+  if (ImGui::IsItemHovered()) ImGui::SetTooltip("Every condition and action: what it does, its fields, an example, the usual mistakes.");
+  ImGui::SameLine(0, 6);
+  if (ImGui::Button("Check the script", ImVec2(half, 0))) {
+    runScriptCheck();
+    showScriptCheck_ = true;
+  }
+  if (ImGui::IsItemHovered())
+    ImGui::SetTooltip("Looks for mistakes: areas and triggers that don't exist, names nothing carries,\n"
+                      "objectives never added, places units can't reach, clocks stopped before they are read.");
   ImGui::PushTextWrapPos(0);
   ImGui::TextDisabled("Saved with the map. Name units and make set pieces in the Units tab's inspector.");
   ImGui::PopTextWrapPos();
+  drawScriptReference();
+  drawScriptCheck();
 }
 
 }  // namespace legion
