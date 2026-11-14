@@ -246,6 +246,18 @@ void GameScene::registerConsoleCommands() {
                    c.printFmt("tick %u  all sections %016llx  %zu bytes", d.tick, static_cast<unsigned long long>(d.total),
                               total);
                  });
+  con.addCommand("path.stats", "path.stats - what the pathfinder has done in this battle: searches, cache, sectors, flow fields.",
+                 [this, inBattle](const ConsoleArgs&, Console& c) {
+                   if (!inBattle(c)) return;
+                   const Pathfinder::Stats& st = sim_->pathfinder().stats();
+                   c.printFmt("routes: %llu straight lines, %llu searched (%llu from the cache, %llu guided by sectors)",
+                              static_cast<unsigned long long>(st.straight), static_cast<unsigned long long>(st.searches),
+                              static_cast<unsigned long long>(st.cacheHits), static_cast<unsigned long long>(st.corridors));
+                   c.printFmt("sectors: %u (16 x 16 tiles), %u parts, %u links; %llu sector rebuilds in %llu refreshes",
+                              st.sectors, st.parts, st.links, static_cast<unsigned long long>(st.sectorRebuilds),
+                              static_cast<unsigned long long>(st.refreshes));
+                   c.printFmt("flow fields built: %llu", static_cast<unsigned long long>(st.flowFields));
+                 });
   con.addCommand("sim.twincheck",
                  "sim.twincheck [seconds] - saves the battle, loads it into a second simulation and runs both side by "
                  "side (default 10 s): they must stay identical. The battle moves on by that long.",
