@@ -14,6 +14,7 @@
 #include <array>
 #include <string>
 #include <map>
+#include <memory>
 #include <cstdint>
 #include <utility>
 #include <vector>
@@ -231,8 +232,11 @@ struct TileRect {
   bool contains(int x, int y) const { return x >= x0 && x <= x1 && y >= y0 && y <= y1; }
 };
 
+class MissionLua;
+
 class Simulation {
  public:
+  ~Simulation();
   // The simulation owns the map's building layer (Map::block) while it runs.
   Simulation(Map& map, const UnitTypeRegistry& types, const WeaponRegistry& weapons, uint64_t seed);
 
@@ -368,6 +372,14 @@ class Simulation {
   uint8_t goalState(int goal) const { return goal >= 0 && goal < static_cast<int>(goalState_.size()) ? goalState_[static_cast<size_t>(goal)].state : 0; }
   int32_t goalObjective(int goal) const { return goal >= 0 && goal < static_cast<int>(goalState_.size()) ? goalState_[static_cast<size_t>(goal)].objective : -1; }
   size_t wavesPending() const { return waveRuns_.size(); }
+  // --- The mission's Lua script (sim/mission_lua.hpp) -----------------------------
+  MissionLua* lua() { return lua_.get(); }
+  // What went wrong in it lately (compile errors, run-time errors, runaway loops).
+  const std::vector<std::string>& scriptErrors() const;
+  // For the Lua bridge: an action carried out, a condition tested, the simulation's dice.
+  void luaPerform(const Action& a);
+  bool luaTest(const Condition& c) const;
+  uint32_t luaRandom(uint32_t n);  // 0 .. n-1
   size_t routesRunning() const { return routes_.size(); }
 
   // --- Computer players ---------------------------------------------------------
@@ -602,6 +614,7 @@ class Simulation {
   void setUnitName(Entity e, int32_t name);
   void stepMission();  // countdowns, patrols, waves, routes
   void stepPhases();   // phase changes and the model's goals (with the script, three times a second)
+  void rebuildLua(bool keepProgress);
   void enterPhase(int32_t p);
   void sendWave(int32_t wave);
   void launchWave(const MissionWave& w);
@@ -716,6 +729,7 @@ class Simulation {
     uint8_t pad[3] = {0, 0, 0};
   };
   std::vector<GoalState> goalState_;
+  std::unique_ptr<MissionLua> lua_;
   bool scriptDamage_ = false;
   bool scriptCommand_ = false;  // a script is giving the orders: locks and computer control don't apply  // a script is hurting units: invulnerability doesn't count
   SkirmishAi ai_;

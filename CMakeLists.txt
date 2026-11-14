@@ -69,6 +69,23 @@ set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(BUILD_FUZZERS OFF CACHE BOOL "" FORCE)
 set(INSTALL_PROJECT OFF CACHE BOOL "" FORCE)
+# Lua 5.4 (MIT): mission scripting. Built as one file of ours
+# (engine/src/lua/pioneer_lua.cpp includes Lua's own onelua.c) so the settings
+# that make it deterministic are in one place. Compiled as C++: Lua then
+# raises its errors as exceptions, which unwind the engine's C++ frames
+# properly (as C it would longjmp over them).
+FetchContent_Declare(lua
+  GIT_REPOSITORY https://github.com/lua/lua.git
+  GIT_TAG        v5.4.7
+  GIT_SHALLOW    TRUE)
+FetchContent_MakeAvailable(lua)  # no build files of its own: this only fetches the sources
+add_library(pioneer_lua STATIC engine/src/lua/pioneer_lua.cpp)
+target_include_directories(pioneer_lua PUBLIC ${lua_SOURCE_DIR})
+if(MSVC)
+  target_compile_options(pioneer_lua PRIVATE /w)
+else()
+  target_compile_options(pioneer_lua PRIVATE -w)
+endif()
 FetchContent_MakeAvailable(nlohmann_json stb miniz)
 
 # glad: OpenGL 3.3 core loader (generated, checked in under external/glad)
@@ -116,7 +133,7 @@ file(GLOB_RECURSE PIONEER_CORE_SOURCES CONFIGURE_DEPENDS
   engine/src/map/*.cpp)
 add_library(pioneer_core STATIC ${PIONEER_CORE_SOURCES})
 target_include_directories(pioneer_core PUBLIC engine/include)
-target_link_libraries(pioneer_core PUBLIC nlohmann_json::nlohmann_json PRIVATE miniz)
+target_link_libraries(pioneer_core PUBLIC nlohmann_json::nlohmann_json PRIVATE miniz pioneer_lua)
 legion_warnings(pioneer_core)
 
 # ---------------------------------------------------------------------------

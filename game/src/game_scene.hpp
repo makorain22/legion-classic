@@ -2,6 +2,7 @@
 // Legion Classic - the battlefield scene: the running world, the camera, unit
 // control, and the editor overlay (F2) that edits the world while it runs.
 
+#include "pioneer/core/events.hpp"
 #include <array>
 #include <deque>
 #include <memory>
@@ -140,6 +141,8 @@ class GameScene final : public pioneer::Scene {
   pioneer::Map& map() { return map_; }
   pioneer::TerrainRenderer& terrain() { return terrain_; }
   pioneer::Simulation& sim() { return *sim_; }
+  // The battle's event bus: every SimEvent of a tick is published on it after the tick (subscribe<SimEvent>).
+  pioneer::EventBus& events() { return bus_; }
   const pioneer::UnitTypeRegistry& types() const { return types_; }
   pioneer::App& app() { return app_; }
   pioneer::Camera& camera() { return cam_; }
@@ -517,6 +520,7 @@ class GameScene final : public pioneer::Scene {
   bool replayValid_ = false;
   std::vector<pioneer::Simulation::LoggedCommand> replayLog_;
   size_t replayNext_ = 0;
+  pioneer::EventBus bus_;           // what happens in the battle, for whoever wants to hear (see events())
   pioneer::HashTrace replayTrace_;  // the recorded game's checksums, to check the playback against
   uint32_t replayDrift_ = 0;        // the tick the playback first differed at (0: in step)
   uint32_t replayEnd_ = 0;

@@ -5,6 +5,7 @@
 #include <set>
 
 #include "pioneer/map/map.hpp"
+#include "pioneer/sim/mission_lua.hpp"
 #include "pioneer/sim/pathfinder.hpp"
 #include "pioneer/sim/unit_types.hpp"
 
@@ -210,6 +211,10 @@ std::vector<Entry> buildConditions() {
     {model(Kind::Goal, "Goal", "The goal's number: the first goal is 0.")});
   C(CondType::GoalFailed, kModel, "True once a goal of the mission model has failed.", "Goal 1 failed: the convoy is lost.", "",
     {model(Kind::Goal, "Goal", "The goal's number: the first goal is 0.")});
+  C(CondType::ScriptSays, kModel, "True when a function of the mission's Lua script returns true.",
+    "Script says 'flank_is_open': a test too involved for conditions, written in Lua.",
+    "The function is called three times a second while the trigger waits: keep it cheap, and don't change the world from it.",
+    {text(Kind::Text, "Function", "The name of a global function of the mission's Lua script.")});
   return v;
 }
 
@@ -411,6 +416,11 @@ std::vector<Entry> buildActions() {
     "They go on to the next point when all of them have arrived or stopped. Any other order takes units off the path for good.",
     {model(Kind::Path, "Path", "The path's number: the first path is 0."),
      {Slot::Player2, Kind::Choice, "player2", "On the way", "March, or fight what they meet.", 0, 0, 1, "march|fight", false}});
+  A(ActionType::CallScript, kModel, "Calls a function of the mission's Lua script, passing it a number.",
+    "Call script 'reinforce' with 3: Lua decides what arrives.",
+    "An error in the function is reported (console: lua.errors) and the mission goes on.",
+    {text(Kind::Text, "Function", "The name of a global function of the mission's Lua script."),
+     number("Number", "Passed to the function.", 0, -1000000)});
   return v;
 }
 }  // namespace
@@ -743,6 +753,17 @@ std::vector<Issue> check(const ScenarioScript& s, const CheckContext& ctx) {
     for (size_t i = before; i < out.size(); ++i) out[i].text = where + out[i].text;
     objectivesAdded += 1;
   }
+  if (!s.lua.empty()) {
+    std::string err;
+    if (!MissionLua::compiles(s.lua, err)) add(Issue::Error, -1, -1, false, "the Lua script does not compile: " + err);
+  } else {
+    for (int ti = 0; ti < nTriggers; ++ti) {
+      for (const Condition& c : s.triggers[static_cast<size_t>(ti)].conditions)
+        if (c.type == CondType::ScriptSays) add(Issue::Error, ti, -1, false, "Script says: the mission has no Lua script");
+      for (const Action& a : s.triggers[static_cast<size_t>(ti)].actions)
+        if (a.type == ActionType::CallScript) add(Issue::Error, ti, -1, true, "Call script: the mission has no Lua script");
+    }
+  }
   for (const MissionSequence& q : s.sequences)
     for (const MissionSequence::Event& e : q.events) {
       bool known = false;
@@ -955,6 +976,44 @@ std::string referenceMarkdown() {
     for (size_t i = 0; (i = kinds.find('|', i)) != std::string::npos; i += 2) kinds.replace(i, 1, ", ");
     md += std::string("| `") + t.id + "` | " + t.summary + " | " + kinds + " |\n";
   }
+  md += "\n## Lua\n\n"
+        "A mission can carry a Lua 5.4 script (the script's `lua` text). It runs inside the simulation, so it is "
+        "sandboxed to be exactly repeatable: no files, clock or operating system; `pairs` walks keys in a fixed order "
+        "(numbers, then texts); random numbers come from the game's own dice; a call may run at most 5 million steps "
+        "and the script use at most 32 MB.\n\n"
+        "**Rules.** Define functions at the top level and act on the world only from them. Keep whatever must survive "
+        "a save in the global table `state` (numbers, texts, true/false and tables): nothing else is saved, and on "
+        "loading the script is run again and `state` put back.\n\n"
+        "**Actions and conditions.** Every action above is a function taking a table of its fields by the names in "
+        "the *In files* column, every condition a function of the table `is` that returns true or false:\n\n"
+        "```lua\n"
+        "function on_start()\n"
+        "  spawn_named{player = 1, area = \"North road\", unit = \"rus_rifleman\", value = 8, text = \"Raiders\"}\n"
+        "  attack_move{text = \"Raiders\", area2 = \"Bridge\"}\n"
+        "  after(90, \"second_wave\", 12)\n"
+        "end\n"
+        "function second_wave(n)\n"
+        "  if is.units_in_area{player = 0, area = \"Bridge\", value = 1} then\n"
+        "    spawn_units{player = 1, area = \"North road\", unit = \"rus_rifleman\", value = n}\n"
+        "  end\n"
+        "end\n"
+        "```\n\n"
+        "Areas, triggers, phases, waves and paths may be given by name or number, goals by their text, unit types by "
+        "id, sides as a number or `\"all\"`, choices by their word. A misspelt field or name is an error that says "
+        "what the choices were. Add `['not'] = true` to a condition's table to turn it round.\n\n"
+        "**Handlers** the game calls if the script defines them: `on_start()`, `on_second()`, "
+        "`on_unit_died(type, owner, x, y)`, `on_phase(number, name)`, `on_countdown(name)`, "
+        "`on_wave(name, units, owner)`, `on_defeated(side)`, `on_objectives()`. Triggers, phases and goals call any "
+        "function with the *Call script* action and ask one with the *Script says* condition.\n\n"
+        "**Functions.** `tick()`, `seconds()`, `phase()` (number, name), `difficulty()` (number, name), "
+        "`count(side[, area[, unit]])`, `named(name)` (how many alive), `supplies(side)`, `flag(name)`, "
+        "`counter(name)`, `objective(number)`, `goal(number or text)`, `random(n)` / `random(a, b)`, "
+        "`after(seconds, \"function\"[, number or text])`, `log(...)`; from Lua itself `pairs`, `ipairs`, `select`, "
+        "`type`, `tostring`, `tonumber`, `pcall`, `error`, `assert`, `setmetatable` (no `__gc`, no `__mode`), the "
+        "`string` and `table` libraries, and `math.floor`, `ceil`, `abs`, `sqrt`, `min`, `max`, `tointeger`, `random`, "
+        "`huge`, `maxinteger`, `mininteger`. `^` is exact for whole powers only. Prefer whole numbers.\n\n"
+        "Errors don't stop the mission: they are logged and listed by `lua.errors` in the console; `lua.run <code>` "
+        "tries a line.\n";
   return md;
 }
 

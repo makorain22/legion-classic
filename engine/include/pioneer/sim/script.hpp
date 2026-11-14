@@ -67,6 +67,7 @@ enum class CondType : uint8_t {
   PhaseElapsed,    // the current phase began at least `value` seconds ago
   GoalDone,        // goal number `value` of the mission model is done
   GoalFailed,      // goal number `value` has failed
+  ScriptSays,      // the mission's Lua function `text` returns true
   Count
 };
 
@@ -146,6 +147,7 @@ enum class ActionType : uint8_t {
   GotoPhase,        // the mission moves to phase number `value`
   SendWave,         // wave number `value` of the mission model is sent (after its delay, as often as it says)
   FollowPath,       // the units follow path number `value` point by point; `player2` 1: fighting what they meet
+  CallScript,       // calls the mission's Lua function `text` with `value`
   Count
 };
 
@@ -289,8 +291,11 @@ struct ScenarioScript {
   std::vector<MissionWave> waves;
   std::vector<MissionGoal> goals;
   std::vector<MissionSequence> sequences;
+  // The mission's Lua script (see sim/mission_lua.hpp), or empty.
+  std::string lua;
   bool empty() const {
-    return areas.empty() && triggers.empty() && phases.empty() && paths.empty() && waves.empty() && goals.empty() && sequences.empty();
+    return areas.empty() && triggers.empty() && phases.empty() && paths.empty() && waves.empty() && goals.empty() && sequences.empty() &&
+           lua.empty();
   }
 };
 

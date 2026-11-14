@@ -79,6 +79,30 @@
     tick on the test machine.
   - Console: `sim.digest`, `sim.twincheck`, `replay.check`, `path.stats`,
     `sim.vision`, `sim.smoke`.
+- **Part 4, scripting** (14 Nov):
+  - **Help for every script line.** In the editor's Script tab, hover any
+    condition or action in the "+" menus to read what it does, its fields,
+    an example and the usual mistakes. *Script reference* opens all of it in
+    a searchable window; `docs/SCRIPT_REFERENCE.md` is the same on paper.
+  - **Check the script** (Script tab) finds mistakes before you play: areas
+    and triggers that don't exist, names no unit carries, objectives never
+    added, clocks stopped before they are read, and **places units can't
+    reach from where they are sent**, the fault behind the cliff-walled
+    fords of the first playtest.
+  - **Missions as phases, goals, waves and paths.** The engine now runs
+    these as things of their own: a mission moves through phases (with
+    branches), goals keep their own score (destroy, reach, clear, hold,
+    survive, escort, protect), waves arrive with counts per difficulty and
+    carry out their orders, units follow drawn paths. They live in the map
+    file today; the screens to edit them come with the Mission Maker (9.14).
+  - **Lua scripting** for missions, sandboxed so replays, saves and
+    multiplayer stay exact: every action and condition is a Lua function
+    (`spawn_units{player = 1, area = "North road", unit = "rus_rifleman",
+    value = 8}`), with handlers such as `on_start()` and
+    `on_unit_died(...)`. A mistake in a script is reported and the mission
+    goes on. See the "Lua" chapter of the script reference.
+  - Cutscene sequences can be stored in missions (they are played from 9.15).
+  - Console: `script.help`, `script.check`, `lua.run`, `lua.errors`.
 
 ## 0.9.1 – in progress (edits after Milestone 9; Milestones 9.1–9.12)
 

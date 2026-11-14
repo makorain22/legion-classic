@@ -11,6 +11,7 @@
 #include <nlohmann/json.hpp>
 
 #include "pioneer/core/chunks.hpp"
+#include "pioneer/sim/mission_lua.hpp"
 
 #include "pioneer/sim/simulation.hpp"
 
@@ -152,7 +153,7 @@ constexpr uint32_t Head = fourcc("HEAD"), Cmds = fourcc("CMDS"), Ecs = fourcc("E
                    Movers = fourcc("MOVE"), Paths = fourcc("PATH"), Sides = fourcc("SIDE"), Tiles = fourcc("TILE"),
                    Vision_ = fourcc("VISN"), Script = fourcc("SCRP"), Ai = fourcc("AI  "), Tutorial = fourcc("TUTR"),
                    Formations = fourcc("FORM"), Logistics = fourcc("LOGI"), Mission = fourcc("MISN"),
-                   Vision2 = fourcc("VIS2"), Mission2 = fourcc("MIS2");
+                   Vision2 = fourcc("VIS2"), Mission2 = fourcc("MIS2"), Lua = fourcc("LUA ");
 }
 
 const std::vector<Simulation::SectionInfo>& Simulation::stateSections() {
@@ -176,6 +177,7 @@ const std::vector<Simulation::SectionInfo>& Simulation::stateSections() {
       {sect::Mission, "MISN", "the mission engine: play area, clocks, named units", false, 8},
       {sect::Vision2, "VIS2", "vision rules (woodland, line of sight, weather) and smoke", false, 9},
       {sect::Mission2, "MIS2", "the mission model: phase, waves on their way, routes, goals", false, 9},
+      {sect::Lua, "LUA", "the mission's Lua script: its `state` table and timers", false, 9},
   };
   return list;
 }
@@ -340,6 +342,10 @@ void Simulation::saveSection(uint32_t tag, ByteWriter& w) const {
       break;
     case sect::Mission:
       saveMission(w);
+      break;
+    case sect::Lua:
+      w.u8(lua_ ? 1 : 0);
+      if (lua_) lua_->save(w);
       break;
     case sect::Mission2:
       w.i32(phase_);
@@ -566,6 +572,7 @@ bool Simulation::loadSection(uint32_t tag, ByteReader& r, int version, std::stri
         objectives_.push_back(std::move(o));
       }
       revealed_ = r.podVector<RevealedArea>();
+      rebuildLua(false);  // the script's functions are defined afresh; its `state` comes from the LUA section
       return r.ok() || damaged("script");
     }
     case sect::Ai:
@@ -625,6 +632,13 @@ bool Simulation::loadSection(uint32_t tag, ByteReader& r, int version, std::stri
     }
     case sect::Mission:
       return loadMission(r) || damaged("mission");
+    case sect::Lua:
+      if (r.u8() == 0) return r.ok() || damaged("Lua");
+      if (!lua_) {  // saved with a script this mission no longer has: step over it
+        MissionLua none(*this);
+        return (none.restore(r) && r.ok()) || damaged("Lua");
+      }
+      return (lua_->restore(r) && r.ok()) || damaged("Lua");
     case sect::Mission2: {
       phase_ = r.i32();
       phaseTick_ = r.u32();

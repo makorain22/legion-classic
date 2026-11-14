@@ -490,6 +490,18 @@ True once a goal of the mission model has failed.
 *Example:* Goal 1 failed: the convoy is lost.
 
 
+#### Script says (`script_says`)
+
+True when a function of the mission's Lua script returns true.
+
+| Field | In files | Kind | What |
+| --- | --- | --- | --- |
+| Function | `text` | text | The name of a global function of the mission's Lua script. |
+
+*Example:* Script says 'flank_is_open': a test too involved for conditions, written in Lua.
+
+*Watch out:* The function is called three times a second while the trigger waits: keep it cheap, and don't change the world from it.
+
 ## Actions
 
 ### Messages and story
@@ -1425,6 +1437,19 @@ The units follow a path of the mission model point by point, to its end (or roun
 
 *Watch out:* They go on to the next point when all of them have arrived or stopped. Any other order takes units off the path for good.
 
+#### Call script (`call_script`)
+
+Calls a function of the mission's Lua script, passing it a number.
+
+| Field | In files | Kind | What |
+| --- | --- | --- | --- |
+| Function | `text` | text | The name of a global function of the mission's Lua script. |
+| Number | `value` | number | Passed to the function. |
+
+*Example:* Call script 'reinforce' with 3: Lua decides what arrives.
+
+*Watch out:* An error in the function is reported (console: lua.errors) and the mission goes on.
+
 ## The mission model
 
 Beside triggers a mission can hold phases, paths, waves, goals and sequences as data of their own, in the script's `phases`, `paths`, `waves`, `goals` and `sequences` lists. All are numbered from 0 in the order they are listed.
@@ -1467,3 +1492,32 @@ A sequence is a timeline of events on tracks, for cutscenes and scripted scenes.
 | `dialogue` | Words and sound. | radio, subtitle, voice, sound, music, ambience |
 | `screen` | What lies over the picture. | fade, title, caption, overlay, objective, letterbox |
 | `flow` | The order of things. | wait, wait_for, branch, action, end |
+
+## Lua
+
+A mission can carry a Lua 5.4 script (the script's `lua` text). It runs inside the simulation, so it is sandboxed to be exactly repeatable: no files, clock or operating system; `pairs` walks keys in a fixed order (numbers, then texts); random numbers come from the game's own dice; a call may run at most 5 million steps and the script use at most 32 MB.
+
+**Rules.** Define functions at the top level and act on the world only from them. Keep whatever must survive a save in the global table `state` (numbers, texts, true/false and tables): nothing else is saved, and on loading the script is run again and `state` put back.
+
+**Actions and conditions.** Every action above is a function taking a table of its fields by the names in the *In files* column, every condition a function of the table `is` that returns true or false:
+
+```lua
+function on_start()
+  spawn_named{player = 1, area = "North road", unit = "rus_rifleman", value = 8, text = "Raiders"}
+  attack_move{text = "Raiders", area2 = "Bridge"}
+  after(90, "second_wave", 12)
+end
+function second_wave(n)
+  if is.units_in_area{player = 0, area = "Bridge", value = 1} then
+    spawn_units{player = 1, area = "North road", unit = "rus_rifleman", value = n}
+  end
+end
+```
+
+Areas, triggers, phases, waves and paths may be given by name or number, goals by their text, unit types by id, sides as a number or `"all"`, choices by their word. A misspelt field or name is an error that says what the choices were. Add `['not'] = true` to a condition's table to turn it round.
+
+**Handlers** the game calls if the script defines them: `on_start()`, `on_second()`, `on_unit_died(type, owner, x, y)`, `on_phase(number, name)`, `on_countdown(name)`, `on_wave(name, units, owner)`, `on_defeated(side)`, `on_objectives()`. Triggers, phases and goals call any function with the *Call script* action and ask one with the *Script says* condition.
+
+**Functions.** `tick()`, `seconds()`, `phase()` (number, name), `difficulty()` (number, name), `count(side[, area[, unit]])`, `named(name)` (how many alive), `supplies(side)`, `flag(name)`, `counter(name)`, `objective(number)`, `goal(number or text)`, `random(n)` / `random(a, b)`, `after(seconds, "function"[, number or text])`, `log(...)`; from Lua itself `pairs`, `ipairs`, `select`, `type`, `tostring`, `tonumber`, `pcall`, `error`, `assert`, `setmetatable` (no `__gc`, no `__mode`), the `string` and `table` libraries, and `math.floor`, `ceil`, `abs`, `sqrt`, `min`, `max`, `tointeger`, `random`, `huge`, `maxinteger`, `mininteger`. `^` is exact for whole powers only. Prefer whole numbers.
+
+Errors don't stop the mission: they are logged and listed by `lua.errors` in the console; `lua.run <code>` tries a line.

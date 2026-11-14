@@ -1773,6 +1773,8 @@ void GameScene::onTick() {
   }
   editor_->onSimTick(sim_->spawnLog());
   const auto& events = sim_->events();
+  for (const SimEvent& ev : events) bus_.publish(ev);
+  bus_.dispatch();
   for (const SimEvent& ev : events) {
     const bool seen = watching(ev.at.x, ev.at.y) || (ev.type == EventType::Fire && watching(ev.from.x, ev.from.y));
     fx_.onEvent(ev, seen, teamColors_);

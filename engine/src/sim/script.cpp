@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <nlohmann/json.hpp>
 
+#include "pioneer/sim/mission_lua.hpp"
 #include "pioneer/sim/simulation.hpp"
 
 namespace pioneer {
@@ -17,7 +18,7 @@ const char* kCondNames[] = {"Always", "Timer", "Units in area", "No units in are
                             "Countdown ran out", "Countdown below", "Counter at least", "Counter at most",
                             "Kills at least", "Losses at least", "Objective done", "Objective failed",
                             "Difficulty at least", "Chance", "Supplies at most", "Health below", "Allied with",
-                            "Phase is", "Phase running for", "Goal done", "Goal failed"};
+                            "Phase is", "Phase running for", "Goal done", "Goal failed", "Script says"};
 const char* kCondIds[] = {"always", "timer", "units_in_area", "no_units_in_area", "unit_count_at_most",
                           "player_defeated", "supplies", "trigger_fired", "unit_count_at_least", "in_cover",
                           "order_given", "flag_at_least",
@@ -26,7 +27,7 @@ const char* kCondIds[] = {"always", "timer", "units_in_area", "no_units_in_area"
                           "countdown_done", "countdown_below", "counter_at_least", "counter_at_most",
                           "kills_at_least", "losses_at_least", "objective_done", "objective_failed",
                           "difficulty_at_least", "chance", "supplies_at_most", "health_below", "allied_with",
-                          "phase_is", "phase_elapsed", "goal_done", "goal_failed"};
+                          "phase_is", "phase_elapsed", "goal_done", "goal_failed", "script_says"};
 const char* kOrderIds[] = {"move", "attack_move", "attack", "stop", "spawn", "remove", "spawn_list", "edit", "kill",
                            "strike", "set_team", "set_stance", "produce", "place_building", "place_walls", "sell",
                            "deploy", "harvest", "set_rally", "set_credits", "set_controller", "repair", "bind_group",
@@ -45,7 +46,7 @@ const char* kActionNames[] = {"Message", "Add objective", "Complete objective", 
                               "Cinematic", "Pan camera", "Mark area", "Clear marker", "Play sound", "Play music",
                               "Income rate", "Add logistics point", "Fire trigger", "Reset trigger", "Hide objective",
                               "Spawn named units", "Freeze water", "Break the ice", "Flood the land", "Drain the land",
-                              "Go to phase", "Send wave", "Follow path"};
+                              "Go to phase", "Send wave", "Follow path", "Call script"};
 const char* kActionIds[] = {"message", "add_objective", "complete_objective", "fail_objective", "victory", "defeat",
                             "spawn_units", "give_supplies", "reveal_area", "attack_move", "move_units",
                             "change_owner", "kill_units", "enable_trigger", "disable_trigger", "set_computer",
@@ -58,7 +59,7 @@ const char* kActionIds[] = {"message", "add_objective", "complete_objective", "f
                             "transmission", "cinematic", "camera_pan", "mark_area", "clear_marker", "play_sound",
                             "play_music", "set_income_rate", "add_logistics_point", "fire_trigger", "reset_trigger",
                             "hide_objective", "spawn_named", "freeze_water", "break_ice", "flood_area", "drain_area",
-                            "goto_phase", "send_wave", "follow_path"};
+                            "goto_phase", "send_wave", "follow_path", "call_script"};
 static_assert(sizeof(kCondIds) / sizeof(kCondIds[0]) == static_cast<size_t>(CondType::Count));
 static_assert(sizeof(kCondNames) / sizeof(kCondNames[0]) == static_cast<size_t>(CondType::Count));
 static_assert(sizeof(kActionIds) / sizeof(kActionIds[0]) == static_cast<size_t>(ActionType::Count));
@@ -98,6 +99,7 @@ bool actionUsesText(ActionType t) {
     case ActionType::AiBehaviour: case ActionType::SetCounter: case ActionType::AddCounter: case ActionType::AddFlag:
     case ActionType::SpawnFromFlag: case ActionType::Transmission: case ActionType::MarkArea:
     case ActionType::ClearMarker: case ActionType::PlaySound: case ActionType::PlayMusic: case ActionType::SpawnNamed:
+    case ActionType::CallScript:
       return true;
     default:
       return false;
@@ -255,6 +257,7 @@ nlohmann::json scriptToJson(const ScenarioScript& s, const UnitTypeRegistry* typ
                      {"value", g.value}, {"unit_name", g.unit}, {"phase", g.phase}, {"on_done", actionsToJson(g.onDone, types)},
                      {"on_fail", actionsToJson(g.onFail, types)}});
   }
+  if (!s.lua.empty()) j["lua"] = s.lua;
   if (!s.sequences.empty()) {
     auto& out = j["sequences"] = Json::array();
     for (const MissionSequence& q : s.sequences) {
@@ -353,6 +356,7 @@ ScenarioScript scriptFromJson(const nlohmann::json& j, const UnitTypeRegistry* t
       g.onFail = actionsFromJson(gj, "on_fail", types);
       s.goals.push_back(std::move(g));
     }
+    s.lua = j.value("lua", std::string());
     for (const auto& qj : j.value("sequences", Json::array())) {
       MissionSequence q;
       q.name = qj.value("name", "Sequence");
@@ -390,6 +394,7 @@ void Simulation::setScript(const ScenarioScript& s, bool keepProgress) {
     }
   }
   goalState_.resize(script_.goals.size());
+  rebuildLua(keepProgress);
   if (!keepProgress) {
     objectives_.clear();
     phase_ = -1;
@@ -568,6 +573,7 @@ bool Simulation::test(const Condition& c, size_t trigger) const {
     case CondType::PhaseElapsed: return phase_ >= 0 && tick_ >= phaseTick_ + static_cast<uint32_t>(std::max(0, c.value)) * TICKS_PER_SECOND;
     case CondType::GoalDone: return goalState(c.value) == 2;
     case CondType::GoalFailed: return goalState(c.value) == 3;
+    case CondType::ScriptSays: return lua_ && lua_->ask(c.text);
     default: return false;
   }
 }
@@ -1020,6 +1026,9 @@ void Simulation::perform(const Action& a, size_t depth) {
     case ActionType::FollowPath:
       followPath(actionUnits(a), a.value, a.player2 != 0);
       break;
+    case ActionType::CallScript:
+      if (lua_) lua_->call(a.text, a.value);
+      break;
     case ActionType::FireTrigger:
       if (a.trigger >= 0 && a.trigger < static_cast<int>(triggerState_.size()) && depth < 8) {
         TriggerState& ts = triggerState_[static_cast<size_t>(a.trigger)];
@@ -1046,6 +1055,7 @@ void Simulation::perform(const Action& a, size_t depth) {
 void Simulation::stepScript() {
   if (tick_ % 5 != 0) return;  // three checks a second is plenty
   stepPhases();
+  if (lua_) lua_->step();
   for (size_t i = 0; i < script_.triggers.size(); ++i) {
     const Trigger& t = script_.triggers[i];
     TriggerState& ts = triggerState_[i];
@@ -1067,6 +1077,36 @@ void Simulation::stepScript() {
     const std::vector<Action> acts = t.actions;  // a copy: an action may change the script's state
     for (const Action& a : acts) perform(a);
   }
+}
+
+}  // namespace pioneer
+
+namespace pioneer {
+
+// The mission's Lua: made afresh from the script's source. With keepProgress
+// (the script was edited while the battle runs) what the old one kept in
+// `state`, and its timers, go over to the new one.
+void Simulation::rebuildLua(bool keepProgress) {
+  ByteWriter kept;
+  const bool had = lua_ && lua_->ready() && keepProgress;
+  if (had) lua_->save(kept);
+  lua_.reset();
+  if (script_.lua.empty()) return;
+  lua_ = std::make_unique<MissionLua>(*this);
+  std::string error;
+  if (!lua_->load(script_.lua, error)) return;  // reported in its errors; the mission goes on without it
+  if (had) {
+    ByteReader r(kept.bytes());
+    lua_->restore(r);
+  }
+}
+
+void Simulation::luaPerform(const Action& a) { perform(a); }
+bool Simulation::luaTest(const Condition& c) const { return evaluate(c, SIZE_MAX); }
+uint32_t Simulation::luaRandom(uint32_t n) { return n ? rng_.below(n) : 0; }
+const std::vector<std::string>& Simulation::scriptErrors() const {
+  static const std::vector<std::string> none;
+  return lua_ ? lua_->errors() : none;
 }
 
 }  // namespace pioneer

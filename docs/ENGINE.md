@@ -14,8 +14,8 @@ stands.
 | 1 | **Core:** the rename, job system, profiler, memory tracking, logging channels, developer console | **done** |
 | 2 | **Data:** virtual file system, asset registry, hot reload, pack format | **done** |
 | 3 | **Simulation:** tagged-chunk saves, determinism checker, sector pathfinding and flow fields, vision 2.0, suppression/morale fields | **done** |
-| 4 | **Scripting:** condition/action registry, mission data model, event bus, sandboxed Lua | next |
-| 5 | **UI framework:** docking, real fonts, UI scale, timeline and node widgets, property grids, key rebinding | planned |
+| 4 | **Scripting:** condition/action registry, mission data model, event bus, sandboxed Lua | **done** |
+| 5 | **UI framework:** docking, real fonts, UI scale, timeline and node widgets, property grids, key rebinding | next |
 | 6 | **Renderer:** backend layer, HDR post-processing, time of day, weather, graphics presets with auto-detect | planned |
 | 7 | **Assets and audio:** glTF in and out, .vox, materials, skeletal animation, poses; sound banks, voice lines, reverb zones, occlusion | planned |
 | 8 | **Networking groundwork:** lockstep, hosting, LAN discovery, dedicated server, reconnect | planned |
@@ -591,3 +591,135 @@ traces), `tests/test_path.cpp` (+6: regions against a flood fill, sector
 rebuilds, guided routes, the cache, a battle warm and cold, flow fields),
 `tests/test_vision.cpp` (8: rays against circles, scouted sight, line of
 sight, smoke, woodland, weather, condition, the budget).
+
+---
+
+## Part 4 – Scripting
+
+What the Mission Maker (9.14) and the cutscene tools (9.15) stand on: one
+description of everything a script can do, missions as structured data
+instead of a pile of triggers, and a real programming language for what
+triggers can't say.
+
+### The script registry (`pioneer/sim/script_registry.hpp`)
+
+Every condition (38) and action (70) is described once: id, name, group, the
+fields it reads (which member of `Condition` / `Action`, what kind of value,
+its range and default, its key in files and in Lua) and help: one sentence,
+an example, the usual mistakes. Four things read the table:
+
+- **The editor**: hover help in the "+ condition" / "+ action" menus, a
+  searchable *Script reference* window, and *Check the script*. (The Mission
+  Maker's property grids will be generated from the same fields.)
+- **`docs/SCRIPT_REFERENCE.md`** is written from it
+  (`script::referenceMarkdown()`); a test fails when the file is out of
+  date. `LEGION_WRITE_DOCS=1 ./build/pioneer_tests` rewrites it.
+- **Checking** (`script::check(script, context)`): areas, triggers, phases,
+  waves, paths and goals that don't exist; unit types not chosen; names
+  nothing carries; countdowns never started; objectives never added;
+  triggers nothing switches on; waves nothing sends; phases nothing leads
+  to; a trigger that fires itself; the clock-hiding trap; Lua that doesn't
+  compile; and, with the map, **places units can't get to from where they
+  are sent** (the cliff-walled fords of playtest round 1) and path points
+  with no way between them.
+- **Lua**: every action and condition is callable by its id with a table of
+  its fields.
+
+To add a condition or action: the enum, its name and id in `script.cpp`, its
+case in `test()` / `perform()`, and its entry in `script_registry.cpp`. A
+test fails if the entry or its help is missing. Text in the help is checked
+against nothing but your care: say only what the code does.
+
+### The mission model (`pioneer/sim/script.hpp`, `sim/mission.cpp`)
+
+Beside areas and triggers a `ScenarioScript` now holds:
+
+| | What | Runs |
+| --- | --- | --- |
+| **Phases** | Stages of the mission; exactly one is current. A phase begins when the phase it follows is current and its conditions hold, or by *Go to phase*; phases following the same one branch. On entry: its actions, its music. A trigger with a `phase` is checked only while that phase is current | yes |
+| **Goals** | Objectives the simulation keeps score of: destroy, reach, clear, hold, survive, escort, protect; each begins with its phase and runs actions when done or failed | yes |
+| **Waves** | Units that arrive together: types with counts for easy / normal / hard, where, after what delay, how often, and their orders (attack or move to an area, follow a path), name, set-piece flags, stance, binding | yes |
+| **Paths** | Named routes, point by point, optionally looping; *Follow path* and waves walk them | yes |
+| **Sequences** | Timelines of events on tracks (camera, actor, effects, dialogue, screen, flow) for cutscenes | **data only**: carried, saved in maps and checked; played by the sequencer of 9.15 |
+
+New conditions `phase_is`, `phase_elapsed`, `goal_done`, `goal_failed`,
+`script_says`; new actions `goto_phase`, `send_wave`, `follow_path`,
+`call_script`; events `PhaseChanged`, `WaveArrived`. All of it is in the map
+file's script JSON (`phases`, `goals`, `waves`, `paths`, `sequences`, `lua`),
+written only when present, so older maps are byte for byte what they were.
+The run-time state (current phase, waves on their way, routes, goal states)
+is saved in section `MIS2`.
+
+What 9.14 adds on top is the editing: the phase columns, the wave designer,
+drawing paths on the map, checkpoints and "test from any phase".
+
+### Lua for missions (`pioneer/sim/mission_lua.hpp`)
+
+A mission may carry a Lua 5.4 script. It runs **inside the simulation**, so
+it has to be as repeatable as the rest: on every machine, in a replay, after
+a load. Lua is built from source as one unit (`engine/src/lua/pioneer_lua.cpp`)
+with the settings that matter in one place:
+
+- The seed of Lua's string hashes is fixed (not the clock and addresses), so
+  tables are laid out the same everywhere.
+- `^` is worked out by multiplication for whole powers; other powers are
+  `nan` rather than the C library's guess, which differs in the last bit
+  between platforms.
+- Built as C++, so a Lua error unwinds the engine's frames as an exception.
+
+And the sandbox (`mission_lua.cpp`):
+
+- Only a vetted base, `string`, `table` and a small `math`. No `io`, `os`,
+  `debug`, `package`, `load`, `require`, `coroutine`, `collectgarbage`,
+  `next`, `string.dump`, no trigonometry.
+- `pairs` walks keys in a fixed order (numbers rising, then texts) and
+  refuses tables keyed by tables or functions; `tostring` never shows an
+  address; `setmetatable` refuses `__gc` and `__mode` (both depend on when
+  the collector runs).
+- `random` and `math.random` are the simulation's dice.
+- A call from the engine may run 5 million VM steps and the script hold
+  32 MB. A runaway script is stopped with an error; the mission goes on.
+- **Saving**: only the global table `state` (plain values and tables,
+  written in `pairs` order) and the timers set with `after()` are saved, in
+  section `LUA`. On loading, the script is run again to define its
+  functions (it may not touch the world while it loads) and `state` is put
+  back. The same happens when the script is edited while the battle runs.
+
+The bridge is the registry: `spawn_units{player = 1, area = "North road",
+unit = "rus_rifleman", value = 8}`, `is.units_in_area{...}`. Names are
+resolved (areas, triggers, phases, waves, paths by name; goals by text; unit
+types by id; choices by word) and a misspelt field or name is an error that
+lists the choices. Handlers: `on_start`, `on_second`, `on_unit_died`,
+`on_phase`, `on_countdown`, `on_wave`, `on_defeated`, `on_objectives`;
+events reach them at the end of the tick they happened in. Triggers call
+Lua with *Call script* and ask it with *Script says*. The full list is the
+"Lua" chapter of `docs/SCRIPT_REFERENCE.md`.
+
+Not in this part: Lua for the interface (menus, HUD). That is presentation
+code with other rules (it need not be deterministic) and comes with the UI
+framework.
+
+### The event bus (`pioneer/core/events.hpp`)
+
+`EventBus`: typed publish / subscribe. `subscribe<E>(fn, priority)` returns
+a guard that ends the subscription when it goes out of scope; `publish(e)`
+tells subscribers now, in priority then subscription order; `post(e)` keeps
+the event for `dispatch()`. Handlers may subscribe, unsubscribe, publish and
+post while being told. The game publishes every `SimEvent` of a tick on
+`GameScene::events()`; the existing presentation code (effects, sound,
+announcements) is unchanged and new listeners (the Mission Maker's panels,
+interface scripts) subscribe instead of being wired in by hand.
+
+### Console
+
+`script.help [word]`, `script.check`, `lua.run <code>`, `lua.errors`.
+
+### Tests
+
+`tests/test_script_registry.cpp` (4: every entry described, the checker,
+all 81 shipped missions without errors, the reference up to date),
+`tests/test_mission_model.cpp` (4: files, a mission played through its
+phases with a wave on a path and a save in mid-flight, the branch, the
+checker), `tests/test_lua.cpp` (6: the event bus, a script driving a
+mission, mistakes told not fatal, the sandbox, `state` and timers through a
+save, triggers calling and asking Lua).

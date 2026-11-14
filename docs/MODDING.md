@@ -132,6 +132,23 @@ counter-attack comes.
 Actions marked *units* pick their units **by name** (text field) or **by
 side, area and unit type**.
 
+**The full reference is [SCRIPT_REFERENCE.md](SCRIPT_REFERENCE.md)**: every
+condition and action with its fields, an example and the usual mistakes,
+written by the game from its own registry (the tables below are the short
+form). The same help is in the editor: hover a line in the "+" menus, or
+open *Script reference* in the Script tab. *Check the script* there looks
+for mistakes, including places units can't reach.
+
+**Beyond triggers (new in 0.9.2).** A script can also hold **phases**
+(stages of the mission, with branches; triggers can belong to one),
+**goals** (objectives the game keeps score of: destroy, reach, clear, hold,
+survive, escort, protect), **waves** (reinforcements with counts for each
+difficulty and orders on arrival) and **paths** (routes units follow), and a
+**Lua script** for whatever triggers can't say. They are described in the
+"mission model" and "Lua" chapters of the reference. Until the Mission Maker
+(Milestone 9.14) brings screens for them, they are written in the map file's
+script JSON (`phases`, `goals`, `waves`, `paths`, `lua`).
+
 ### Conditions
 
 | Id | Holds when |

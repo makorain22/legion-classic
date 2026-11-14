@@ -1,10 +1,15 @@
 #include "pioneer/sim/simulation.hpp"
+
+#include "pioneer/sim/mission_lua.hpp"
 #include "pioneer/core/profiler.hpp"
 
 #include <algorithm>
 #include <chrono>
 
 namespace pioneer {
+
+Simulation::~Simulation() = default;
+
 
 Simulation::Simulation(Map& map, const UnitTypeRegistry& types, const WeaponRegistry& weapons, uint64_t seed)
     : map_(map), types_(types), weapons_(weapons), rng_(seed), pathfinder_(map) {
@@ -221,6 +226,7 @@ void Simulation::tick() {
   }
   stats_.projectiles = static_cast<uint32_t>(reg_.pool<CProjectile>().size());
   PNR_COUNTER("Units", reg_.pool<CUnit>().size());
+  if (lua_) lua_->deliver(events_);
   ++tick_;
   if (recording_ && tick_ % TICKS_PER_SECOND == 0) hashLog_.push_back({tick_, 0, stateHash()});
 }

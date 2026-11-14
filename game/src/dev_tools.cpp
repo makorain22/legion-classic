@@ -25,6 +25,7 @@
 #include "pioneer/core/profiler.hpp"
 #include "pioneer/core/version.hpp"
 #include "pioneer/sim/determinism.hpp"
+#include "pioneer/sim/mission_lua.hpp"
 #include "pioneer/sim/script_registry.hpp"
 #include "settings.hpp"
 #include "sidebar.hpp"
@@ -278,6 +279,21 @@ void GameScene::registerConsoleCommands() {
       c.printFmt("%s %s%s", i.severity == script::Issue::Error ? "ERROR  " : i.severity == script::Issue::Warning ? "warning" : "note   ",
                  i.trigger >= 0 ? ("[" + sim_->script().triggers[static_cast<size_t>(i.trigger)].name + "] ").c_str() : "", i.text.c_str());
     c.printFmt("%zu findings in %zu triggers", issues.size(), sim_->script().triggers.size());
+  });
+  con.addCommand("lua.run", "lua.run <code> - runs Lua in the mission's script (try: lua.run count(1), lua.run state.x). Changes made this way are not in replays.",
+                 [this, inBattle](const ConsoleArgs& a, Console& c) {
+                   if (!inBattle(c)) return;
+                   if (!sim_->lua()) return c.error("this mission has no Lua script");
+                   std::string code;
+                   for (size_t i = 1; i < a.size(); ++i) code += (i > 1 ? " " : "") + a.str(i);
+                   c.print(sim_->lua()->run(code));
+                   replayValid_ = false;
+                 });
+  con.addCommand("lua.errors", "lua.errors - what went wrong in the mission's Lua script lately.", [this, inBattle](const ConsoleArgs&, Console& c) {
+    if (!inBattle(c)) return;
+    if (!sim_->lua()) return c.print("this mission has no Lua script");
+    for (const std::string& e : sim_->scriptErrors()) c.error(e);
+    c.printFmt("%zu errors; %zu KB of memory in use", sim_->scriptErrors().size(), sim_->lua()->memory() / 1024);
   });
   con.addCommand("sim.vision",
                  "sim.vision [woodland 0|1] [los 0|1] [sight percent] - how sight works in this battle: men inside "

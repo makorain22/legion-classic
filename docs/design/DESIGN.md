@@ -405,6 +405,26 @@ recognition flash on vehicles and a roundel in the interface.
        Console `sim.digest`, `sim.twincheck`, `replay.check`, `path.stats`,
        `sim.vision`, `sim.smoke`. Tests: test_state.cpp, test_path.cpp,
        test_vision.cpp; fixture tests/data/sim8_three_sides.lsav.
+     - **Part 4, scripting (done 14 Nov):** script registry
+       (`sim/script_registry.hpp`: `script::Entry` / `Field` / `Kind` /
+       `Slot`, `conditions()`, `actions()`, `makeAction`, `check()`,
+       `referenceMarkdown()`, `goalTypes()`, `sequenceTracks()`;
+       docs/SCRIPT_REFERENCE.md generated); mission model in
+       `ScenarioScript` (`MissionPhase`, `MissionGoal`, `MissionWave`,
+       `MissionPath`, `MissionSequence`, `lua`; `Trigger::phase`), run by
+       `Simulation::stepPhases` / `enterPhase` / `sendWave` / `launchWave`
+       / `followPath` (mission.cpp), state in section `MIS2`; conditions
+       `PhaseIs`, `PhaseElapsed`, `GoalDone`, `GoalFailed`, `ScriptSays`,
+       actions `GotoPhase`, `SendWave`, `FollowPath`, `CallScript`, events
+       `PhaseChanged`, `WaveArrived`; Lua 5.4 fetched from github.com/lua/lua
+       (v5.4.7), built as C++ in `engine/src/lua/pioneer_lua.cpp` (fixed
+       hash seed, exact `^`), sandbox and bridge in `sim/mission_lua.cpp`
+       (`MissionLua`: load, step, deliver, call, ask, run, save / restore;
+       `Simulation::rebuildLua`, section `LUA`); `core/events.hpp`
+       (`EventBus`), `GameScene::events()`. Editor: `script_help.cpp`
+       (hover help, Script reference, Check the script). Console
+       `script.help`, `script.check`, `lua.run`, `lua.errors`. Tests:
+       test_script_registry.cpp, test_mission_model.cpp, test_lua.cpp.
    - **9.14 Mission Maker foundation**, **9.15 Cutscenes and event
      sequences**, **9.16 Set pieces**, **9.17 Map, assets and terrain**,
      **9.18 Combat and controls**, (campaign finalisation when the user's
