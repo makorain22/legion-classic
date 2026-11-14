@@ -844,7 +844,7 @@ void SkirmishAi::manageArmy(Simulation& sim, uint8_t p, bool saving) {
     const CUnit& u = reg.pool<CUnit>().get(e);
     if (u.owner >= MAX_PLAYERS || sim.allied(u.owner, p) || types.get(u.type).isStructure()) continue;
     const CPosition& c = reg.pool<CPosition>().get(e);
-    if (!sim.canSee(p, c.x, c.y)) continue;
+    if (!sim.unitVisibleTo(p, e)) continue;
     if (dist({c.x, c.y}, ai.base) < 20 * T || (ai.order == 2 && dist({c.x, c.y}, ai.orderAt) < 16 * T)) {
       if (threat.x < 0) threat = {c.x, c.y};
       threatSize += types.get(u.type).infantry() ? 1 : 4;
@@ -1043,7 +1043,7 @@ void SkirmishAi::manageArmy(Simulation& sim, uint8_t p, bool saving) {
       if (u.owner >= MAX_PLAYERS || sim.allied(u.owner, p) || u.health <= 0) continue;
       const CPosition& c = reg.pool<CPosition>().get(e);
       const int32_t d = dist({c.x, c.y}, rc);
-      if (d < truckD && sim.canSee(p, c.x, c.y)) {
+      if (d < truckD && sim.unitVisibleTo(p, e)) {
         truckD = d;
         truck = reg.handle(e);
       }

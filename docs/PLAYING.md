@@ -599,6 +599,8 @@ are typing, **Up/Down** bring back earlier lines, **Esc** closes it.
 | `profiler` (or F8) | Open the profiler; `prof.capture 300` writes a trace file you can send with a bug report |
 | `log.level ai debug` | Make one part of the game say more in the log |
 | `mem.report`, `jobs.info` | Memory by system; what the worker threads did |
+| `sim.vision woodland 1`, `sim.vision los 1`, `sim.vision sight 60`, `sim.smoke 64 64` | Try the new sight rules: men in woods seen only by scouts, hills hiding ground, weather, a smoke cloud (all off in normal play) |
+| `sim.twincheck 30`, `sim.digest`, `replay.check`, `path.stats` | For bug reports: prove the battle is repeatable, checksums by system, whether a replay still matches, what the pathfinder did |
 | `bind f6 "speed 8"` | Run any command on a key; `unbind f6` |
 | `alias fast "speed 8"` | Give a command a name of your own |
 | `cheats 1`, then `spawn ger_heavy_tank 3`, `credits 9999`, `reveal`, `kill`, `side 1` | Testing tools: units under the mouse, supplies, see everything, destroy the selection, command another side |

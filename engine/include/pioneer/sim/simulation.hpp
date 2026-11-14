@@ -72,6 +72,9 @@ enum class CommandType : uint8_t {
   TagUnits,       // `units` are named `text` (unless empty; "-" clears) and get ScriptFlag bits: the bits in `count` become
                   // those in `amount`; `radius` 1 + Stance sets the stance (0 keeps it). With `tag` set and no `units`:
                   // the unit spawned this tick by a SpawnList with that tag, at index `indexBase` (map placements)
+  // --- Vision 2.0 (Pioneer) --------------------------------------------------------
+  SetVisionRules, // `count`: VisionRules flag bits; `amount`: sight percent (10..200); for the whole battle
+  Smoke,          // a smoke cloud at `target`, `radius` leptons, lasting `amount` seconds
 };
 
 // Production lines: one per kind of thing a side builds.
@@ -265,6 +268,34 @@ class Simulation {
   uint8_t coverAt(int tx, int ty) const;
   const Vision& vision() const { return vision_; }
   Vision& vision() { return vision_; }
+  // --- Vision 2.0 -----------------------------------------------------------------
+  // How sight works in this battle. All off by default: the game sees as it
+  // always did. Changed by a SetVisionRules command (scripts, the console).
+  struct VisionRules {
+    enum : uint16_t {
+      kWoodland = 1,     // infantry inside woodland is seen only by scouts (its outskirts are seen as usual)
+      kLineOfSight = 2,  // rising ground hides what lies behind it
+    };
+    uint16_t flags = 0;
+    uint16_t sightPercent = 100;  // weather and time of day: every sight radius scaled
+    bool woodland() const { return flags & kWoodland; }
+    bool lineOfSight() const { return flags & kLineOfSight; }
+  };
+  const VisionRules& visionRules() const { return visionRules_; }
+  struct SmokeCloud {
+    Vec2i at;
+    int32_t radius = 0;  // leptons
+    uint32_t until = 0;  // tick it has blown away
+  };
+  const std::vector<SmokeCloud>& smoke() const { return smoke_; }
+  // Is this unit hidden where it stands (the rules and the ground say so)?
+  bool concealed(uint32_t unit) const;
+  // Does `player`'s side see this unit: its tile in sight, and the unit not hidden from it?
+  bool unitVisibleTo(uint8_t player, uint32_t unit) const;
+  // A unit's bearing (suppression, morale, posture...); null for one nothing has touched.
+  const CCondition* condition(Entity e) const { return reg_.alive(e) ? reg_.pool<CCondition>().tryGet(e.index) : nullptr; }
+  // For the systems to come and for tests: the unit's condition, made if it has none.
+  CCondition& conditionOf(Entity e);
   Pathfinder& pathfinder() { return pathfinder_; }
   const std::vector<SimEvent>& events() const { return events_; }  // from the last tick
   // Units created by SpawnList commands in the last tick, with their tags.
@@ -462,6 +493,7 @@ class Simulation {
   void rebuildSpatial();
   void stepSeparation();
   void stepVision();
+  void rebuildGround();  // woodland and smoke on the vision's ground layer
 
   // economy and structures (economy.cpp)
   void occupy(uint32_t e, const UnitTypeDef& def, Vec2i origin);
@@ -617,8 +649,15 @@ class Simulation {
   struct VisionStamp {
     int16_t x, y, r;
     uint8_t owner;
+    uint8_t scout;
   };
   std::vector<VisionStamp> visionStamps_;
+  VisionRules visionRules_;
+  std::vector<SmokeCloud> smoke_;
+  bool groundDirty_ = true;       // the woodland layer must be worked out again
+  uint32_t groundProps_ = 0;      // how many props the map had when it was
+  std::vector<int32_t> tileHeights_;  // for line of sight: each tile's height at its middle (scratch)
+  uint32_t heightsRevision_ = UINT32_MAX;
   // Tutorials and campaigns.
   std::array<std::string, MAX_PLAYERS> hints_, highlights_;
   std::array<std::vector<uint8_t>, MAX_PLAYERS> buildLocks_;  // by unit type: 1 = a script forbids it

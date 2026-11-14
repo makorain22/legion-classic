@@ -13,8 +13,8 @@ stands.
 | --- | --- | --- |
 | 1 | **Core:** the rename, job system, profiler, memory tracking, logging channels, developer console | **done** |
 | 2 | **Data:** virtual file system, asset registry, hot reload, pack format | **done** |
-| 3 | **Simulation:** tagged-chunk saves, determinism checker, hierarchical pathfinding and flow fields, vision 2.0, suppression/morale fields | next |
-| 4 | **Scripting:** condition/action registry, mission data model, event bus, sandboxed Lua | planned |
+| 3 | **Simulation:** tagged-chunk saves, determinism checker, sector pathfinding and flow fields, vision 2.0, suppression/morale fields | **done** |
+| 4 | **Scripting:** condition/action registry, mission data model, event bus, sandboxed Lua | next |
 | 5 | **UI framework:** docking, real fonts, UI scale, timeline and node widgets, property grids, key rebinding | planned |
 | 6 | **Renderer:** backend layer, HDR post-processing, time of day, weather, graphics presets with auto-detect | planned |
 | 7 | **Assets and audio:** glTF in and out, .vox, materials, skeletal animation, poses; sound banks, voice lines, reverb zones, occlusion | planned |
@@ -412,3 +412,182 @@ caches and their last good version; packs as mods through `ContentLayers`;
 and one over the game's real content: every file its data names exists.
 `--mods-selftest` edits a mod's rules on disk under a running battle, packs
 the mod, deletes the folder and plays on from the pack.
+
+---
+
+## Part 3 – Simulation
+
+Four things under the simulation that the Mission Maker, big scenarios and
+multiplayer need: saves that survive new systems, a way to prove two runs
+are the same, routes that stay cheap on big maps, and a vision model that
+can hide things.
+
+### Saved state in sections (`pioneer/core/chunks.hpp`, `sim/serialize.cpp`)
+
+A saved state is `SIM9` followed by tagged chunks:
+
+```
+u32 "SIM9"
+u32 count
+count x { u32 tag, u16 version, u16 flags, u32 size, bytes }
+```
+
+One section per system, in `Simulation::stateSections()`:
+
+| Tag | What |
+| --- | --- |
+| `HEAD` | map size, tick, random numbers |
+| `CMDS` | commands waiting for the next tick |
+| `ECS ` | entities, and every plain component pool under its own tag and item size |
+| `GRPS` `MOVE` `PATH` | bound units and garrisons, routes, route requests |
+| `SIDE` `TILE` `VISN` | sides and production, structures and cover on the ground, what each side sees |
+| `SCRP` `AI  ` | the scenario script and objectives, the computer players |
+| `TUTR` `FORM` `LOGI` `MISN` | hints and flags, formations, logistics points, the mission engine |
+| `VIS2` | vision rules and smoke (new) |
+
+Rules:
+
+- **A new system adds a section**, optional, with a reset for states that
+  don't have it (`Simulation::resetSection`). Nothing else changes.
+- **A new plain component** goes on the `PNR_POD_POOLS` list with a tag. A
+  state without that pool loads with the pool empty; a pool this version
+  doesn't know is stepped over.
+- **A component may grow at its end.** The pool records the size one item
+  had when saved; shorter items keep the defaults in the new fields.
+- A reader refuses a section it doesn't know only if the section is flagged
+  `chunk::kRequired`, and a known section with a higher version.
+  `Simulation::loadNotes()` lists what was left out.
+- States saved by 0.7 to 0.9.1 (`SIM2`..`SIM8`, one stream without a table)
+  load through the same section code. `tests/data/sim8_three_sides.lsav`
+  is such a save, kept as a test.
+
+`ChunkWriter` / `ChunkReader` are general: packs and network snapshots can
+use them.
+
+### Canonical bytes (`pioneer/core/reflect.hpp`)
+
+Plain structs are written as their bytes. The compiler leaves gaps between
+fields (padding) that hold whatever was in memory, so two machines in the
+same state could write different bytes. `ByteWriter::pod` and `podVector`
+blank them: `reflect::podMask<T>()` finds the padding of any aggregate at
+start-up with a small structured-binding reflection (`forEachField`, up to
+24 fields; nested structs and `std::array` are followed). Types without
+padding are written as before, at full speed.
+
+So: **equal states give equal bytes.** Save, load, save again gives the same
+file, and a checksum of saved bytes is a checksum of the state.
+
+### The determinism checker (`pioneer/sim/determinism.hpp`)
+
+- `Simulation::stateHash()` – the cheap checksum of units, projectiles and
+  mission state, for every tick.
+- `Simulation::digest()` – a checksum of **each section** (of the bytes it
+  would save). `digestDifference(a, b)` names the sections two states
+  differ in: "ECS" (a unit), "AI", "PATH"...
+- `HashTrace` – the state checksum at regular ticks. While a game is
+  recorded the simulation keeps one sample a second
+  (`Simulation::hashLog()`); **replays carry it** (save file version 3) and
+  check themselves on playback. A replay made with other rules or another
+  version says from which minute it no longer matches, instead of showing a
+  battle that never happened. Lockstep multiplayer (part 8) compares the
+  same samples between machines.
+- `twinCheck(sim, ticks)` – saves the battle, loads it into a second
+  simulation on a copy of the map and runs both side by side. A piece of
+  state that isn't saved, or isn't deterministic, shows as a difference at
+  the tick it first matters, with the sections named.
+
+Console: `hash`, `sim.digest`, `sim.twincheck [seconds]`, `replay.check`.
+
+### Pathfinding (`pioneer/sim/pathfinder.hpp`)
+
+- **Sectors.** The map is cut into 16 x 16 tile sectors. Each knows its
+  connected parts per movement type (foot, wheels, tracks) and which parts
+  of its neighbours they touch. Regions ("can this tile reach that one")
+  come from that graph. When a building goes up or a bridge is blown only
+  the sectors whose ground changed are worked out again; before, every
+  change flood-filled the whole map three times.
+- **Guided search.** For a route of more than 12 tiles the distance to the
+  goal's part from every other part (one pass over the sector graph, kept
+  for the next units going there) steers the tile A*: where the graph knows
+  the way round is longer than the straight line, the search heads for the
+  ford or the gap at once instead of filling the ground in front of the
+  river. On a test map with one ford and a walled town: 3.4 times fewer
+  nodes, routes the same length. On open ground it changes nothing.
+- **Route cache.** The same trip (start tile, goal, movement type) asked
+  again is answered from memory: units leaving one door for one rally
+  point, supply trucks on their round. Emptied when the ground changes.
+  **The cache never changes an answer and reports the work the first search
+  took**, so the per-tick search budget is spent identically warm or cold
+  and a loaded game plays out exactly like the one that went on.
+- **Flow fields.** `flowField(goal, loco[, rect])` gives every tile its
+  step towards one goal (a Dijkstra pass outwards from it), `flowPath`
+  reads one unit's smoothed way off it. One field serves any number of
+  units: this is the mover for crowds (civilians, 9.16) and hordes.
+- `Pathfinder::stats()`, console `path.stats`.
+
+Routes can differ from 0.9.1's, so replays recorded before part 3 stop
+matching (and say so).
+
+### Vision 2.0 (`pioneer/sim/vision.hpp`, `Simulation::VisionRules`)
+
+Each side's grid gains a third bit, and the vision a ground layer:
+
+- `kScouted` – the tile is under a **scout's** eye now.
+- Ground: `kWood` (woodland: a tile with a tree and trees on at least three
+  tiles round it), `kWoodEdge` (its outskirts), `kSmoke`.
+- `stampRays` – sight along rays from the viewer instead of a filled
+  circle: a ray ends in smoke and, with line of sight on, where the ground
+  rises to hide what lies beyond (a ridge hides the valley behind it; the
+  hill beyond the valley is seen; so is the flat top of a hill from below).
+
+What the layers mean is set per battle by `VisionRules`, changed with a
+`SetVisionRules` command (so replays and multiplayer stay in step), all
+**off by default: the game sees as it did**:
+
+| Rule | Effect |
+| --- | --- |
+| `kWoodland` | infantry inside woodland is seen (and shot at, and drawn, and shown as a chip) only where a scout looks; on the outskirts, and vehicles anywhere, as usual |
+| `kLineOfSight` | rising ground hides what is behind it |
+| `sightPercent` | every sight radius scaled (weather, night): 10..200 |
+
+**Smoke** is a `Smoke` command (place, radius, seconds): nobody sees into
+or through a cloud until it blows away. Smoke shells (9.18) and scripts
+will lay it; `sim.smoke` does from the console.
+
+`Simulation::unitVisibleTo(player, unit)` is the one question to ask ("does
+this side see that unit"); targeting, scouts, the computer player and the
+game's drawing ask it. `concealed(unit)` says whether the rules hide a unit
+where it stands.
+
+### Unit condition (`CCondition`)
+
+Suppression (0..1000), morale, posture (standing, crouched, prone, pinned,
+hands up, cowering), flags (hidden, ambush, routing, surrendered),
+experience and the tick a unit last gave itself away. Only units something
+has touched carry it; it is saved (pool `CCND`) and counts in the state
+checksum. Nothing changes it yet: 9.18's suppression, prone, ambush and
+veterancy write to it.
+
+### Budget
+
+`tests/test_vision.cpp` runs 1,500 soldiers and tanks fighting in thirty
+blocks on a 256 x 256 map for a minute and prints the time per tick
+(real time is 66.7 ms a tick). On the development container (two cores):
+under 1 ms a tick on average, 2 ms at worst. Two formations of 750 marching
+as one body each are the dear case (about 12 ms a tick): formations that
+large are for 9.19 to look at.
+
+### Console
+
+`sim.digest`, `sim.twincheck`, `replay.check`, `path.stats`,
+`sim.vision [woodland 0|1] [los 0|1] [sight percent]`,
+`sim.smoke <x> <y> [radius] [seconds]`.
+
+### Tests
+
+`tests/test_state.cpp` (8 cases: reflection and padding, chunks, the old
+save, canonical bytes, newer sections and components, twin check, hash
+traces), `tests/test_path.cpp` (+6: regions against a flood fill, sector
+rebuilds, guided routes, the cache, a battle warm and cold, flow fields),
+`tests/test_vision.cpp` (8: rays against circles, scouted sight, line of
+sight, smoke, woodland, weather, condition, the budget).

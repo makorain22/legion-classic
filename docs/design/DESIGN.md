@@ -382,6 +382,29 @@ recognition flash on vehicles and a roundel in the interface.
        `<user>/exports/`. Zip reading is in `engine/src/core/zip_file.*`
        (miniz). Tests: `tests/test_data.cpp`; `--mods-selftest` covers hot
        reload and a packed mod end to end.
+     - **Part 3, simulation (done 14 Nov):** state saved as tagged chunks
+       (`core/chunks.hpp`; `SIM9`, one section per system via
+       `Simulation::saveSection` / `loadSection` / `resetSection`, plain
+       pools self-describing with tag and item size on `PNR_POD_POOLS`;
+       SIM2..SIM8 read by the same code); canonical bytes
+       (`core/reflect.hpp`: `podMask`, `forEachField`; `ByteWriter` blanks
+       padding); `Simulation::digest()` per section; determinism checker
+       (`sim/determinism.hpp`: `HashTrace`, `twinCheck`; replays carry a
+       checksum a second, save file version 3, checked in
+       `GameScene::onTick`); pathfinder rebuilt on 16-tile sectors
+       (`Pathfinder::buildSector` / `linkSector` / `buildRegions`,
+       incremental by sector hash), guided A* (`guideTo`: distance to the
+       goal's part over the part graph, slack 8 tiles, from 12 tiles),
+       route cache keyed by start tile, goal and locomotor that charges the
+       first search's work, flow fields (`flowField`, `flowPath`); vision
+       2.0 (`Vision::kScouted`, ground layer `kWood` / `kWoodEdge` /
+       `kSmoke`, `stampRays`; `Simulation::VisionRules` set by
+       `CommandType::SetVisionRules`, `CommandType::Smoke`,
+       `unitVisibleTo`, `concealed`, section `VIS2`); `CCondition`
+       (suppression, morale, posture, flags, experience; pool `CCND`).
+       Console `sim.digest`, `sim.twincheck`, `replay.check`, `path.stats`,
+       `sim.vision`, `sim.smoke`. Tests: test_state.cpp, test_path.cpp,
+       test_vision.cpp; fixture tests/data/sim8_three_sides.lsav.
    - **9.14 Mission Maker foundation**, **9.15 Cutscenes and event
      sequences**, **9.16 Set pieces**, **9.17 Map, assets and terrain**,
      **9.18 Combat and controls**, (campaign finalisation when the user's

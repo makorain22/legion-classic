@@ -40,7 +40,7 @@ void Simulation::stepScouts() {
       if (vd.weapons.empty()) return;
       const CPosition& q = pos.get(o2);
       const uint32_t d = distance(q.x - p.x, q.y - p.y);
-      if (d > static_cast<uint32_t>(kThreat) || d >= bestD || !canSee(u.owner, q.x, q.y)) return;
+      if (d > static_cast<uint32_t>(kThreat) || d >= bestD || !unitVisibleTo(u.owner, o2)) return;
       bestD = d;
       threat = {q.x, q.y};
     });

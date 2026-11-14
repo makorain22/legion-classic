@@ -138,7 +138,7 @@ void Simulation::stepOrders() {
         const CPosition& tp = reg_.get<CPosition>(o.target);
         const int32_t d = effectiveDistance(distance(tp.x - p.x, tp.y - p.y), o.target.index);
         if (def.speed <= 0 || reg_.pool<CGarrisoned>().has(ei)) break;  // emplacements and men inside fire from where they are
-        if (d <= maxRange(def) && canSee(u.owner, tp.x, tp.y)) {
+        if (d <= maxRange(def) && unitVisibleTo(u.owner, o.target.index)) {
           m.active = false;  // in range: stand and fire
           m.request = 0;
         } else if ((!m.active && !m.request) ||
@@ -381,7 +381,93 @@ void Simulation::stepSeparation() {
   }
 }
 
+// Woodland from the map's trees, and smoke from the clouds drifting now.
+void Simulation::rebuildGround() {
+  const int W = map_.width(), H = map_.height();
+  std::vector<uint8_t>& g = vision_.groundData();
+  if (g.size() != static_cast<size_t>(W) * H) g.assign(static_cast<size_t>(W) * H, 0);
+  if (groundDirty_ || groundProps_ != map_.props().size()) {
+    groundDirty_ = false;
+    groundProps_ = static_cast<uint32_t>(map_.props().size());
+    for (uint8_t& v : g) v &= static_cast<uint8_t>(~(Vision::kWood | Vision::kWoodEdge));
+    if (visionRules_.woodland()) {
+      // A tile with a tree on it, with trees on at least three of the tiles round it, is woodland.
+      std::vector<uint8_t> trees(g.size(), 0);
+      for (const Prop& p : map_.props()) {
+        const bool tree = p.kind == PropKind::Tree || p.kind == PropKind::Pine || p.kind == PropKind::SnowPine ||
+                          p.kind == PropKind::Palm || p.kind == PropKind::JungleTree;
+        const int tx = p.x >> LEPTON_SHIFT, ty = p.y >> LEPTON_SHIFT;
+        if (tree && map_.inBounds(tx, ty)) trees[static_cast<size_t>(ty) * W + tx] = 1;
+      }
+      auto treed = [&](int x, int y) { return map_.inBounds(x, y) && trees[static_cast<size_t>(y) * W + x]; };
+      for (int y = 0; y < H; ++y)
+        for (int x = 0; x < W; ++x) {
+          if (!treed(x, y)) continue;
+          int round = 0;
+          for (int dy = -1; dy <= 1; ++dy)
+            for (int dx = -1; dx <= 1; ++dx) round += (dx || dy) && treed(x + dx, y + dy);
+          if (round >= 3) g[static_cast<size_t>(y) * W + x] |= Vision::kWood;
+        }
+      // Its outskirts: woodland with open ground beside it.
+      auto wood = [&](int x, int y) { return map_.inBounds(x, y) && (g[static_cast<size_t>(y) * W + x] & Vision::kWood); };
+      for (int y = 0; y < H; ++y)
+        for (int x = 0; x < W; ++x)
+          if (wood(x, y) && !(wood(x + 1, y) && wood(x - 1, y) && wood(x, y + 1) && wood(x, y - 1)))
+            g[static_cast<size_t>(y) * W + x] |= Vision::kWoodEdge;
+    }
+  }
+  // Smoke: clouds that have blown away go; the rest lie on their tiles.
+  const bool had = vision_.anySmoke();
+  smoke_.erase(std::remove_if(smoke_.begin(), smoke_.end(), [&](const SmokeCloud& c) { return c.until <= tick_; }), smoke_.end());
+  if (had || !smoke_.empty()) {
+    for (uint8_t& v : g) v &= static_cast<uint8_t>(~Vision::kSmoke);
+    for (const SmokeCloud& c : smoke_) {
+      const int r = std::max(1, c.radius >> LEPTON_SHIFT), cx = c.at.x >> LEPTON_SHIFT, cy = c.at.y >> LEPTON_SHIFT;
+      for (int y = std::max(0, cy - r); y <= std::min(H - 1, cy + r); ++y)
+        for (int x = std::max(0, cx - r); x <= std::min(W - 1, cx + r); ++x)
+          if ((x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r + r) g[static_cast<size_t>(y) * W + x] |= Vision::kSmoke;
+    }
+    vision_.setAnySmoke(!smoke_.empty());
+  }
+}
+
+bool Simulation::concealed(uint32_t unit) const {
+  if (!visionRules_.woodland()) return false;
+  const CUnit* u = reg_.pool<CUnit>().tryGet(unit);
+  if (!u || !types_.get(u->type).infantry()) return false;
+  if (reg_.pool<CGarrisoned>().has(unit)) return false;  // in a building or a trench: that is seen as itself
+  const CPosition& p = reg_.pool<CPosition>().get(unit);
+  const uint8_t g = vision_.ground(p.x >> LEPTON_SHIFT, p.y >> LEPTON_SHIFT);
+  return (g & Vision::kWood) && !(g & Vision::kWoodEdge);
+}
+
+bool Simulation::unitVisibleTo(uint8_t player, uint32_t unit) const {
+  if (player >= MAX_PLAYERS) return true;
+  const CPosition* p = reg_.pool<CPosition>().tryGet(unit);
+  if (!p) return false;
+  if (const CUnit* u = reg_.pool<CUnit>().tryGet(unit); u && allied(u->owner, player)) return true;  // one's own are never hidden
+  const int tx = p->x >> LEPTON_SHIFT, ty = p->y >> LEPTON_SHIFT;
+  if (!vision_.visible(player, tx, ty)) return false;
+  return !concealed(unit) || vision_.scouted(player, tx, ty);
+}
+
+CCondition& Simulation::conditionOf(Entity e) {
+  if (CCondition* c = reg_.tryGet<CCondition>(e)) return *c;
+  reg_.add<CCondition>(e, CCondition{});
+  return reg_.get<CCondition>(e);
+}
+
 void Simulation::stepVision() {
+  rebuildGround();
+  const bool rays = visionRules_.lineOfSight() || vision_.anySmoke();
+  if (visionRules_.lineOfSight() && heightsRevision_ != map_.revision()) {
+    heightsRevision_ = map_.revision();
+    const int W = map_.width(), H = map_.height();
+    tileHeights_.resize(static_cast<size_t>(W) * H);
+    for (int y = 0; y < H; ++y)
+      for (int x = 0; x < W; ++x)
+        tileHeights_[static_cast<size_t>(y) * W + x] = map_.heightAt(x * LEPTONS_PER_TILE + 128, y * LEPTONS_PER_TILE + 128);
+  }
   vision_.begin();
   // Allies share what they see (see below).
   // Areas a scenario has revealed stay visible.
@@ -399,19 +485,27 @@ void Simulation::stepVision() {
   visionStamps_.clear();
   reg_.each<CUnit, CPosition>([&](uint32_t, CUnit& u, CPosition& p) {
     if (u.owner >= MAX_PLAYERS) return;  // neutral: nobody sees through civilians' eyes
-    const int r = types_.get(u.type).sight >> LEPTON_SHIFT;
+    const UnitTypeDef& def = types_.get(u.type);
+    int r = def.sight >> LEPTON_SHIFT;
     if (r <= 0) return;
+    if (visionRules_.sightPercent != 100) r = std::max(1, r * visionRules_.sightPercent / 100);
     vision_.prepare(r);
     visionStamps_.push_back({static_cast<int16_t>(p.x >> LEPTON_SHIFT), static_cast<int16_t>(p.y >> LEPTON_SHIFT),
-                             static_cast<int16_t>(r), u.owner});
+                             static_cast<int16_t>(r), u.owner, static_cast<uint8_t>(def.scout ? 1 : 0)});
   });
   if (!visionStamps_.empty())
     jobs::system().parallelFor(
         MAX_PLAYERS, 1,
         [&](size_t first, size_t last, size_t, int) {
+          const int32_t* heights = visionRules_.lineOfSight() ? tileHeights_.data() : nullptr;
           for (size_t viewer = first; viewer < last; ++viewer)
-            for (const VisionStamp& s : visionStamps_)
-              if (team_[s.owner] == team_[viewer]) vision_.stamp(static_cast<int>(viewer), s.x, s.y, s.r);
+            for (const VisionStamp& s : visionStamps_) {
+              if (team_[s.owner] != team_[viewer]) continue;
+              const uint8_t bits = static_cast<uint8_t>(Vision::kVisible | Vision::kExplored | (s.scout ? Vision::kScouted : 0));
+              // An eye two men high: a man sees over the lip of his own tile.
+              if (rays) vision_.stampRays(static_cast<int>(viewer), s.x, s.y, s.r, bits, heights, 24);
+              else vision_.stamp(static_cast<int>(viewer), s.x, s.y, s.r, bits);
+            }
         },
         "Sim: vision of one side");
   vision_.end();

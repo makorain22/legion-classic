@@ -38,7 +38,7 @@ void Simulation::stepTargeting() {
         return;
       }
       const CPosition& tp = pos.get(c.target.index);
-      if (effectiveDistance(distance(tp.x - p.x, tp.y - p.y), c.target.index) <= scan + 256 && canSee(u.owner, tp.x, tp.y))
+      if (effectiveDistance(distance(tp.x - p.x, tp.y - p.y), c.target.index) <= scan + 256 && unitVisibleTo(u.owner, c.target.index))
         return;
       c.target = kNullEntity;
     }
@@ -53,7 +53,7 @@ void Simulation::stepTargeting() {
       const CPosition& q = pos.get(o2);
       const uint32_t d = distance(q.x - p.x, q.y - p.y);
       if (d > static_cast<uint32_t>(scan) || d >= best) return;
-      if (!canSee(u.owner, q.x, q.y)) return;
+      if (!unitVisibleTo(u.owner, o2)) return;
       const ArmorClass armor = types_.get(v.type).armor;
       bool useful = false;
       for (int w : def.weapons) useful = useful || weapons_.damageCenti(weapons_.forTarget(w, armor), armor) > 0;
@@ -122,7 +122,7 @@ void Simulation::stepWeapons() {
           if (m.active) return;  // no turret: must stop to fire
           aligned = turnToward(f.angle, desired, f.turnWait, def.turnTicks);
         }
-        if (!aligned || !canSee(u.owner, tp.x, tp.y)) return;
+        if (!aligned || !unitVisibleTo(u.owner, c.target.index)) return;
 
         const uint32_t d = static_cast<uint32_t>(effectiveDistance(distance(tp.x - p.x, tp.y - p.y), c.target.index));
         const ArmorClass armor = types_.get(units.get(c.target.index).type).armor;

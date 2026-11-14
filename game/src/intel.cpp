@@ -100,7 +100,10 @@ void GameScene::drawChips(ImDrawList* dl, const std::function<ImVec2(Vec2f)>& to
       const CPosition& p = reg.pool<CPosition>().get(e);
       const int tx = p.x >> LEPTON_SHIFT, ty = p.y >> LEPTON_SHIFT;
       const bool structure = d.isStructure();
-      if (structure ? structureKnown(e) : sim_->vision().visible(player_, tx, ty)) continue;  // shown as itself
+      if (structure ? structureKnown(e) : sim_->vision().visible(player_, tx, ty)) {
+        continue;  // shown as itself (or, hidden in woodland, not at all)
+      }
+      if (!structure && sim_->concealed(e)) continue;  // men in the woods: no chip either, until a scout looks
       if (structure && d.category == UnitCategory::Fortification && d.footW * d.footH < 2) continue;  // wire, trenches
       const int b = structure ? kBase : kBucket;
       Chip& c = buckets[{tx / b, ty / b, structure ? 1 : 0}];

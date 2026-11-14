@@ -41,6 +41,22 @@ struct CUnit {
   uint8_t damageFrac = 0;  // hundredths of a hit point taken but not yet counted (rifles on armour)
 };
 
+// How a man (or a crew) is bearing up, and how he carries himself. The fields
+// are here for 9.18 (suppression, morale, prone, ambush) and for veterancy;
+// nothing in the simulation changes them yet, and only units something has
+// touched carry the component. It is saved, and counts in the state checksum.
+enum class Posture : uint8_t { Standing = 0, Crouched, Prone, Pinned, HandsUp, Cowering, Count };
+struct CCondition {
+  enum : uint8_t { kHidden = 1, kAmbush = 2, kRouting = 4, kSurrendered = 8 };
+  uint16_t suppression = 0;  // 0 calm .. 1000 pinned
+  uint16_t morale = 1000;    // 1000 steady .. 0 broken
+  Posture posture = Posture::Standing;
+  uint8_t flags = 0;
+  uint16_t experience = 0;   // veterancy points
+  uint32_t revealedTick = 0; // when it last gave itself away (opened fire)
+  uint32_t spare = 0;
+};
+
 // What a mission script has said about a unit: its name (an index into the
 // simulation's name table, 0 = none) and ScriptFlag bits. Only units a script
 // or the scenario editor has touched carry one.

@@ -285,7 +285,7 @@ void GameScene::drawWorldOverlays() {
       for (Entity m : g.members) {
         if (!reg.alive(m) || (reg.has<CGarrisoned>(m) && !sim_->inTrench(m))) continue;
         const CPosition& p = reg.get<CPosition>(m);
-        if (fog && !mine && !sim_->vision().visible(player_, p.x >> LEPTON_SHIFT, p.y >> LEPTON_SHIFT)) continue;
+        if (fog && !mine && !sim_->unitVisibleTo(player_, m.index)) continue;
         const Vec2f s = unitScreenWorld(m.index);
         sx += s.x;
         sy += s.y;

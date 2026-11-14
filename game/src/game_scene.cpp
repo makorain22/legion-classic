@@ -2326,8 +2326,7 @@ void GameScene::drawUnits(const RectF& view) {
       // Fade in as it goes up.
       const uint32_t age = sim_->tickCount() - reg.pool<CStructure>().get(e).builtTick;
       if (age < 12) tint = (tint & 0x00FFFFFFu) | (static_cast<uint32_t>(60 + age * 16) << 24);
-    } else if (fog && !sim_->allied(u.owner, player_) &&
-               !sim_->vision().visible(player_, p.x >> LEPTON_SHIFT, p.y >> LEPTON_SHIFT)) {
+    } else if (fog && !sim_->allied(u.owner, player_) && !sim_->unitVisibleTo(player_, e)) {
       continue;
     }
     const CPrevPosition& prev = reg.pool<CPrevPosition>().get(e);

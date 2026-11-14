@@ -53,6 +53,32 @@
     `assets.list`, `assets.info`, `content.check`, `content.watches`,
     `pack.build`, `pack.info`, `pack.verify`, `pack.extract`, `mod.list`,
     `mod.pack`.
+- **Part 3, the simulation** (14 Nov):
+  - **Saves that survive new features.** A saved game is now a set of
+    labelled sections, one per system. A later version that adds a system
+    adds a section; older saves still load, and every save made since 0.7
+    still does.
+  - **Replays check themselves.** A replay carries a checksum of the battle
+    for every second. Played back under other rules or another version it
+    tells you from which minute it no longer matches, instead of showing a
+    battle that never happened. *Replays recorded before this build may stop
+    matching, because routes are found differently now.*
+  - **Routes on big maps.** The pathfinder knows the map as sectors and
+    which connect, so a unit sent across a river heads for the ford at once
+    instead of searching the whole bank first (3.4 times less work on a test
+    map, same routes in length). Putting up or losing a building re-reads
+    only the ground around it. The same trip asked twice is remembered.
+  - **Sight can hide things** (all off until missions and 9.18 switch them
+    on): men inside woods seen only by scouts, hills hiding what is behind
+    them, weather shortening every sight range, and smoke nobody sees
+    through. Try `sim.vision woodland 1`, `sim.vision los 1`,
+    `sim.vision sight 60` and `sim.smoke <x> <y>` in the console.
+  - Units can carry suppression, morale, posture and experience (unused
+    until 9.18).
+  - Flow fields for crowds; 1,500 units fighting take under a millisecond a
+    tick on the test machine.
+  - Console: `sim.digest`, `sim.twincheck`, `replay.check`, `path.stats`,
+    `sim.vision`, `sim.smoke`.
 
 ## 0.9.1 – in progress (edits after Milestone 9; Milestones 9.1–9.12)
 

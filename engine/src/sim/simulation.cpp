@@ -420,6 +420,16 @@ void Simulation::applyCommandBody(const Command& cmd) {
     case CommandType::SetTeam:
       if (cmd.player < MAX_PLAYERS) team_[cmd.player] = static_cast<uint8_t>(cmd.count);
       break;
+    case CommandType::SetVisionRules:
+      visionRules_.flags = static_cast<uint16_t>(cmd.count & (VisionRules::kWoodland | VisionRules::kLineOfSight));
+      visionRules_.sightPercent = static_cast<uint16_t>(std::clamp(cmd.amount <= 0 ? 100 : cmd.amount, 10, 200));
+      groundDirty_ = true;
+      break;
+    case CommandType::Smoke:
+      if (smoke_.size() < 256 && cmd.radius > 0 && cmd.amount > 0)
+        smoke_.push_back({cmd.target, std::min(cmd.radius, 24 * LEPTONS_PER_TILE),
+                          tick_ + static_cast<uint32_t>(std::min(cmd.amount, 3600)) * TICKS_PER_SECOND});
+      break;
     case CommandType::TagUnits: {
       const int32_t name = cmd.text.empty() ? -1 : nameIndex(cmd.text == "-" ? std::string() : cmd.text);
       std::vector<Entity> who = cmd.units;
@@ -486,6 +496,13 @@ uint64_t Simulation::stateHash() {
     mix(uint64_t(uint32_t(pr.x)) | (uint64_t(uint32_t(pr.y)) << 32));
   });
   reg_.each<CScripted>([&](uint32_t e, CScripted& s) { mix(e ^ (uint64_t{s.name} << 32) ^ (uint64_t{s.flags} << 48)); });
+  reg_.each<CCondition>([&](uint32_t e, CCondition& c) {
+    mix(e);
+    mix(c.suppression | (uint64_t{c.morale} << 16) | (uint64_t(c.posture) << 32) | (uint64_t{c.flags} << 40) | (uint64_t{c.experience} << 48));
+    mix(c.revealedTick);
+  });
+  if (visionRules_.flags || visionRules_.sightPercent != 100) mix(visionRules_.flags | (uint64_t{visionRules_.sightPercent} << 16));
+  for (const SmokeCloud& c : smoke_) mix(uint64_t(uint32_t(c.at.x)) ^ (uint64_t(uint32_t(c.at.y)) << 20) ^ (uint64_t{c.until} << 40));
   for (const MissionCountdown& d : countdowns_) mix(d.endTick ^ (uint64_t{d.done} << 40));
   for (const auto& [k, v] : counters_) mix(static_cast<uint32_t>(v) ^ (k.size() << 20));
   return h;

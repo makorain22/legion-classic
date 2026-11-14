@@ -1,10 +1,17 @@
 #pragma once
 // Pioneer Engine - fog of war.
 //
-// Each player has a grid with two bits per tile: "visible now" and "explored
-// at some point". It is recomputed every 4 ticks from every unit's sight
-// radius. The simulation uses it (units only shoot at what their side can
-// see), and the renderer shades the terrain with it.
+// Each player has a grid with a few bits per tile: "visible now", "explored
+// at some point" and "under a scout's eye now". It is recomputed every 4
+// ticks from every unit's sight radius. The simulation uses it (units only
+// shoot at what their side can see), and the renderer shades the terrain
+// with it.
+//
+// Vision 2.0 (Pioneer): a ground layer says what hides things on each tile
+// (woodland, its outskirts, smoke). Sight can be stamped as a plain circle,
+// or along rays that stop at smoke and at rising ground (line of sight).
+// What the layers mean for the game - infantry hidden in woods unless a
+// scout looks - is the simulation's business (Simulation::VisionRules).
 
 #include <array>
 #include <cstdint>
@@ -15,7 +22,9 @@ namespace pioneer {
 
 class Vision {
  public:
-  static constexpr uint8_t kVisible = 1, kExplored = 2;
+  static constexpr uint8_t kVisible = 1, kExplored = 2, kScouted = 4;
+  // The ground layer.
+  static constexpr uint8_t kWood = 1, kWoodEdge = 2, kSmoke = 4;
   static constexpr int kMaxPlayers = 8;
 
   void resize(int w, int h);
@@ -25,7 +34,12 @@ class Vision {
   // Several players' grids may be stamped at the same time from different
   // threads, as long as each radius used was announced with prepare() first
   // and no two threads stamp the same player.
-  void stamp(int player, int tx, int ty, int radiusTiles);
+  // `bits`: what is marked (a scout's sight adds kScouted).
+  void stamp(int player, int tx, int ty, int radiusTiles, uint8_t bits = kVisible | kExplored);
+  // The same along rays from the viewer: a ray ends in smoke, and (with
+  // `heights`, one value per tile) where the ground rises to hide what lies
+  // beyond from an eye `eye` height units above the viewer's tile.
+  void stampRays(int player, int tx, int ty, int radiusTiles, uint8_t bits, const int32_t* heights, int32_t eye);
   // Builds the circle table for a radius (not thread-safe; call before stamping in parallel).
   void prepare(int radiusTiles) { if (radiusTiles > 0) circle(radiusTiles); }
   void end() { ++revision_; }
@@ -33,6 +47,14 @@ class Vision {
   bool visible(int player, int tx, int ty) const {
     return inBounds(tx, ty) && (reveal_[player] || (grid_[player][index(tx, ty)] & kVisible));
   }
+  bool scouted(int player, int tx, int ty) const {
+    return inBounds(tx, ty) && (reveal_[player] || (grid_[player][index(tx, ty)] & kScouted));
+  }
+  // The ground layer: woodland, its outskirts, smoke.
+  uint8_t ground(int tx, int ty) const { return inBounds(tx, ty) && !ground_.empty() ? ground_[index(tx, ty)] : 0; }
+  std::vector<uint8_t>& groundData() { return ground_; }
+  bool anySmoke() const { return smoke_; }
+  void setAnySmoke(bool on) { smoke_ = on; }
   bool explored(int player, int tx, int ty) const {
     return inBounds(tx, ty) && (reveal_[player] || (grid_[player][index(tx, ty)] & kExplored));
   }
@@ -57,6 +79,8 @@ class Vision {
   std::array<std::vector<uint8_t>, kMaxPlayers> grid_;
   std::array<bool, kMaxPlayers> reveal_{};
   std::array<bool, kMaxPlayers> active_{};
+  std::vector<uint8_t> ground_;
+  bool smoke_ = false;
   std::unordered_map<int, std::vector<int16_t>> circles_;  // per radius: pairs of (dy, half-width)
   uint32_t revision_ = 0;
 };

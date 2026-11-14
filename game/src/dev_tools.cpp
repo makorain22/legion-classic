@@ -246,6 +246,44 @@ void GameScene::registerConsoleCommands() {
                    c.printFmt("tick %u  all sections %016llx  %zu bytes", d.tick, static_cast<unsigned long long>(d.total),
                               total);
                  });
+  con.addCommand("sim.vision",
+                 "sim.vision [woodland 0|1] [los 0|1] [sight percent] - how sight works in this battle: men inside "
+                 "woods seen only by scouts, rising ground hiding what is behind it, and every sight radius scaled "
+                 "(weather). Without arguments: what is set now.",
+                 [this, inBattle](const ConsoleArgs& a, Console& c) {
+                   if (!inBattle(c)) return;
+                   Simulation::VisionRules r = sim_->visionRules();
+                   for (size_t i = 1; i + 1 < a.size(); i += 2) {
+                     const std::string key = a.str(i);
+                     if (key == "woodland") r.flags = static_cast<uint16_t>((r.flags & ~Simulation::VisionRules::kWoodland) | (a.flag(i + 1) ? Simulation::VisionRules::kWoodland : 0));
+                     else if (key == "los") r.flags = static_cast<uint16_t>((r.flags & ~Simulation::VisionRules::kLineOfSight) | (a.flag(i + 1) ? Simulation::VisionRules::kLineOfSight : 0));
+                     else if (key == "sight") r.sightPercent = static_cast<uint16_t>(std::clamp(a.integer(i + 1), 10, 200));
+                     else return c.error("sim.vision [woodland 0|1] [los 0|1] [sight percent]");
+                   }
+                   if (a.size() > 1) {
+                     Command cmd;
+                     cmd.type = CommandType::SetVisionRules;
+                     cmd.player = player_;
+                     cmd.count = r.flags;
+                     cmd.amount = r.sightPercent;
+                     sim_->queue(cmd);
+                   }
+                   c.printFmt("woodland %d  line of sight %d  sight %u%%  smoke clouds %zu", r.woodland() ? 1 : 0,
+                              r.lineOfSight() ? 1 : 0, r.sightPercent, sim_->smoke().size());
+                 });
+  con.addCommand("sim.smoke", "sim.smoke <tile x> <tile y> [radius tiles] [seconds] - lays a smoke cloud nobody sees through.",
+                 [this, inBattle](const ConsoleArgs& a, Console& c) {
+                   if (!inBattle(c)) return;
+                   if (a.size() < 3) return c.error("sim.smoke <tile x> <tile y> [radius tiles] [seconds]");
+                   Command cmd;
+                   cmd.type = CommandType::Smoke;
+                   cmd.player = player_;
+                   cmd.target = {a.integer(1) * LEPTONS_PER_TILE + 128, a.integer(2) * LEPTONS_PER_TILE + 128};
+                   cmd.radius = std::clamp(a.size() > 3 ? a.integer(3) : 3, 1, 24) * LEPTONS_PER_TILE;
+                   cmd.amount = std::clamp(a.size() > 4 ? a.integer(4) : 30, 1, 3600);
+                   sim_->queue(cmd);
+                   c.print("Smoke on its way.");
+                 });
   con.addCommand("path.stats", "path.stats - what the pathfinder has done in this battle: searches, cache, sectors, flow fields.",
                  [this, inBattle](const ConsoleArgs&, Console& c) {
                    if (!inBattle(c)) return;

@@ -305,7 +305,7 @@ void Sidebar::rebuildMinimap() {
     const bool mine = scene_.sim().allied(u.owner, me);
     const UnitTypeDef& d = scene_.types().get(u.type);
     if (fog && !mine &&
-        (d.isStructure() ? !scene_.structureKnown(e) : !scene_.sim().vision().visible(me, p.x >> LEPTON_SHIFT, p.y >> LEPTON_SHIFT)))
+        (d.isStructure() ? !scene_.structureKnown(e) : !scene_.sim().unitVisibleTo(me, e)))
       continue;
     if (d.category == UnitCategory::Fortification) continue;
     int px, py;

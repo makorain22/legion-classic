@@ -55,7 +55,8 @@ void loadPool(ByteReader& r, Registry& reg) {
   X(CProducer, "CPRD")      \
   X(CHarvester, "CHAR")     \
   X(CGroupMember, "CGRM")   \
-  X(CGarrisoned, "CGAR")
+  X(CGarrisoned, "CGAR")    \
+  X(CCondition, "CCND")
 
 template <class T>
 void savePoolTagged(ByteWriter& w, Registry& reg, uint32_t tag) {
@@ -150,7 +151,8 @@ namespace sect {
 constexpr uint32_t Head = fourcc("HEAD"), Cmds = fourcc("CMDS"), Ecs = fourcc("ECS "), Groups = fourcc("GRPS"),
                    Movers = fourcc("MOVE"), Paths = fourcc("PATH"), Sides = fourcc("SIDE"), Tiles = fourcc("TILE"),
                    Vision_ = fourcc("VISN"), Script = fourcc("SCRP"), Ai = fourcc("AI  "), Tutorial = fourcc("TUTR"),
-                   Formations = fourcc("FORM"), Logistics = fourcc("LOGI"), Mission = fourcc("MISN");
+                   Formations = fourcc("FORM"), Logistics = fourcc("LOGI"), Mission = fourcc("MISN"),
+                   Vision2 = fourcc("VIS2");
 }
 
 const std::vector<Simulation::SectionInfo>& Simulation::stateSections() {
@@ -172,6 +174,7 @@ const std::vector<Simulation::SectionInfo>& Simulation::stateSections() {
       {sect::Formations, "FORM", "formations on the march", false, 5},
       {sect::Logistics, "LOGI", "logistics points", false, 6},
       {sect::Mission, "MISN", "the mission engine: play area, clocks, named units", false, 8},
+      {sect::Vision2, "VIS2", "vision rules (woodland, line of sight, weather) and smoke", false, 9},
   };
   return list;
 }
@@ -337,6 +340,11 @@ void Simulation::saveSection(uint32_t tag, ByteWriter& w) const {
     case sect::Mission:
       saveMission(w);
       break;
+    case sect::Vision2:
+      w.u16(visionRules_.flags);
+      w.u16(visionRules_.sightPercent);
+      w.podVector(smoke_);
+      break;
     default:
       break;
   }
@@ -442,7 +450,9 @@ bool Simulation::loadSection(uint32_t tag, ByteReader& r, int version, std::stri
           if (!known) loadNotes_.push_back("components '" + fourccName(poolTag) + "' are not known to this version and were left out");
         }
       } else {
-#define PNR_LOAD(T, TAG) loadPool<T>(r, reg_);
+        // The old stream: the fourteen pools it had, in its order.
+#define PNR_LOAD(T, TAG) \
+  if (fourcc(TAG) != fourcc("CCND")) loadPool<T>(r, reg_);
         PNR_POD_POOLS(PNR_LOAD)
 #undef PNR_LOAD
       }
@@ -601,6 +611,13 @@ bool Simulation::loadSection(uint32_t tag, ByteReader& r, int version, std::stri
     }
     case sect::Mission:
       return loadMission(r) || damaged("mission");
+    case sect::Vision2:
+      visionRules_.flags = r.u16();
+      visionRules_.sightPercent = static_cast<uint16_t>(std::clamp<int>(r.u16(), 10, 200));
+      smoke_ = r.podVector<SmokeCloud>(256);
+      groundDirty_ = true;
+      vision_.setAnySmoke(true);  // the layer is laid again at the next look round
+      return r.ok() || damaged("vision rules");
     default:
       return true;
   }
@@ -627,6 +644,12 @@ void Simulation::resetSection(uint32_t tag) {
       break;
     case sect::Mission:
       resetMission();
+      break;
+    case sect::Vision2:
+      visionRules_ = VisionRules{};
+      smoke_.clear();
+      groundDirty_ = true;
+      vision_.setAnySmoke(true);
       break;
     default:
       break;
