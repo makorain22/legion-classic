@@ -17,6 +17,7 @@
 #include <filesystem>
 #include <nlohmann/json.hpp>
 
+#include "pioneer/ui/fonts.hpp"
 #include "pioneer/sim/factions.hpp"
 
 #include "editor.hpp"
@@ -87,6 +88,14 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
     if (!loadRules(error)) return false;
     modWarnings_ += "The mods were switched off: " + why + "\n";
     PNR_WARN("Mods switched off: %s", why.c_str());
+  }
+  // The interface's fonts come from the content (a mod may bring its own), at the size the player chose.
+  pioneer::ui::loadFonts(*content_.fileSystem());
+  pioneer::ui::setScale(opt_.uiScale > 0 ? opt_.uiScale : settings_.uiScale);
+  if (!app_.offscreen()) {
+    // Where tool windows were left (and how they were docked) is remembered between runs.
+    layoutPath_ = app_.userDir() + "layout.ini";
+    ImGui::GetIO().IniFilename = layoutPath_.c_str();
   }
   const ArtOptions artOpt = artOptions();
   artPack_ = !artOpt.packDirs.empty();
@@ -2554,7 +2563,10 @@ void GameScene::onImGui() {
   drawHud();
   // A tutorial's hint and the interface element it points at.
   ui::setHighlight(mode_ != Mode::Menu ? sim_->highlight(player_) : std::string());
-  if (mode_ == Mode::Game && !sim_->cinematic(player_)) sidebar_->draw();
+  if (mode_ == Mode::Game && !sim_->cinematic(player_)) {
+    pioneer::ui::Unscaled asDesigned;  // the sidebar is laid out in fixed pixels until the interface revamp
+    sidebar_->draw();
+  }
   if (mode_ == Mode::Game) editor_->imgui();
   drawObjectives();
   drawMission();
@@ -2664,7 +2676,7 @@ void GameScene::drawObjectives() {
   for (const Objective& o : sim_->objectives())
     if ((o.player == ANY_PLAYER || sim_->allied(o.player, player_)) && o.state != 3) mine.push_back(&o);
   if (mine.empty() && messages_.empty()) return;
-  ImGui::SetNextWindowPos(ImVec2(editor_->active() ? Editor::kPanelWidth + 16 : 8, hudBottom_), ImGuiCond_Always);
+  ImGui::SetNextWindowPos(ImVec2(editor_->active() ? Editor::panelWidth() + 16 : 8, hudBottom_), ImGuiCond_Always);
   ImGui::SetNextWindowBgAlpha(0.75f);
   ImGui::Begin("##objectives", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
                                             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
@@ -2692,7 +2704,7 @@ void GameScene::drawHud() {
     hudBottom_ = 8;
     return;
   }
-  ImGui::SetNextWindowPos(ImVec2(editing ? Editor::kPanelWidth + 16 : 8, 8));
+  ImGui::SetNextWindowPos(ImVec2(editing ? Editor::panelWidth() + 16 : 8, 8));
   ImGui::SetNextWindowBgAlpha(0.82f);
   ImGui::Begin("##hud", nullptr,
                ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
@@ -2780,7 +2792,7 @@ void GameScene::drawHelp() {
 }
 
 void GameScene::drawDebug() {
-  ImGui::SetNextWindowPos(ImVec2(editor_->active() ? Editor::kPanelWidth + 16 : 8, 170), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowPos(ImVec2(editor_->active() ? Editor::panelWidth() + 16 : 8, 170), ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowBgAlpha(0.88f);
   ImGui::Begin("Debug & spawn tools (F3)", &showDebug_, ImGuiWindowFlags_AlwaysAutoResize);
   ImGui::Text("%.0f fps  (%.2f ms)%s", app_.fps(), app_.frameMs(), app_.simBehind() ? "  SIM SLOWED" : "");

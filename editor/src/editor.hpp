@@ -13,6 +13,7 @@
 // Terrain and unit edits share one undo history (Ctrl+Z / Ctrl+Y). Unit edits
 // go through simulation commands, so they stay deterministic.
 
+#include "pioneer/ui/fonts.hpp"
 #include "pioneer/sim/script_registry.hpp"
 #include <SDL3/SDL.h>
 
@@ -43,7 +44,8 @@ enum class PlaceMode { Single, Brush, Block };
 
 class Editor {
  public:
-  static constexpr float kPanelWidth = 310.0f;
+  // The editor panel's width: it grows with the interface size.
+  static float panelWidth() { return 310.0f * pioneer::ui::scale(); }
 
   explicit Editor(GameScene& scene);
   ~Editor();

@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "settings.hpp"
 
 #include <fstream>
@@ -97,6 +98,7 @@ bool Settings::load(const std::string& path) {
   mouseLock = j.value("mouseLock", mouseLock);
   edgeScroll = j.value("edgeScroll", edgeScroll);
   scrollSpeed = j.value("scrollSpeed", scrollSpeed);
+  uiScale = std::clamp(j.value("uiScale", uiScale), 0.9f, 2.0f);
   showInfoPanel = j.value("showInfoPanel", showInfoPanel);
   showCards = j.value("showCards", showCards);
   showChips = j.value("showChips", showChips);
@@ -140,6 +142,7 @@ bool Settings::save(const std::string& path) const {
   j["mouseLock"] = mouseLock;
   j["edgeScroll"] = edgeScroll;
   j["scrollSpeed"] = scrollSpeed;
+  j["uiScale"] = uiScale;
   j["showInfoPanel"] = showInfoPanel;
   j["showCards"] = showCards;
   j["showChips"] = showChips;

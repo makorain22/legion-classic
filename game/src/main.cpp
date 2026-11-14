@@ -81,6 +81,7 @@ int main(int argc, char** argv) {
     else if (a == "--zoom") opt.zoom = static_cast<float>(std::atof(next()));
     else if (a == "--classic") opt.classic = true;
     else if (a == "--no-shadows") opt.noShadows = true;
+    else if (a == "--ui-scale") opt.uiScale = static_cast<float>(std::atof(next()));
     else if (a == "--intel") opt.intel = true;
     else if (a == "--ffa") opt.ffa = true;
     else if (a == "--bench") {

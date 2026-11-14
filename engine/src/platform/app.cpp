@@ -110,6 +110,10 @@ bool App::init(const AppConfig& cfg) {
   ImGuiIO& io = ImGui::GetIO();
   io.IniFilename = nullptr;  // layout is saved by the game itself later
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+  // Tool windows can be docked to each other and to the screen's edges: hold
+  // Shift while dragging one by its title (so no window docks by accident).
+  io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+  io.ConfigDockingWithShift = true;
   applyImGuiStyle();
   ImGui_ImplSDL3_InitForOpenGL(window_, gl_);
   ImGui_ImplOpenGL3_Init("#version 330");

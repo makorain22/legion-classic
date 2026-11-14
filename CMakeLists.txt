@@ -142,6 +142,7 @@ legion_warnings(pioneer_core)
 if(LEGION_BUILD_GAME)
   file(GLOB_RECURSE PIONEER_GFX_SOURCES CONFIGURE_DEPENDS
     engine/src/platform/*.cpp
+    engine/src/ui/*.cpp
     engine/src/render/*.cpp
     engine/src/assets/*.cpp
     engine/src/audio/*.cpp

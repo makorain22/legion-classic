@@ -549,7 +549,7 @@ void Editor::imgui() {
 void Editor::drawToolPanel() {
   const ImGuiIO& io = ImGui::GetIO();
   ImGui::SetNextWindowPos(ImVec2(8, 8));
-  ImGui::SetNextWindowSize(ImVec2(kPanelWidth, io.DisplaySize.y - 16));
+  ImGui::SetNextWindowSize(ImVec2(panelWidth(), io.DisplaySize.y - 16));
   ImGui::SetNextWindowBgAlpha(0.92f);
   ImGui::Begin("Live Scenario Editor (F2)", nullptr,
                ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
@@ -631,7 +631,7 @@ void Editor::drawTerrainTab() {
   const ImGuiIO& io = ImGui::GetIO();
   Map& m = scene_.map();
   ImGui::SeparatorText("Tool");
-  const float bw = (kPanelWidth - 26) * 0.5f;
+  const float bw = (panelWidth() - 26) * 0.5f;
   for (int i = 0; i <= static_cast<int>(Tool::Oil); ++i) {
     const bool sel = static_cast<int>(tool_) == i;
     if (sel) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.62f, 0.50f, 0.22f, 1));

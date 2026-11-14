@@ -12,6 +12,7 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 
+#include "pioneer/ui/fonts.hpp"
 #include "pioneer/core/rng.hpp"
 #include "pioneer/sim/factions.hpp"
 
@@ -45,7 +46,9 @@ bool menuButton(const char* label, float width, bool enabled = true) {
 void centredWindow(const char* id, ImVec2 size) {
   const ImGuiIO& io = ImGui::GetIO();
   ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-  ImGui::SetNextWindowSize(size);
+  // Pages grow with the interface size, as far as the screen allows.
+  const float k = pioneer::ui::scale();
+  ImGui::SetNextWindowSize(ImVec2(std::min(size.x * k, io.DisplaySize.x - 16), std::min(size.y * k, io.DisplaySize.y - 16)));
   ImGui::SetNextWindowBgAlpha(0.94f);
   ImGui::Begin(id, nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 }
@@ -696,6 +699,20 @@ void Menus::drawSettings() {
       changed |= ImGui::Checkbox("Scroll when the mouse touches a screen edge", &st.edgeScroll);
       ImGui::SetNextItemWidth(200);
       changed |= ImGui::SliderFloat("Scroll speed", &st.scrollSpeed, 0.3f, 3.0f, "%.1fx");
+      {
+        // Applied when the slider is let go, so the page doesn't change size under the mouse.
+        static float pending = 0;
+        if (pending == 0) pending = st.uiScale;
+        int percent = static_cast<int>(pending * 100.0f + 0.5f);
+        ImGui::SetNextItemWidth(200);
+        if (ImGui::SliderInt("Interface size", &percent, 90, 200, "%d%%")) pending = static_cast<float>(percent) / 100.0f;
+        if (ImGui::IsItemDeactivatedAfterEdit()) {
+          st.uiScale = pending;
+          pioneer::ui::setScale(st.uiScale);
+          changed = true;
+        }
+        ImGui::TextDisabled("Text and controls everywhere. The editor and tool windows follow fully; the battle screen's own\npanels keep their size for now.");
+      }
       changed |= ImGui::Checkbox("Show the game info panel (I)", &st.showInfoPanel);
       changed |= ImGui::Checkbox("Unit cards over fireteams, platoons and companies", &st.showCards);
       changed |= ImGui::Checkbox("Unit cards over the other sides' units too", &st.showEnemyCards);

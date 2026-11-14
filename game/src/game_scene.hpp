@@ -98,6 +98,7 @@ struct SceneOptions {
   int sides = 2;                // --ai-battle: 2 (1v1), 3 (every side for itself) or 4 (2v2)
   bool noSound = false;         // --no-sound
   bool forceSound = false;      // --sound: sound even with --offscreen (testing)
+  float uiScale = 0;            // --ui-scale: interface size for this run (0: the setting)
   std::string factions;         // --ai-battle: "ger,gbr,..." per side (default Germany v Russia)
   int monkey = 0;
   std::string showcase;         // record a video of an AI battle to this .mp4, camera following the fighting
@@ -520,6 +521,7 @@ class GameScene final : public pioneer::Scene {
   bool replayValid_ = false;
   std::vector<pioneer::Simulation::LoggedCommand> replayLog_;
   size_t replayNext_ = 0;
+  std::string layoutPath_;          // where Dear ImGui keeps window positions and docking
   pioneer::EventBus bus_;           // what happens in the battle, for whoever wants to hear (see events())
   pioneer::HashTrace replayTrace_;  // the recorded game's checksums, to check the playback against
   uint32_t replayDrift_ = 0;        // the tick the playback first differed at (0: in step)

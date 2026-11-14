@@ -262,8 +262,8 @@ void GameScene::drawMission() {
     const Transmission& t = transmissions_.front();
     const float a = std::clamp(std::min(t.age * 4.0f, (t.duration - t.age) * 2.0f), 0.0f, 1.0f);
     const size_t shown = std::min(t.text.size(), static_cast<size_t>(t.age * 45.0f));
-    const float w = std::min(560.0f, viewW - 40 - (editor_->active() ? Editor::kPanelWidth : 0.0f));
-    const float x = editor_->active() ? Editor::kPanelWidth + 20 : 20, y = io.DisplaySize.y - (cine ? io.DisplaySize.y * 0.11f * ease(letterbox_) + 12 : 30) - 96;
+    const float w = std::min(560.0f, viewW - 40 - (editor_->active() ? Editor::panelWidth() : 0.0f));
+    const float x = editor_->active() ? Editor::panelWidth() + 20 : 20, y = io.DisplaySize.y - (cine ? io.DisplaySize.y * 0.11f * ease(letterbox_) + 12 : 30) - 96;
     ImGui::SetNextWindowPos(ImVec2(x, y), ImGuiCond_Always, ImVec2(0, 1));
     ImGui::SetNextWindowSize(ImVec2(w, 0));
     ImGui::SetNextWindowBgAlpha(0.82f * a);

@@ -643,7 +643,7 @@ void Editor::drawUnitPalette() {
 
 void Editor::drawUnitsTab() {
   // Tool choice.
-  const float bw = (kPanelWidth - 26) * 0.5f;
+  const float bw = (panelWidth() - 26) * 0.5f;
   for (Tool t : {Tool::PlaceUnits, Tool::SelectUnits}) {
     const bool sel = tool_ == t;
     if (sel) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.62f, 0.50f, 0.22f, 1));
@@ -1010,7 +1010,7 @@ void Editor::drawBattleTab() {
     ImGui::SetTooltip("Go back to the snapshot: try a battle, then rewind and try again. Clears undo.");
 
   ImGui::SeparatorText("Battle tools");
-  const float bw = (kPanelWidth - 32) / 3.0f;
+  const float bw = (panelWidth() - 32) / 3.0f;
   for (Tool t : {Tool::Artillery, Tool::Smite, Tool::Heal}) {
     const bool sel = tool_ == t;
     if (sel) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.62f, 0.50f, 0.22f, 1));
