@@ -303,6 +303,9 @@ struct ScenarioScript {
 class UnitTypeRegistry;
 nlohmann::json scriptToJson(const ScenarioScript& s, const UnitTypeRegistry* types);
 ScenarioScript scriptFromJson(const nlohmann::json& j, const UnitTypeRegistry* types);
+// One condition / action as it is written in a scenario file (for tools).
+nlohmann::json conditionJson(const Condition& c, const UnitTypeRegistry* types);
+nlohmann::json actionJson(const Action& a, const UnitTypeRegistry* types);
 
 const char* condName(CondType t);
 const char* actionName(ActionType t);

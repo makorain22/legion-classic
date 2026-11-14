@@ -15,8 +15,8 @@ stands.
 | 2 | **Data:** virtual file system, asset registry, hot reload, pack format | **done** |
 | 3 | **Simulation:** tagged-chunk saves, determinism checker, sector pathfinding and flow fields, vision 2.0, suppression/morale fields | **done** |
 | 4 | **Scripting:** condition/action registry, mission data model, event bus, sandboxed Lua | **done** |
-| 5 | **UI framework:** docking, real fonts, UI scale, timeline and node widgets, property grids, key rebinding | next |
-| 6 | **Renderer:** backend layer, HDR post-processing, time of day, weather, graphics presets with auto-detect | planned |
+| 5 | **UI framework:** real fonts and icons, interface size, docking, property grids from the script registry, timeline and graph widgets, string tables, Lua panels | **done** |
+| 6 | **Renderer:** backend layer, HDR post-processing, time of day, weather, graphics presets with auto-detect | next |
 | 7 | **Assets and audio:** glTF in and out, .vox, materials, skeletal animation, poses; sound banks, voice lines, reverb zones, occlusion | planned |
 | 8 | **Networking groundwork:** lockstep, hosting, LAN discovery, dedicated server, reconnect | planned |
 | 9 | **Tools:** `pioneer_tool`, asset browser, model viewer, sound bank editor | planned |
@@ -28,7 +28,7 @@ engine/include/pioneer/   public headers, one folder per system
 engine/src/core/          log, jobs, profiler, memory, console, virtual file system, packs, assets,
                           hot reload, content layers, fixed-point maths
 engine/src/{ecs,sim,map}  the deterministic simulation
-engine/src/{platform,render,assets,audio,ui}   window, OpenGL 3.3 renderer, art, mixer, developer windows
+engine/src/{platform,render,assets,audio,ui}   window, OpenGL 3.3 renderer, art, mixer, the interface kit and developer windows
 game/src/                 Legion Classic itself
 editor/src/               the Live Scenario Editor and the rules editor
 tests/                    doctest cases (pioneer_tests)
@@ -695,9 +695,8 @@ events reach them at the end of the tick they happened in. Triggers call
 Lua with *Call script* and ask it with *Script says*. The full list is the
 "Lua" chapter of `docs/SCRIPT_REFERENCE.md`.
 
-Not in this part: Lua for the interface (menus, HUD). That is presentation
-code with other rules (it need not be deterministic) and comes with the UI
-framework.
+Lua for the interface is a different thing with other rules (it only looks
+at the battle and need not be exact): see *Interface scripts* in part 5.
 
 ### The event bus (`pioneer/core/events.hpp`)
 
@@ -723,3 +722,177 @@ phases with a wave on a path and a save in mid-flight, the branch, the
 checker), `tests/test_lua.cpp` (6: the event bus, a script driving a
 mission, mistakes told not fatal, the sandbox, `state` and timers through a
 save, triggers calling and asking Lua).
+
+## Part 5 – UI framework
+
+What the Mission Maker, the sequencer and every later tool are built from.
+Nothing in the battle interface was redesigned (that is a milestone of its
+own, after the Mission Maker); what changed for players is the text, the
+*Interface size* setting, and tool windows that dock and stay where they
+were put.
+
+```
+engine/include/pioneer/ui/fonts.hpp              fonts, interface size
+engine/include/pioneer/ui/icons.hpp              ICON_* names, iconList()
+engine/include/pioneer/ui/script_fields.hpp      property grids from the script registry
+engine/include/pioneer/ui/timeline.hpp           timeline: model + widget
+engine/include/pioneer/ui/node_graph.hpp         graph: model, layout + widget
+engine/include/pioneer/ui/mission_views.hpp      a mission as graph and timelines
+engine/include/pioneer/ui/interface_widgets.hpp  ImGui widgets for interface scripts
+engine/include/pioneer/core/strings.hpp          string tables
+engine/include/pioneer/core/interface_lua.hpp    Lua panels
+```
+
+The rule for this part: **what can be worked out without a window is kept
+apart from what draws it.** The timeline's arithmetic, the graph's layout,
+the mission views, string tables and the interface scripts' runtime have no
+graphics in them and are built into `pioneer_tests`; only the thin drawing
+halves need Dear ImGui.
+
+### Fonts, icons and interface size (`pioneer/ui/fonts.hpp`, `icons.hpp`)
+
+- `loadFonts(vfs)` reads `fonts/ui-regular.ttf`, `ui-bold.ttf`, `mono.ttf`
+  and `icons.ttf` through the virtual file system (so a mod may bring its
+  own) and merges the icons into each text font. Shipped: IBM Plex Sans and
+  Mono (SIL OFL 1.1) and Lucide icons (ISC); licences beside them in
+  `content/fonts/`. Dear ImGui 1.92+ rasterises glyphs on demand, so any
+  size and any character the font has is available without baking ranges.
+  Without the files the built-in bitmap font is used and the game still runs.
+- `setScale(s)` (0.75 to 2.5) scales fonts and every style metric;
+  `px(v)` turns a designed size into pixels. Layouts written before this
+  part use fixed pixels: the editor's panels and the menus follow the
+  scale, the battle sidebar is drawn inside `ui::Unscaled` and keeps its
+  designed size until the in-game interface is redone.
+- RAII guards: `Bold`, `Mono`, `Sized(1.5f)`, `Unscaled`.
+- Icons are text: `ImGui::Button(ICON_SAVE " Save")`. 109 are named;
+  `iconList()` gives them all (a test keeps list and header in step).
+- Setting: Settings → Display → *Interface size* (90% to 200%, `uiScale` in
+  settings.json); `--ui-scale 1.5` for one run; `ui.scale 130` in the console.
+- Docking is on (`ImGuiConfigFlags_DockingEnable`, hold Shift while dragging
+  a window to dock it) and window places are kept in `<user>/layout.ini`.
+
+### Property grids (`pioneer/ui/script_fields.hpp`)
+
+`editFields(entry, condition|action, ctx)` draws the fields of a script
+line from the registry of part 4: a widget per field by its `Kind` (the
+mission's areas, triggers, phases, waves, paths and goals by name; unit
+types with a search box; sides; choices; percentages as sliders; numbers
+clamped to their range; text), labelled, with the field's help on hover.
+The editor's Script tab uses it for every line that has no hand-written
+panel, which is how the nine mission-model lines of part 4 (*Go to phase*,
+*Send wave*, *Follow path*, *Call script*; *Phase is*, *Phase elapsed*,
+*Goal done*, *Goal failed*, *Script says*) became editable, under a new
+group in the "+" menus. A line added to the registry later needs no editor
+code. `script::describe(line, &script)` gives any line as a sentence from
+the registry alone, for lists.
+
+### Timeline (`pioneer/ui/timeline.hpp`)
+
+Model: `TimelineTrack`, `TimelineItem` (start, length; length 0 is a
+moment), `TimelineView` (zoom, scroll, playhead, selection, snap);
+`snapTo`, `timeLabel`, `rulerSteps` (label spacing that reads well at any
+zoom: tenths, seconds, 5 s, 15 s, minutes...), `itemAt`, `moveItem`,
+`resizeItem`, `sortItems`. Widget: `timeline(id, tracks, items, view)`
+draws tracks, ruler, items and playhead; drag to move (Alt: off the grid),
+drag the right edge to stretch, drag the ruler for the playhead, Ctrl+wheel
+zooms about the mouse, wheel scrolls, double-click on empty space asks for
+a new item, Delete asks to remove the selected one. It changes `items` and
+reports what happened in a `TimelineResult`; undo and what an item *means*
+stay with the caller.
+
+### Graph (`pioneer/ui/node_graph.hpp`)
+
+Model: `Graph` of `GraphNode` (title, small print, colour) and `GraphLink`
+(label, dashed). `layoutGraph` puts nodes in columns by longest path from
+the roots (links that close a loop are found by a depth-first walk in list
+order and don't count), orders each column by its neighbours' average
+place over several sweeps keeping the best ordering seen, and centres the
+columns. Same data, same picture. `graphCrossings` counts crossings (a test
+lays out a tangle and expects none). Widget: `nodeGraph(id, graph, view)`
+pans (drag the background, or right/middle button), zooms about the mouse,
+drags boxes, selects, reports double-clicks.
+
+### Mission views (`pioneer/ui/mission_views.hpp`)
+
+`phaseGraph(script, current)`: phases as boxes, solid arrows where a phase
+begins by itself, dashed ones for *Go to phase* actions of triggers,
+on-entry actions and goals; a jump from "any phase" is written on the box
+instead of drawn from everywhere. `sequenceTimeline` / `applyTimeline`: a
+`MissionSequence` to tracks and items and back after editing.
+`waveTimeline`: when each wave arrives. These are what 9.14 and 9.15 put
+on screen.
+
+### String tables (`pioneer/core/strings.hpp`)
+
+`lang/<id>.json`: `{"language", "name", "strings": {nested keys}}`. Every
+layer's copy of a file is read, lowest first, so a mod adds or changes
+words without replacing the game's file. `loc::tr("settings.display.language")`
+returns the chosen language's string, else English, else the key (which is
+then listed by `lang.missing`). Patterns: `{name}`, and
+`{n|# unit|# units}` for numbers, with plural rules for one-form languages
+(Malay, Japanese, Chinese...), one/other, French, Slavic, Polish and Czech,
+chosen by language id or the file's `"plural"`. `Strings::resolve("@key")`
+is for text that comes from data. Pseudo-translation (`lang.pseudo`) turns
+table text into accented, longer text so anything not from the table, or
+not fitting, shows at once.
+
+The framework is in; the interface's existing English is **not** moved into
+the table yet (only the new settings and the interface kit are). That is
+done screen by screen as screens are rebuilt, so nothing is translated
+twice. The setting appears in Settings → Display once a second language
+file exists. The shipped fonts cover Latin (with Vietnamese), Cyrillic and
+Greek; a language in another script needs a font from its mod.
+
+### Interface scripts (`pioneer/core/interface_lua.hpp`)
+
+`ui/*.lua` in the game or a mod: Lua that draws panels.
+
+```lua
+local lost = 0
+on("unit_died", function(e) if e.owner == game.player then lost = lost + 1 end end)
+panel{ title = "Losses", draw = function()
+  ui.heading(lost .. " lost")
+  if ui.button("Reset") then lost = 0 end
+end }
+```
+
+- **Apart from the simulation.** A second Lua state, not the mission's. It
+  reads values the game provides (`game.seconds`, `game.supplies`,
+  `game.selected`, `game.phase`...), hears events by name, and draws. It
+  cannot give orders, is not saved with a battle and is not part of
+  replays, so it may use `math.random` and the clock. `console("...")`
+  runs a console line and returns what it printed (cheat commands still
+  need `cheats 1`).
+- **Sandboxed and limited** like mission scripts: no `load`, `require`,
+  `io`, `os`, `debug`; text chunks only; 16 MB; two million VM instructions
+  per call. A panel or handler that fails three times in a row is switched
+  off and said so; opening the panel again retries it.
+- **Widgets behind an interface** (`InterfaceWidgets`): the runtime is in
+  `pioneer_core` and tested with widgets that only record; the game passes
+  `ui::makeInterfaceWidgets()`.
+- **Kept between runs:** the scripts' `saved` table and which panels were
+  open (`<user>/ui_scripts.json`). Scripts reload when a file under `ui/`
+  changes.
+- Panels are closed until opened: `ui.panel "Battle report"`, or the
+  interface kit's Scripts tab. Shipped example: `content/ui/battle_report.lua`.
+
+### The interface kit and the console
+
+`ui.kit [0|1] [tab]` opens a window showing all of the above on the game's
+own data: fonts and icons (click an icon to copy its name), every script
+line in its property grid with the JSON it saves as, the timeline with a
+sample sequence and the mission's waves, the mission's phases as a graph
+(a sample when it has none), string tables, interface scripts.
+
+`ui.scale [percent]`, `ui.scripts`, `ui.panel <title> [0|1]`, `ui.reload`,
+`lang.list`, `lang.set <id>`, `lang.missing`, `lang.pseudo [0|1]`.
+
+### Tests
+
+`tests/test_ui.cpp` (9: timeline arithmetic and editing, graph columns with
+loops, untangling, phases as a graph, a sequence to a timeline and back,
+string tables with plurals and fallback, tables through the file system
+with a mod's language, fonts present and icons listed once),
+`tests/test_interface_lua.cpp` (4: a panel reading, hearing and drawing;
+mistakes contained; the sandbox, limits and `saved`; the shipped script),
+and one more in `tests/test_script_registry.cpp` (every line put into words).

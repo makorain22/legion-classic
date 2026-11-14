@@ -9,6 +9,7 @@
 #include "game_audio.hpp"
 #include "game_scene.hpp"
 #include "rules_editor.hpp"
+#include "pioneer/core/strings.hpp"
 #include "pioneer/core/log.hpp"
 #include "pioneer/core/pack.hpp"
 #include "pioneer/core/version.hpp"
@@ -82,6 +83,11 @@ void GameScene::watchContent() {
   hotReload_.setEnabled(!app_.offscreen());
   hotReload_.watch("rules", "rules/", ".json", [this](const std::vector<vfs::Change>&) { reloadRulesFromDisk(); });
   hotReload_.watch("sounds", "audio/", "", [this](const std::vector<vfs::Change>&) { reloadSounds(); });
+  hotReload_.watch("interface scripts", "ui/", ".lua", [this](const std::vector<vfs::Change>&) { loadInterfaceScripts(); });
+  hotReload_.watch("languages", "lang/", ".json", [this](const std::vector<vfs::Change>&) {
+    pioneer::loc::strings().load(*content_.fileSystem(), settings_.language);
+    PNR_INFO_CH(Content, "String tables read again: %zu strings", pioneer::loc::strings().size());
+  });
   hotReload_.watch("campaigns", "campaigns/", "", [this](const std::vector<vfs::Change>&) {
     loadCampaigns();
     PNR_INFO_CH(Content, "Campaign list read again: %zu campaigns", campaigns_.size());

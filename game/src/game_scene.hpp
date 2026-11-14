@@ -2,6 +2,7 @@
 // Legion Classic - the battlefield scene: the running world, the camera, unit
 // control, and the editor overlay (F2) that edits the world while it runs.
 
+#include "pioneer/core/interface_lua.hpp"
 #include "pioneer/core/events.hpp"
 #include <array>
 #include <deque>
@@ -487,6 +488,22 @@ class GameScene final : public pioneer::Scene {
   pioneer::ui::ConsoleWindow consoleWin_;
   pioneer::ui::ProfilerWindow profilerWin_;
   bool showConsole_ = false, showProfiler_ = false;
+  // The interface kit (ui_kit.cpp): the UI framework shown on the game's data.
+  void drawInterfaceKit();
+  void registerKitCommands();
+  // Interface scripts (ui_scripts.cpp): panels drawn by Lua, from ui/*.lua.
+  void initInterfaceScripts();
+  void loadInterfaceScripts();
+  void saveInterfaceScripts();
+  void drawInterfaceScripts();
+  void registerInterfaceScriptCommands();
+  std::unique_ptr<pioneer::InterfaceLua> uiLua_;
+  std::unique_ptr<pioneer::InterfaceWidgets> uiWidgets_;
+  pioneer::EventBus::Subscription uiLuaEvents_;
+  std::vector<std::string> uiPanelsOpen_;
+  const void* uiLuaBattle_ = nullptr;
+  bool showKit_ = false;
+  int kitTab_ = -1;  // a tab to switch to (-1: leave it)
   bool devToolsReady_ = false;
   std::vector<pioneer::mem::ScopedReporter> memReporters_;
   // --- Data (game_content.cpp): every file the game can read, and what

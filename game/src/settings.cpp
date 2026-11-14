@@ -99,6 +99,7 @@ bool Settings::load(const std::string& path) {
   edgeScroll = j.value("edgeScroll", edgeScroll);
   scrollSpeed = j.value("scrollSpeed", scrollSpeed);
   uiScale = std::clamp(j.value("uiScale", uiScale), 0.9f, 2.0f);
+  language = j.value("language", language);
   showInfoPanel = j.value("showInfoPanel", showInfoPanel);
   showCards = j.value("showCards", showCards);
   showChips = j.value("showChips", showChips);
@@ -143,6 +144,7 @@ bool Settings::save(const std::string& path) const {
   j["edgeScroll"] = edgeScroll;
   j["scrollSpeed"] = scrollSpeed;
   j["uiScale"] = uiScale;
+  j["language"] = language;
   j["showInfoPanel"] = showInfoPanel;
   j["showCards"] = showCards;
   j["showChips"] = showChips;

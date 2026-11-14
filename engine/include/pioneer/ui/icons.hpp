@@ -120,3 +120,13 @@
 #define ICON_CHART_COLUMN "\xee\x8a\xa3"  // U+E2A3
 #define ICON_HOURGLASS "\xee\x8a\x96"  // U+E296
 #define ICON_BELL "\xee\x81\x99"  // U+E059
+
+#include <cstddef>
+namespace pioneer::ui {
+// Every icon named above, for pickers and the interface kit.
+struct IconName {
+  const char* name;   // "ICON_SAVE"
+  const char* glyph;  // the text that draws it
+};
+const IconName* iconList(size_t& count);
+}  // namespace pioneer::ui

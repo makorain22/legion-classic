@@ -506,6 +506,78 @@ void set(Action& a, Slot s, int32_t v) {
   }
 }
 
+namespace {
+template <class T>
+std::string describeItem(const Entry& e, const T& item, const ScenarioScript* s) {
+  std::string out = e.name;
+  bool first = true;
+  auto named = [](const auto& list, int32_t v, const char* none) -> std::string {
+    if (v < 0) return none;
+    if (static_cast<size_t>(v) < list.size()) return list[static_cast<size_t>(v)].name;
+    return "#" + std::to_string(v);
+  };
+  for (const Field& f : e.fields) {
+    std::string value;
+    if (f.slot == Slot::Text) {
+      if (item.text.empty()) continue;
+      value = item.text.size() > 40 ? item.text.substr(0, 37) + "..." : item.text;
+      if (f.kind == Kind::Text) value = "\"" + value + "\"";
+    } else {
+      const int32_t v = get(item, f.slot);
+      switch (f.kind) {
+        case Kind::Player:
+        case Kind::PlayerOrAny: value = v == ANY_PLAYER ? "everyone" : "side " + std::to_string(v + 1); break;
+        case Kind::Area:
+        case Kind::AreaOrMap: value = s ? named(s->areas, v, "the whole map") : std::to_string(v); break;
+        case Kind::Trigger: value = s ? named(s->triggers, v, "none") : std::to_string(v); break;
+        case Kind::Phase: value = s ? named(s->phases, v, "none") : std::to_string(v); break;
+        case Kind::Wave: value = s ? named(s->waves, v, "none") : std::to_string(v); break;
+        case Kind::Path: value = s ? named(s->paths, v, "none") : std::to_string(v); break;
+        case Kind::Goal: value = s && v >= 0 && static_cast<size_t>(v) < s->goals.size() ? s->goals[static_cast<size_t>(v)].text : std::to_string(v); break;
+        case Kind::Bool:
+          if (v == 0) continue;  // said only when it is on
+          value = "yes";
+          break;
+        case Kind::Percent: value = std::to_string(v) + "%"; break;
+        case Kind::Seconds: value = std::to_string(v) + " s"; break;
+        case Kind::UnitType:
+          if (v < 0) continue;
+          value = "type " + std::to_string(v);
+          break;
+        case Kind::Choice: {
+          int at = v - f.min;
+          const char* p = f.choices ? f.choices : "";
+          while (at > 0 && *p) {
+            if (*p == '|') --at;
+            ++p;
+          }
+          const char* end = p;
+          while (*end && *end != '|') ++end;
+          value = at == 0 && end > p ? std::string(p, end) : std::to_string(v);
+          break;
+        }
+        default: value = std::to_string(v); break;
+      }
+    }
+    std::string label = f.label;
+    if (!label.empty()) label[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(label[0])));
+    out += first ? ": " : ", ";
+    out += label + " " + value;
+    first = false;
+  }
+  return out;
+}
+}  // namespace
+
+std::string describe(const Condition& c, const ScenarioScript* s) {
+  if (c.type >= CondType::Count) return "unknown condition";
+  return describeItem(entry(c.type), c, s);
+}
+std::string describe(const Action& a, const ScenarioScript* s) {
+  if (a.type >= ActionType::Count) return "unknown action";
+  return describeItem(entry(a.type), a, s);
+}
+
 Condition makeCondition(CondType t) {
   Condition c;
   c.type = t;

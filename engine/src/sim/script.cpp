@@ -206,6 +206,9 @@ std::vector<Action> actionsFromJson(const Json& j, const char* key, const UnitTy
 }
 }  // namespace
 
+nlohmann::json conditionJson(const Condition& c, const UnitTypeRegistry* types) { return condToJson(c, types); }
+nlohmann::json actionJson(const Action& a, const UnitTypeRegistry* types) { return actionToJson(a, types); }
+
 nlohmann::json scriptToJson(const ScenarioScript& s, const UnitTypeRegistry* types) {
   Json j;
   auto& areas = j["areas"] = Json::array();

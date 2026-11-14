@@ -17,6 +17,7 @@
 #include <filesystem>
 #include <nlohmann/json.hpp>
 
+#include "pioneer/core/strings.hpp"
 #include "pioneer/ui/fonts.hpp"
 #include "pioneer/sim/factions.hpp"
 
@@ -71,6 +72,8 @@ GameScene::GameScene(App& app, SceneOptions opt) : app_(app), opt_(opt) {
 }
 
 GameScene::~GameScene() {
+  saveInterfaceScripts();
+  uiLuaEvents_ = {};
   shutdownDevTools();
   if (cursorArrow_) SDL_DestroyCursor(cursorArrow_);
   if (cursorCross_) SDL_DestroyCursor(cursorCross_);
@@ -92,6 +95,13 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
   // The interface's fonts come from the content (a mod may bring its own), at the size the player chose.
   pioneer::ui::loadFonts(*content_.fileSystem());
   pioneer::ui::setScale(opt_.uiScale > 0 ? opt_.uiScale : settings_.uiScale);
+  // The interface's words, in the player's language over English (mods add their own).
+  {
+    std::string why;
+    if (!pioneer::loc::strings().load(*content_.fileSystem(), settings_.language, &why) && !why.empty())
+      PNR_WARN("Language '%s': %s", settings_.language.c_str(), why.c_str());
+  }
+  initInterfaceScripts();
   if (!app_.offscreen()) {
     // Where tool windows were left (and how they were docked) is remembered between runs.
     layoutPath_ = app_.userDir() + "layout.ini";

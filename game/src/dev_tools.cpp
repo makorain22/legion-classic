@@ -77,6 +77,8 @@ void GameScene::initDevTools() {
   };
   registerDataCommands(con, std::move(data));
   registerConsoleCommands();
+  registerKitCommands();
+  registerInterfaceScriptCommands();
 
   // Automated runs (self-tests, screenshots) neither read nor write the
   // player's console settings, so they behave the same on every machine.
@@ -162,6 +164,8 @@ void GameScene::drawDevTools() {
     profilerWin_.draw(&showProfiler_, app_.userDir());
     if (!showProfiler_) con.execute("profiler 0");  // closed with its own button
   }
+  drawInterfaceKit();
+  drawInterfaceScripts();
   if (showConsole_) {
     if (const CVar* h = con.find("con.height")) consoleWin_.setHeight(h->f());
     consoleWin_.draw(con, &showConsole_);

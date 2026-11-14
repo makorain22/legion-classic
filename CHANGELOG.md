@@ -103,6 +103,32 @@
     goes on. See the "Lua" chapter of the script reference.
   - Cutscene sequences can be stored in missions (they are played from 9.15).
   - Console: `script.help`, `script.check`, `lua.run`, `lua.errors`.
+- **Part 5, the UI framework** (14 Nov):
+  - **Real text.** The interface is set in IBM Plex Sans (with a mono face
+    for the console and an icon font), sharp at any size, replacing the
+    small built-in bitmap font.
+  - **Interface size** (Settings → Display, 90% to 200%) for large or dense
+    screens. Menus, the editor and tool windows follow it; the battle
+    sidebar keeps its size until the in-game interface is redone.
+  - **Tool windows dock** (hold Shift while dragging one onto another or to
+    a screen edge) and stay where you left them between runs.
+  - **The new script lines can be edited.** *Go to phase*, *Send wave*,
+    *Follow path*, *Call script* and the phase, goal and Lua conditions are
+    in the Script tab's "+" menus. Their panels are drawn from the script
+    registry, as will every line added from now on.
+  - **Building blocks for the Mission Maker:** a timeline (tracks, items,
+    playhead, snapping) and a graph that lays itself out (a mission's phases
+    and what leads from one to the next). `ui.kit` in the console shows
+    them on the current mission.
+  - **Panels by mods, in Lua.** A file in `ui/` can draw its own window,
+    reading the battle and hearing its events without being able to change
+    it. Try `ui.panel "Battle report"`. See MODDING.md, "Panels of your own".
+  - **Ready for translation.** The interface's words can come from language
+    files (`lang/en.json`), with plural rules for a dozen language families
+    and a fallback to English; mods can add languages. The existing screens
+    are moved over as they are rebuilt, so for now only English ships.
+  - Console: `ui.kit`, `ui.scale`, `ui.scripts`, `ui.panel`, `ui.reload`,
+    `lang.list`, `lang.set`, `lang.missing`, `lang.pseudo`.
 
 ## 0.9.1 – in progress (edits after Milestone 9; Milestones 9.1–9.12)
 

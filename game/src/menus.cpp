@@ -12,6 +12,7 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 
+#include "pioneer/core/strings.hpp"
 #include "pioneer/ui/fonts.hpp"
 #include "pioneer/core/rng.hpp"
 #include "pioneer/sim/factions.hpp"
@@ -705,13 +706,36 @@ void Menus::drawSettings() {
         if (pending == 0) pending = st.uiScale;
         int percent = static_cast<int>(pending * 100.0f + 0.5f);
         ImGui::SetNextItemWidth(200);
-        if (ImGui::SliderInt("Interface size", &percent, 90, 200, "%d%%")) pending = static_cast<float>(percent) / 100.0f;
+        if (ImGui::SliderInt(pioneer::loc::tr("settings.display.interface_size"), &percent, 90, 200, "%d%%")) pending = static_cast<float>(percent) / 100.0f;
         if (ImGui::IsItemDeactivatedAfterEdit()) {
           st.uiScale = pending;
           pioneer::ui::setScale(st.uiScale);
           changed = true;
         }
-        ImGui::TextDisabled("Text and controls everywhere. The editor and tool windows follow fully; the battle screen's own\npanels keep their size for now.");
+        ImGui::TextDisabled("%s", pioneer::loc::tr("settings.display.interface_size_help"));
+        // Languages: offered once there is more than English.
+        static std::vector<pioneer::loc::Strings::Language> languages;
+        static uint32_t seen = 0;
+        if (seen != pioneer::loc::strings().revision()) {
+          languages = pioneer::loc::Strings::available(*scene_.content().fileSystem());
+          seen = pioneer::loc::strings().revision();
+        }
+        if (languages.size() > 1) {
+          const char* now = st.language.c_str();
+          for (const auto& l : languages)
+            if (l.id == st.language) now = l.name.c_str();
+          ImGui::SetNextItemWidth(200);
+          if (ImGui::BeginCombo(pioneer::loc::tr("settings.display.language"), now)) {
+            for (const auto& l : languages)
+              if (ImGui::Selectable(l.name.c_str(), l.id == st.language)) {
+                st.language = l.id;
+                pioneer::loc::strings().load(*scene_.content().fileSystem(), st.language);
+                changed = true;
+              }
+            ImGui::EndCombo();
+          }
+          ImGui::TextDisabled("%s", pioneer::loc::tr("settings.display.language_help"));
+        }
       }
       changed |= ImGui::Checkbox("Show the game info panel (I)", &st.showInfoPanel);
       changed |= ImGui::Checkbox("Unit cards over fireteams, platoons and companies", &st.showCards);

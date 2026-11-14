@@ -207,3 +207,31 @@ TEST_CASE("script reference: docs/SCRIPT_REFERENCE.md is what the registry says"
   CHECK_MESSAGE(onDisk == now, "docs/SCRIPT_REFERENCE.md is out of date: run the tests once with LEGION_WRITE_DOCS=1");
   CHECK(now.find("#### Spawn units (`spawn_units`)") != std::string::npos);
 }
+
+TEST_CASE("script registry: any line can be put into words") {
+  ScenarioScript s;
+  s.phases.resize(2);
+  s.phases[1].name = "Assault";
+  MissionWave w;
+  w.name = "Raiders";
+  s.waves.push_back(w);
+  Action a = script::makeAction(ActionType::GotoPhase);
+  a.value = 1;
+  CHECK(script::describe(a, &s).find("Assault") != std::string::npos);
+  CHECK(script::describe(a, nullptr).find("1") != std::string::npos);
+  a = script::makeAction(ActionType::SendWave);
+  a.value = 0;
+  CHECK(script::describe(a, &s).find("Raiders") != std::string::npos);
+  // Every line of the registry gives a sentence that starts with its name, set or not.
+  for (const script::Entry& e : script::actions()) {
+    const Action made = script::makeAction(static_cast<ActionType>(e.type));
+    CHECK(script::describe(made, &s).rfind(e.name, 0) == 0);
+  }
+  for (const script::Entry& e : script::conditions()) {
+    const Condition made = script::makeCondition(static_cast<CondType>(e.type));
+    CHECK(script::describe(made, &s).rfind(e.name, 0) == 0);
+  }
+  Action bad;
+  bad.type = ActionType::Count;
+  CHECK(script::describe(bad) == "unknown action");
+}

@@ -198,7 +198,9 @@ if(LEGION_BUILD_TESTS)
   add_executable(pioneer_tests ${TEST_SOURCES} editor/src/history.cpp engine/src/assets/blitzkrieg.cpp
                  engine/src/audio/mixer.cpp engine/src/audio/decode.cpp game/src/campaign.cpp
                  engine/src/render/camera.cpp engine/src/assets/voxel.cpp engine/src/assets/voxel_mesh.cpp
-                 engine/src/assets/image.cpp)
+                 engine/src/assets/image.cpp
+                 engine/src/ui/timeline_model.cpp engine/src/ui/graph_model.cpp engine/src/ui/mission_views.cpp
+                 engine/src/ui/icon_list.cpp)
   target_include_directories(pioneer_tests PRIVATE editor/src game/src)
   target_link_libraries(pioneer_tests PRIVATE pioneer_core doctest::doctest stb)
   target_compile_definitions(pioneer_tests PRIVATE LEGION_CONTENT_DIR="${CMAKE_SOURCE_DIR}/content/")

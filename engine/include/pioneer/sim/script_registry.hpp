@@ -99,6 +99,12 @@ void set(Action& a, Slot s, int32_t v);
 // A condition or action with every field at its default.
 Condition makeCondition(CondType t);
 Action makeAction(ActionType t);
+// A line in plain words from the registry alone: the name and what its
+// fields are set to ("Send a wave: wave Raiders"). For lists in tools, where
+// no hand-written sentence exists for a line. `script` gives names to areas,
+// triggers, phases, waves, paths and goals (may be null: numbers then).
+std::string describe(const Condition& c, const ScenarioScript* script = nullptr);
+std::string describe(const Action& a, const ScenarioScript* script = nullptr);
 
 // --- Checking a script --------------------------------------------------------
 struct Issue {

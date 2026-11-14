@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstdio>
 
+#include "pioneer/ui/script_fields.hpp"
 #include "editor.hpp"
 #include "game_scene.hpp"
 #include "pioneer/sim/script_registry.hpp"
@@ -301,7 +302,11 @@ bool Editor::editCondition(Condition& c) {
       ImGui::SetNextItemWidth(100);
       ch |= ImGui::InputInt("at least", &c.value);
       break;
-    default: break;
+    default: {  // anything without a panel of its own: drawn from the script registry
+      pioneer::ui::ScriptFieldContext ctx{&scene_.scenario(), &scene_.types()};
+      ch |= pioneer::ui::editFields(script::entry(c.type), c, ctx);
+      break;
+    }
   }
   ImGui::Unindent();
   return ch;
@@ -641,7 +646,11 @@ bool Editor::editAction(Action& a) {
       ImGui::SetNextItemWidth(100);
       ch |= ImGui::InputInt("value", &a.value);
       break;
-    default: break;
+    default: {  // anything without a panel of its own: drawn from the script registry
+      pioneer::ui::ScriptFieldContext ctx{&scene_.scenario(), &scene_.types()};
+      ch |= pioneer::ui::editFields(script::entry(a.type), a, ctx);
+      break;
+    }
   }
   ImGui::Unindent();
   return ch;
@@ -649,9 +658,9 @@ bool Editor::editAction(Action& a) {
 
 // --- The add menus, in groups -------------------------------------------------
 namespace {
-const char* kCondGroups[] = {"Time and the mission", "Units and places", "Named units", "Sides"};
+const char* kCondGroups[] = {"Time and the mission", "Units and places", "Named units", "Sides", "Phases, goals and Lua"};
 const char* kActionGroups[] = {"Story and objectives", "Radio, camera and sound", "Units", "Set pieces",
-                               "Computer players", "The battlefield", "Clocks, counters and flags", "Triggers"};
+                               "Computer players", "The battlefield", "Clocks, counters and flags", "Triggers", "Phases, waves and Lua"};
 }  // namespace
 const char* Editor::condGroup(int g) { return kCondGroups[g]; }
 const char* Editor::actionGroup(int g) { return kActionGroups[g]; }
@@ -664,7 +673,8 @@ std::vector<int> Editor::condOrder() {
           I(C::UnitCount), I(C::StructuresAtLeast), I(C::StructuresAtMost), I(C::HealthBelow), I(C::InCover),
           -3, I(C::NamedAlive), I(C::NamedDead), I(C::NamedInArea), I(C::NamedHealthBelow),
           -4, I(C::PlayerDefeated), I(C::Supplies), I(C::SuppliesAtMost), I(C::KillsAtLeast), I(C::LossesAtLeast),
-          I(C::AlliedWith), I(C::OrderGiven)};
+          I(C::AlliedWith), I(C::OrderGiven),
+          -5, I(C::PhaseIs), I(C::PhaseElapsed), I(C::GoalDone), I(C::GoalFailed), I(C::ScriptSays)};
 }
 std::vector<int> Editor::actionOrder() {
   using A = ActionType;
@@ -683,7 +693,8 @@ std::vector<int> Editor::actionOrder() {
           I(A::SetIncomeRate), I(A::LockBuild), I(A::UnlockBuild),
           -7, I(A::Countdown), I(A::StopCountdown), I(A::PauseCountdown), I(A::SetCounter), I(A::AddCounter), I(A::SetFlag),
           I(A::AddFlag),
-          -8, I(A::EnableTrigger), I(A::DisableTrigger), I(A::FireTrigger), I(A::ResetTrigger)};
+          -8, I(A::EnableTrigger), I(A::DisableTrigger), I(A::FireTrigger), I(A::ResetTrigger),
+          -9, I(A::GotoPhase), I(A::SendWave), I(A::FollowPath), I(A::CallScript)};
 }
 
 // --- Plain-English summaries --------------------------------------------------
@@ -751,7 +762,7 @@ std::string Editor::describeCondition(const Condition& c) const {
     case CondType::SuppliesAtMost: return sideName(sc, c.player) + " has $" + std::to_string(c.value) + " or less";
     case CondType::HealthBelow: return sideName(sc, c.player) + "'s " + units(c.unitType) + " in " + area(c.area) + " are below " + std::to_string(c.value) + "% health";
     case CondType::AlliedWith: return sideName(sc, c.player) + " is allied with " + sideName(sc, static_cast<uint8_t>(std::clamp(c.value, 0, MAX_PLAYERS - 1)));
-    default: return condName(c.type);
+    default: return script::describe(c, &scene_.scenario());  // from the registry
   }
 }
 
@@ -841,7 +852,7 @@ std::string Editor::describeAction(const Action& a) const {
     case ActionType::FireTrigger: return "run trigger " + trig(a.trigger) + " now";
     case ActionType::ResetTrigger: return "let trigger " + trig(a.trigger) + " fire again";
     case ActionType::HideObjective: return "take objective " + std::to_string(a.value + 1) + " off the list";
-    default: return actionName(a.type);
+    default: return script::describe(a, &scene_.scenario());  // from the registry
   }
 }
 

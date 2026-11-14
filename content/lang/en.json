@@ -1,0 +1,35 @@
+{
+  "language": "en",
+  "name": "English",
+  "strings": {
+    "settings": {
+      "display": {
+        "interface_size": "Interface size",
+        "interface_size_help": "How large the menus, the editor and the tools are drawn. The battle interface keeps its own size.",
+        "language": "Language",
+        "language_help": "The language of the interface. Words a language doesn't have yet are shown in English."
+      }
+    },
+    "kit": {
+      "title": "Interface kit",
+      "fonts": "Fonts and icons",
+      "fields": "Script fields",
+      "timeline": "Timeline",
+      "graph": "Graph",
+      "strings": "Strings",
+      "scripts": "Scripts",
+      "scripts_help": "Panels drawn by Lua scripts (ui/*.lua in the game or a mod). Tick one to open it.",
+      "regular": "Regular: the quick brown fox jumps over the lazy dog 0123456789",
+      "bold": "Semi-bold: headings and things that matter",
+      "mono": "Mono: for consoles, numbers in columns and code",
+      "icons": "{n|# icon|# icons}, drawn from the icon font at any size",
+      "phases": "{n|# phase|# phases} in this mission",
+      "no_phases": "This mission has no phases; a sample is shown.",
+      "strings_loaded": "{n|# string|# strings} in {language}",
+      "strings_missing": "{n|# key was|# keys were} asked for and not found",
+      "timeline_help": "Drag items to move them (Alt: off the grid), their right edge to stretch them, the ruler to move the playhead. Ctrl+wheel zooms.",
+      "graph_help": "Drag a box to move it, the background to pan. The wheel zooms.",
+      "fields_help": "Every condition and action of the script registry, edited by the same panel the editor uses."
+    }
+  }
+}

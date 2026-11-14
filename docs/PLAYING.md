@@ -576,7 +576,11 @@ These are the defaults:
 144 by default), vsync, whether the mouse is kept inside the window while you
 play (on by default, so edge scrolling always works), edge scrolling, scroll
 speed, the info panel, unit cards (and whether enemy cards show) and intel
-chips. The sidebar wears your side's colours: field grey for the Germans,
+chips, and **Interface size** (90% to 200%): how large the menus, the editor
+and tool windows are drawn. The battle sidebar keeps its own size for now.
+Tool windows (console, profiler, the editor's reference windows) can be
+docked: hold **Shift** while dragging one onto another or to a screen edge.
+They are where you left them at the next start. The sidebar wears your side's colours: field grey for the Germans,
 khaki for the Soviets, service brown and stone (with the roundel) for the British.
 
 Screenshots, settings and the log file (`legion.log`) are saved in
@@ -601,6 +605,9 @@ are typing, **Up/Down** bring back earlier lines, **Esc** closes it.
 | `mem.report`, `jobs.info` | Memory by system; what the worker threads did |
 | `sim.vision woodland 1`, `sim.vision los 1`, `sim.vision sight 60`, `sim.smoke 64 64` | Try the new sight rules: men in woods seen only by scouts, hills hiding ground, weather, a smoke cloud (all off in normal play) |
 | `sim.twincheck 30`, `sim.digest`, `replay.check`, `path.stats` | For bug reports: prove the battle is repeatable, checksums by system, whether a replay still matches, what the pathfinder did |
+| `ui.scale 130` | Interface size for now (the lasting setting is in Settings → Display) |
+| `ui.panel "Battle report"` | Open a panel made by an interface script (`ui.scripts` lists them; mods add their own) |
+| `ui.kit` | The interface kit: fonts and icons, every script line, the timeline and the mission's phases as a graph |
 | `bind f6 "speed 8"` | Run any command on a key; `unbind f6` |
 | `alias fast "speed 8"` | Give a command a name of your own |
 | `cheats 1`, then `spawn ger_heavy_tank 3`, `credits 9999`, `reveal`, `kill`, `side 1` | Testing tools: units under the mouse, supplies, see everything, destroy the selection, command another side |

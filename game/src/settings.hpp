@@ -42,6 +42,7 @@ struct Settings {
   bool edgeScroll = true;
   float scrollSpeed = 1.0f;
   float uiScale = 1.0f;    // interface size: 1 = as designed (0.9 .. 2)
+  std::string language = "en";  // of the interface (a file in lang/)
   bool showInfoPanel = false;  // the top-left game info box
   bool showCards = true;       // NATO cards over bound units
   bool showEnemyCards = true;  // cards over the other sides' units too (when seen)

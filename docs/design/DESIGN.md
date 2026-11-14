@@ -425,6 +425,28 @@ recognition flash on vehicles and a roundel in the interface.
        (hover help, Script reference, Check the script). Console
        `script.help`, `script.check`, `lua.run`, `lua.errors`. Tests:
        test_script_registry.cpp, test_mission_model.cpp, test_lua.cpp.
+     - **Part 5, UI framework (done 14 Nov):** fonts through the VFS
+       (`ui/fonts.hpp`: `loadFonts`, `setScale`, `px`, guards `Bold` /
+       `Mono` / `Sized` / `Unscaled`; IBM Plex + Lucide in
+       `content/fonts/` with licences; `ui/icons.hpp`, `iconList()`),
+       `Settings::uiScale`, `--ui-scale`, docking, `<user>/layout.ini`;
+       `ui/script_fields.hpp` (`editFields` from the registry; the editor's
+       `default:` branches; `script::describe`); `ui/timeline.hpp`
+       (model in `timeline_model.cpp`, widget `timeline()`);
+       `ui/node_graph.hpp` (model and `layoutGraph` in `graph_model.cpp`,
+       widget `nodeGraph()`); `ui/mission_views.hpp` (`phaseGraph`,
+       `sequenceTimeline`, `applyTimeline`, `waveTimeline`);
+       `core/strings.hpp` (`loc::StringTable`, `Strings`, `tr`, `format`,
+       plural rules, pseudo-translation; `content/lang/en.json`;
+       `Settings::language`); `core/interface_lua.hpp` (`InterfaceLua`,
+       `InterfaceWidgets`; `ui/interface_widgets.hpp`;
+       `game/src/ui_scripts.cpp`; `content/ui/battle_report.lua`;
+       `<user>/ui_scripts.json`); `game/src/ui_kit.cpp` (the interface
+       kit). Decision: existing interface text moves into string tables
+       screen by screen as screens are rebuilt, not in one sweep. Console
+       `ui.kit`, `ui.scale`, `ui.scripts`, `ui.panel`, `ui.reload`,
+       `lang.list`, `lang.set`, `lang.missing`, `lang.pseudo`. Tests:
+       test_ui.cpp, test_interface_lua.cpp.
    - **9.14 Mission Maker foundation**, **9.15 Cutscenes and event
      sequences**, **9.16 Set pieces**, **9.17 Map, assets and terrain**,
      **9.18 Combat and controls**, (campaign finalisation when the user's

@@ -29,8 +29,8 @@ file of the game or of a mod that is switched on, the battle on screen takes
 the change in within a couple of seconds ("Rules reloaded from disk"), the
 same way *Apply* in the rules editor does. A file that can't be read (a
 missing bracket, a half-finished save) is reported and nothing changes.
-Sounds (`audio\`), campaigns (`campaigns\`) and sprite overrides (`art\`)
-reload too. `content.hotreload 0` in the console switches this off;
+Sounds (`audio\`), campaigns (`campaigns\`), sprite overrides (`art\`),
+interface scripts (`ui\`) and string tables (`lang\`) reload too. `content.hotreload 0` in the console switches this off;
 `content.check` looks at once instead of waiting.
 
 ## A mod as one file: packs (new in 0.9.2)
@@ -82,6 +82,9 @@ my_mod\
   maps\skirmish\      ready-made skirmish maps and their maps.json
   audio\              sounds and music that replace the game's (same paths as content\audio)
                       and an audio.json to change or add sounds
+  ui\                 .lua files that draw panels of your own (see "Panels of your own")
+  lang\               string tables: words for the interface, new languages (see "Words and languages")
+  fonts\              ui-regular.ttf, ui-bold.ttf, mono.ttf to replace the interface's fonts
 ```
 
 A campaign folder holds `campaign.json`:
@@ -366,6 +369,101 @@ voxel models, so a repainted sprite only shows in the classic 2D view and on
 the sidebar's pictures. Sprite overrides in a mod's `art/` folder still load
 (see [ART_PIPELINE.md](ART_PIPELINE.md)), and `--export-sprites` still writes
 the sprites out for painting.
+
+## Panels of your own: interface scripts (new in 0.9.2)
+
+A file `ui/<name>.lua` in your mod can put a window on screen. It is Lua,
+but a different Lua from a mission's script: it **looks and draws, and
+cannot change the battle**. That is why it may do things a mission script
+may not (random numbers, the clock) and why it never breaks a replay.
+
+```lua
+-- ui/losses.lua
+local lost = 0
+
+on("unit_died", function(e)
+  if e.owner == game.player then lost = lost + 1 end
+end)
+on("battle_started", function() lost = 0 end)
+
+panel{
+  title = "Losses",
+  draw = function()
+    ui.heading(lost .. " lost")
+    ui.text("Supplies: " .. game.supplies)
+    saved.note = ui.input("Note", saved.note or "")
+    if ui.button("Reset") then lost = 0 end
+  end
+}
+```
+
+Open it with `ui.panel "Losses"` in the console or from `ui.kit` (tab
+Scripts); it is open again at the next start. The game's own example is
+`content/ui/battle_report.lua`.
+
+| You write | It does |
+| --- | --- |
+| `panel{title=, draw=, open=}` | Declares a window. `draw` runs every frame while it is open. Titles must differ. |
+| `on("event", function(e) ... end)` | Hears an event (table below). |
+| `ui.text(s)`, `ui.heading(s)`, `ui.faint(s)`, `ui.good(s)`, `ui.warn(s)`, `ui.bad(s)`, `ui.mono(s)` | A line of text in that style. |
+| `ui.button(label)` | A button; true in the frame it is clicked. |
+| `v = ui.checkbox(label, v)` | A tick box; returns the value (and whether it changed). |
+| `v = ui.slider(label, v, min, max)` | A slider. |
+| `v = ui.input(label, v)` | A line of text to type. |
+| `ui.progress(0..1, label)` | A bar. |
+| `ui.same_line()`, `ui.separator()`, `ui.tooltip(s)` | Layout; a tooltip for the widget before it. |
+| `game.<name>` | Reads the battle (list below). Writing to it is an error. |
+| `saved` | A table kept between runs (numbers, text, true/false and tables of them). |
+| `tr("key")` | A word from the string tables (below). |
+| `console("speed 2")` | Runs a console line and returns what it printed. Not while the script loads. |
+| `log(...)` | Writes to the game's log. |
+
+`game`: `in_battle`, `tick`, `seconds`, `player` (the side you command, from
+0), `supplies`, `selected` (how many units), `phase`, `phase_name`,
+`phase_seconds`, `fps`, `clock`, `language`.
+
+Events, each with `e.owner`, `e.x`, `e.y` (tiles), `e.amount`, `e.text`, and
+`e.unit` (a unit id) where a unit is concerned: `battle_started`,
+`battle_ended`, `unit_died`, `unit_ready`, `structure_placed`,
+`structure_sold`, `player_defeated`, `player_won`, `message`,
+`transmission`, `objectives_changed`, `group_formed`, `point_captured`,
+`convoy_arrived`, `countdown_done`, `phase_changed`, `wave_arrived`.
+
+A mistake is written to the log and shown by `ui.scripts`; the game goes
+on. A panel that fails three frames running is closed until you open it
+again. Scripts are read again when you save the file, so you can write one
+with the game open. There is no `require`, `io` or `os`.
+
+## Words and languages (new in 0.9.2)
+
+The interface is being moved to string tables: files `lang/<id>.json`.
+
+```json
+{ "language": "ms", "name": "Bahasa Melayu",
+  "strings": {
+    "settings": { "display": { "interface_size": "Saiz antara muka" } },
+    "my_mod.tanks_ready": "{n|# kereta kebal} sedia"
+  } }
+```
+
+* A mod's `lang/en.json` is laid **over** the game's, key by key: add your
+  own words under a prefix of your own, or change the game's.
+* A file for another language makes that language appear in Settings →
+  Display. Whatever it lacks is shown in English.
+* `{name}` is filled in by the game. `{n|# unit|# units}` picks a form by
+  the number; `#` is the number. English, German and most others give two
+  forms; Malay, Japanese, Chinese and others one; Russian, Ukrainian,
+  Polish, Czech three (one, few, many). The rule follows the language id;
+  `"plural": "slavic"` (or `none`, `one-other`, `french`, `polish`,
+  `czech`) sets it by hand.
+* `lang.missing` lists what your language hasn't translated and any key you
+  misspelt; `lang.pseudo 1` shows which text on screen comes from the
+  tables at all. **Most of the game's text is not in the tables yet**: it
+  moves over as each screen is rebuilt, so a full translation is not
+  possible today. The keys that exist are in `content/lang/en.json`.
+* The game's fonts (`fonts/ui-regular.ttf`, `ui-bold.ttf`, `mono.ttf`) cover
+  Latin, Cyrillic and Greek. A mod can replace them with files of the same
+  names, for another script or another look; put the font's licence beside it.
 
 ## The console, for testing a mod
 
