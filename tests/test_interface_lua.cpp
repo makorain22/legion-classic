@@ -2,6 +2,7 @@
 // what they were asked to draw.
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <fstream>
 #include <sstream>
 
