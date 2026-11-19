@@ -748,7 +748,7 @@ void Menus::drawSettings() {
       }
       changed |= ImGui::Checkbox("Atmosphere: period colour grading and a vignette", &st.atmosphere);
       changed |= ImGui::Checkbox("3D battlefield (off: the classic 2D view)", &st.view3D);
-      if (st.view3D) changed |= ImGui::Checkbox("Shadows", &st.shadows);
+      if (st.view3D) scene_.drawGraphicsSettings();
       changed |= ImGui::Checkbox("Use the Blitzkrieg art pack when installed (restart to apply)", &st.artPack);
       ImGui::EndTabItem();
     }

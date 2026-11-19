@@ -11,6 +11,9 @@ ShadowMap::~ShadowMap() {
 }
 
 bool ShadowMap::init(int size, std::string& error) {
+  if (fbo_) glDeleteFramebuffers(1, &fbo_);  // called again for another size
+  if (depth_) glDeleteTextures(1, &depth_);
+  fbo_ = depth_ = 0;
   size_ = size;
   glGenTextures(1, &depth_);
   glBindTexture(GL_TEXTURE_2D, depth_);
@@ -38,7 +41,8 @@ bool ShadowMap::init(int size, std::string& error) {
   return true;
 }
 
-void ShadowMap::fit(const Camera& cam, float minZ, float maxZ, float reach) {
+void ShadowMap::fit(const Camera& cam, float minZ, float maxZ, float reach, Vec3f light) {
+  light_ = light;
   // Where the screen's corners and edge midpoints meet the ground (a plane at
   // the target's height), kept within `reach` of the target.
   const Vec3f t = cam.target();
@@ -62,7 +66,7 @@ void ShadowMap::fit(const Camera& cam, float minZ, float maxZ, float reach) {
     pts[n++] = Vec3f{t.x + off.x, t.y + off.y, minZ};
     pts[n++] = Vec3f{t.x + off.x, t.y + off.y, maxZ};
   }
-  const Vec3f L = sunDirection();
+  const Vec3f L = light_;
   const Mat4 view = Mat4::lookAt(t + L * 200.0f, t, Vec3f{0, 0, 1});
   float x0 = 1e9f, x1 = -1e9f, y0 = 1e9f, y1 = -1e9f, z0 = 1e9f, z1 = -1e9f;
   for (int i = 0; i < n; ++i) {
@@ -84,6 +88,9 @@ void ShadowMap::fit(const Camera& cam, float minZ, float maxZ, float reach) {
 }
 
 void ShadowMap::begin() {
+  // Whatever was being drawn into (the window, or the scene's target) is drawn into again after end().
+  glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFbo_);
+  glGetIntegerv(GL_VIEWPORT, prevViewport_);
   glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
   glViewport(0, 0, size_, size_);
   glClearDepth(1.0);
@@ -96,10 +103,10 @@ void ShadowMap::begin() {
   glPolygonOffset(1.6f, 3.0f);
 }
 
-void ShadowMap::end(int viewportW, int viewportH) {
+void ShadowMap::end() {
   glDisable(GL_POLYGON_OFFSET_FILL);
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
-  glViewport(0, 0, viewportW, viewportH);
+  glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(prevFbo_));
+  glViewport(prevViewport_[0], prevViewport_[1], prevViewport_[2], prevViewport_[3]);
 }
 
 void ShadowMap::bind(int unit) const {

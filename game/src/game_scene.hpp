@@ -2,6 +2,7 @@
 // Legion Classic - the battlefield scene: the running world, the camera, unit
 // control, and the editor overlay (F2) that edits the world while it runs.
 
+#include "pioneer/render/post.hpp"
 #include "pioneer/core/interface_lua.hpp"
 #include "pioneer/core/events.hpp"
 #include <array>
@@ -113,6 +114,7 @@ struct SceneOptions {
   int biome = 0;
   bool classic = false;         // --classic: the old 2D sprite view instead of 3D
   bool noShadows = false;       // --no-shadows (testing, comparisons)
+  std::string gfx;              // --gfx low|medium|high|ultra: the graphics preset for this run
   bool intel = false;           // --intel: an AI battle seen with the viewing side's intel (no reveal)
   bool ffa = false;             // --ffa: an --ai-battle with every side for itself
   int bench = 0;                // --bench N: play an --ai-battle for N game minutes without drawing, print a report, quit
@@ -460,6 +462,24 @@ class GameScene final : public pioneer::Scene {
   pioneer::SpriteRenderer renderer_;
   pioneer::MeshRenderer meshes_;
   pioneer::ShadowMap shadow_;
+  // --- Graphics quality (graphics.cpp) ------------------------------------------
+  pioneer::PostProcess post_;
+  pioneer::gfx::Options gfx_;       // what is drawn with now: the settings, cut down to what the card can do
+  pioneer::SceneLook look_;         // the light, mist and exposure of this frame
+  pioneer::gfx::GpuTimer gpuScene_;
+  // Choosing a preset for this machine: the scene is timed over some frames at Medium.
+  int detectFrames_ = -1;           // -1: not measuring
+  double detectMs_ = 0;
+  void initGraphics();
+  void applyGraphics();             // after the settings changed
+  void detectGraphics(bool measure);  // picks a preset for this machine (now by the card's name, then by timing)
+  void detectFrame(double sceneMs);
+  void registerGraphicsCommands();
+ public:
+  void drawGraphicsSettings();      // the Settings page's part
+  void setGraphicsPreset(pioneer::gfx::Preset p, bool byGame);
+  const pioneer::gfx::Options& graphicsInUse() const { return gfx_; }
+ private:
   std::vector<int> frameMesh_;  // atlas frame -> mesh (-2: not looked at yet)
   std::vector<DrawItem> billboards_;  // 3D: things with no model, drawn as sprites facing the camera
   std::vector<int> rockMesh_;            // per terrain chunk: its rock faces (owned mesh, reused)

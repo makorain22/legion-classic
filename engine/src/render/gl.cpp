@@ -4,12 +4,16 @@
 #include <cstring>
 
 #include "pioneer/core/log.hpp"
+#include "pioneer/render/device.hpp"
 
 namespace pioneer::gl {
 
 namespace {
-GLuint compileStage(GLenum type, const char* src, std::string& error) {
+GLuint compileStage(GLenum type, const char* source, std::string& error) {
   const GLuint s = glCreateShader(type);
+  // Shaders are written for OpenGL 3.3; the device layer gives the text for the API in use.
+  const std::string text = gfx::shaderSource(source, gfx::caps().api);
+  const char* src = text.c_str();
   glShaderSource(s, 1, &src, nullptr);
   glCompileShader(s);
   GLint ok = 0;

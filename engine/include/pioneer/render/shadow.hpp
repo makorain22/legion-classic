@@ -39,17 +39,18 @@ class ShadowMap {
   ShadowMap(const ShadowMap&) = delete;
   ShadowMap& operator=(const ShadowMap&) = delete;
 
-  bool init(int size, std::string& error);
+  bool init(int size, std::string& error);  // again with another size: remade
   bool ready() const { return fbo_ != 0; }
   int size() const { return size_; }
 
   // Fits the sun's view over what the camera sees on the ground (whose
   // heights run from minZ to maxZ, in tiles), out to `reach` tiles from the
   // camera's target.
-  void fit(const Camera& cam, float minZ, float maxZ, float reach);
+  // `light`: the direction towards the sun (or the moon), a unit vector.
+  void fit(const Camera& cam, float minZ, float maxZ, float reach, Vec3f light = sunDirection());
   // Renders into the map until end(): bind, set the viewport, clear.
   void begin();
-  void end(int viewportW, int viewportH);
+  void end();  // back to what was being drawn into before begin()
 
   const Mat4& matrix() const { return lightViewProj_; }  // world -> the sun's clip space
   void bind(int unit) const;
@@ -60,6 +61,8 @@ class ShadowMap {
   GLuint fbo_ = 0, depth_ = 0;
   int size_ = 0;
   Mat4 lightViewProj_;
+  Vec3f light_ = sunDirection();
+  GLint prevFbo_ = 0, prevViewport_[4] = {0, 0, 0, 0};
 };
 
 }  // namespace pioneer

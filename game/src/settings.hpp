@@ -2,6 +2,7 @@
 // Legion Classic - player settings: display options and key bindings, saved
 // as settings.json in the user folder.
 
+#include "pioneer/render/graphics.hpp"
 #include <SDL3/SDL.h>
 
 #include <array>
@@ -52,6 +53,19 @@ struct Settings {
   bool atmosphere = true;      // colour grading and a vignette over the battlefield
   bool view3D = true;          // the 3D battlefield (false: the classic 2D sprite view)
   bool shadows = true;         // 3D: the sun's shadows
+  // Graphics quality (render/graphics.hpp). "auto": not chosen yet, the game
+  // picks a preset for this machine at the next start and writes it here.
+  std::string graphicsPreset = "auto";
+  bool graphicsAuto = false;   // the preset was the game's choice, not the player's
+  bool gfxPost = true;
+  float renderScale = 1.0f;
+  int shadowSize = 2048;
+  bool bloom = true, groundFog = true, cloudShadows = true;
+  int antialias = 2;           // 0 none, 1 fast, 2 best
+  int weatherDetail = 2;
+  int colourBlind = 0;         // 0 off, 1 protan, 2 deutan, 3 tritan
+  pioneer::gfx::Options graphics() const;
+  void setGraphics(const pioneer::gfx::Options& o);
   bool artPack = true;
   // Sound: 0..1 each.
   float volMaster = 0.85f, volEffects = 1.0f, volVoices = 0.9f, volMusic = 0.6f, volAmbience = 0.8f, volInterface = 0.8f;         // use content/art/blitzkrieg when present (takes effect on restart)

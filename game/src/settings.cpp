@@ -100,6 +100,18 @@ bool Settings::load(const std::string& path) {
   scrollSpeed = j.value("scrollSpeed", scrollSpeed);
   uiScale = std::clamp(j.value("uiScale", uiScale), 0.9f, 2.0f);
   language = j.value("language", language);
+  graphicsPreset = j.value("graphicsPreset", graphicsPreset);
+  graphicsAuto = j.value("graphicsAuto", graphicsAuto);
+  gfxPost = j.value("gfxPost", gfxPost);
+  renderScale = j.value("renderScale", renderScale);
+  shadowSize = j.value("shadowSize", shadowSize);
+  bloom = j.value("bloom", bloom);
+  antialias = j.value("antialias", antialias);
+  groundFog = j.value("groundFog", groundFog);
+  cloudShadows = j.value("cloudShadows", cloudShadows);
+  weatherDetail = j.value("weatherDetail", weatherDetail);
+  colourBlind = std::clamp(j.value("colourBlind", colourBlind), 0, 3);
+  setGraphics(graphics());  // within what the engine draws
   showInfoPanel = j.value("showInfoPanel", showInfoPanel);
   showCards = j.value("showCards", showCards);
   showChips = j.value("showChips", showChips);
@@ -145,6 +157,17 @@ bool Settings::save(const std::string& path) const {
   j["scrollSpeed"] = scrollSpeed;
   j["uiScale"] = uiScale;
   j["language"] = language;
+  j["graphicsPreset"] = graphicsPreset;
+  j["graphicsAuto"] = graphicsAuto;
+  j["gfxPost"] = gfxPost;
+  j["renderScale"] = renderScale;
+  j["shadowSize"] = shadowSize;
+  j["bloom"] = bloom;
+  j["antialias"] = antialias;
+  j["groundFog"] = groundFog;
+  j["cloudShadows"] = cloudShadows;
+  j["weatherDetail"] = weatherDetail;
+  j["colourBlind"] = colourBlind;
   j["showInfoPanel"] = showInfoPanel;
   j["showCards"] = showCards;
   j["showChips"] = showChips;
@@ -168,6 +191,35 @@ bool Settings::save(const std::string& path) const {
   if (!out) return false;
   out << j.dump(1) << "\n";
   return true;
+}
+
+pioneer::gfx::Options Settings::graphics() const {
+  pioneer::gfx::Options o;
+  o.post = gfxPost;
+  o.renderScale = renderScale;
+  o.shadows = shadows;
+  o.shadowSize = shadowSize;
+  o.bloom = bloom;
+  o.antialias = antialias;
+  o.groundFog = groundFog;
+  o.cloudShadows = cloudShadows;
+  o.weather = weatherDetail;
+  o.colourBlind = static_cast<pioneer::gfx::ColourBlind>(std::clamp(colourBlind, 0, 3));
+  return pioneer::gfx::sanitized(o);
+}
+
+void Settings::setGraphics(const pioneer::gfx::Options& in) {
+  const pioneer::gfx::Options o = pioneer::gfx::sanitized(in);
+  gfxPost = o.post;
+  renderScale = o.renderScale;
+  shadows = o.shadows;
+  shadowSize = o.shadowSize;
+  bloom = o.bloom;
+  antialias = o.antialias;
+  groundFog = o.groundFog;
+  cloudShadows = o.cloudShadows;
+  weatherDetail = o.weather;
+  colourBlind = static_cast<int>(o.colourBlind);
 }
 
 }  // namespace legion

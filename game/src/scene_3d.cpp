@@ -2,6 +2,7 @@
 // ground under the mouse, and drawing the battle with real voxel meshes,
 // the sun's shadows, ground decals and camera-facing effects.
 
+#include <chrono>
 #include <glad/gl.h>
 
 #include <algorithm>
@@ -319,6 +320,11 @@ void GameScene::render3D() {
   static const float kSky[5][3] = {
       {0.46f, 0.50f, 0.50f}, {0.62f, 0.66f, 0.70f}, {0.66f, 0.60f, 0.48f}, {0.42f, 0.50f, 0.44f}, {0.44f, 0.45f, 0.45f}};
   const float* sky = kSky[static_cast<int>(map_.biome) % 5];
+  // The scene goes into the pipeline's target when there is one (else straight to the window).
+  const bool piped = post_.beginScene(app_.pixelWidth(), app_.pixelHeight(), gfx_);
+  const bool timing = detectFrames_ >= 0;
+  const auto sceneStart = std::chrono::steady_clock::now();
+  gpuScene_.begin();
   glClearColor(sky[0] * 0.5f, sky[1] * 0.5f, sky[2] * 0.5f, 1.0f);
   glClearDepth(1.0);
   glDepthMask(GL_TRUE);
@@ -358,7 +364,7 @@ void GameScene::render3D() {
     }
 
   // The sun's shadows: the ground and the models seen from the sun.
-  const bool shadows = settings_.shadows && shadow_.ready() && !opt_.noShadows;
+  const bool shadows = gfx_.shadows && shadow_.ready();
   if (shadows) {
     float z0 = 0, z1 = 0;
     terrain_.heightRange(z0, z1);
@@ -367,7 +373,7 @@ void GameScene::render3D() {
     shadow_.begin();
     terrain_.drawDepth(shadow_.matrix());
     meshes_.drawDepth(shadow_.matrix());
-    shadow_.end(app_.pixelWidth(), app_.pixelHeight());
+    shadow_.end();
   }
   terrain_.draw3D(cam_, time_, shadows ? &shadow_ : nullptr);
 
@@ -400,15 +406,27 @@ void GameScene::render3D() {
              meshes_.trianglesLastFrame() / 1000.0, meshes_.meshCount(), cam_.zoom());
   terrain_.drawWater3D(cam_, time_);
 
-  // In the air: sprites with no model, smoke, fire, flashes, tracers.
+  // Things of the world that are sprites: river ice (9.11), units with no model.
   renderer_.begin3D(cam_);
-  drawIce3D();  // river ice lies on the water (9.11)
+  drawIce3D();
   for (const DrawItem& d : billboards_)
     renderer_.billboard(d.frame, worldPoint(d.lx, d.ly, d.h), kTilesPerSpritePixel, d.team, d.tint);
+  renderer_.flush();
+
+  // The world is drawn: light it for the hour and the weather. What follows
+  // (smoke, fire, flashes, tracers) keeps its own brightness.
+  if (piped) post_.light(look_, cam_, gfx_);
+  renderer_.begin3D(cam_);
   fx_.drawAir(renderer_, view, fogAt);
   renderer_.flush();
   glDepthMask(GL_TRUE);
   glDisable(GL_DEPTH_TEST);
+  gpuScene_.end();
+  if (piped) post_.present(look_, gfx_, app_.pixelWidth(), app_.pixelHeight(), time_);
+  if (timing) {
+    glFinish();  // the card's work counts too
+    detectFrame(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - sceneStart).count());
+  }
 
   renderer_.beginWorld(cam_);  // screen space from here on
   drawOverlays(view, false);

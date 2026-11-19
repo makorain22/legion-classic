@@ -113,10 +113,7 @@ bool GameScene::init(const std::string& contentDir, std::string& error) {
   if (!renderer_.init(error)) return false;
   if (!terrain_.init(error)) return false;
   if (!meshes_.init(error)) return false;
-  {
-    std::string serr;
-    if (!shadow_.init(2048, serr)) PNR_WARN("No shadows: %s", serr.c_str());
-  }
+  initGraphics();  // what the card can do, post-processing, the preset (and the shadow map at its size)
   renderer_.setAtlas(art_.atlas, art_.frames);
   frameMesh_.assign(art_.frames.size(), -2);
   renderer_.setWhiteFrame(art_.white);
