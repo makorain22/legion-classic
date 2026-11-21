@@ -1239,14 +1239,32 @@ machine guns. All from Freesound, **CC0 or CC BY** only (both may be shipped
 with the game; CC BY ones are credited). `content/audio/RECORDINGS.md` lists
 every one with its author, link and licence.
 
-`tools/audio/recordings.py` turns them into the game's sounds: takes with
-several shots are cut into one sound per shot at their onsets, engines,
-feet, fire and the land become seamless loops (an equal-power crossfade of
-the end into the start), everything is resampled to 48 kHz, cleaned below
-30 Hz, and **levelled to the loudness of the sound it replaces**, so the
-balance of the mix stays as it was tuned. Where a weapon in the rules has
-its own recording, it gets its own event (`rifle_smle`, `cannon_6pdr`).
-The interface sounds and the music are unchanged.
+`tools/audio/recordings.py` turns them into the game's sounds (99 sounds,
+27 distant variants, 6 ambience beds and 17 voice lines from 101
+recordings):
+
+- takes with several shots are cut into one sound per shot at their
+  onsets; every gun, blast and impact then **starts on its bang** (the first
+  moment at 40% of its loudest on a 10 ms envelope, so a click before it
+  doesn't count), so the sound lands with the muzzle flash; a take that
+  gives one piece keeps its whole burst; slivers are dropped;
+- engines, feet, fire and the land become **seamless loops** (an
+  equal-power crossfade of the end into the start; layers of different
+  lengths are repeated to the longest and the mix is joined once more);
+- everything is resampled to 48 kHz, cleaned below 30 Hz, and **levelled to
+  the loudness of the synthesised sound it replaces**, so the balance of the
+  mix stays as it was tuned. Those target levels were measured once and are
+  kept in `tools/audio/levels.json`, so the tool can be run again;
+- the output is bit-exact: the same recordings give the same files.
+
+Where a weapon in the rules has its own recording it gets its own event:
+the Lee-Enfield (`rifle_smle`) and the 6-pounder (`cannon_6pdr`, also its HE
+round). The interface sounds (`sfx/ui_*`) and the music are unchanged; the
+synthesised battle sounds they replaced are gone from `content/`
+(`tools/audio/sfx.py` still makes them). Three long takes didn't download
+(a roaring fire, a forest bed, a winter forest bed): the fire is the
+crackling take alone, temperate ground has no forest layer, and winter is
+the cold wind alone.
 
 ### MagicaVoxel (`pioneer/assets/vox_file.hpp`)
 

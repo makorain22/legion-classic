@@ -10,16 +10,21 @@ and the "sounds", "ambience" and "voices" of audio.json rewritten to use them.
 
 What it does to a recording, by recipe:
   shots   cut a take with several shots or bursts into one sound per shot
-          (onsets found from the energy envelope), each with its tail, faded
+          (onsets found from the energy envelope), each started on its bang
+          and with its tail, faded
   one     a single sound: leading silence trimmed, the tail faded
   loop    a steady stretch made into a seamless loop (an equal-power
           crossfade of its end into its start)
   voice   a spoken line: trimmed, levelled, mono
 Every sound is resampled to 48 kHz, made mono unless it is an ambience bed,
 high-passed below 30 Hz (rumble from the recorder), and levelled to the
-loudness of the sound it replaces, so the mix keeps its balance.
+loudness of the sound it replaces, so the mix keeps its balance (those
+levels are kept in tools/audio/levels.json: the synthesised sounds they were
+measured from are no longer in content/). A recording that isn't there is
+skipped and the event keeps what it had.
 
-Needs numpy, scipy and ffmpeg (with libvorbis). Deterministic.
+Needs numpy, scipy and ffmpeg (with libvorbis). Bit-exact: the same
+recordings give the same files.
 
     python3 tools/audio/recordings.py <recordings dir or zip> [--content content]
 """
@@ -50,7 +55,8 @@ def write_ogg(path, x, quality=5):
     x = np.clip(x, -1, 1).astype(np.float32)
     ch = 1 if x.ndim == 1 else x.shape[1]
     subprocess.run(['ffmpeg', '-y', '-v', 'error', '-f', 'f32le', '-ac', str(ch), '-ar', str(RATE), '-i', '-',
-                    '-c:a', 'libvorbis', '-q:a', str(quality), path], input=x.tobytes(), check=True)
+                    '-c:a', 'libvorbis', '-q:a', str(quality), '-fflags', '+bitexact', '-flags:a', '+bitexact',
+                    '-serial_offset', '1', path], input=x.tobytes(), check=True)  # bit-exact: same input, same file
 
 
 def mono(x):
@@ -170,7 +176,26 @@ def active_rms(x):
     return float(np.sqrt(np.mean(m[sel] ** 2)) + 1e-9) if sel.any() else rms(x)
 
 
-def level(x, target_active_rms, peak=0.89):
+def anchor(x, pre_ms=3):
+    """Starts a percussive sound on its first bang (a burst keeps all its shots): the first
+    moment at 40% of the loudest, back to where it rises."""
+    e = envelope(x, 10)  # long enough that a click is not a bang
+    pk = int(np.argmax(e > e.max() * 0.4))
+    thr = e[pk] * 0.1
+    a = pk
+    while a > 0 and e[a] > thr and pk - a < int(0.08 * RATE):
+        a -= 1
+    return x[max(0, a - int(pre_ms * RATE / 1000)):]
+
+
+def tile(x, n):
+    """A seamless loop repeated to n samples."""
+    reps = int(np.ceil(n / len(x)))
+    y = np.concatenate([x] * reps, axis=0)
+    return y[:n]
+
+
+def level(x, target_active_rms, peak=0.85):
     g = target_active_rms / active_rms(x)
     y = x * g
     p = np.abs(y).max()
@@ -185,26 +210,8 @@ def pitch(x, factor):
     return signal.resample(x, n, axis=0)
 
 
-def mix(*parts):
-    n = max(len(p) for p, _ in parts)
-    ch = max((1 if p.ndim == 1 else p.shape[1]) for p, _ in parts)
-    out = np.zeros((n, ch)) if ch > 1 else np.zeros(n)
-    for p, g in parts:
-        if ch > 1 and p.ndim == 1:
-            p = np.repeat(p[:, None], ch, axis=1)
-        out[:len(p)] += p * g
-    return out
-
-
 def stereo(x):
     return x if x.ndim == 2 else np.repeat(x[:, None], 2, axis=1)
-
-
-def loop_stereo_mix(srcs, seconds):
-    """Layers several beds (each made into a loop of the same length) into one stereo loop."""
-    beds = [stereo(loop(highpass(load_src(s, 2)), seconds, start=st)) * g for s, g, st in srcs]
-    n = min(len(b) for b in beds)
-    return sum(b[:n] for b in beds)
 
 
 # ---------------------------------------------------------------------------
@@ -241,6 +248,12 @@ def main():
     by_name = {m['file'][:-4]: m for m in manifest}
     bank = json.load(open(os.path.join(audio, 'audio.json')))
     old_sounds = bank['sounds']
+    # Each sound is levelled to the one it replaced. Those levels were measured once from the
+    # synthesised sounds and are kept in levels.json, so this can be run again after they are gone.
+    levels_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'levels.json')
+    levels = json.load(open(levels_path)) if os.path.exists(levels_path) else {'sounds': {}, 'ambience': {}}
+    if not levels['sounds'] and any(f.startswith('rec/') for d in old_sounds.values() for f in d.get('files', [])):
+        sys.exit('no levels.json and audio.json already uses recordings: nothing to level against')
     used = set()   # recordings that went into the game
     made = {}      # event -> [files]
     far = {}       # event -> [far files]
@@ -251,7 +264,7 @@ def main():
         vals = [active_rms(load(os.path.join(audio, f))) for f in files[:3] if os.path.exists(os.path.join(audio, f))]
         return float(np.median(vals)) if vals else 0.12
 
-    targets = {}
+    targets = levels['sounds']
 
     def tgt(event):
         if event not in targets:
@@ -273,12 +286,21 @@ def main():
             x = pitch(x, p)
         if lp:
             x = lowpass(x, lp)
-        pieces = cut_shots(x, max_len, keep=keep, min_gap=min_gap)
+        if keep == 1:  # one piece from a take: the whole burst or shot, not its first round
+            min_gap = max(min_gap, max_len)
+        pieces = cut_shots(x, max_len * 2, keep=keep, min_gap=min_gap)
         if not pieces:
-            pieces = [trim(x)[:int(max_len * RATE)]]
+            pieces = [trim(x)]
+        pieces = [anchor(p)[:int(max_len * RATE)] for p in pieces]
+        # Started on the bang, a piece that is only a sliver of a shot is no shot: leave it out.
+        whole = [p for p in pieces if len(p) >= min(0.35 * max_len, 0.6) * RATE]
+        pieces = whole or [max(pieces, key=len)]
         for k, piece in enumerate(pieces):
             emit(event, f'{prefix or src}_{k}', fade(piece, 1, tail_ms), kind, target)
         used.add(src)
+
+    percussive = {'explosion_small', 'explosion_medium', 'explosion_large', 'ricochet', 'armour_hit', 'vehicle_destroyed',
+                  'howitzer', 'rocket', 'cannon_small', 'cannon_medium', 'cannon_large'}
 
     def one(event, src, max_len=6.0, kind='files', p=1.0, lp=None, name=None, start=0.0, target=None, tail_ms=250):
         if not have(src):
@@ -293,7 +315,10 @@ def main():
             x = pitch(x, p)
         if lp:
             x = lowpass(x, lp)
-        x = trim(x)[:int(max_len * RATE)]
+        x = trim(x)
+        if event in percussive:
+            x = anchor(x)
+        x = x[:int(max_len * RATE)]
         emit(event, name or src, fade(x, 1, tail_ms), kind, target)
         used.add(src)
 
@@ -355,12 +380,9 @@ def main():
         one(ev, 'expl_distant_2', 5.0, kind='far', name=f'{ev}_far_2', target=tgt(ev) * 0.8)
         shots(ev, 'expl_distant_many', 4.0, keep=2, min_gap=2.0, kind='far', prefix=f'{ev}_far_many', target=tgt(ev) * 0.8)
     one('explosion_large', 'expl_distant_bomb', 6.0, kind='far', target=tgt('explosion_large') * 0.8)
-    for n in ('incoming_1', 'incoming_2', 'incoming_3', 'incoming_4'):
-        one('shell_incoming', n, 2.5, target=0.08)
     shots('ricochet', 'ricochets_mg', 1.2, keep=4, min_gap=0.4)
     one('ricochet', 'ricochet_1', 1.5)
     one('ricochet', 'ricochet_2', 1.5)
-    one('bullet_flyby', 'flyby', 0.6, target=0.06)
     one('armour_hit', 'metal_hit_1', 1.2)
     shots('armour_hit', 'metal_hits', 1.2, keep=3, min_gap=0.4)
     one('armour_hit', 'metal_hit_resonant', 2.0)
@@ -394,8 +416,9 @@ def main():
             used.add(src)
         if not parts:
             return  # keeps the sound it had
-        n = min(len(p) for p, _ in parts)
-        y = sum(p[:n] * g for p, g in parts)
+        n = max(len(p) for p, _ in parts)
+        y = sum(tile(p, n) * g for p, g in parts)
+        y = loop(y, (len(y) - int(1.0 * RATE)) / RATE, start=0, xfade=1.0)  # a shorter layer's cut, joined again
         rel = f'rec/{name}.ogg'
         write_ogg(os.path.join(audio, rel), level(y, tgt(event)))
         made.setdefault(event, []).append(rel)
@@ -418,12 +441,14 @@ def main():
             parts.append((loop(x, seconds, start=st, xfade=3.0), g))
             used.add(src)
         if not parts:
-            amb[biome] = bank['ambience'][biome]  # keeps the bed it had
+            amb[biome] = bank['ambience'][biome]  # keeps the bed it had (if it is still there)
             return
-        n = min(len(p) for p, _ in parts)
-        y = sum(p[:n] * g for p, g in parts)
-        old = os.path.join(audio, bank['ambience'][biome])
-        y = y * (rms(load(old, 2)) / rms(y))
+        n = max(len(p) for p, _ in parts)
+        y = sum(tile(p, n) * g for p, g in parts)
+        y = loop(y, (len(y) - int(2.0 * RATE)) / RATE, start=0, xfade=2.0)  # a shorter layer's cut, joined again
+        if biome not in levels['ambience']:
+            levels['ambience'][biome] = rms(load(os.path.join(audio, bank['ambience'][biome]), 2))
+        y = y * (levels['ambience'][biome] / rms(y))
         p = np.abs(y).max()
         if p > 0.89:
             y *= 0.89 / p
@@ -491,10 +516,6 @@ def main():
     defaults = {
         'rifle_smle': dict(sounds['rifle']),
         'cannon_6pdr': dict(sounds['cannon_small']),
-        'shell_incoming': {'bus': 'sfx', 'volume': 0.5, 'range': 10, 'priority': 3, 'reverb': 0.1, 'pitch': 0.04,
-                           'perSecond': 3, 'limit': 2},
-        'bullet_flyby': {'bus': 'sfx', 'volume': 0.4, 'range': 4, 'priority': 1, 'reverb': 0.05, 'pitch': 0.08,
-                         'perSecond': 6, 'limit': 3},
     }
     for ev, d in defaults.items():
         sounds.setdefault(ev, d)
@@ -505,6 +526,9 @@ def main():
         sounds[ev]['far'] = files
         sounds[ev].setdefault('farBelow', 0.3)
     bank['ambience'] = amb
+    with open(levels_path, 'w') as f:
+        json.dump(levels, f, indent=1, sort_keys=True)
+        f.write('\n')
     bank['voices'] = voices
     bank['factions'] = {'gbr': 'en', 'ger': 'de', 'rus': 'ru', 'default': 'en'}
     with open(os.path.join(audio, 'audio.json'), 'w') as f:

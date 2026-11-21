@@ -1,12 +1,22 @@
 # Sound and music: where it comes from
 
-Everything in this folder was made for Legion Classic.
+The interface sounds and the music were made for Legion Classic; the battle's
+sounds, the ambience and the voices are field recordings under free licences.
 
-## Sound effects and ambience (`sfx/`, `ambience/`)
+## Battle sounds, ambience and voices (`rec/`)
+
+Cut, cleaned and levelled by `tools/audio/recordings.py` from field
+recordings on [Freesound](https://freesound.org), each **CC0 1.0** (public
+domain) or **CC BY** (credit to its author). Every recording, its author,
+link and licence: **[RECORDINGS.md](RECORDINGS.md)**. That list is the credit
+the CC BY licences ask for; keep it with the game.
+
+## Interface sounds (`sfx/ui_*.ogg`)
 
 Synthesised from scratch by `tools/audio/sfx.py` (shaped noise, swept tones,
-inharmonic partials, outdoor echoes). No recordings or samples are used.
-Released under **CC0 1.0** (public domain dedication).
+inharmonic partials). No recordings or samples are used. Released under
+**CC0 1.0** (public domain dedication). (Until part 7 of Milestone 9.13 the
+battle's sounds were synthesised the same way.)
 
 ## Music (`music/`)
 
@@ -35,5 +45,8 @@ and mastered by the same script.
 
 ## Adding sounds
 
-New files must be CC0, CC-BY (credit them here) or made for the game.
-Record each one in this file with its source and licence.
+New files must be CC0, CC BY or made for the game - free to ship with it. A
+recording goes through `tools/audio/recordings.py` (add it to the manifest
+and a recipe) so it lands in RECORDINGS.md with its source and licence;
+anything else is recorded in this file. Licences that forbid passing the file
+on by itself (Pixabay's, for one) don't qualify.

@@ -447,7 +447,7 @@
       "projectile": "instant",
       "accuracy": 70,
       "muzzle": 0,
-      "sound": "rifle"
+      "sound": "rifle_smle"
     },
     {
       "id": "bren",
@@ -486,7 +486,7 @@
       "splash": 0.2,
       "muzzle": 1,
       "vsInfantry": "cannon_6pdr_he",
-      "sound": "cannon_small"
+      "sound": "cannon_6pdr"
     },
     {
       "id": "cannon_6pdr_he",
@@ -499,7 +499,7 @@
       "speed": 200,
       "splash": 0.6,
       "muzzle": 1,
-      "sound": "cannon_small"
+      "sound": "cannon_6pdr"
     },
     {
       "id": "cannon_75qf",

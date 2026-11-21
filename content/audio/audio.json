@@ -3,10 +3,11 @@
  "sounds": {
   "rifle": {
    "files": [
-    "sfx/rifle_0.ogg",
-    "sfx/rifle_1.ogg",
-    "sfx/rifle_2.ogg",
-    "sfx/rifle_3.ogg"
+    "rec/rifle_mauser_0.ogg",
+    "rec/rifle_garand_0.ogg",
+    "rec/rifle_garand2_0.ogg",
+    "rec/rifle_shots_craig_0.ogg",
+    "rec/rifle_shots_craig_1.ogg"
    ],
    "bus": "sfx",
    "volume": 0.42,
@@ -15,12 +16,21 @@
    "reverb": 0.12,
    "pitch": 0.05,
    "perSecond": 14,
-   "limit": 6
+   "limit": 6,
+   "far": [
+    "rec/rifle_far_0.ogg",
+    "rec/rifle_far_1.ogg",
+    "rec/rifle_far_2.ogg",
+    "rec/rifle_far_3.ogg"
+   ],
+   "farBelow": 0.3
   },
   "sniper": {
    "files": [
-    "sfx/sniper_0.ogg",
-    "sfx/sniper_1.ogg"
+    "rec/sniper_field_0.ogg",
+    "rec/sniper_shots_0.ogg",
+    "rec/sniper_shots_1.ogg",
+    "rec/sniper_shots_2.ogg"
    ],
    "bus": "sfx",
    "volume": 0.6,
@@ -33,10 +43,11 @@
   },
   "mg": {
    "files": [
-    "sfx/mg_0.ogg",
-    "sfx/mg_1.ogg",
-    "sfx/mg_2.ogg",
-    "sfx/mg_3.ogg"
+    "rec/mg42_0.ogg",
+    "rec/mg_rapid_0.ogg",
+    "rec/mg_rapid_1.ogg",
+    "rec/mg_rapid_2.ogg",
+    "rec/mg_burst_0.ogg"
    ],
    "bus": "sfx",
    "volume": 0.5,
@@ -45,14 +56,21 @@
    "reverb": 0.15,
    "pitch": 0.05,
    "perSecond": 8,
-   "limit": 4
+   "limit": 4,
+   "far": [
+    "rec/mg_far_0.ogg",
+    "rec/mg_far_1.ogg",
+    "rec/mg_far_2.ogg"
+   ],
+   "farBelow": 0.3
   },
   "lmg": {
    "files": [
-    "sfx/lmg_0.ogg",
-    "sfx/lmg_1.ogg",
-    "sfx/lmg_2.ogg",
-    "sfx/lmg_3.ogg"
+    "rec/lmg_long_0.ogg",
+    "rec/lmg_long_1.ogg",
+    "rec/lmg_long_2.ogg",
+    "rec/lmg_long_3.ogg",
+    "rec/mg_burst_clean_0.ogg"
    ],
    "bus": "sfx",
    "volume": 0.48,
@@ -61,14 +79,22 @@
    "reverb": 0.15,
    "pitch": 0.05,
    "perSecond": 8,
-   "limit": 4
+   "limit": 4,
+   "far": [
+    "rec/lmg_far_0.ogg",
+    "rec/lmg_far_1.ogg",
+    "rec/lmg_far_2.ogg"
+   ],
+   "farBelow": 0.3
   },
   "hmg": {
    "files": [
-    "sfx/hmg_0.ogg",
-    "sfx/hmg_1.ogg",
-    "sfx/hmg_2.ogg",
-    "sfx/hmg_3.ogg"
+    "rec/hmg_50cal_0.ogg",
+    "rec/hmg_50cal_1.ogg",
+    "rec/hmg_50cal_2.ogg",
+    "rec/hmg_50cal_2_0.ogg",
+    "rec/hmg_dshk_0.ogg",
+    "rec/mg_bursts_craig_0.ogg"
    ],
    "bus": "sfx",
    "volume": 0.55,
@@ -81,8 +107,10 @@
   },
   "at_launcher": {
    "files": [
-    "sfx/at_launcher_0.ogg",
-    "sfx/at_launcher_1.ogg"
+    "rec/bazooka_shot_0.ogg",
+    "rec/bazooka_craig_0.ogg",
+    "rec/bazooka_craig_1.ogg",
+    "rec/bazooka_craig_2.ogg"
    ],
    "bus": "sfx",
    "volume": 0.6,
@@ -95,8 +123,8 @@
   },
   "at_rifle": {
    "files": [
-    "sfx/at_rifle_0.ogg",
-    "sfx/at_rifle_1.ogg"
+    "rec/at_rifle_enfield_0.ogg",
+    "rec/at_rifle_sniper_0.ogg"
    ],
    "bus": "sfx",
    "volume": 0.55,
@@ -109,9 +137,10 @@
   },
   "cannon_small": {
    "files": [
-    "sfx/cannon_small_0.ogg",
-    "sfx/cannon_small_1.ogg",
-    "sfx/cannon_small_2.ogg"
+    "rec/atgun_37mm_0.ogg",
+    "rec/atgun_37mm_1.ogg",
+    "rec/atgun_37mm_squad_0.ogg",
+    "rec/atgun_37mm_squad_1.ogg"
    ],
    "bus": "sfx",
    "volume": 0.62,
@@ -120,13 +149,20 @@
    "reverb": 0.18,
    "pitch": 0.05,
    "perSecond": 8,
-   "limit": 4
+   "limit": 4,
+   "far": [
+    "rec/cannon_small_far_0.ogg",
+    "rec/cannon_small_far_1.ogg"
+   ],
+   "farBelow": 0.3
   },
   "cannon_medium": {
    "files": [
-    "sfx/cannon_medium_0.ogg",
-    "sfx/cannon_medium_1.ogg",
-    "sfx/cannon_medium_2.ogg"
+    "rec/tank_shots_0.ogg",
+    "rec/tank_shots_1.ogg",
+    "rec/tanks_shooting_0.ogg",
+    "rec/tanks_shooting_1.ogg",
+    "rec/tanks_shooting_2.ogg"
    ],
    "bus": "sfx",
    "volume": 0.74,
@@ -135,13 +171,19 @@
    "reverb": 0.2,
    "pitch": 0.05,
    "perSecond": 8,
-   "limit": 4
+   "limit": 4,
+   "far": [
+    "rec/cannon_medium_far_0.ogg",
+    "rec/cannon_medium_far_1.ogg"
+   ],
+   "farBelow": 0.3
   },
   "cannon_large": {
    "files": [
-    "sfx/cannon_large_0.ogg",
-    "sfx/cannon_large_1.ogg",
-    "sfx/cannon_large_2.ogg"
+    "rec/tanks_shooting_heavy_0.ogg",
+    "rec/tanks_shooting_heavy_1.ogg",
+    "rec/tanks_shooting_heavy_2.ogg",
+    "rec/tank_shots_heavy_0.ogg"
    ],
    "bus": "sfx",
    "volume": 0.85,
@@ -150,13 +192,23 @@
    "reverb": 0.22,
    "pitch": 0.05,
    "perSecond": 8,
-   "limit": 4
+   "limit": 4,
+   "far": [
+    "rec/cannon_large_far_0.ogg",
+    "rec/cannon_large_far_1.ogg"
+   ],
+   "farBelow": 0.3
   },
   "howitzer": {
    "files": [
-    "sfx/howitzer_0.ogg",
-    "sfx/howitzer_1.ogg",
-    "sfx/howitzer_2.ogg"
+    "rec/artillery_shots_0.ogg",
+    "rec/artillery_gunfire_0.ogg",
+    "rec/artillery_gunfire_1.ogg",
+    "rec/artillery_k55_0.ogg",
+    "rec/artillery_k55_1.ogg",
+    "rec/artillery_69th.ogg",
+    "rec/mortar_0.ogg",
+    "rec/mortar_1.ogg"
    ],
    "bus": "sfx",
    "volume": 0.9,
@@ -169,9 +221,8 @@
   },
   "rocket": {
    "files": [
-    "sfx/rocket_0.ogg",
-    "sfx/rocket_1.ogg",
-    "sfx/rocket_2.ogg"
+    "rec/rocket_launch.ogg",
+    "rec/rocket_salvo_0.ogg"
    ],
    "bus": "sfx",
    "volume": 0.55,
@@ -184,9 +235,10 @@
   },
   "explosion_small": {
    "files": [
-    "sfx/explosion_small_0.ogg",
-    "sfx/explosion_small_1.ogg",
-    "sfx/explosion_small_2.ogg"
+    "rec/expl_small_1.ogg",
+    "rec/expl_small_2.ogg",
+    "rec/expl_small_3.ogg",
+    "rec/expl_small_4.ogg"
    ],
    "bus": "sfx",
    "volume": 0.6,
@@ -199,9 +251,9 @@
   },
   "explosion_medium": {
    "files": [
-    "sfx/explosion_medium_0.ogg",
-    "sfx/explosion_medium_1.ogg",
-    "sfx/explosion_medium_2.ogg"
+    "rec/expl_1.ogg",
+    "rec/expl_2.ogg",
+    "rec/expl_3.ogg"
    ],
    "bus": "sfx",
    "volume": 0.8,
@@ -210,13 +262,20 @@
    "reverb": 0.22,
    "pitch": 0.05,
    "perSecond": 8,
-   "limit": 5
+   "limit": 5,
+   "far": [
+    "rec/explosion_medium_far_1.ogg",
+    "rec/explosion_medium_far_2.ogg",
+    "rec/explosion_medium_far_many_0.ogg",
+    "rec/explosion_medium_far_many_1.ogg"
+   ],
+   "farBelow": 0.3
   },
   "explosion_large": {
    "files": [
-    "sfx/explosion_large_0.ogg",
-    "sfx/explosion_large_1.ogg",
-    "sfx/explosion_large_2.ogg"
+    "rec/expl_big.ogg",
+    "rec/expl_huge.ogg",
+    "rec/expl_tank.ogg"
    ],
    "bus": "sfx",
    "volume": 0.95,
@@ -225,13 +284,22 @@
    "reverb": 0.26,
    "pitch": 0.04,
    "perSecond": 6,
-   "limit": 4
+   "limit": 4,
+   "far": [
+    "rec/explosion_large_far_1.ogg",
+    "rec/explosion_large_far_2.ogg",
+    "rec/explosion_large_far_many_0.ogg",
+    "rec/explosion_large_far_many_1.ogg",
+    "rec/expl_distant_bomb.ogg"
+   ],
+   "farBelow": 0.3
   },
   "armour_hit": {
    "files": [
-    "sfx/armour_hit_0.ogg",
-    "sfx/armour_hit_1.ogg",
-    "sfx/armour_hit_2.ogg"
+    "rec/metal_hit_1.ogg",
+    "rec/metal_hits_0.ogg",
+    "rec/metal_hits_1.ogg",
+    "rec/metal_hit_resonant.ogg"
    ],
    "bus": "sfx",
    "volume": 0.55,
@@ -244,9 +312,9 @@
   },
   "ricochet": {
    "files": [
-    "sfx/ricochet_0.ogg",
-    "sfx/ricochet_1.ogg",
-    "sfx/ricochet_2.ogg"
+    "rec/ricochets_mg_0.ogg",
+    "rec/ricochet_1.ogg",
+    "rec/ricochet_2.ogg"
    ],
    "bus": "sfx",
    "volume": 0.28,
@@ -259,8 +327,9 @@
   },
   "vehicle_destroyed": {
    "files": [
-    "sfx/vehicle_destroyed_0.ogg",
-    "sfx/vehicle_destroyed_1.ogg"
+    "rec/vehicle_destroyed_tank.ogg",
+    "rec/vehicle_destroyed_huge.ogg",
+    "rec/vehicle_destroyed_big.ogg"
    ],
    "bus": "sfx",
    "volume": 1.0,
@@ -273,8 +342,10 @@
   },
   "collapse": {
    "files": [
-    "sfx/collapse_0.ogg",
-    "sfx/collapse_1.ogg"
+    "rec/collapse_wood_1.ogg",
+    "rec/collapse_wood_2.ogg",
+    "rec/collapse_3.ogg",
+    "rec/collapse_4.ogg"
    ],
    "bus": "sfx",
    "volume": 0.9,
@@ -287,8 +358,10 @@
   },
   "construction": {
    "files": [
-    "sfx/construction_0.ogg",
-    "sfx/construction_1.ogg"
+    "rec/hammer_wood_0.ogg",
+    "rec/hammer_wood_1.ogg",
+    "rec/hammer_wood_2.ogg",
+    "rec/shovel_dig.ogg"
    ],
    "bus": "sfx",
    "volume": 0.5,
@@ -301,8 +374,8 @@
   },
   "whistle": {
    "files": [
-    "sfx/whistle_0.ogg",
-    "sfx/whistle_1.ogg"
+    "rec/whistle_trench.ogg",
+    "rec/whistle_police.ogg"
    ],
    "bus": "sfx",
    "volume": 0.45,
@@ -315,8 +388,9 @@
   },
   "engine_rev": {
    "files": [
-    "sfx/engine_rev_0.ogg",
-    "sfx/engine_rev_1.ogg"
+    "rec/tank_short.ogg",
+    "rec/truck_pullaway.ogg",
+    "rec/tank_driving.ogg"
    ],
    "bus": "sfx",
    "volume": 0.45,
@@ -329,9 +403,9 @@
   },
   "radio": {
    "files": [
-    "sfx/radio_0.ogg",
-    "sfx/radio_1.ogg",
-    "sfx/radio_2.ogg"
+    "rec/radio_static_1.ogg",
+    "rec/radio_static_2.ogg",
+    "rec/radio_static_3.ogg"
    ],
    "bus": "voice",
    "volume": 0.4,
@@ -344,7 +418,7 @@
   },
   "tank_engine": {
    "files": [
-    "sfx/tank_engine.ogg"
+    "rec/tank_engine.ogg"
    ],
    "bus": "sfx",
    "volume": 0.42,
@@ -356,7 +430,7 @@
   },
   "truck_engine": {
    "files": [
-    "sfx/truck_engine.ogg"
+    "rec/truck_engine.ogg"
    ],
    "bus": "sfx",
    "volume": 0.32,
@@ -368,7 +442,7 @@
   },
   "march": {
    "files": [
-    "sfx/march.ogg"
+    "rec/march.ogg"
    ],
    "bus": "sfx",
    "volume": 0.32,
@@ -380,7 +454,7 @@
   },
   "fire": {
    "files": [
-    "sfx/fire.ogg"
+    "rec/fire.ogg"
    ],
    "bus": "sfx",
    "volume": 0.45,
@@ -519,6 +593,40 @@
    "pitch": 0.0,
    "perSecond": 2,
    "limit": 1
+  },
+  "rifle_smle": {
+   "files": [
+    "rec/rifle_enfield_0.ogg",
+    "rec/rifle_enfield2_0.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.42,
+   "range": 10,
+   "priority": 1,
+   "reverb": 0.12,
+   "pitch": 0.05,
+   "perSecond": 14,
+   "limit": 6
+  },
+  "cannon_6pdr": {
+   "files": [
+    "rec/atgun_6pdr_0.ogg",
+    "rec/atgun_6pdr_1.ogg",
+    "rec/atgun_6pdr_2.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.62,
+   "range": 18,
+   "priority": 4,
+   "reverb": 0.18,
+   "pitch": 0.05,
+   "perSecond": 8,
+   "limit": 4,
+   "far": [
+    "rec/cannon_6pdr_far_0.ogg",
+    "rec/cannon_6pdr_far_1.ogg"
+   ],
+   "farBelow": 0.3
   }
  },
  "music": {
@@ -579,11 +687,198 @@
   ]
  },
  "ambience": {
-  "temperate": "ambience/temperate.ogg",
-  "winter": "ambience/winter.ogg",
-  "desert": "ambience/desert.ogg",
-  "tropical": "ambience/tropical.ogg",
-  "urban": "ambience/urban.ogg",
-  "battle": "ambience/distant_battle.ogg"
+  "temperate": "rec/ambience_temperate.ogg",
+  "winter": "rec/ambience_winter.ogg",
+  "desert": "rec/ambience_desert.ogg",
+  "tropical": "rec/ambience_tropical.ogg",
+  "urban": "rec/ambience_urban.ogg",
+  "battle": "rec/ambience_battle.ogg"
+ },
+ "voices": {
+  "en": {
+   "language": "en",
+   "speaker": "Sergeant",
+   "fallback": "battle",
+   "cues": {
+    "move": {
+     "cooldown": 7,
+     "priority": 1,
+     "chance": 0.7,
+     "radio": true,
+     "lines": [
+      {
+       "file": "rec/voice/vo_en_move.ogg",
+       "text": "Move!"
+      },
+      {
+       "file": "rec/voice/vo_en_gogogo.ogg",
+       "text": "Go, go, go!"
+      },
+      {
+       "file": "rec/voice/vo_en_yes.ogg",
+       "text": "Yes!"
+      }
+     ]
+    },
+    "attack": {
+     "cooldown": 7,
+     "priority": 2,
+     "chance": 0.8,
+     "radio": true,
+     "lines": [
+      {
+       "file": "rec/voice/vo_en_covering_fire.ogg",
+       "text": "Covering fire!"
+      },
+      {
+       "file": "rec/voice/vo_en_guns_up.ogg",
+       "text": "Guns up!"
+      }
+     ]
+    },
+    "ready": {
+     "cooldown": 10,
+     "priority": 1,
+     "radio": true,
+     "lines": [
+      {
+       "file": "rec/voice/vo_en_yes_ready.ogg",
+       "text": "Yes!"
+      }
+     ]
+    },
+    "incoming": {
+     "cooldown": 6,
+     "priority": 4,
+     "lines": [
+      {
+       "file": "rec/voice/vo_en_mortars_incoming.ogg",
+       "text": "Mortars incoming!"
+      },
+      {
+       "file": "rec/voice/vo_en_take_cover.ogg",
+       "text": "Take cover!"
+      },
+      {
+       "file": "rec/voice/vo_en_take_cover2.ogg",
+       "text": "Take cover!"
+      }
+     ]
+    },
+    "man_down": {
+     "cooldown": 8,
+     "priority": 3,
+     "lines": [
+      {
+       "file": "rec/voice/vo_en_medic.ogg",
+       "text": "Medic!"
+      }
+     ]
+    }
+   }
+  },
+  "de": {
+   "language": "de",
+   "speaker": "Unteroffizier",
+   "fallback": "battle",
+   "cues": {
+    "move": {
+     "cooldown": 7,
+     "priority": 1,
+     "chance": 0.7,
+     "radio": true,
+     "lines": [
+      {
+       "file": "rec/voice/vo_de_los.ogg",
+       "text": "Los!",
+       "meaning": "Go!"
+      },
+      {
+       "file": "rec/voice/vo_de_schnell.ogg",
+       "text": "Schnell, schnell!",
+       "meaning": "Quick, quick!"
+      }
+     ]
+    },
+    "attack": {
+     "cooldown": 7,
+     "priority": 2,
+     "chance": 0.8,
+     "lines": [
+      {
+       "file": "rec/voice/vo_de_los_los_los.ogg",
+       "text": "Los, los, los!",
+       "meaning": "Go, go, go!"
+      }
+     ]
+    }
+   }
+  },
+  "ru": {
+   "language": "ru",
+   "speaker": "Serzhant",
+   "fallback": "battle",
+   "cues": {
+    "move": {
+     "cooldown": 7,
+     "priority": 1,
+     "chance": 0.7,
+     "radio": true,
+     "lines": [
+      {
+       "file": "rec/voice/vo_ru_davai.ogg",
+       "text": "Davai!",
+       "meaning": "Come on!"
+      }
+     ]
+    },
+    "attack": {
+     "cooldown": 8,
+     "priority": 2,
+     "chance": 0.8,
+     "lines": [
+      {
+       "file": "rec/voice/vo_ru_ura.ogg",
+       "text": "Urraa!",
+       "meaning": "Hurrah!"
+      }
+     ]
+    },
+    "ready": {
+     "cooldown": 12,
+     "priority": 1,
+     "radio": true,
+     "lines": [
+      {
+       "file": "rec/voice/vo_ru_comrade_commander.ogg",
+       "text": "Tovarishch komandir!",
+       "meaning": "Comrade commander!"
+      }
+     ]
+    }
+   }
+  },
+  "battle": {
+   "language": "",
+   "speaker": "",
+   "cues": {
+    "man_down": {
+     "cooldown": 8,
+     "priority": 3,
+     "lines": [
+      {
+       "file": "rec/voice/vo_pain.ogg",
+       "text": "(a cry of pain)"
+      }
+     ]
+    }
+   }
+  }
+ },
+ "factions": {
+  "gbr": "en",
+  "ger": "de",
+  "rus": "ru",
+  "default": "en"
  }
 }
