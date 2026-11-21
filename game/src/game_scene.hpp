@@ -472,6 +472,9 @@ class GameScene final : public pioneer::Scene {
   pioneer::Lighting lightingNow() const;
   // Hands this frame's light to the renderers; `grade`: the biome's colour grade (rgb, saturation).
   void prepareLighting(bool piped, const float grade[4]);
+  void drawDebugShapes();  // the debug shapes (core/debug_draw.hpp) over the battlefield
+  void updateDebugSun(float dt);
+  float debugSun_ = 0.0f;  // seconds left of debug.sun
   float grade_[4] = {1, 1, 1, 1};   // this frame's colour grade before the light: for what keeps its own brightness
   pioneer::gfx::GpuTimer gpuScene_;
   // Choosing a preset for this machine: the scene is timed over some frames at Medium.

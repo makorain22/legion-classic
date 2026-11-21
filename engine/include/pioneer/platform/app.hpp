@@ -21,6 +21,7 @@ struct AppConfig {
   bool offscreen = false;        // no visible window (automated tests)
   int maxFrames = 0;             // quit after N frames (0 = run until closed)
   std::string screenshotOnExit;  // save a PNG of the last frame
+  bool screenshotWithoutInterface = false;  // ...of the scene alone, before the interface is drawn over it
   bool fixedFrameTime = false;   // pretend every frame took 1/60 s (repeatable tests)
 };
 
@@ -50,7 +51,14 @@ class App {
   float pixelScale() const { return pixelScale_; }
 
   void toggleFullscreen();
-  void requestScreenshot(const std::string& path) { pendingShot_ = path; }
+  // Saved at the end of this frame; `withInterface` false: the scene alone,
+  // taken before the interface is drawn over it (photos).
+  void requestScreenshot(const std::string& path, bool withInterface = true) {
+    pendingShot_ = path;
+    shotWithInterface_ = withInterface;
+  }
+  // A photo is being taken this frame: scenes leave out what they draw over the world for the player.
+  bool takingPhoto() const { return !pendingShot_.empty() && !shotWithInterface_; }
   bool saveScreenshot(const std::string& path) const;
 
   // Video capture through ffmpeg (development: trailers and bug videos).
@@ -90,6 +98,7 @@ class App {
   int ticksLastFrame_ = 0;
   bool simBehind_ = false;
   std::string pendingShot_;
+  bool shotWithInterface_ = true;
   std::string userDir_;
   int fpsLimit_ = 0;
   bool mouseLock_ = false;

@@ -73,6 +73,10 @@ int main(int argc, char** argv) {
     if (a == "--offscreen") cfg.offscreen = true;
     else if (a == "--frames") cfg.maxFrames = std::atoi(next());
     else if (a == "--screenshot") cfg.screenshotOnExit = next();
+    else if (a == "--photo") {  // as --screenshot, of the battlefield alone (no interface, no markers over units)
+      cfg.screenshotOnExit = next();
+      cfg.screenshotWithoutInterface = true;
+    }
     else if (a == "--fixed-dt") cfg.fixedFrameTime = true;
     else if (a == "--fullscreen") cfg.fullscreen = true;
     else if (a == "--windowed") std::sscanf(next(), "%dx%d", &cfg.width, &cfg.height);

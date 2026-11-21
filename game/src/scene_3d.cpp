@@ -391,9 +391,12 @@ void GameScene::render3D() {
   glPolygonOffset(-1.0f, -2.0f);
   drawGround3D();
   fx_.drawGround(renderer_, view, fogAt, bodies);
-  drawSelection3D();
-  editor_->renderWorld(renderer_);  // ghosts of what is being placed
-  sidebar_->renderWorld(renderer_);
+  const bool photo = app_.takingPhoto();  // the battlefield alone: no rings, ghosts or markers
+  if (!photo) {
+    drawSelection3D();
+    editor_->renderWorld(renderer_);  // ghosts of what is being placed
+    sidebar_->renderWorld(renderer_);
+  }
   renderer_.flush();
   glDisable(GL_POLYGON_OFFSET_FILL);
 
@@ -437,7 +440,7 @@ void GameScene::render3D() {
   }
 
   renderer_.beginWorld(cam_);  // screen space from here on
-  drawOverlays(view, false);
+  if (!photo) drawOverlays(view, false);
 }
 
 }  // namespace legion

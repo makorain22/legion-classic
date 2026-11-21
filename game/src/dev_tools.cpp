@@ -37,7 +37,7 @@ namespace legion {
 namespace {
 // Every command and variable this file registers, so they can be taken away
 // again when the scene goes (they hold a pointer to it).
-const char* const kGameCommands[] = {"quit",   "exit",    "screenshot", "speed", "pause", "hash", "status",
+const char* const kGameCommands[] = {"quit",   "exit",    "screenshot", "photo", "speed", "pause", "hash", "status",
                                      "reveal", "credits", "spawn",      "kill",  "side",  "goto", "map",
                                      "restart", "editor", "clear",      "profiler", "console", "mod.list", "mod.pack"};
 
@@ -221,6 +221,16 @@ void GameScene::registerConsoleCommands() {
                    c.print("Screenshot: " + path);
                  });
 
+  con.addCommand("photo", "photo [name] - saves the battlefield alone as a PNG in the user folder: no interface, no "
+                          "selection rings, health bars or markers.",
+                 [this](const ConsoleArgs& a, Console& c) {
+                   std::string name = a.str(1, "photo.png");
+                   if (name.size() < 4 || name.compare(name.size() - 4, 4, ".png") != 0) name += ".png";
+                   const bool bare = name.find('/') == std::string::npos && name.find('\\') == std::string::npos;
+                   const std::string path = bare ? app_.userDir() + name : name;
+                   app_.requestScreenshot(path, false);
+                   c.print("Photo: " + path);
+                 });
   con.addCommand("speed", "speed [x] - game speed, 0.25 to 16 (1 = normal).", [this](const ConsoleArgs& a, Console& c) {
     if (a.size() > 1) speed_ = std::clamp(static_cast<float>(a.number(1, 1.0)), 0.25f, 16.0f);
     c.printFmt("Game speed x%.2f%s", static_cast<double>(speed_), paused_ ? " (paused)" : "");

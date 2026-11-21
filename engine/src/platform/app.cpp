@@ -228,9 +228,16 @@ int App::run(Scene& scene) {
     glDisable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    if (cfg_.maxFrames > 0 && frame + 1 >= cfg_.maxFrames && !cfg_.screenshotOnExit.empty() && cfg_.screenshotWithoutInterface &&
+        pendingShot_.empty())
+      requestScreenshot(cfg_.screenshotOnExit, false);  // --photo: the last frame, without the interface
     {
       PNR_PROFILE("Render");
       scene.onRender();
+    }
+    if (!pendingShot_.empty() && !shotWithInterface_) {
+      saveScreenshot(pendingShot_);  // the scene alone
+      pendingShot_.clear();
     }
     {
       PNR_PROFILE("Interface");
@@ -254,7 +261,7 @@ int App::run(Scene& scene) {
       pendingShot_.clear();
     }
     if (cfg_.maxFrames > 0 && frame >= cfg_.maxFrames) {
-      if (!cfg_.screenshotOnExit.empty()) saveScreenshot(cfg_.screenshotOnExit);
+      if (!cfg_.screenshotOnExit.empty() && !cfg_.screenshotWithoutInterface) saveScreenshot(cfg_.screenshotOnExit);
       running = false;
     }
     {

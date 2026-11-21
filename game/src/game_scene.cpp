@@ -24,6 +24,7 @@
 #include "editor.hpp"
 #include "menus.hpp"
 #include "rules_editor.hpp"
+#include "pioneer/core/debug_draw.hpp"
 #include "pioneer/core/log.hpp"
 #include "pioneer/core/rng.hpp"
 #include "pioneer/math/iso.hpp"
@@ -1929,6 +1930,8 @@ void GameScene::drawStructureEffects(float dt) {
 }
 
 void GameScene::onUpdate(float dt, float alpha) {
+  pioneer::debug::DebugDraw::global().endFrame(dt);  // last frame's shapes have been drawn
+  updateDebugSun(dt);
   updateDevTools();
   hotReload_.update(content_.fileSystem(), dt, &assets_);
   if (opt_.monkey > 0) monkeyStep();
@@ -2085,7 +2088,7 @@ void GameScene::onRender() {
   renderer_.flush();
   renderer_.setGrade(grade_[0], grade_[1], grade_[2], grade_[3]);  // fire and flashes keep their brightness at night
   fx_.drawAir(renderer_, view, fogAt);
-  drawOverlays(view, true);
+  if (!app_.takingPhoto()) drawOverlays(view, true);
 }
 
 // Health bars, order markers, the editor's and sidebar's tools, a formation
@@ -2569,6 +2572,7 @@ void GameScene::onImGui() {
     bg->AddRectFilledMultiColor(ImVec2(w - e, 0), ImVec2(w, h), clear, dark, dark, clear);
   }
   drawWorldOverlays();
+  if (!app_.takingPhoto()) drawDebugShapes();
   drawHud();
   // A tutorial's hint and the interface element it points at.
   ui::setHighlight(mode_ != Mode::Menu ? sim_->highlight(player_) : std::string());

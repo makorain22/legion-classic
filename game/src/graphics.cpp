@@ -6,9 +6,11 @@
 
 #include "game_scene.hpp"
 #include "pioneer/core/console.hpp"
+#include "pioneer/core/debug_draw.hpp"
 #include "pioneer/core/weather.hpp"
 #include "pioneer/math/iso.hpp"
 #include "pioneer/render/device.hpp"
+#include "pioneer/ui/debug_view.hpp"
 #include "pioneer/ui/fonts.hpp"
 
 using namespace pioneer;
@@ -252,8 +254,82 @@ void GameScene::prepareLighting(bool piped, const float grade[4]) {
   meshes_.setGrade(grade[0] * l[0], grade[1] * l[1], grade[2] * l[2], grade[3] * sat);
 }
 
+// --- Debug shapes ---------------------------------------------------------------------------
+// debug.sun: drawn afresh each frame where the view is, for as long as asked.
+void GameScene::updateDebugSun(float dt) {
+  if (debugSun_ <= 0.0f || !sim_) return;
+  debugSun_ -= dt;
+  const Vec3f at = cam_.is3D() ? cam_.target() : Vec3f{cam_.center().x, cam_.center().y, 0.0f};
+  if (!cam_.is3D()) return;  // the arrow needs the 3D view
+  const pioneer::Lighting l = lightingNow();
+  debug::DebugDraw& dd = debug::DebugDraw::global();
+  dd.arrow(at, l.sun * 12.0f, rgba8(255, 214, 90), 0.0f, "sun");
+  dd.arrow(at, Vec3f{l.wind.x, l.wind.y, 0.0f} * 3.0f, rgba8(140, 200, 255), 0.0f, "sun");
+  dd.circle(at, 2.0f, rgba8(255, 214, 90), 0.0f, "sun");
+  const Simulation::Environment& e = sim_->environment();
+  char buf[160];
+  std::snprintf(buf, sizeof buf, "%s  %s  light %.0f%% direct", pioneer::formatTimeOfDay(static_cast<int>(sim_->hourAt(sim_->tickCount()) * 60.0)).c_str(),
+                pioneer::weatherName(static_cast<pioneer::Weather>(e.weather)), static_cast<double>(l.direct * 100.0f));
+  dd.text(at + l.sun * 13.0f, buf, rgba8(255, 236, 170), 0.0f, "sun");
+}
+
+void GameScene::drawDebugShapes() {
+  const debug::DebugDraw& dd = debug::DebugDraw::global();
+  if (dd.shapes().empty()) return;
+  const float ps = app_.pixelScale();
+  ui::drawDebugShapes(dd, ImGui::GetBackgroundDrawList(), [&](Vec3f w, float& x, float& y) {
+    Vec2f s;
+    if (cam_.is3D()) {
+      if (!cam_.project(w, s)) return false;
+    } else {
+      s = cam_.worldToScreen(groundToScreenWorld(w.x * LEPTONS_PER_TILE, w.y * LEPTONS_PER_TILE));  // the classic view: on the ground
+    }
+    x = s.x / ps;
+    y = s.y / ps;
+    return true;
+  });
+}
+
 void GameScene::registerGraphicsCommands() {
   Console& con = Console::global();
+  con.addCommand("debug.draw", "debug.draw [0|1] - shows debug shapes (lines, boxes, text) over the battlefield, or "
+                               "stops keeping them. Without arguments: how many there are.",
+                 [](const ConsoleArgs& a, Console& c) {
+                   debug::DebugDraw& dd = debug::DebugDraw::global();
+                   if (a.size() > 1) dd.setEnabled(a.flag(1));
+                   c.printFmt("debug shapes %s, %zu kept", dd.enabled() ? "on" : "off", dd.shapes().size());
+                 });
+  con.addCommand("debug.clear", "debug.clear [channel] - takes away the debug shapes (of one channel).",
+                 [](const ConsoleArgs& a, Console&) { debug::DebugDraw::global().clear(a.str(1, "")); });
+  con.addCommand("debug.channel", "debug.channel <name> [0|1] - shows or hides one channel of debug shapes.",
+                 [](const ConsoleArgs& a, Console& c) {
+                   if (a.size() < 2) return c.error("debug.channel <name> [0|1]");
+                   debug::DebugDraw& dd = debug::DebugDraw::global();
+                   dd.showChannel(a.str(1), a.size() > 2 ? a.flag(2) : !dd.channelShown(a.str(1)));
+                   c.printFmt("%s: %s", a.str(1).c_str(), dd.channelShown(a.str(1)) ? "shown" : "hidden");
+                 });
+  con.addCommand("debug.sun", "debug.sun [seconds] - for a while (0: stop), where the light comes from: an arrow towards "
+                              "the sun or moon in the middle of the 3D view, the wind, the time and the weather.",
+                 [this](const ConsoleArgs& a, Console& c) {
+                   if (!sim_) return c.error("no battle");
+                   debugSun_ = static_cast<float>(a.number(1, 30.0));
+                   c.printFmt(debugSun_ > 0 ? "showing the light for %.0f s" : "not showing the light", static_cast<double>(debugSun_));
+                 });
+  con.addCommand("debug.areas", "debug.areas [seconds] - the mission's areas as boxes with their names.",
+                 [this](const ConsoleArgs& a, Console& c) {
+                   if (!sim_) return c.error("no battle");
+                   const float secs = static_cast<float>(a.number(1, 15.0));
+                   debug::DebugDraw& dd = debug::DebugDraw::global();
+                   const ScenarioScript& s = scenario_;
+                   for (const ScriptArea& ar : s.areas) {
+                     const float h0 = map_.heightAt((ar.x0 + ar.x1) * 128.0f + 128.0f, (ar.y0 + ar.y1) * 128.0f + 128.0f) /
+                                      static_cast<float>(HEIGHT_UNITS_PER_TILE);
+                     dd.box({static_cast<float>(ar.x0), static_cast<float>(ar.y0), h0}, {static_cast<float>(ar.x1 + 1), static_cast<float>(ar.y1 + 1), h0 + 1.5f},
+                            rgba8(255, 170, 60), secs, "areas");
+                     dd.text({(ar.x0 + ar.x1 + 1) * 0.5f, (ar.y0 + ar.y1 + 1) * 0.5f, h0 + 2.0f}, ar.name, rgba8(255, 220, 160), secs, "areas");
+                   }
+                   c.printFmt("%zu areas", s.areas.size());
+                 });
   con.addCommand("gfx.info", "gfx.info - the graphics card, the quality in use and what each option is set to.",
                  [this](const ConsoleArgs&, Console& c) {
                    const gfx::Caps& k = gfx::caps();
