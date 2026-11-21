@@ -447,6 +447,35 @@ recognition flash on vehicles and a roundel in the interface.
        `ui.kit`, `ui.scale`, `ui.scripts`, `ui.panel`, `ui.reload`,
        `lang.list`, `lang.set`, `lang.missing`, `lang.pseudo`. Tests:
        test_ui.cpp, test_interface_lua.cpp.
+     - **Part 6, renderer (done 21 Nov):** `render/graphics.hpp` (no GL:
+       `gfx::Options`, presets Low/Medium/High/Ultra + Custom,
+       `matchPreset`, `sanitized`, `effective`, `autoDetect(Machine)`,
+       `shaderSource` for GLES 3.0, `colourBlindMatrix` from Machado et
+       al. 2009); `render/device.hpp` (`queryCaps`, `RenderTarget`,
+       `drawFullscreen`, `GpuTimer`); `render/post.hpp` (`PostProcess`:
+       half-float scene at a render scale, 4x MSAA resolve, `light()` with
+       haze from `fogNear` and ground mist, `present()` with bloom,
+       exposure, shoulder, colour filter, grain, FXAA); `ShadowMap::fit`
+       takes the light; `render/environment.hpp` (no GL: `SceneLook`,
+       `sunDirection`, `Environment`, `Lighting`, `lightingFor`, day keys,
+       sun and moon path, 8 weathers, brightness floor);
+       `core/weather.hpp` (`Weather`, ids, `parseTimeOfDay`);
+       `TerrainRenderer::setSun/setGroundCover/setLightTint` (slope light
+       in the 3D vertex shader from per-vertex slopes, snow and wet in the
+       fragment shader); `MeshRenderer::setSun` (`uDirect`);
+       `render/precipitation.hpp` (instanced, wrapped in a camera box);
+       `BattleFx::setWind`; `Simulation::Environment`, `hourAt`,
+       `weatherChangeAt`, `setTimeOfDay`, `setWeather`, section `ENV`,
+       `CommandType::SetEnvironment`; `ScenarioScript::startMinute /
+       clockRate / startWeather` (`"environment"` in files); actions
+       `SetTimeOfDay` / `SetWeather` with `script::Kind::TimeOfDay` /
+       `Weather`; editor `drawSkySettings`; `core/debug_draw.hpp` +
+       `ui/debug_view.hpp`; `App::requestScreenshot(path, false)`,
+       `takingPhoto()`, `--photo`. Game: `game/src/graphics.cpp`
+       (settings page, auto-detect timing, `lightingNow`,
+       `prepareLighting`, console `gfx.*`, `env.*`, `debug.*`), `photo`.
+       Noon-clear verified pixel-identical with the previous build. Tests:
+       test_graphics.cpp, test_environment.cpp, test_debug_draw.cpp.
    - **9.14 Mission Maker foundation**, **9.15 Cutscenes and event
      sequences**, **9.16 Set pieces**, **9.17 Map, assets and terrain**,
      **9.18 Combat and controls**, (campaign finalisation when the user's

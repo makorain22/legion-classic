@@ -16,7 +16,7 @@ stands.
 | 3 | **Simulation:** tagged-chunk saves, determinism checker, sector pathfinding and flow fields, vision 2.0, suppression/morale fields | **done** |
 | 4 | **Scripting:** condition/action registry, mission data model, event bus, sandboxed Lua | **done** |
 | 5 | **UI framework:** real fonts and icons, interface size, docking, property grids from the script registry, timeline and graph widgets, string tables, Lua panels | **done** |
-| 6 | **Renderer:** backend layer, HDR post-processing, time of day, weather, graphics presets with auto-detect | next |
+| 6 | **Renderer:** device layer, graphics presets with auto-detect, HDR post-processing, time of day, weather, rain and snow, debug drawing | **done** |
 | 7 | **Assets and audio:** glTF in and out, .vox, materials, skeletal animation, poses; sound banks, voice lines, reverb zones, occlusion | planned |
 | 8 | **Networking groundwork:** lockstep, hosting, LAN discovery, dedicated server, reconnect | planned |
 | 9 | **Tools:** `pioneer_tool`, asset browser, model viewer, sound bank editor | planned |
@@ -444,6 +444,7 @@ One section per system, in `Simulation::stateSections()`:
 | `SCRP` `AI  ` | the scenario script and objectives, the computer players |
 | `TUTR` `FORM` `LOGI` `MISN` | hints and flags, formations, logistics points, the mission engine |
 | `VIS2` | vision rules and smoke (new) |
+| `ENV ` | the time of day, the clock and the weather (part 6) |
 
 Rules:
 
@@ -896,3 +897,214 @@ with a mod's language, fonts present and icons listed once),
 `tests/test_interface_lua.cpp` (4: a panel reading, hearing and drawing;
 mistakes contained; the sandbox, limits and `saved`; the shipped script),
 and one more in `tests/test_script_registry.cpp` (every line put into words).
+
+## Part 6 – Renderer
+
+What the battlefield looks like at any hour and in any weather, on any
+machine. The user's brief for this part was immersion, not effects for their
+own sake: time of day, weather, light that stays readable, and presets that
+run on old machines. **Noon under a clear sky is exactly the picture the
+engine drew before**: checked pixel for pixel against the build before this
+part at Low, Medium and High and in the classic view.
+
+```
+engine/include/pioneer/render/graphics.hpp       options, presets, auto-detect, GLES shaders, colour filters (no GL)
+engine/include/pioneer/render/device.hpp         what the card can do, render targets, GPU timer
+engine/include/pioneer/render/post.hpp           the post-processing pipeline
+engine/include/pioneer/render/environment.hpp    the hour and the weather as light (no GL)
+engine/include/pioneer/render/precipitation.hpp  rain and snow in the air
+engine/include/pioneer/core/weather.hpp          names of the weather, times of day (shared with the simulation)
+engine/include/pioneer/core/debug_draw.hpp       debug shapes in the world (no GL)
+engine/include/pioneer/ui/debug_view.hpp         draws them over a view
+game/src/graphics.cpp                            the settings page, auto-detect, lighting each frame, console
+```
+
+As in part 5, **what can be worked out without a window is kept apart from
+what draws it**: `graphics_settings.cpp`, `environment.cpp`, `weather.cpp`
+and `debug_draw.cpp` are built into `pioneer_tests`.
+
+### Graphics quality (`pioneer/render/graphics.hpp`)
+
+`gfx::Options` holds every choice; four presets fill it:
+
+| Preset | What it draws |
+| --- | --- |
+| Low | Straight to the screen as before 2.0: no shadows, no pipeline, thin rain and snow. For old and slow machines, and software renderers. |
+| Medium | Shadows (1024), the pipeline: mist, clouds' shadows; edges smoothed the fast way (FXAA); no glow. |
+| High | Shadows 2048, glow round fire and flashes, 4x multisampling, full rain and snow. |
+| Ultra | As High with 4096 shadows. |
+
+Anything else is *Custom*. The colour filter is not part of a preset and is
+kept when the preset changes. `sanitized` keeps options in range;
+`effective(options, postAvailable, hdrAvailable)` cuts what the card can't
+do (no float targets: no glow; no pipeline: no mist, clouds or glow, and the
+window's own smoothing).
+
+**Auto-detect** (`autoDetect(Machine)`), on the first run and from *Choose
+for this machine*: a software renderer (llvmpipe, SwiftShader, Microsoft
+Basic Render...), no float targets or textures under 4096 → Low. Otherwise
+the battlefield is drawn at Medium for 120 frames and timed: over 14 ms →
+Low, over 6.5 → Medium, over 2.5 → High, else Ultra. Without a measurement,
+by the card's name (old integrated graphics → Medium).
+
+Where: Settings → Display → *Graphics quality* (shown while the 3D
+battlefield is on). `--gfx low|medium|high|ultra` for one run; offscreen
+runs use Medium so the pipeline is exercised. Console: `gfx.info`,
+`gfx.preset [low|medium|high|ultra|auto]`, `gfx.set <option> <value>`.
+
+**OpenGL ES 3.0:** every shader goes through `shaderSource(src, api)`, which
+swaps the `#version 330 core` line for `#version 300 es` and the precision
+lines it needs. The engine still runs on OpenGL 3.3; this is the seam for a
+second API.
+
+**Colour filters** for colour-blind players (red-weak, green-weak,
+blue-weak): daltonisation, built from the full-severity simulation matrices
+of Machado, Oliveira and Fernandes (2009), applied in the pipeline's last
+pass. White stays white; a test recomputes the matrices.
+
+### The device layer (`pioneer/render/device.hpp`)
+
+`gfx::queryCaps()` / `caps()`: vendor, renderer, version, the largest
+texture, whether half-float targets can be drawn into (found by trying),
+timer queries, software rendering. `RenderTarget` (RGBA8 or RGBA16F, with or
+without a depth texture, or sharing one), `bindScreen`, `drawFullscreen`
+(one triangle from `gl_VertexID`, no vertex buffer), `GpuTimer`.
+
+### The pipeline (`pioneer/render/post.hpp`)
+
+```
+beginScene()   the world is drawn into a half-float target at the render scale
+               (4x multisampled renderbuffers when edges are smoothed the best way)
+light(look)    the drawn world lit for the hour and the weather: the light's colour,
+               saturation, clouds' shadows, haze and ground mist (world positions
+               rebuilt from depth). Skipped when the look is the identity.
+               Fire, smoke, flashes, rain and snow are drawn after it and keep their brightness.
+present()      glow (a chain down and up over what is brighter than white), exposure,
+               a soft shoulder, the colour filter, grain in dark skies, FXAA;
+               then the interface, untouched
+```
+
+Haze begins at `fogNear` (70%) of the eye's distance to what the camera
+looks at, so the fighting in view stays clear and the distance fades; ground
+mist starts nearer and lies in the map's low ground (`fogBase` is the lowest
+ground, thinning over a third of the map's height range).
+
+### Time of day and weather (`pioneer/render/environment.hpp`)
+
+`lightingFor(Environment{hour, weather, previous, change, seconds})` gives a
+`Lighting`:
+
+- `look` – the `SceneLook` for the pipeline;
+- `sun` – towards the light that casts shadows. The sun rises at 6, sets at
+  18 and swings 160° across the sky (never drawn lower than 14°, or shadows
+  would run off the map); the moon lights the night from the other side;
+  they hand over at dusk and before dawn while the light is too weak for
+  sharp shadows. At 12:00 it is exactly the classic sun;
+- `direct` – the share of light straight from it. Models lose contrast to
+  an even sky light as it drops, the ground's slopes flatten, shadows fade;
+  below 0.2 the shadow pass is skipped;
+- `wet`, `snowCover` – the ground darkens in rain; snow lies where the ground
+  is flat enough, in ragged patches, never quite hiding roads and fields;
+- `rain`, `snow`, `wind`.
+
+The day is a table of light keys eased into one another: moonlit night
+(blue, dim), first light, sunrise (warm, low, mist in the valleys), morning,
+day (9:30 to 14:30: the picture as drawn), late afternoon, golden hour,
+sunset, dusk. **The battle stays readable:** however dark the hour and the
+weather together, the exposure rises to keep the world at least at a set
+brightness.
+
+| Weather (`id`) | Light | Shadows | Mist | In the air | Ground |
+| --- | --- | --- | --- | --- | --- |
+| Clear (`clear`) | as drawn | full | – | – | – |
+| Fair with clouds (`fair`) | as drawn | full; clouds' shadows drift over the ground | – | – | – |
+| Overcast (`overcast`) | greyer, paler | faint | light haze | – | – |
+| Rain (`rain`) | grey | almost none | haze | rain | wet |
+| Storm (`storm`) | dark | none | thick haze | heavy rain, slanting | wet |
+| Snow (`snow`) | cold, pale | faint | haze | snow | snow lies |
+| Blizzard (`blizzard`) | white-grey | none | very thick | snow driven sideways | snow lies |
+| Mist (`mist`) | soft | faint | thick, deep in low ground | – | damp |
+
+Weather turns from one kind to the next over the seconds asked: every value
+is blended, and rain and snow can fall together while it does.
+
+**Renderers.** `TerrainRenderer::setSun(dir, direct)`, `setGroundCover(wet,
+snow)`; `MeshRenderer::setSun(dir, direct)`; `ShadowMap::fit(..., light)`.
+The terrain's slope light, baked per vertex from the classic sun, is worked
+out in the 3D vertex shader from the vertex's slope when the sun is anywhere
+else (the same arithmetic, so it matches at noon). **Without the pipeline**
+(Low, and the classic 2D view) the light goes into the colours as they are
+drawn: the terrain's tint and the sprites' and models' colour grade; haze
+and mist need the pipeline.
+
+**Only the look.** The simulation keeps the clock and the weather (section
+`ENV`: the time of day when it was last set and the tick, how fast the day
+runs, the weather, what it is turning from, since when and over how long) so
+that a save or a replay shows the same sky, but nothing in the rules reads
+them. A mission that wants night to shorten sight changes the vision rules
+of part 3 as well.
+
+| Where | How |
+| --- | --- |
+| The scenario | Editor → Script → Quick start → *Time and weather*: begins at (quarter hours), the clock (stands still, real time, 10, 30, 60 or 120 times as fast), the weather. In the map file: `"environment": {"time": "05:30", "clock": 60, "weather": "mist"}`, written only when not noon, clear and still. |
+| Script actions | `set_time_of_day` (`text` "hh:mm", `value` the clock), `set_weather` (`text` a weather id, `value` seconds to turn), in the editor's *The battlefield* menu, checked by *Check the script*. |
+| Lua | `set_time_of_day{text = "21:15", value = 0}`, `set_weather{text = "snow", value = 60}`; a time or weather that doesn't exist is an error. |
+| Console | `env.time [hh:mm] [clock]`, `env.weather [id] [seconds]` (through `CommandType::SetEnvironment`, so they are recorded like any command). |
+
+### Rain and snow (`pioneer/render/precipitation.hpp`)
+
+6,000 drops made once (a fixed seed) are drawn instanced. The vertex shader
+moves each with the fall and the wind and wraps it into a box between the
+eye and what it looks at, as large as the view is far: the box follows the
+camera, the drops stay put in the world, and nothing is sent to the card per
+frame but a few numbers. Rain is streaks along the fall (slanting in a
+storm), snow is swaying flakes (driven sideways in a blizzard). They are
+depth-tested against the world, faded near the eye and the box's edges,
+and seen in the scene's light. How many: *Rain and snow in the air* – none,
+thin (a third), full. 3D view only; the classic view gets the light and the
+ground but nothing in the air.
+
+**Wind on smoke:** smoke and dust have always leaned in a light breeze; the
+weather's wind is added on top (`BattleFx::setWind`), so under a clear sky
+nothing changes.
+
+### Debug drawing and photos
+
+`debug::DebugDraw::global()`: `line`, `box`, `circle`, `cross`, `arrow`,
+`text` in world units (tiles), each with seconds to last (0: the next frame
+only, for code that runs every frame) and a channel. `endFrame(dt)` ages
+them; `clear(channel)`, `showChannel`, `setEnabled`; at most 20,000 kept.
+`ui::drawDebugShapes(shapes, drawList, project)` draws them with ImGui over
+the view (on top of everything, so they show through hills and walls); the
+game projects through the 3D camera, or onto the ground in the classic view.
+Console: `debug.draw [0|1]`, `debug.clear [channel]`, `debug.channel <name>
+[0|1]`, `debug.sun [seconds]` (live: an arrow towards the sun or moon, the
+wind, the time, the weather and how much of the light is direct),
+`debug.areas [seconds]` (the mission's areas as boxes with their names).
+
+**Photos:** `App::requestScreenshot(path, false)` saves the frame before the
+interface is drawn over it; scenes ask `App::takingPhoto()` and leave out
+their own selection rings, health bars, markers and debug shapes. Console
+`photo [name]`; `--photo out.png --frames N` as `--screenshot`.
+
+### Not done on purpose
+
+- Haze and mist don't change what units can see (see *Only the look*).
+- Render-only objects moving along splines (aircraft overhead, trains) were
+  listed as optional for this part; they are left to 9.16, which needs them.
+- Lightning, puddles and splashes: effects for their own sake.
+
+### Tests
+
+`tests/test_graphics.cpp` (9: presets recognised as themselves and only
+adding as they go up, options kept in range, what a weaker card gets,
+auto-detect for software renderers, old cards, measured times and names,
+GLES shaders, colour filters keeping greys and matching a recomputation from
+Machado et al.), `tests/test_environment.cpp` (9: names and times of day;
+noon and clear is the identity and the classic sun; the sun's path, no jumps
+minute to minute, midnight round to the start; night dark but readable, at
+every weather; each weather's effect; turning from one to the next; the
+battle's clock from the scenario, the editor and past midnight; script
+actions, saved and loaded, a change under way, the console command and the
+checker; Lua), `tests/test_debug_draw.cpp` (3: lifetimes, channels, the
+lines each shape is made of).

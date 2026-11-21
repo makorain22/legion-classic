@@ -506,8 +506,48 @@ rock: cliffs, some with overhanging ledges. New buildings level their plot.
 Bridges stand only where both banks are high, straight across beside the
 ford.
 
-The old 2D view is still there: **Settings > Game > 3D battlefield** off (or
-`--classic`). Shadows can be switched off on the same page.
+The old 2D view is still there: **Settings → Display → 3D battlefield** off
+(or `--classic`).
+
+### Time of day and weather
+
+A mission can be fought at any hour and in any weather: moonlit night, first
+light with mist lying in the valleys, a low sun throwing long shadows, golden
+evening and dusk; clear skies, clouds whose shadows drift across the field,
+overcast, rain, storm, snow, blizzard and mist. The sun crosses the sky and
+the shadows follow it; in some missions the clock runs, so dawn breaks (or
+night falls) while you fight. Rain and snow fall in the 3D view, the ground
+gets wet or white, and smoke drifts with the wind. It is only the look:
+your men see and move as they do on a clear day. Missions made before this
+are fought at noon under a clear sky, as they always were.
+
+To try it in any battle, open the console: `env.time 06:15`,
+`env.time 18:00 60` (from six in the evening, an hour a minute),
+`env.weather rain 30` (rain coming in over half a minute).
+
+### Graphics quality
+
+**Settings → Display → Graphics quality** (shown while the 3D battlefield is
+on). The first time the game runs it picks a quality for your machine by
+drawing the battlefield for a moment and timing it; **Choose for this
+machine** does that again.
+
+| Quality | For |
+| --- | --- |
+| Low | Old and slow machines: exactly the picture before these options existed, no shadows |
+| Medium | Shadows, haze and mist, clouds' shadows; edges smoothed the fast way |
+| High | Sharper shadows, a glow round fire and flashes, the best edge smoothing, full rain and snow |
+| Ultra | As High with the sharpest shadows |
+
+Below it every option can be set on its own (the quality then says
+*Custom*): shadows and how sharp, *Effects over the picture* (haze, mist,
+glow: needs a graphics card that can draw them), glow, smoothed edges, mist
+in low ground, clouds' shadows, *Battlefield resolution* (draw the
+battlefield smaller and stretch it, for a slow card; the interface stays
+sharp), *Rain and snow in the air* (none, thin, full) and a **Colour
+filter** for red-weak, green-weak or blue-weak sight. `--gfx low` (or
+medium, high, ultra) uses a quality for one run without changing your
+settings.
 
 ## Sound and music
 
@@ -606,6 +646,10 @@ are typing, **Up/Down** bring back earlier lines, **Esc** closes it.
 | `sim.vision woodland 1`, `sim.vision los 1`, `sim.vision sight 60`, `sim.smoke 64 64` | Try the new sight rules: men in woods seen only by scouts, hills hiding ground, weather, a smoke cloud (all off in normal play) |
 | `sim.twincheck 30`, `sim.digest`, `replay.check`, `path.stats` | For bug reports: prove the battle is repeatable, checksums by system, whether a replay still matches, what the pathfinder did |
 | `ui.scale 130` | Interface size for now (the lasting setting is in Settings → Display) |
+| `env.time 06:15`, `env.time 18:00 60`, `env.weather snow 30` | The time of day (and how fast the clock runs) and the weather in this battle |
+| `gfx.info`, `gfx.preset high`, `gfx.set bloom 0` | Graphics: what the card can do and what is set; a quality; one option |
+| `photo` | Save the battlefield alone, without the interface or markers |
+| `debug.sun`, `debug.areas`, `debug.clear` | Show where the light comes from; the mission's areas as boxes; take such drawings away |
 | `ui.panel "Battle report"` | Open a panel made by an interface script (`ui.scripts` lists them; mods add their own) |
 | `ui.kit` | The interface kit: fonts and icons, every script line, the timeline and the mission's phases as a graph |
 | `bind f6 "speed 8"` | Run any command on a key; `unbind f6` |

@@ -129,6 +129,33 @@
     are moved over as they are rebuilt, so for now only English ships.
   - Console: `ui.kit`, `ui.scale`, `ui.scripts`, `ui.panel`, `ui.reload`,
     `lang.list`, `lang.set`, `lang.missing`, `lang.pseudo`.
+- **Part 6, the renderer** (21 Nov):
+  - **Time of day.** Battles can be fought at any hour: moonlit night, first
+    light with mist in the valleys, a low warm sun with long shadows, golden
+    evening, dusk. The sun crosses the sky and shadows follow it; the clock
+    can stand still or run (dawn can break during an attack). Night stays
+    readable.
+  - **Weather:** clear, fair with clouds whose shadows drift over the
+    ground, overcast, rain, storm, snow, blizzard and mist. Rain and snow
+    fall in the 3D view, the ground gets wet or white, smoke drifts with the
+    wind, and one weather turns into another over as long as the mission
+    says. Only the look: units see and move as before.
+  - **For mission makers:** the time and weather a battle begins in
+    (Script → Quick start → *Time and weather*), and two new actions under
+    *The battlefield*: *Set the time of day* and *Set the weather* (also in
+    Lua). Existing missions are unchanged: noon, clear.
+  - **Graphics quality** (Settings → Display, with the 3D battlefield on):
+    Low, Medium, High and Ultra, chosen for your machine the first time the
+    game runs (*Choose for this machine* does it again). Low draws exactly
+    as before and suits old machines; higher presets add sharper shadows,
+    haze and mist, glow round fire and flashes, smoother edges and more rain
+    and snow. Every option can be set on its own; `--gfx low` for one run.
+  - **Colour filter** for red-weak, green-weak and blue-weak sight.
+  - **Photos:** `photo` in the console saves the battlefield alone, with no
+    interface or markers.
+  - Console: `gfx.info`, `gfx.preset`, `gfx.set`, `env.time`,
+    `env.weather`, `photo`, `debug.draw`, `debug.clear`, `debug.channel`,
+    `debug.sun`, `debug.areas`.
 
 ## 0.9.1 – in progress (edits after Milestone 9; Milestones 9.1–9.12)
 

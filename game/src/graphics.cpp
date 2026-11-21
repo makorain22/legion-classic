@@ -2,6 +2,10 @@
 // Settings page's part and the console's commands.
 #include <imgui.h>
 
+#include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include <string>
 #include <thread>
 
 #include "game_scene.hpp"
@@ -156,7 +160,9 @@ void GameScene::drawGraphicsSettings() {
       }
     }
     ImGui::BeginDisabled(!canPost);
-    changed |= ImGui::Checkbox("Effects over the picture (time of day, mist, glow)", &o.post);
+    changed |= ImGui::Checkbox("Effects over the picture (mist, haze, glow)", &o.post);
+    if (ImGui::IsItemHovered())
+      ImGui::SetTooltip("The battlefield is finished in a pass of its own: mist and haze in the distance,\nclouds' shadows, glow, the colour filter. The light of the hour and the weather\nis there either way; without this it goes into the colours as they are drawn.");
     if (!canPost) ImGui::TextDisabled("This graphics card can't draw them.");
     ImGui::BeginDisabled(!o.post);
     ImGui::Indent();

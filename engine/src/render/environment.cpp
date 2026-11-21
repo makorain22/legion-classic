@@ -3,6 +3,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string>
+#include <string_view>
 
 namespace pioneer {
 

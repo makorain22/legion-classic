@@ -2,6 +2,8 @@
 
 #include <imgui.h>
 
+#include <vector>
+
 namespace pioneer::ui {
 
 int drawDebugShapes(const debug::DebugDraw& shapes, ImDrawList* list, const ProjectFn& project) {
