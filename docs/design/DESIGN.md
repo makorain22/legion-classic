@@ -476,6 +476,32 @@ recognition flash on vehicles and a roundel in the interface.
        `prepareLighting`, console `gfx.*`, `env.*`, `debug.*`), `photo`.
        Noon-clear verified pixel-identical with the previous build. Tests:
        test_graphics.cpp, test_environment.cpp, test_debug_draw.cpp.
+     - **Part 7, assets and audio (done 21 Nov):** `audio/acoustics.hpp`
+       (no device: `Space` open/forest/town/valley, `spaceSound`,
+       `Acoustics` grid of 4-tile cells with ground/solid/foliage,
+       `classify`, `ReverbZone` with tags, `occlusion` along the line);
+       mixer: `Emitter::occlusion/space`, one reverb per space with echo
+       taps (open = the old hall, others skipped when idle),
+       `setAcoustics`, `voiceAcoustics`, `PlayDesc::radio`;
+       `audio/bank.hpp` (`SoundBank` from JSON, later files replace by
+       name, `far`/`farBelow`; `EventPlayer`); `audio/voice_lines.hpp`
+       (`VoiceLines` sets/cues/lines with fallback, `VoiceDirector`: one
+       voice, cooldowns, priority cut-in, queue, `Subtitle`s);
+       `assets/vox_file.hpp` (MagicaVoxel in/out, team colour as
+       magenta); `assets/gltf.hpp` (`ModelAsset`, `Material`, .gltf/.glb
+       in, .glb out, y-up/z-up, `voxelModelAsset`); `assets/skeleton.hpp`
+       (`Skeleton`, `Pose`, `AnimationClip`, `sample`, `blend` with
+       masks, skinning); `assets/voxel_rig.hpp` (`poseVoxels`,
+       `humanoidRig` with 10 infantry clips, `assignByRegion`). Game:
+       `GameAudio` on banks (`audio.json` + `banks/*.json`), voices
+       (`factions` map, cues move/attack/ready/incoming/man_down/
+       vehicle_lost/captured), acoustics from the map; subtitles drawn by
+       `GameScene::drawSubtitles`; `Settings::voiceLines/subtitles`;
+       `tools/audio/recordings.py` and `content/audio/rec/`,
+       `RECORDINGS.md`. Console `audio.*`, `model.export`, `model.info`.
+       Not done on purpose: soldiers still drawn from their hand-built
+       frames; glTF not drawn in battle; reverb zones not in the editor.
+       Tests: test_audio_part7.cpp, test_assets_part7.cpp.
    - **9.14 Mission Maker foundation**, **9.15 Cutscenes and event
      sequences**, **9.16 Set pieces**, **9.17 Map, assets and terrain**,
      **9.18 Combat and controls**, (campaign finalisation when the user's

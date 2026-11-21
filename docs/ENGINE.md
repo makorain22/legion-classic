@@ -17,7 +17,7 @@ stands.
 | 4 | **Scripting:** condition/action registry, mission data model, event bus, sandboxed Lua | **done** |
 | 5 | **UI framework:** real fonts and icons, interface size, docking, property grids from the script registry, timeline and graph widgets, string tables, Lua panels | **done** |
 | 6 | **Renderer:** device layer, graphics presets with auto-detect, HDR post-processing, time of day, weather, rain and snow, debug drawing | **done** |
-| 7 | **Assets and audio:** glTF in and out, .vox, materials, skeletal animation, poses; sound banks, voice lines, reverb zones, occlusion | planned |
+| 7 | **Assets and audio:** glTF in and out, .vox, materials, skeletal animation, poses; sound banks, voice lines, reverb zones, occlusion | **done** |
 | 8 | **Networking groundwork:** lockstep, hosting, LAN discovery, dedicated server, reconnect | planned |
 | 9 | **Tools:** `pioneer_tool`, asset browser, model viewer, sound bank editor | planned |
 
@@ -1108,3 +1108,244 @@ battle's clock from the scenario, the editor and past midnight; script
 actions, saved and loaded, a change under way, the console command and the
 checker; Lua), `tests/test_debug_draw.cpp` (3: lifetimes, channels, the
 lines each shape is made of).
+
+## Part 7 – Assets and audio
+
+What the battle sounds like, and models in and out of the engine. The
+user's brief, as for part 6, was immersion: **sound that serves it** -
+authentic recordings, men who answer and call out, the land shaping what
+is heard - and model formats a modder (or a later game on this engine) can
+work in.
+
+```
+engine/include/pioneer/audio/acoustics.hpp   spaces (reverb zones) and occlusion over the ground (no device)
+engine/include/pioneer/audio/bank.hpp        sound banks: named events from JSON, the player that keeps their limits
+engine/include/pioneer/audio/voice_lines.hpp voice sets, cues and lines; the director (one voice at a time) and subtitles
+engine/include/pioneer/audio/audio.hpp       the mixer: per-space reverbs, occlusion, the field-radio filter
+engine/include/pioneer/assets/vox_file.hpp   MagicaVoxel .vox in and out
+engine/include/pioneer/assets/gltf.hpp       glTF 2.0 in (.gltf, .glb) and out (.glb); materials; voxel models as meshes
+engine/include/pioneer/assets/skeleton.hpp   skeletons, clips, sampling, blending, skinning
+engine/include/pioneer/assets/voxel_rig.hpp  voxel figures posed by a skeleton; the humanoid and its infantry poses
+game/src/game_audio.cpp                      banks, voices and acoustics in the game
+game/src/audio_commands.cpp, asset_commands.cpp   console
+tools/audio/recordings.py                    field recordings cut and levelled into the game's sounds
+```
+
+All of it runs without a window or a sound card: `acoustics.cpp`,
+`bank.cpp`, `voice_lines.cpp`, `vox_file.cpp`, `skeleton.cpp`, `gltf.cpp`
+and `voxel_rig.cpp` are built into `pioneer_tests`. Nothing here reaches the
+simulation: sound and models are presentation.
+
+### Sound banks (`pioneer/audio/bank.hpp`)
+
+The game's sounds were named in one file, `audio.json`, read by the game.
+That reader is now the engine's: a `SoundBank` holds named `SoundEvent`s
+(the files to pick from, bus, volume, range, priority, reverb send, random
+pitch, starts a second, voices at once, loop) and an `EventPlayer` plays
+them on a mixer, keeping to the limits (thinned at high game speed, as
+before). New:
+
+- **Several bank files.** Each content folder's `audio.json`, then its
+  `banks/*.json` in name order, base game first and mods after. A later
+  file's event replaces an earlier one of the same name, so a mod redoes
+  one sound without copying the rest. `audio.info` lists the files read.
+- **Far recordings.** `"far": [...]` with `"farBelow"` (default 0.3): when
+  the sound would reach the ear at less than that, a far recording is
+  played instead of a quieter near one. A rifle a long way off is a flat
+  crack, not a small copy of the one beside you.
+
+### Voice lines and subtitles (`pioneer/audio/voice_lines.hpp`)
+
+Bank files may carry `"voices"`: sets (any name: a language, a squad, a
+radio operator), each with a speaker's title, an optional `fallback` set,
+and cues ("move", "incoming"), each cue with lines - a file, what is said,
+and for a foreign language what it means:
+
+```json
+"voices": {
+  "de": { "language": "de", "speaker": "Unteroffizier", "fallback": "battle",
+          "cues": { "move": { "cooldown": 7, "priority": 1, "chance": 0.7, "radio": true,
+                              "lines": [ { "file": "rec/voice/vo_de_los.ogg", "text": "Los!", "meaning": "Go!" } ] } } } }
+```
+
+`VoiceDirector` speaks them: **one voice at a time** (a line waits up to
+2.5 s for the one before, or cuts in when its cue's priority is two or more
+above), a **cooldown per cue** so a busy battle doesn't chatter, `chance`
+to leave some orders unanswered, and a **subtitle** for every line spoken,
+held 1.6 s after it ends or long enough to read, whichever is longer. Text
+may be a string-table key (`@voice.de.move.1`), resolved when drawn.
+`radio` lines go through the mixer's field-radio filter.
+
+`audio.json` maps factions to sets (`"factions": {"ger": "de", ...,
+"default": "en"}`); the player's faction picks who speaks for them. The
+cues the game uses: `move` and `attack` (an order given), `ready` (a unit
+comes off the production line), `incoming` (enemy shells landing in view),
+`man_down` (one of yours falls in view), `vehicle_lost`, `captured` (a
+supply point taken). Settings → Sound: **Voice lines** and **Subtitles**,
+both on by default.
+
+### Spaces and occlusion (`pioneer/audio/acoustics.hpp`)
+
+`Acoustics` is a coarse grid over the ground (cells of 4 tiles) holding
+each cell's ground height, how much of it is buildings and how much trees,
+and its **space**:
+
+| Space | How it rings |
+| --- | --- |
+| open | the big soft hall the mixer always had (unchanged numbers) |
+| forest | short, dense and dark: trunks scatter, leaves eat the top |
+| town | hard and bright, with slapback off the house fronts (55, 83, 131 ms) |
+| valley | a long tail and echoes rolling back off the slopes (0.3–1.1 s) |
+
+`classify()` picks each cell's space: a street from enough buildings, a
+wood from enough trees, a valley where ground rises 1.25 tiles or more on
+both ends of a line through the cell (across, down or either diagonal - one
+hill beside you is not a valley). `ReverbZone`s (circles with a tag) laid
+on top override the cells: for a mission or a set piece that wants a cave,
+a cathedral or a river gorge to sound so.
+
+**Occlusion** walks the line from a sound to the ear in half-cell steps
+(leaving out the cells they stand in): ground rising above the line blocks
+it by how far (a crest leaks over the top, so never more than 0.85),
+buildings soak it up (0.35 a cell), trees dull it a little (0.08). In the
+mixer, `Emitter::occlusion` makes a sound quieter (up to 55%), much duller
+(the low-pass falls towards 300 Hz) and wetter (more of it arrives by
+reflection). Voices are re-checked eight times a second and glide, so
+panning the camera over a ridge opens a muffled fight up smoothly.
+
+The mixer runs **one reverb per space**; each voice rings in the space of
+the place it comes from. Open ground always runs (exactly as the single
+hall did); the others only while something has been sent to them and until
+their tail has died. **Without acoustics, or on flat open land, the mix is
+sample for sample what it was** (a test compares the two). The game builds
+the grid from the map (`GameAudio::setMap`) and again when buildings go up
+or come down (the map's revision, checked every two seconds).
+`audio.acoustics 0` turns it off to compare.
+
+### The field radio
+
+`PlayDesc::radio`: mono, a high-pass near 450 Hz, a two-stage low-pass at
+3 kHz and a little overdrive. Order acknowledgements use it; shouts on the
+field don't.
+
+### The recordings
+
+The game's sounds were synthesised (`tools/audio/sfx.py`). Part 7 replaces
+the battle's with **field recordings**: gunfire, guns, engines, the land
+and men's voices, many of them of the very weapons in the game (a
+Lee-Enfield, a Mauser 98k, an MG42, a Bren, a 37 mm and a 6-pounder anti-tank
+gun, a Churchill's engine) and US Army recordings of artillery, mortars and
+machine guns. All from Freesound, **CC0 or CC BY** only (both may be shipped
+with the game; CC BY ones are credited). `content/audio/RECORDINGS.md` lists
+every one with its author, link and licence.
+
+`tools/audio/recordings.py` turns them into the game's sounds: takes with
+several shots are cut into one sound per shot at their onsets, engines,
+feet, fire and the land become seamless loops (an equal-power crossfade of
+the end into the start), everything is resampled to 48 kHz, cleaned below
+30 Hz, and **levelled to the loudness of the sound it replaces**, so the
+balance of the mix stays as it was tuned. Where a weapon in the rules has
+its own recording, it gets its own event (`rifle_smle`, `cannon_6pdr`).
+The interface sounds and the music are unchanged.
+
+### MagicaVoxel (`pioneer/assets/vox_file.hpp`)
+
+`readVox` takes every model in a .vox (SIZE and XYZI pairs) and its
+palette; `writeVox` writes one. Axes match (z up). **Team colour travels as
+magenta**: red and blue equal, no green, red = brightness × 192 - so a
+modder paints team colour in magenta and it comes back as team colour. A
+plain colour that happens to look like that is nudged off it on the way
+out. Console `model.export <unit> vox` writes a unit (and its turret).
+
+### glTF (`pioneer/assets/gltf.hpp`)
+
+A `ModelAsset`: meshes (positions, normals, colours, texture coordinates,
+four joint weights), `Material`s (metallic-roughness: base colour, metal,
+roughness, emission, a base-colour image's file, alpha mode, double-sided,
+and a team-colour flag kept in the material's `extras`), a skeleton and
+clips.
+
+- **Reading** .gltf (buffers as base64 or in .bin files beside it) and
+  .glb. Static meshes are placed by their nodes into one space (a mirroring
+  node's triangles are turned back the right way out); skinned meshes stay
+  in bind space. glTF is y-up and the engine z-up: everything is turned
+  upright on the way in (a root joint `__yup` above the skeleton does it for
+  skinned models, so animating the real root doesn't undo it) and laid
+  down again on the way out. Cubic-spline keys keep their values. Not read:
+  morph targets, cameras, lights, sparse accessors, extensions.
+- **Writing** a .glb with everything above; a file this engine wrote reads
+  back with the same skeleton (the upright joint is used again, not
+  doubled).
+- `voxelModelAsset()` turns a voxel model into a mesh (shared corners,
+  crowded corners a little darker as the game shades them, team-colour
+  faces as their own part and material), 1 unit = 1 tile.
+  `model.export <unit> [glb]` writes a unit to the exports folder, ready
+  for Blender; `model.info <file>` says what a glTF file holds as the
+  engine reads it.
+
+### Skeletons and animation (`pioneer/assets/skeleton.hpp`)
+
+`Skeleton` (joints with a parent, a rest placement and an inverse bind
+matrix; `bindRest`, `sortParentsFirst` for files in any order), `Pose`
+(each joint's local placement), `AnimationClip` (channels moving a joint's
+translation, rotation or scale through step or linear keys; rotations
+slerped the short way), `sample` (looped or held at the end; joints a clip
+doesn't move keep the base pose), `blend` with an optional per-joint mask
+(`maskBelow`: the upper body over the legs), `globalMatrices`,
+`skinningMatrices` and `skinVertex` (four weights). Matrices are the
+renderer's `Mat4`.
+
+### Infantry poses (`pioneer/assets/voxel_rig.hpp`)
+
+A voxel figure is cut into rigid parts, each fixed to a joint
+(`assignByRegion` gives every voxel to the bone passing closest to it);
+`poseVoxels` lays the parts down again where the pose has put their joints
+- working backwards from each cell of the posed grid into the part at
+rest, so a turned part leaves no holes. `humanoidRig()` is the standard
+figure: 15 joints sized for the engine's 18-voxel soldier and the infantry
+poses as clips - **stand, walk** (four steps a second), **run, kneel,
+kneel_aim, prone, prone_aim, throw, fall_back, fall_forward**. Standing
+gives back the figure exactly as built.
+
+### Console
+
+`audio.info`, `audio.play <event> [here]`, `audio.say <cue> [set]`,
+`audio.acoustics [0|1]`, `audio.space [seconds]` (the space under the
+camera, and the cells round it drawn in colour with the occlusion from each
+to the ear), `model.export <unit> [glb|vox]`, `model.info <file>`.
+
+### Not done on purpose
+
+- **The game's soldiers are not yet drawn from the rig.** The rig, its
+  poses and the tests are here; the soldiers keep their hand-built frames
+  until the in-game visuals are redone (their kit differs per weapon, and
+  switching changes how every battle looks - it is a decision for that
+  milestone, not a side effect of this one).
+- glTF models are read and written but not drawn in the battle: the 3D view
+  draws voxel models. The model viewer of part 9 is their first user.
+- No voice lines were recorded for this part: they come from freely
+  licensed recordings, so the English set is fullest, the German and
+  Russian ones are short (and fall back to wordless sounds, never to another
+  language). A set is a few lines of JSON: recorded lines can be added
+  without code.
+- Reverb zones are not yet placed from the editor (the engine and the
+  console have them; the mission editor's turn comes with 9.14).
+
+### Tests
+
+`tests/test_audio_part7.cpp` (12: a hill between a sound and the ear
+blocks it and only then, the same both ways, a crest leaking; houses and
+woods; spaces from cells, valleys needing both sides, zones and tags; the
+open space is the old hall; flat open land sounds sample for sample as no
+acoustics; a fight behind a hill quieter and duller at the top; occlusion
+following the ear; the street's slapback; the radio band; banks replacing
+by name, limits, far recordings, missing files; voices one at a time,
+cooldowns, cutting in, waiting, subtitles and their meaning, fallback sets;
+every bank file, sound and voice line in the game exists, decodes and has
+its words), `tests/test_assets_part7.cpp` (12: .vox round trip with team
+colour, several models, damaged files; skeleton rest, bending, skinning;
+decompose, invert, slerp the short way; sampling, looping, step keys,
+masked blends; sorting joints; glTF round trips of a voxel model and of a
+skinned animated model - twice - and a hand-written .gltf with a node
+transform; the humanoid's joints and poses; standing exact; kneeling,
+prone, walking, falling, nothing lost or smeared).

@@ -156,6 +156,30 @@
   - Console: `gfx.info`, `gfx.preset`, `gfx.set`, `env.time`,
     `env.weather`, `photo`, `debug.draw`, `debug.clear`, `debug.channel`,
     `debug.sun`, `debug.areas`.
+- **Part 7, assets and audio** (21 Nov):
+  - **Real recordings.** The battle's sounds are now field recordings
+    instead of synthesised ones: rifles, machine guns, anti-tank guns, tank
+    guns, artillery and mortars, explosions near and far, ricochets, tank
+    and truck engines, marching, fire, collapsing buildings, the land in
+    every biome and the far-off front. Several are of the very weapons in
+    the game (Lee-Enfield, Mauser 98k, MG42, Bren, 37 mm and 6-pounder
+    anti-tank guns). All freely licensed (CC0 or CC BY), credited in
+    `content/audio/RECORDINGS.md`. Distant gunfire uses distant
+    recordings, not quieter near ones.
+  - **Your men talk.** They answer orders over the radio, shout when shells
+    land nearby, call for a medic when a comrade falls; with **subtitles**
+    (German and Russian lines with what they mean). Settings → Sound:
+    *Voice lines* and *Subtitles*.
+  - **The land shapes the sound.** Woods, streets and valleys each ring in
+    their own way (slapback off house fronts, echoes off the slopes), and a
+    hill or houses between the camera and a fight muffle it: scroll over the
+    ridge to hear it open up.
+  - **For modders:** sound banks (`audio/banks/*.json`; a mod replaces one
+    sound by name), voice sets in a few lines of JSON, MagicaVoxel `.vox`
+    and glTF `.glb` export of any unit (`model.export`), glTF import,
+    skeletal animation and posed voxel figures in the engine.
+  - Console: `audio.info`, `audio.play`, `audio.say`, `audio.acoustics`,
+    `audio.space`, `model.export`, `model.info`.
 
 ## 0.9.1 – in progress (edits after Milestone 9; Milestones 9.1–9.12)
 

@@ -211,6 +211,14 @@ def loop_stereo_mix(srcs, seconds):
 SRC = None  # the recordings folder
 
 
+def have(name):
+    p = os.path.join(SRC, name + '.ogg')
+    return os.path.exists(p) and os.path.getsize(p) > 2000
+
+
+MISSING = []
+
+
 def load_src(name, channels=1):
     return load(os.path.join(SRC, name + '.ogg'), channels)
 
@@ -257,6 +265,9 @@ def main():
         (far if kind == 'far' else made).setdefault(event, []).append(rel)
 
     def shots(event, src, max_len, keep=3, min_gap=0.25, kind='files', p=1.0, lp=None, tail_ms=150, target=None, prefix=None):
+        if not have(src):
+            MISSING.append(src)
+            return
         x = highpass(load_src(src))
         if p != 1.0:
             x = pitch(x, p)
@@ -270,7 +281,12 @@ def main():
         used.add(src)
 
     def one(event, src, max_len=6.0, kind='files', p=1.0, lp=None, name=None, start=0.0, target=None, tail_ms=250):
+        if not have(src):
+            MISSING.append(src)
+            return
         x = highpass(load_src(src))
+        if start and start * RATE >= len(x) - RATE // 2:  # a short download: start where there is sound
+            start = 0.0
         if start:
             x = x[int(start * RATE):]
         if p != 1.0:
@@ -370,9 +386,14 @@ def main():
         """A loop under the battle: an engine, marching feet, a fire."""
         parts = []
         for src, g, st in layers:
+            if not have(src):
+                MISSING.append(src)
+                continue
             x = highpass(load_src(src, channels))
             parts.append((loop(x, seconds, start=st), g))
             used.add(src)
+        if not parts:
+            return  # keeps the sound it had
         n = min(len(p) for p, _ in parts)
         y = sum(p[:n] * g for p, g in parts)
         rel = f'rec/{name}.ogg'
@@ -381,7 +402,7 @@ def main():
 
     bed('tank_engine', [('engine_churchill', 1.0, 0.2), ('tracks', 0.6, 0.1)], 8.0, 'tank_engine')
     bed('truck_engine', [('truck_diesel_large', 1.0, 0.3)], 8.0, 'truck_engine')
-    bed('march', [('march_gravel', 1.0, 0.2)], 10.0, 'march')
+    bed('march', [('march_gravel', 1.0, 0.2), ('march_squad', 0.7, 0.1)], 10.0, 'march')
     bed('fire', [('fire_crackling', 0.8, 0.2), ('fire_roaring', 0.6, 0.3)], 10.0, 'fire')
 
     # --- The land: ambience beds, stereo, seamless ------------------------------------------
@@ -390,9 +411,15 @@ def main():
     def ambience(biome, layers, seconds=48.0):
         parts = []
         for src, g, st in layers:
+            if not have(src):
+                MISSING.append(src)
+                continue
             x = highpass(load_src(src, 2), 40)
             parts.append((loop(x, seconds, start=st, xfade=3.0), g))
             used.add(src)
+        if not parts:
+            amb[biome] = bank['ambience'][biome]  # keeps the bed it had
+            return
         n = min(len(p) for p, _ in parts)
         y = sum(p[:n] * g for p, g in parts)
         old = os.path.join(audio, bank['ambience'][biome])
@@ -500,6 +527,8 @@ def main():
                 'or layered with others.\n\n'
                 '| Recording | Title | User | Freesound | Licence |\n| --- | --- | --- | --- | --- |\n')
         f.write('\n'.join(rows) + '\n')
+    if MISSING:
+        print('not available (kept what was there):', ', '.join(sorted(set(MISSING))))
     print(f'{sum(len(v) for v in made.values())} sounds, {sum(len(v) for v in far.values())} far, {len(amb)} beds, '
           f'{len(voice_files)} voice lines from {len(used)} recordings')
     if tmp:
