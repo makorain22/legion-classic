@@ -1450,6 +1450,34 @@ Calls a function of the mission's Lua script, passing it a number.
 
 *Watch out:* An error in the function is reported (console: lua.errors) and the mission goes on.
 
+### Time and weather
+
+#### Set the time of day (`set_time_of_day`)
+
+The time of day jumps to the hour given, and from then on the clock runs at the speed given: the light, the sun's shadows and the mist follow it, from dawn through noon and dusk to moonlit night.
+
+| Field | In files | Kind | What |
+| --- | --- | --- | --- |
+| Time | `text` | time hh:mm | hh:mm on the 24-hour clock (05:30, 21:00). |
+| Clock | `value` | number | How many times as fast as the battle the day runs from now (0: the clock stands still; 60: an hour a minute). |
+
+*Example:* 05:30 with the clock at 30: dawn breaks over the first two minutes of the attack.
+
+*Watch out:* Only the look changes: units see and move as before. The jump shows at once; to let night fall slowly, set the clock running instead. The time and weather a battle begins in are set on the editor's Quick start page.
+
+#### Set the weather (`set_weather`)
+
+The weather turns to another over some seconds: the light, the mist, rain or snow in the air, wet or snowy ground.
+
+| Field | In files | Kind | What |
+| --- | --- | --- | --- |
+| Weather | `text` | clear/fair/overcast/rain/storm/snow/blizzard/mist | clear, fair, overcast, rain, storm, snow, blizzard or mist. |
+| Over | `value` | seconds | How long the change takes (0: at once). |
+
+*Example:* Turn to 'rain' over 90 s when the attack begins; to 'mist' at once for a dawn crossing.
+
+*Watch out:* Only the look changes: units see and move as before. Rain and snow fall in the 3D view, as much as the player chooses (Settings > Display > Graphics quality > Rain and snow in the air).
+
 ## The mission model
 
 Beside triggers a mission can hold phases, paths, waves, goals and sequences as data of their own, in the script's `phases`, `paths`, `waves`, `goals` and `sequences` lists. All are numbered from 0 in the order they are listed.

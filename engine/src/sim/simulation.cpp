@@ -431,6 +431,11 @@ void Simulation::applyCommandBody(const Command& cmd) {
       visionRules_.sightPercent = static_cast<uint16_t>(std::clamp(cmd.amount <= 0 ? 100 : cmd.amount, 10, 200));
       groundDirty_ = true;
       break;
+    case CommandType::SetEnvironment:
+      if (cmd.amount >= 0 || cmd.radius >= 0)
+        setTimeOfDay(cmd.amount >= 0 ? cmd.amount : static_cast<int32_t>(hourAt(tick_) * 3600.0), cmd.radius >= 0 ? cmd.radius : env_.rate);
+      if (cmd.count > 0) setWeather(static_cast<uint8_t>(cmd.count - 1), cmd.unitType);
+      break;
     case CommandType::Smoke:
       if (smoke_.size() < 256 && cmd.radius > 0 && cmd.amount > 0)
         smoke_.push_back({cmd.target, std::min(cmd.radius, 24 * LEPTONS_PER_TILE),

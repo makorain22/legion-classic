@@ -15,6 +15,7 @@
 
 #include "pioneer/core/log.hpp"
 #include "pioneer/core/profiler.hpp"
+#include "pioneer/core/weather.hpp"
 #include "pioneer/sim/script_registry.hpp"
 #include "pioneer/sim/simulation.hpp"
 
@@ -368,6 +369,12 @@ void readFields(lua_State* L, Impl& self, const script::Entry& e, T& out) {
         const char* s = luaL_tolstring(L, -1, &len);
         out.text.assign(s, len);
         lua_pop(L, 1);
+        int minute = 0;
+        Weather w = Weather::Clear;
+        if (f.kind == script::Kind::TimeOfDay && !parseTimeOfDay(out.text, minute))
+          luaL_error(L, "%s: '%s' is not a time of day (\"hh:mm\")", e.id, out.text.c_str());
+        if (f.kind == script::Kind::Weather && !weatherFromId(out.text, w))
+          luaL_error(L, "%s: '%s' is not a kind of weather (%s)", e.id, out.text.c_str(), weatherChoices());
       } else {
         script::set(out, f.slot, fieldValue(L, self, f));
       }

@@ -76,6 +76,10 @@ enum class CommandType : uint8_t {
   // --- Vision 2.0 (Pioneer) --------------------------------------------------------
   SetVisionRules, // `count`: VisionRules flag bits; `amount`: sight percent (10..200); for the whole battle
   Smoke,          // a smoke cloud at `target`, `radius` leptons, lasting `amount` seconds
+  // --- The hour and the weather (Pioneer) ---------------------------------------------
+  SetEnvironment, // `amount`: the time of day in seconds after midnight (-1: as it is); `radius`: how many times as
+                  // fast as the battle the day runs (-1: as it is); `count`: Weather + 1 (0: as it is), turning over
+                  // `unitType` seconds
 };
 
 // Production lines: one per kind of thing a side builds.
@@ -295,6 +299,27 @@ class Simulation {
     uint32_t until = 0;  // tick it has blown away
   };
   const std::vector<SmokeCloud>& smoke() const { return smoke_; }
+  // --- The hour and the weather ---------------------------------------------------------
+  // Kept here so that a saved or replayed battle shows the same sky. Nothing
+  // in the rules reads them: they are only the look (render/environment.hpp).
+  // A script that wants night to shorten sight changes the vision rules too.
+  struct Environment {
+    int32_t daySeconds = 12 * 3600;  // the time of day when the clock was last set...
+    uint32_t setTick = 0;            // ...at this tick
+    int32_t rate = 0;                // the day runs this many times as fast as the battle (0: the clock stands still)
+    uint8_t weather = 0;             // a Weather (core/weather.hpp)...
+    uint8_t previous = 0;            // ...turning from this one...
+    uint32_t changeTick = 0;         // ...since this tick...
+    uint32_t changeTicks = 0;        // ...over this many (0: done)
+  };
+  const Environment& environment() const { return env_; }
+  // The time of day in hours (0 .. 24) at a tick; `tick` may carry a fraction for drawing between ticks.
+  double hourAt(double tick) const;
+  // How far the weather has turned from `previous` to `weather` at a tick (0 .. 1).
+  float weatherChangeAt(double tick) const;
+  // From now on (scripts; the console goes through CommandType::SetEnvironment).
+  void setTimeOfDay(int32_t daySeconds, int32_t rate);
+  void setWeather(uint8_t weather, int32_t seconds);
   // Is this unit hidden where it stands (the rules and the ground say so)?
   bool concealed(uint32_t unit) const;
   // Does `player`'s side see this unit: its tile in sight, and the unit not hidden from it?
@@ -684,6 +709,7 @@ class Simulation {
   std::vector<VisionStamp> visionStamps_;
   VisionRules visionRules_;
   std::vector<SmokeCloud> smoke_;
+  Environment env_;
   bool groundDirty_ = true;       // the woodland layer must be worked out again
   uint32_t groundProps_ = 0;      // how many props the map had when it was
   std::vector<int32_t> tileHeights_;  // for line of sight: each tile's height at its middle (scratch)

@@ -8,6 +8,7 @@
 #include "pioneer/ui/script_fields.hpp"
 #include "editor.hpp"
 #include "game_scene.hpp"
+#include "pioneer/core/weather.hpp"
 #include "pioneer/sim/script_registry.hpp"
 
 using namespace pioneer;
@@ -689,7 +690,7 @@ std::vector<int> Editor::actionOrder() {
           -4, I(A::SetInvulnerable), I(A::SetAiControl), I(A::SetTargetable), I(A::SetLocked),
           -5, I(A::AiAttack), I(A::AiDefend), I(A::AiFree), I(A::AiBehaviour), I(A::AiWaveSize), I(A::SetComputer),
           I(A::SetAlliance),
-          -6, I(A::SetPlayArea), I(A::RevealArea), I(A::Barrage), I(A::FreezeWater), I(A::BreakIce), I(A::FloodArea), I(A::DrainArea), I(A::AddLogisticsPoint), I(A::GiveSupplies),
+          -6, I(A::SetPlayArea), I(A::RevealArea), I(A::Barrage), I(A::FreezeWater), I(A::BreakIce), I(A::FloodArea), I(A::DrainArea), I(A::SetTimeOfDay), I(A::SetWeather), I(A::AddLogisticsPoint), I(A::GiveSupplies),
           I(A::SetIncomeRate), I(A::LockBuild), I(A::UnlockBuild),
           -7, I(A::Countdown), I(A::StopCountdown), I(A::PauseCountdown), I(A::SetCounter), I(A::AddCounter), I(A::SetFlag),
           I(A::AddFlag),
@@ -1330,6 +1331,60 @@ void Editor::drawTriggerPage(bool& changed) {
   }
 }
 
+// The hour and the weather the battle begins in (only the look: nothing in the rules reads them).
+bool Editor::drawSkySettings(pioneer::ScenarioScript& s) {
+  bool changed = false;
+  ImGui::SeparatorText("Time and weather");
+  const float labelW = ImGui::CalcTextSize("Weather  ").x + 40.0f;
+  ImGui::AlignTextToFramePadding();
+  ImGui::TextUnformatted("Begins at");
+  ImGui::SameLine(labelW);
+  ImGui::SetNextItemWidth(-1);
+  int quarter = std::clamp(s.startMinute, 0, 24 * 60 - 1) / 15;
+  const std::string now = formatTimeOfDay(s.startMinute);
+  if (ImGui::SliderInt("##start", &quarter, 0, 24 * 4 - 1, now.c_str())) {
+    s.startMinute = quarter * 15;
+    changed = true;
+  }
+  if (ImGui::IsItemHovered()) ImGui::SetTooltip("The time of day when the battle begins. Noon is the picture as it always was.");
+  ImGui::AlignTextToFramePadding();
+  ImGui::TextUnformatted("Clock");
+  ImGui::SameLine(labelW);
+  ImGui::SetNextItemWidth(-1);
+  static const int kRates[] = {0, 1, 10, 30, 60, 120};
+  static const char* const kRateNames[] = {"stands still", "real time", "10 x (10 minutes a minute)", "30 x (half an hour a minute)",
+                                           "60 x (an hour a minute)", "120 x (two hours a minute)"};
+  int at = -1;
+  for (int i = 0; i < 6; ++i)
+    if (kRates[i] == s.clockRate) at = i;
+  const std::string rateNow = at >= 0 ? kRateNames[at] : std::to_string(s.clockRate) + " x";
+  if (ImGui::BeginCombo("##clock", rateNow.c_str())) {
+    for (int i = 0; i < 6; ++i)
+      if (ImGui::Selectable(kRateNames[i], at == i)) {
+        s.clockRate = kRates[i];
+        changed = true;
+      }
+    ImGui::EndCombo();
+  }
+  if (ImGui::IsItemHovered()) ImGui::SetTooltip("How fast the day goes by while the battle runs: dawn can break, or night fall, during it.");
+  ImGui::AlignTextToFramePadding();
+  ImGui::TextUnformatted("Weather");
+  ImGui::SameLine(labelW);
+  ImGui::SetNextItemWidth(-1);
+  if (ImGui::BeginCombo("##weather", weatherName(static_cast<Weather>(s.startWeather)))) {
+    for (int i = 0; i < kWeatherCount; ++i)
+      if (ImGui::Selectable(weatherName(static_cast<Weather>(i)), s.startWeather == i)) {
+        s.startWeather = static_cast<uint8_t>(i);
+        changed = true;
+      }
+    ImGui::EndCombo();
+  }
+  ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+  ImGui::TextWrapped("Only the look: units see and move as in daylight. 'Set the time of day' and 'Set the weather' change them during the battle.");
+  ImGui::PopStyleColor();
+  return changed;
+}
+
 void Editor::drawScriptTab() {
   ScenarioScript& s = scene_.scenario();
   bool changed = false;
@@ -1355,6 +1410,7 @@ void Editor::drawScriptTab() {
     ImGui::TextColored(kGold, "3.");
     ImGui::SameLine();
     ImGui::TextWrapped("Test: Battle tab > Snapshot, play, then Restore.");
+    changed |= drawSkySettings(s);
     ImGui::SeparatorText("Ready-made triggers");
     const char* names[11] = {"Briefing and main objective", "Capture an area (uses the selected area)",
                              "Victory when the enemy is beaten", "Reinforcements after 2 minutes",

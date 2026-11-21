@@ -11,6 +11,7 @@
 
 #include "pioneer/math/mat.hpp"
 #include "pioneer/render/camera.hpp"
+#include "pioneer/render/environment.hpp"  // sunDirection()
 #include "pioneer/render/gl.hpp"
 
 // GLSL shared by every shader that receives shadows: 1 = in sunlight, 0 = shadowed.
@@ -27,10 +28,6 @@
   "}\n"
 
 namespace pioneer {
-
-// Direction towards the sun, in world space (tiles; z up). Matches the light
-// the voxel baker and the classic terrain use.
-inline Vec3f sunDirection() { return Vec3f{-0.35f, 0.45f, 0.80f}.normalized(); }
 
 class ShadowMap {
  public:

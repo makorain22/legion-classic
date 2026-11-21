@@ -148,6 +148,9 @@ enum class ActionType : uint8_t {
   SendWave,         // wave number `value` of the mission model is sent (after its delay, as often as it says)
   FollowPath,       // the units follow path number `value` point by point; `player2` 1: fighting what they meet
   CallScript,       // calls the mission's Lua function `text` with `value`
+  // --- The hour and the weather (Pioneer) -----------------------------------------------
+  SetTimeOfDay,     // the time becomes `text` ("05:30"); from then on the clock runs `value` times as fast as the battle (0: stands still)
+  SetWeather,       // the weather turns to `text` ("rain", see core/weather.hpp) over `value` seconds (0: at once)
   Count
 };
 
@@ -293,9 +296,16 @@ struct ScenarioScript {
   std::vector<MissionSequence> sequences;
   // The mission's Lua script (see sim/mission_lua.hpp), or empty.
   std::string lua;
+  // The hour and the weather the battle begins in (only the look: see
+  // render/environment.hpp). Noon, clear, the clock standing still: as
+  // battles always were.
+  int32_t startMinute = 12 * 60;  // minutes after midnight
+  int32_t clockRate = 0;          // the day runs this many times as fast as the battle (0: the clock stands still)
+  uint8_t startWeather = 0;       // a Weather
+  bool defaultEnvironment() const { return startMinute == 12 * 60 && clockRate == 0 && startWeather == 0; }
   bool empty() const {
     return areas.empty() && triggers.empty() && phases.empty() && paths.empty() && waves.empty() && goals.empty() && sequences.empty() &&
-           lua.empty();
+           lua.empty() && defaultEnvironment();
   }
 };
 

@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <set>
 
+#include "pioneer/core/weather.hpp"
 #include "pioneer/map/map.hpp"
 #include "pioneer/sim/mission_lua.hpp"
 #include "pioneer/sim/pathfinder.hpp"
@@ -421,6 +422,22 @@ std::vector<Entry> buildActions() {
     "An error in the function is reported (console: lua.errors) and the mission goes on.",
     {text(Kind::Text, "Function", "The name of a global function of the mission's Lua script."),
      number("Number", "Passed to the function.", 0, -1000000)});
+  const char* kSky = "Time and weather";
+  A(ActionType::SetTimeOfDay, kSky,
+    "The time of day jumps to the hour given, and from then on the clock runs at the speed given: the light, the sun's "
+    "shadows and the mist follow it, from dawn through noon and dusk to moonlit night.",
+    "05:30 with the clock at 30: dawn breaks over the first two minutes of the attack.",
+    "Only the look changes: units see and move as before. The jump shows at once; to let night fall slowly, set the "
+    "clock running instead. The time and weather a battle begins in are set on the editor's Quick start page.",
+    {text(Kind::TimeOfDay, "Time", "hh:mm on the 24-hour clock (05:30, 21:00)."),
+     number("Clock", "How many times as fast as the battle the day runs from now (0: the clock stands still; 60: an hour a minute).", 0, 0, 3600)});
+  A(ActionType::SetWeather, kSky,
+    "The weather turns to another over some seconds: the light, the mist, rain or snow in the air, wet or snowy ground.",
+    "Turn to 'rain' over 90 s when the attack begins; to 'mist' at once for a dawn crossing.",
+    "Only the look changes: units see and move as before. Rain and snow fall in the 3D view, as much as the player "
+    "chooses (Settings > Display > Graphics quality > Rain and snow in the air).",
+    {text(Kind::Weather, "Weather", "clear, fair, overcast, rain, storm, snow, blizzard or mist."),
+     seconds("Over", "How long the change takes (0: at once).", 30, 3600)});
   return v;
 }
 }  // namespace
@@ -588,8 +605,11 @@ Condition makeCondition(CondType t) {
 Action makeAction(ActionType t) {
   Action a;
   a.type = t;
-  for (const Field& f : entry(t).fields)
+  for (const Field& f : entry(t).fields) {
     if (f.slot != Slot::Text) set(a, f.slot, f.def);
+    else if (f.kind == Kind::TimeOfDay) a.text = "06:00";  // a sensible start, never an invalid one
+    else if (f.kind == Kind::Weather) a.text = "rain";
+  }
   return a;
 }
 
@@ -673,6 +693,16 @@ std::vector<Issue> check(const ScenarioScript& s, const CheckContext& ctx) {
       case Kind::Music:
         if (txt.empty() && !f.optional) add(Issue::Error, ti, item, e.action, where + "left empty");
         break;
+      case Kind::TimeOfDay: {
+        int minute = 0;
+        if (!parseTimeOfDay(txt, minute)) add(Issue::Error, ti, item, e.action, where + "'" + txt + "' is not a time of day (hh:mm, 00:00 to 23:59)");
+        break;
+      }
+      case Kind::Weather: {
+        Weather w = Weather::Clear;
+        if (!weatherFromId(txt, w)) add(Issue::Error, ti, item, e.action, where + "'" + txt + "' is not a kind of weather (" + weatherChoices() + ")");
+        break;
+      }
       case Kind::AiBehaviour:
         if (aiBehaviourFromId(txt) < 0) add(Issue::Error, ti, item, e.action, where + "'" + txt + "' is not a behaviour of the computer");
         break;
@@ -987,6 +1017,12 @@ std::string referenceMarkdown() {
       case Kind::Wave: return "wave number";
       case Kind::Path: return "path number";
       case Kind::Goal: return "goal number";
+      case Kind::TimeOfDay: return "time hh:mm";
+      case Kind::Weather: {
+        std::string s = weatherChoices();
+        std::replace(s.begin(), s.end(), '|', '/');
+        return s;
+      }
       default: return f.optional ? "text (may be empty)" : "text";
     }
   };

@@ -21,6 +21,8 @@ struct Vertex {
   float tx, ty;  // tile coordinates (texture and splat lookups)
   float z;       // height in tiles (depth sorting)
   float extra;   // terrain: light; water: depth in height units
+  float dx = 0, dy = 0;  // terrain: the slope (height change per tile), so the 3D view can light it from any sun
+  float lit = 0;         // 1: lit by the slope (ground); 0: keeps `extra` (skirts, water)
 };
 
 const char* kCommonVertex = R"(#version 330 core
@@ -28,6 +30,7 @@ layout(location = 0) in vec2 aScreen;
 layout(location = 1) in vec2 aTile;
 layout(location = 2) in float aZ;
 layout(location = 3) in float aExtra;
+layout(location = 4) in vec3 aSlope;
 uniform vec2 uCamera;
 uniform vec2 uHalf;
 uniform vec2 uViewport;
@@ -36,8 +39,10 @@ uniform float uDepthMax;
 out vec2 vTile;
 out float vExtra;
 out vec3 vWorld;
+out float vFlat;
 void main() {
   vWorld = vec3(0.0);
+  vFlat = 1.0 / sqrt(aSlope.x * aSlope.x + aSlope.y * aSlope.y + 1.0);
   vec2 s = (aScreen - uCamera) * uZoom + uHalf;
   // Distance toward the viewer: farther tiles and lower ground are deeper.
   float d = (aTile.x + aTile.y) * 0.6124 + aZ * 0.5;
@@ -55,15 +60,28 @@ layout(location = 0) in vec2 aScreen;
 layout(location = 1) in vec2 aTile;
 layout(location = 2) in float aZ;
 layout(location = 3) in float aExtra;
+layout(location = 4) in vec3 aSlope;  // height change per tile in x and y; 1 if lit by it
 uniform mat4 uViewProj;
+uniform vec3 uLight;     // towards the sun (or the moon)
+uniform float uRelight;  // 1: light the slopes from uLight (else as baked: the classic sun)
+uniform float uDirect;   // share of the light straight from it
 out vec2 vTile;
 out float vExtra;
 out vec3 vWorld;
+out float vFlat;
 void main() {
   vWorld = vec3(aTile, aZ);
   gl_Position = uViewProj * vec4(vWorld, 1.0);
   vTile = aTile;
+  float nl = sqrt(aSlope.x * aSlope.x + aSlope.y * aSlope.y + 1.0);
+  vFlat = 1.0 / nl;
   vExtra = aExtra;
+  if (uRelight > 0.5 && aSlope.z > 0.5) {
+    // As the chunk builder bakes it, from this light: flat ground is 1, slopes
+    // facing the light brighter, slopes facing away darker; softer under cloud.
+    float lambert = (-aSlope.x * uLight.x - aSlope.y * uLight.y + uLight.z) / nl;
+    vExtra = clamp(1.0 + (lambert - uLight.z) * 1.9 * uDirect, 0.42, 1.35);
+  }
 }
 )";
 
@@ -71,6 +89,7 @@ const char* kTerrainFragment = R"(#version 330 core
 in vec2 vTile;
 in float vExtra;
 in vec3 vWorld;
+in float vFlat;
 uniform sampler2DShadow uShadowMap;
 uniform mat4 uShadowMat;
 uniform float uShadowOn;
@@ -84,6 +103,8 @@ uniform float uTexScale;
 uniform sampler2D uFog;
 uniform vec3 uTint;
 uniform float uSat;
+uniform float uWet;   // rain on the ground (0..1)
+uniform float uSnow;  // snow on the ground (0..1)
 out vec4 fragColor;
 // Fog of war: unexplored ground is black, explored ground out of sight is
 // darkened and drained of colour, visible ground is untouched.
@@ -132,6 +153,16 @@ void main() {
   col = mix(col, col * vec3(1.06, 1.01, 0.86), clamp((hue - 0.55) * 2.0, 0.0, 1.0) * 0.5);
   col = mix(col, col * vec3(0.90, 1.05, 0.92), clamp((0.45 - hue) * 2.0, 0.0, 1.0) * 0.5);
 
+  // The weather on the ground: snow settles where it is flat enough (in
+  // ragged patches at the edge), rain darkens everything. Then the biome's
+  // light (and, drawn without the pipeline, the hour's) over all of it.
+  if (uSnow > 0.0) {
+    // Never quite all of it: tracks, field edges and roads still show through.
+    float lie = smoothstep(0.80, 0.93, vFlat + (tone2 - 0.5) * 0.12 + (tone - 0.5) * 0.06);
+    float k = uSnow * lie * (0.62 + 0.22 * smoothstep(0.3, 0.7, tone2));
+    col = mix(col, vec3(0.78, 0.80, 0.85) * (0.92 + 0.12 * tone), k);
+  }
+  if (uWet > 0.0) col *= mix(vec3(1.0), vec3(0.70, 0.72, 0.76), uWet);
   // The biome's light: cold winter blue, hot desert glare, drained ruins.
   col = mix(vec3(dot(col, vec3(0.30, 0.59, 0.11))), col, uSat) * uTint;
   col *= vExtra;  // slope lighting
@@ -217,6 +248,8 @@ void setupVao(GLuint vao, GLuint vbo, GLuint ibo) {
   glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(offsetof(Vertex, z)));
   glEnableVertexAttribArray(3);
   glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(offsetof(Vertex, extra)));
+  glEnableVertexAttribArray(4);
+  glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(offsetof(Vertex, dx)));
   glBindVertexArray(0);
 }
 
@@ -498,7 +531,7 @@ void TerrainRenderer::buildChunk(Chunk& c) {
       const float nl = std::sqrt(dx * dx + dy * dy + 1.0f);
       const float lambert = (-dx * Lx - dy * Ly + Lz) / nl;
       const float light = std::clamp(1.0f + (lambert - Lz) * 1.9f, 0.42f, 1.35f);
-      verts[static_cast<size_t>(y) * n + x] = {s.x, s.y, tx, ty, h / HEIGHT_UNITS_PER_TILE, light};
+      verts[static_cast<size_t>(y) * n + x] = {s.x, s.y, tx, ty, h / HEIGHT_UNITS_PER_TILE, light, dx, dy, 1.0f};
       b.x0 = std::min(b.x0, s.x);
       b.y0 = std::min(b.y0, s.y);
       b.x1 = std::max(b.x1, s.x);
@@ -571,8 +604,10 @@ void TerrainRenderer::draw(const Camera& cam, float timeSeconds) {
   glUniform1f(terrainShader_.uniform("uTexScale"), kTexScale);
   glUniform1i(terrainShader_.uniform("uFog"), 4);
   const BiomeLight& light = biomeLight(map_->biome);
-  glUniform3f(terrainShader_.uniform("uTint"), light.tint[0], light.tint[1], light.tint[2]);
-  glUniform1f(terrainShader_.uniform("uSat"), light.saturation);
+  glUniform3f(terrainShader_.uniform("uTint"), light.tint[0] * tint_[0], light.tint[1] * tint_[1], light.tint[2] * tint_[2]);
+  glUniform1f(terrainShader_.uniform("uSat"), light.saturation * tintSat_);
+  glUniform1f(terrainShader_.uniform("uWet"), wet_);
+  glUniform1f(terrainShader_.uniform("uSnow"), snow_);
   glUniform1i(terrainShader_.uniform("uShadowMap"), kShadowUnit);
   glUniform1f(terrainShader_.uniform("uShadowOn"), 0.0f);
   layers_.bind(0);
@@ -661,9 +696,14 @@ void TerrainRenderer::draw3D(const Camera& cam, float timeSeconds, const ShadowM
   glUniform1f(terrain3D_.uniform("uTexScale"), kTexScale);
   glUniform1i(terrain3D_.uniform("uFog"), 4);
   const BiomeLight& light = biomeLight(map_->biome);
-  glUniform3f(terrain3D_.uniform("uTint"), light.tint[0], light.tint[1], light.tint[2]);
-  glUniform1f(terrain3D_.uniform("uSat"), light.saturation);
-  if (shadow) shadow->setUniforms(terrain3D_, kShadowUnit, true, 0.52f);
+  glUniform3f(terrain3D_.uniform("uTint"), light.tint[0] * tint_[0], light.tint[1] * tint_[1], light.tint[2] * tint_[2]);
+  glUniform1f(terrain3D_.uniform("uSat"), light.saturation * tintSat_);
+  glUniform3f(terrain3D_.uniform("uLight"), sun_.x, sun_.y, sun_.z);
+  glUniform1f(terrain3D_.uniform("uRelight"), relight_ ? 1.0f : 0.0f);
+  glUniform1f(terrain3D_.uniform("uDirect"), direct_);
+  glUniform1f(terrain3D_.uniform("uWet"), wet_);
+  glUniform1f(terrain3D_.uniform("uSnow"), snow_);
+  if (shadow) shadow->setUniforms(terrain3D_, kShadowUnit, true, direct_ == 1.0f ? 0.52f : 1.0f - 0.48f * direct_);
   else {
     glUniform1i(terrain3D_.uniform("uShadowMap"), kShadowUnit);
     glUniform1f(terrain3D_.uniform("uShadowOn"), 0.0f);
@@ -699,8 +739,8 @@ void TerrainRenderer::bindGround(const gl::Shader& s, int u) const {
   glUniform2f(s.uniform("uMapSize"), static_cast<float>(map_->width()), static_cast<float>(map_->height()));
   glUniform1f(s.uniform("uTexScale"), kTexScale);
   const BiomeLight& light = biomeLight(map_->biome);
-  glUniform3f(s.uniform("uTint"), light.tint[0], light.tint[1], light.tint[2]);
-  glUniform1f(s.uniform("uSat"), light.saturation);
+  glUniform3f(s.uniform("uTint"), light.tint[0] * tint_[0], light.tint[1] * tint_[1], light.tint[2] * tint_[2]);
+  glUniform1f(s.uniform("uSat"), light.saturation * tintSat_);
   glActiveTexture(GL_TEXTURE0);
 }
 
@@ -754,6 +794,25 @@ void TerrainRenderer::heightRange(float& zMin, float& zMax) const {
     zMax = first ? c->zMax : std::max(zMax, c->zMax);
     first = false;
   }
+}
+
+void TerrainRenderer::setSun(Vec3f towardsLight, float direct) {
+  sun_ = towardsLight;
+  direct_ = std::clamp(direct, 0.0f, 1.0f);
+  const Vec3f c = sunDirection();
+  relight_ = !(direct_ == 1.0f && sun_.x == c.x && sun_.y == c.y && sun_.z == c.z);
+}
+
+void TerrainRenderer::setGroundCover(float wet, float snow) {
+  wet_ = std::clamp(wet, 0.0f, 1.0f);
+  snow_ = std::clamp(snow, 0.0f, 1.0f);
+}
+
+void TerrainRenderer::setLightTint(float r, float g, float b, float saturation) {
+  tint_[0] = r;
+  tint_[1] = g;
+  tint_[2] = b;
+  tintSat_ = saturation;
 }
 
 }  // namespace pioneer

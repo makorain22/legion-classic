@@ -19,6 +19,7 @@ uniform vec3 uLight;
 uniform float uSaturation;
 uniform vec3 uFog;
 uniform vec4 uFogParams;   // density, ground fog, base height, height it thins over
+uniform float uFogStart;   // tiles from the eye before the mist begins
 uniform float uSkyFog;
 uniform vec4 uCloud;       // strength, 1 / size, offset x, offset y
 out vec4 fragColor;
@@ -55,7 +56,8 @@ void main() {
   } else if (uFogParams.x > 0.0 || uFogParams.y > 0.0) {
     float dist = length(world - uEye);
     float low = exp(-max(world.z - uFogParams.z, 0.0) / max(uFogParams.w, 0.05));
-    float f = 1.0 - exp(-dist * (uFogParams.x + uFogParams.y * low));
+    // Haze from beyond what the camera looks at; mist in low ground from closer in.
+    float f = 1.0 - exp(-max(dist - uFogStart, 0.0) * uFogParams.x - max(dist - uFogStart * 0.5, 0.0) * uFogParams.y * low);
     c = mix(c, uFog, clamp(f, 0.0, 1.0));
   }
   fragColor = vec4(c, 1.0);
@@ -177,11 +179,6 @@ void bindTexture(int unit, GLuint tex) {
   glBindTexture(GL_TEXTURE_2D, tex);
 }
 }  // namespace
-
-bool SceneLook::identity() const {
-  return light[0] == 1.0f && light[1] == 1.0f && light[2] == 1.0f && saturation == 1.0f && fogDensity <= 0.0f &&
-         groundFog <= 0.0f && skyFog <= 0.0f && clouds <= 0.0f;
-}
 
 PostProcess::~PostProcess() {
   if (litDepthFbo_) glDeleteFramebuffers(1, &litDepthFbo_);
@@ -342,6 +339,10 @@ void PostProcess::light(const SceneLook& look, const Camera& cam, const gfx::Opt
   glUniform1f(lightShader_.uniform("uSaturation"), l.saturation);
   glUniform3f(lightShader_.uniform("uFog"), l.fog[0], l.fog[1], l.fog[2]);
   glUniform4f(lightShader_.uniform("uFogParams"), l.fogDensity, l.groundFog, l.fogBase, l.fogHeight);
+  // What the camera looks at stays clear; the mist thickens beyond it.
+  const Vec3f t = cam.target();
+  const float toTarget = std::sqrt((t.x - eye.x) * (t.x - eye.x) + (t.y - eye.y) * (t.y - eye.y) + (t.z - eye.z) * (t.z - eye.z));
+  glUniform1f(lightShader_.uniform("uFogStart"), l.fogNear * toTarget);
   glUniform1f(lightShader_.uniform("uSkyFog"), l.skyFog);
   glUniform4f(lightShader_.uniform("uCloud"), l.clouds, l.cloudScale, l.cloudOffset[0] * l.cloudScale, l.cloudOffset[1] * l.cloudScale);
   gfx::drawFullscreen();

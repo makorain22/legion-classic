@@ -325,27 +325,24 @@ void GameScene::render3D() {
   const bool timing = detectFrames_ >= 0;
   const auto sceneStart = std::chrono::steady_clock::now();
   gpuScene_.begin();
-  glClearColor(sky[0] * 0.5f, sky[1] * 0.5f, sky[2] * 0.5f, 1.0f);
+  {
+    // Colour grade per biome, as in the classic view; then the hour and the weather.
+    static const float kGrade[5][4] = {
+        {1.03f, 1.00f, 0.93f, 0.86f}, {0.97f, 1.00f, 1.05f, 0.82f}, {1.05f, 1.00f, 0.90f, 0.90f},
+        {1.00f, 1.03f, 0.95f, 0.94f}, {0.98f, 0.98f, 0.97f, 0.74f},
+    };
+    static const float kNone[4] = {1, 1, 1, 1};
+    prepareLighting(piped, settings_.atmosphere ? kGrade[static_cast<int>(map_.biome) % 5] : kNone);
+  }
+  // Without the pipeline the sky takes the light here (with it, the light pass does).
+  const float skyLight[3] = {piped ? 1.0f : look_.light[0] * look_.exposure, piped ? 1.0f : look_.light[1] * look_.exposure,
+                             piped ? 1.0f : look_.light[2] * look_.exposure};
+  glClearColor(sky[0] * 0.5f * skyLight[0], sky[1] * 0.5f * skyLight[1], sky[2] * 0.5f * skyLight[2], 1.0f);
   glClearDepth(1.0);
   glDepthMask(GL_TRUE);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   renderer_.resetStats();
   pruneSelection();
-  {
-    // Colour grade per biome, as in the classic view.
-    static const float kGrade[5][4] = {
-        {1.03f, 1.00f, 0.93f, 0.86f}, {0.97f, 1.00f, 1.05f, 0.82f}, {1.05f, 1.00f, 0.90f, 0.90f},
-        {1.00f, 1.03f, 0.95f, 0.94f}, {0.98f, 0.98f, 0.97f, 0.74f},
-    };
-    const float* g = kGrade[static_cast<int>(map_.biome) % 5];
-    if (settings_.atmosphere) {
-      renderer_.setGrade(g[0], g[1], g[2], g[3]);
-      meshes_.setGrade(g[0], g[1], g[2], g[3]);
-    } else {
-      renderer_.setGrade(1, 1, 1, 1);
-      meshes_.setGrade(1, 1, 1, 1);
-    }
-  }
   const RectF view = cam_.visibleWorld(160);
   const bool fog = fogEnabled();
   const BattleFx::FogAt fogAt = [&](int tx, int ty) -> uint8_t { return fog ? intelAt(tx, ty) : 255; };
@@ -364,12 +361,12 @@ void GameScene::render3D() {
     }
 
   // The sun's shadows: the ground and the models seen from the sun.
-  const bool shadows = gfx_.shadows && shadow_.ready();
+  const bool shadows = gfx_.shadows && shadow_.ready() && lighting_.shadows;
   if (shadows) {
     float z0 = 0, z1 = 0;
     terrain_.heightRange(z0, z1);
     const float reach = std::clamp(34.0f / cam_.zoom(), 18.0f, 110.0f);
-    shadow_.fit(cam_, z0, z1 + 3.0f, reach);
+    shadow_.fit(cam_, z0, z1 + 3.0f, reach, lighting_.sun);
     shadow_.begin();
     terrain_.drawDepth(shadow_.matrix());
     meshes_.drawDepth(shadow_.matrix());
@@ -417,6 +414,7 @@ void GameScene::render3D() {
   // (smoke, fire, flashes, tracers) keeps its own brightness.
   if (piped) post_.light(look_, cam_, gfx_);
   renderer_.begin3D(cam_);
+  renderer_.setGrade(grade_[0], grade_[1], grade_[2], grade_[3]);  // fire and flashes are not darkened by the night
   fx_.drawAir(renderer_, view, fogAt);
   renderer_.flush();
   glDepthMask(GL_TRUE);

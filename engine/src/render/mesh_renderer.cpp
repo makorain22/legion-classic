@@ -71,6 +71,7 @@ flat in vec2 vShade;
 in float vLocalZ;
 flat in float vBlend;
 uniform vec3 uLight;
+uniform float uDirect;  // share of the light straight from the sun (the rest comes evenly from the sky)
 uniform float uGroundOn;
 uniform sampler2DArray uLayers;
 uniform sampler2D uSplat0;
@@ -119,7 +120,10 @@ void main() {
   float lambert = max(0.0, dot(normalize(vNormal), uLight));
   float sun = 1.0;
   if (uShadowOn > 0.5) sun = mix(uShadowDark, 1.0, sunShadow(uShadowMap, uShadowMat, vWorld + normalize(vNormal) * 0.02));
-  float shade = (0.40 + 0.66 * lambert * sun) * (0.80 + 0.20 * min(1.0, (float(v.z) + 0.5) / 3.0));
+  // Under cloud and at night less comes from the sun: faces lose their
+  // contrast to an even light from the sky, about as bright on the whole.
+  float lit = lambert * sun * uDirect + (1.0 - uDirect) * 0.62;
+  float shade = (0.40 + 0.66 * lit) * (0.80 + 0.20 * min(1.0, (float(v.z) + 0.5) / 3.0));
   shade *= 1.0 - vShade.x * float(vInfo.y) / 12.0;
   if (vShade.y > 0.0) {
     uint h = uint(v.x) * 73856093u ^ uint(v.y) * 19349663u ^ uint(v.z) * 83492791u ^ vInfo.w * 2654435761u;
@@ -141,7 +145,7 @@ void main() {
     float n = texture(uMacro, vWorld.xy * 1.7).r;
     float reach = vBlend * (0.45 + 1.1 * n);
     float k = 1.0 - smoothstep(reach * 0.55, reach, vLocalZ);
-    if (k > 0.0) col = mix(col, groundColour(vWorld.xy) * (0.62 + 0.4 * lambert * sun), k * 0.9);
+    if (k > 0.0) col = mix(col, groundColour(vWorld.xy) * (0.62 + 0.4 * lit), k * 0.9);
   }
   col *= vTint.rgb;
   col = mix(vec3(dot(col, vec3(0.30, 0.59, 0.11))), col, uGrade.a) * uGrade.rgb;
@@ -393,8 +397,8 @@ void MeshRenderer::draw(const Camera& cam, const ShadowMap* shadow) {
   glDisable(GL_CULL_FACE);
   shader_.use();
   glUniformMatrix4fv(shader_.uniform("uViewProj"), 1, GL_FALSE, cam.viewProj().m);
-  const Vec3f L = sunDirection();
-  glUniform3f(shader_.uniform("uLight"), L.x, L.y, L.z);
+  glUniform3f(shader_.uniform("uLight"), sun_.x, sun_.y, sun_.z);
+  glUniform1f(shader_.uniform("uDirect"), direct_);
   glUniform4f(shader_.uniform("uGrade"), grade_[0], grade_[1], grade_[2], grade_[3]);
   // Every sampler keeps its own unit, used or not (two sampler types on one unit is an error).
   glUniform1i(shader_.uniform("uLayers"), 8);
@@ -403,7 +407,7 @@ void MeshRenderer::draw(const Camera& cam, const ShadowMap* shadow) {
   glUniform1i(shader_.uniform("uMacro"), 11);
   glUniform1f(shader_.uniform("uGroundOn"), ground_ && ground_->hasMap() ? 1.0f : 0.0f);
   if (ground_ && ground_->hasMap()) ground_->bindGround(shader_, 8);
-  if (shadow) shadow->setUniforms(shader_, kShadowUnit, true, 0.55f);
+  if (shadow) shadow->setUniforms(shader_, kShadowUnit, true, direct_ == 1.0f ? 0.55f : 1.0f - 0.45f * direct_);
   else {
     glUniform1i(shader_.uniform("uShadowMap"), kShadowUnit);
     glUniform1f(shader_.uniform("uShadowOn"), 0.0f);

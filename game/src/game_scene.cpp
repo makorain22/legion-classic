@@ -2044,7 +2044,6 @@ void GameScene::onRender() {
   renderer_.resetStats();
   pruneSelection();
 
-  terrain_.draw(cam_, time_);
   {
     // Colour grade per biome: worn, slightly faded colours like period film.
     static const float kGrade[5][4] = {
@@ -2054,10 +2053,11 @@ void GameScene::onRender() {
         {1.00f, 1.03f, 0.95f, 0.94f},  // tropical
         {0.98f, 0.98f, 0.97f, 0.74f},  // urban
     };
-    const float* g = kGrade[static_cast<int>(map_.biome) % 5];
-    if (settings_.atmosphere) renderer_.setGrade(g[0], g[1], g[2], g[3]);
-    else renderer_.setGrade(1, 1, 1, 1);
+    static const float kNone[4] = {1, 1, 1, 1};
+    // The classic view has no pipeline: the hour and the weather go into the colours.
+    prepareLighting(false, settings_.atmosphere ? kGrade[static_cast<int>(map_.biome) % 5] : kNone);
   }
+  terrain_.draw(cam_, time_);
   renderer_.beginWorld(cam_);
 
   const RectF view = cam_.visibleWorld(120);
@@ -2082,6 +2082,8 @@ void GameScene::onRender() {
     renderer_.sprite(d.radius > 60 ? art_.selectLarge : art_.selectSmall, s.x, s.y, kWhite, kSelectGreen);
   }
   drawUnits(view);
+  renderer_.flush();
+  renderer_.setGrade(grade_[0], grade_[1], grade_[2], grade_[3]);  // fire and flashes keep their brightness at night
   fx_.drawAir(renderer_, view, fogAt);
   drawOverlays(view, true);
 }

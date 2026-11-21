@@ -118,7 +118,8 @@ class Editor {
   void drawUnitsTab();
   void drawSidesTab();
   void drawBattleTab();
-  void drawScriptTab();  // script_tab.cpp
+  void drawScriptTab();
+  bool drawSkySettings(pioneer::ScenarioScript& s);  // script_tab.cpp
   // script_help.cpp: help from the script registry.
   bool helpSelectable(const pioneer::script::Entry& e);  // a menu line with the entry's help on hover
   void drawScriptReference();

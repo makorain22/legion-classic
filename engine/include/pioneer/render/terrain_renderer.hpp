@@ -17,6 +17,7 @@
 #include "pioneer/map/map.hpp"
 #include "pioneer/math/mat.hpp"
 #include "pioneer/render/camera.hpp"
+#include "pioneer/render/environment.hpp"
 #include "pioneer/render/gl.hpp"
 
 namespace pioneer {
@@ -58,6 +59,16 @@ class TerrainRenderer {
   // macro) and sets uLayers, uSplat0, uSplat1, uMacro, uMapSize, uTexScale,
   // uTint and uSat on the shader in use.
   void bindGround(const gl::Shader& s, int firstUnit) const;
+
+  // The hour and the weather (render/environment.hpp). Until they are set,
+  // the ground is drawn as it always was: the classic sun, dry, no snow.
+  // `towardsLight`: unit vector to the sun or moon; `direct`: the share of
+  // light that comes straight from it (slopes and shadows soften as it drops).
+  void setSun(Vec3f towardsLight, float direct);
+  void setGroundCover(float wet, float snow);  // 0..1 each
+  // Multiplies the biome's light, for drawing without the post-processing
+  // pipeline (with it, the light is put over the finished picture instead).
+  void setLightTint(float r, float g, float b, float saturation);
   bool hasMap() const { return map_ != nullptr; }
   // Texture unit the terrain shader keeps for the shadow map.
   static constexpr int kShadowUnit = 7;
@@ -99,6 +110,10 @@ class TerrainRenderer {
   int splatDirty_[4] = {1, 1, 0, 0};  // x0, y0, x1, y1 (empty when x0 > x1)
   float depthMax_ = 1.0f;
   size_t drawn_ = 0;
+  Vec3f sun_ = sunDirection();
+  float direct_ = 1.0f, wet_ = 0.0f, snow_ = 0.0f;
+  bool relight_ = false;
+  float tint_[3] = {1.0f, 1.0f, 1.0f}, tintSat_ = 1.0f;
 };
 
 }  // namespace pioneer

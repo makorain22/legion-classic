@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "pioneer/core/weather.hpp"
 #include "pioneer/sim/unit_types.hpp"
 #include "pioneer/ui/fonts.hpp"
 
@@ -90,6 +91,39 @@ bool editAll(const script::Entry& e, T& item, const ScriptFieldContext& ctx) {
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s%s", f.help, f.optional ? "\n(may be left empty)" : "");
     ImGui::SameLine(labelW);
     ImGui::SetNextItemWidth(-1);
+    if (f.slot == script::Slot::Text && f.kind == Kind::Weather) {
+      Weather w = Weather::Clear;
+      const bool known = weatherFromId(item.text, w);
+      if (ImGui::BeginCombo("##v", known ? weatherName(w) : "(choose)")) {
+        for (int i = 0; i < kWeatherCount; ++i)
+          if (ImGui::Selectable(weatherName(static_cast<Weather>(i)), known && static_cast<int>(w) == i)) {
+            item.text = weatherId(static_cast<Weather>(i));
+            changed = true;
+          }
+        ImGui::EndCombo();
+      }
+      if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", f.help);
+      ImGui::PopID();
+      continue;
+    }
+    if (f.slot == script::Slot::Text && f.kind == Kind::TimeOfDay) {
+      // A slider in steps of a quarter of an hour, or typed exactly (hh:mm).
+      int minute = 12 * 60;
+      const bool valid = parseTimeOfDay(item.text, minute);
+      int quarter = minute / 15;
+      const std::string now = formatTimeOfDay(minute);
+      ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.62f);
+      if (ImGui::SliderInt("##q", &quarter, 0, 24 * 4 - 1, valid ? now.c_str() : "(hh:mm)")) {
+        item.text = formatTimeOfDay(quarter * 15);
+        changed = true;
+      }
+      ImGui::SameLine();
+      ImGui::SetNextItemWidth(-1);
+      changed |= ImGui::InputTextWithHint("##v", "hh:mm", &item.text);
+      if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", f.help);
+      ImGui::PopID();
+      continue;
+    }
     if (f.slot == script::Slot::Text) {
       if (f.kind == Kind::Text) changed |= ImGui::InputTextMultiline("##v", &item.text, ImVec2(-1, ImGui::GetTextLineHeight() * 3.2f));
       else changed |= ImGui::InputTextWithHint("##v", f.optional ? "(none)" : f.label, &item.text);

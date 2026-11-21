@@ -2,8 +2,10 @@
 #include "pioneer/sim/script.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <nlohmann/json.hpp>
 
+#include "pioneer/core/weather.hpp"
 #include "pioneer/sim/mission_lua.hpp"
 #include "pioneer/sim/simulation.hpp"
 
@@ -46,7 +48,7 @@ const char* kActionNames[] = {"Message", "Add objective", "Complete objective", 
                               "Cinematic", "Pan camera", "Mark area", "Clear marker", "Play sound", "Play music",
                               "Income rate", "Add logistics point", "Fire trigger", "Reset trigger", "Hide objective",
                               "Spawn named units", "Freeze water", "Break the ice", "Flood the land", "Drain the land",
-                              "Go to phase", "Send wave", "Follow path", "Call script"};
+                              "Go to phase", "Send wave", "Follow path", "Call script", "Set the time of day", "Set the weather"};
 const char* kActionIds[] = {"message", "add_objective", "complete_objective", "fail_objective", "victory", "defeat",
                             "spawn_units", "give_supplies", "reveal_area", "attack_move", "move_units",
                             "change_owner", "kill_units", "enable_trigger", "disable_trigger", "set_computer",
@@ -59,7 +61,7 @@ const char* kActionIds[] = {"message", "add_objective", "complete_objective", "f
                             "transmission", "cinematic", "camera_pan", "mark_area", "clear_marker", "play_sound",
                             "play_music", "set_income_rate", "add_logistics_point", "fire_trigger", "reset_trigger",
                             "hide_objective", "spawn_named", "freeze_water", "break_ice", "flood_area", "drain_area",
-                            "goto_phase", "send_wave", "follow_path", "call_script"};
+                            "goto_phase", "send_wave", "follow_path", "call_script", "set_time_of_day", "set_weather"};
 static_assert(sizeof(kCondIds) / sizeof(kCondIds[0]) == static_cast<size_t>(CondType::Count));
 static_assert(sizeof(kCondNames) / sizeof(kCondNames[0]) == static_cast<size_t>(CondType::Count));
 static_assert(sizeof(kActionIds) / sizeof(kActionIds[0]) == static_cast<size_t>(ActionType::Count));
@@ -99,7 +101,7 @@ bool actionUsesText(ActionType t) {
     case ActionType::AiBehaviour: case ActionType::SetCounter: case ActionType::AddCounter: case ActionType::AddFlag:
     case ActionType::SpawnFromFlag: case ActionType::Transmission: case ActionType::MarkArea:
     case ActionType::ClearMarker: case ActionType::PlaySound: case ActionType::PlayMusic: case ActionType::SpawnNamed:
-    case ActionType::CallScript:
+    case ActionType::CallScript: case ActionType::SetTimeOfDay: case ActionType::SetWeather:
       return true;
     default:
       return false;
@@ -261,6 +263,9 @@ nlohmann::json scriptToJson(const ScenarioScript& s, const UnitTypeRegistry* typ
                      {"on_fail", actionsToJson(g.onFail, types)}});
   }
   if (!s.lua.empty()) j["lua"] = s.lua;
+  if (!s.defaultEnvironment())
+    j["environment"] = {{"time", formatTimeOfDay(s.startMinute)}, {"clock", s.clockRate},
+                        {"weather", weatherId(static_cast<Weather>(s.startWeather))}};
   if (!s.sequences.empty()) {
     auto& out = j["sequences"] = Json::array();
     for (const MissionSequence& q : s.sequences) {
@@ -360,6 +365,14 @@ ScenarioScript scriptFromJson(const nlohmann::json& j, const UnitTypeRegistry* t
       s.goals.push_back(std::move(g));
     }
     s.lua = j.value("lua", std::string());
+    if (j.contains("environment") && j["environment"].is_object()) {
+      const Json& e = j["environment"];
+      int minute = 12 * 60;
+      if (parseTimeOfDay(e.value("time", std::string("12:00")), minute)) s.startMinute = minute;
+      s.clockRate = std::clamp(e.value("clock", 0), 0, 3600);
+      Weather w = Weather::Clear;
+      if (weatherFromId(e.value("weather", std::string("clear")), w)) s.startWeather = static_cast<uint8_t>(w);
+    }
     for (const auto& qj : j.value("sequences", Json::array())) {
       MissionSequence q;
       q.name = qj.value("name", "Sequence");
@@ -386,7 +399,18 @@ ScenarioScript scriptFromJson(const nlohmann::json& j, const UnitTypeRegistry* t
 // Runtime
 // ---------------------------------------------------------------------------
 void Simulation::setScript(const ScenarioScript& s, bool keepProgress) {
+  // The hour and the weather it begins in: when a battle starts, or when they
+  // are changed in the editor (so the change is seen at once).
+  const bool newSky = !keepProgress || s.startMinute != script_.startMinute || s.clockRate != script_.clockRate ||
+                      s.startWeather != script_.startWeather;
   script_ = s;
+  if (newSky) {
+    env_ = Environment{};
+    env_.daySeconds = std::clamp(script_.startMinute, 0, 24 * 60 - 1) * 60;
+    env_.setTick = tick_;
+    env_.rate = std::clamp(script_.clockRate, 0, 3600);
+    env_.weather = env_.previous = static_cast<uint8_t>(std::min<int>(script_.startWeather, kWeatherCount - 1));
+  }
   std::vector<TriggerState> old = std::move(triggerState_);
   triggerState_.assign(script_.triggers.size(), {});
   for (size_t i = 0; i < triggerState_.size(); ++i) {
@@ -831,6 +855,16 @@ void Simulation::perform(const Action& a, size_t depth) {
       break;
     }
     case ActionType::FloodArea:
+    case ActionType::SetTimeOfDay: {
+      int minute = 0;
+      if (parseTimeOfDay(a.text, minute)) setTimeOfDay(minute * 60, a.value);
+      break;
+    }
+    case ActionType::SetWeather: {
+      Weather w = Weather::Clear;
+      if (weatherFromId(a.text, w)) setWeather(static_cast<uint8_t>(w), a.value);
+      break;
+    }
     case ActionType::DrainArea: {
       if (a.area < 0 || a.area >= static_cast<int>(script_.areas.size())) break;
       const ScriptArea& s = script_.areas[static_cast<size_t>(a.area)];
@@ -1110,6 +1144,39 @@ uint32_t Simulation::luaRandom(uint32_t n) { return n ? rng_.below(n) : 0; }
 const std::vector<std::string>& Simulation::scriptErrors() const {
   static const std::vector<std::string> none;
   return lua_ ? lua_->errors() : none;
+}
+
+// ---------------------------------------------------------------------------
+// The hour and the weather
+// ---------------------------------------------------------------------------
+double Simulation::hourAt(double tick) const {
+  const double since = std::max(0.0, tick - static_cast<double>(env_.setTick)) / TICKS_PER_SECOND;
+  double seconds = std::fmod(static_cast<double>(env_.daySeconds) + since * env_.rate, 24.0 * 3600.0);
+  if (seconds < 0) seconds += 24.0 * 3600.0;
+  return seconds / 3600.0;
+}
+
+float Simulation::weatherChangeAt(double tick) const {
+  if (env_.changeTicks == 0 || env_.previous == env_.weather) return 1.0f;
+  const double t = (tick - static_cast<double>(env_.changeTick)) / static_cast<double>(env_.changeTicks);
+  return static_cast<float>(std::clamp(t, 0.0, 1.0));
+}
+
+void Simulation::setTimeOfDay(int32_t daySeconds, int32_t rate) {
+  env_.daySeconds = ((daySeconds % (24 * 3600)) + 24 * 3600) % (24 * 3600);
+  env_.setTick = tick_;
+  env_.rate = std::clamp(rate, 0, 3600);
+}
+
+void Simulation::setWeather(uint8_t weather, int32_t seconds) {
+  weather = static_cast<uint8_t>(std::min<int>(weather, kWeatherCount - 1));
+  // A change already under way goes on from where it has got to: start
+  // from whichever of the two it looks more like now.
+  if (weatherChangeAt(tick_) < 0.5f) env_.weather = env_.previous;
+  env_.previous = env_.weather;
+  env_.weather = weather;
+  env_.changeTick = tick_;
+  env_.changeTicks = static_cast<uint32_t>(std::clamp(seconds, 0, 3600)) * TICKS_PER_SECOND;
 }
 
 }  // namespace pioneer

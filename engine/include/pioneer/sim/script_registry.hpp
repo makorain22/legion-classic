@@ -55,6 +55,8 @@ enum class Kind : uint8_t {
   Wave,         // a wave of the mission model, by number
   Path,         // a path of the mission model, by number
   Goal,         // a goal of the mission model, by number
+  TimeOfDay,    // a time of day, "hh:mm" (text)
+  Weather,      // a kind of weather by id: clear, fair, overcast... (text)
 };
 
 struct Field {

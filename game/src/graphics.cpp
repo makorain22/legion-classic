@@ -6,6 +6,7 @@
 
 #include "game_scene.hpp"
 #include "pioneer/core/console.hpp"
+#include "pioneer/core/weather.hpp"
 #include "pioneer/render/device.hpp"
 #include "pioneer/ui/fonts.hpp"
 
@@ -205,6 +206,44 @@ void GameScene::drawGraphicsSettings() {
   }
 }
 
+// --- The hour and the weather ----------------------------------------------------------
+pioneer::Lighting GameScene::lightingNow() const {
+  pioneer::Environment e;
+  if (sim_) {
+    const double t = static_cast<double>(sim_->tickCount()) + static_cast<double>(alpha_);
+    const Simulation::Environment& env = sim_->environment();
+    e.hour = static_cast<float>(sim_->hourAt(t));
+    e.weather = static_cast<pioneer::Weather>(env.weather);
+    e.previous = static_cast<pioneer::Weather>(env.previous);
+    e.change = sim_->weatherChangeAt(t);
+    e.seconds = static_cast<float>(t / TICKS_PER_SECOND);
+  }
+  return pioneer::lightingFor(e);
+}
+
+void GameScene::prepareLighting(bool piped, const float grade[4]) {
+  lighting_ = lightingNow();
+  look_ = lighting_.look;
+  // Ground mist lies in the map's low ground and thins out above it.
+  float z0 = 0.0f, z1 = 0.0f;
+  terrain_.heightRange(z0, z1);
+  look_.fogBase = z0;
+  look_.fogHeight = std::max(1.0f, (z1 - z0) * 0.3f);
+  terrain_.setSun(lighting_.sun, lighting_.direct);
+  meshes_.setSun(lighting_.sun, lighting_.direct);
+  terrain_.setGroundCover(lighting_.wet, lighting_.snowCover);
+  // With the pipeline the light is put over the finished picture; without it
+  // (Low, the classic view) it goes into the colours as they are drawn.
+  float l[3] = {1.0f, 1.0f, 1.0f}, sat = 1.0f;
+  if (!piped)
+    for (int c = 0; c < 3; ++c) l[c] = look_.light[c] * look_.exposure;
+  if (!piped) sat = look_.saturation;
+  for (int c = 0; c < 4; ++c) grade_[c] = grade[c];
+  terrain_.setLightTint(l[0], l[1], l[2], sat);
+  renderer_.setGrade(grade[0] * l[0], grade[1] * l[1], grade[2] * l[2], grade[3] * sat);
+  meshes_.setGrade(grade[0] * l[0], grade[1] * l[1], grade[2] * l[2], grade[3] * sat);
+}
+
 void GameScene::registerGraphicsCommands() {
   Console& con = Console::global();
   con.addCommand("gfx.info", "gfx.info - the graphics card, the quality in use and what each option is set to.",
@@ -219,6 +258,52 @@ void GameScene::registerGraphicsCommands() {
                               static_cast<int>(o.renderScale * 100.0f + 0.5f), o.shadows, o.shadowSize, o.bloom, o.antialias, o.groundFog,
                               o.cloudShadows, o.weather, gfx::colourBlindName(o.colourBlind));
                    if (post_.available() && gfx_.post) c.printFmt("scene %dx%d; the card took %.2f ms over it", post_.sceneWidth(), post_.sceneHeight(), static_cast<double>(gpuScene_.ms()));
+                 });
+  con.addCommand("env.time",
+                 "env.time [hh:mm] [clock] - the time of day in this battle, and how many times as fast as the battle the "
+                 "day runs (0: the clock stands still). Only the look. Without arguments: what it is now.",
+                 [this](const ConsoleArgs& a, Console& c) {
+                   if (!sim_) return c.error("no battle");
+                   if (a.size() > 1) {
+                     int minute = 0;
+                     if (!pioneer::parseTimeOfDay(a.str(1), minute)) return c.error("a time of day is hh:mm, 00:00 to 23:59");
+                     Command cmd;
+                     cmd.type = CommandType::SetEnvironment;
+                     cmd.player = player_;
+                     cmd.amount = minute * 60;
+                     cmd.radius = a.size() > 2 ? std::clamp(a.integer(2), 0, 3600) : -1;
+                     cmd.count = 0;
+                     sim_->queue(cmd);
+                     return c.printFmt("the time becomes %s", pioneer::formatTimeOfDay(minute).c_str());
+                   }
+                   const double h = sim_->hourAt(sim_->tickCount());
+                   c.printFmt("%s, the clock %s", pioneer::formatTimeOfDay(static_cast<int>(h * 60.0)).c_str(),
+                              sim_->environment().rate ? ("running " + std::to_string(sim_->environment().rate) + " x").c_str() : "standing still");
+                 });
+  con.addCommand("env.weather",
+                 "env.weather [clear|fair|overcast|rain|storm|snow|blizzard|mist] [seconds] - the weather in this battle, "
+                 "turning over some seconds (0: at once). Only the look. Without arguments: what it is now.",
+                 [this](const ConsoleArgs& a, Console& c) {
+                   if (!sim_) return c.error("no battle");
+                   if (a.size() > 1) {
+                     pioneer::Weather w;
+                     if (!pioneer::weatherFromId(a.str(1), w)) return c.error(std::string("one of: ") + pioneer::weatherChoices());
+                     Command cmd;
+                     cmd.type = CommandType::SetEnvironment;
+                     cmd.player = player_;
+                     cmd.amount = -1;
+                     cmd.radius = -1;
+                     cmd.count = static_cast<uint16_t>(static_cast<int>(w) + 1);
+                     cmd.unitType = static_cast<uint16_t>(a.size() > 2 ? std::clamp(a.integer(2), 0, 3600) : 0);
+                     sim_->queue(cmd);
+                     return c.printFmt("the weather turns to %s", pioneer::weatherName(w));
+                   }
+                   const Simulation::Environment& e = sim_->environment();
+                   const float k = sim_->weatherChangeAt(sim_->tickCount());
+                   if (k < 1.0f)
+                     c.printFmt("%s, turning to %s (%d%%)", pioneer::weatherName(static_cast<pioneer::Weather>(e.previous)),
+                                pioneer::weatherName(static_cast<pioneer::Weather>(e.weather)), static_cast<int>(k * 100.0f));
+                   else c.print(pioneer::weatherName(static_cast<pioneer::Weather>(e.weather)));
                  });
   con.addCommand("gfx.preset", "gfx.preset [low|medium|high|ultra|auto] - the graphics quality (auto: chosen for this machine again).",
                  [this](const ConsoleArgs& a, Console& c) {

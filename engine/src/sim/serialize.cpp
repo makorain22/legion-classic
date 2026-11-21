@@ -11,6 +11,7 @@
 #include <nlohmann/json.hpp>
 
 #include "pioneer/core/chunks.hpp"
+#include "pioneer/core/weather.hpp"
 #include "pioneer/sim/mission_lua.hpp"
 
 #include "pioneer/sim/simulation.hpp"
@@ -153,7 +154,7 @@ constexpr uint32_t Head = fourcc("HEAD"), Cmds = fourcc("CMDS"), Ecs = fourcc("E
                    Movers = fourcc("MOVE"), Paths = fourcc("PATH"), Sides = fourcc("SIDE"), Tiles = fourcc("TILE"),
                    Vision_ = fourcc("VISN"), Script = fourcc("SCRP"), Ai = fourcc("AI  "), Tutorial = fourcc("TUTR"),
                    Formations = fourcc("FORM"), Logistics = fourcc("LOGI"), Mission = fourcc("MISN"),
-                   Vision2 = fourcc("VIS2"), Mission2 = fourcc("MIS2"), Lua = fourcc("LUA ");
+                   Vision2 = fourcc("VIS2"), Mission2 = fourcc("MIS2"), Lua = fourcc("LUA "), Environment = fourcc("ENV ");
 }
 
 const std::vector<Simulation::SectionInfo>& Simulation::stateSections() {
@@ -178,6 +179,7 @@ const std::vector<Simulation::SectionInfo>& Simulation::stateSections() {
       {sect::Vision2, "VIS2", "vision rules (woodland, line of sight, weather) and smoke", false, 9},
       {sect::Mission2, "MIS2", "the mission model: phase, waves on their way, routes, goals", false, 9},
       {sect::Lua, "LUA", "the mission's Lua script: its `state` table and timers", false, 9},
+      {sect::Environment, "ENV", "the time of day, the clock and the weather", false, 9},
   };
   return list;
 }
@@ -364,6 +366,15 @@ void Simulation::saveSection(uint32_t tag, ByteWriter& w) const {
       w.u16(visionRules_.flags);
       w.u16(visionRules_.sightPercent);
       w.podVector(smoke_);
+      break;
+    case sect::Environment:
+      w.i32(env_.daySeconds);
+      w.u32(env_.setTick);
+      w.i32(env_.rate);
+      w.u8(env_.weather);
+      w.u8(env_.previous);
+      w.u32(env_.changeTick);
+      w.u32(env_.changeTicks);
       break;
     default:
       break;
@@ -664,6 +675,15 @@ bool Simulation::loadSection(uint32_t tag, ByteReader& r, int version, std::stri
       groundDirty_ = true;
       vision_.setAnySmoke(true);  // the layer is laid again at the next look round
       return r.ok() || damaged("vision rules");
+    case sect::Environment:
+      env_.daySeconds = std::clamp(r.i32(), 0, 24 * 3600 - 1);
+      env_.setTick = r.u32();
+      env_.rate = std::clamp(r.i32(), 0, 3600);
+      env_.weather = static_cast<uint8_t>(std::min<int>(r.u8(), kWeatherCount - 1));
+      env_.previous = static_cast<uint8_t>(std::min<int>(r.u8(), kWeatherCount - 1));
+      env_.changeTick = r.u32();
+      env_.changeTicks = r.u32();
+      return r.ok() || damaged("time and weather");
     default:
       return true;
   }
@@ -703,6 +723,12 @@ void Simulation::resetSection(uint32_t tag) {
       smoke_.clear();
       groundDirty_ = true;
       vision_.setAnySmoke(true);
+      break;
+    case sect::Environment:  // as the scenario begins
+      env_ = Environment{};
+      env_.daySeconds = std::clamp(script_.startMinute, 0, 24 * 60 - 1) * 60;
+      env_.rate = std::clamp(script_.clockRate, 0, 3600);
+      env_.weather = env_.previous = static_cast<uint8_t>(std::min<int>(script_.startWeather, kWeatherCount - 1));
       break;
     default:
       break;

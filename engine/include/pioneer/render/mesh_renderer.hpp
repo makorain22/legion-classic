@@ -17,6 +17,7 @@
 #include "pioneer/assets/voxel_mesh.hpp"
 #include "pioneer/math/mat.hpp"
 #include "pioneer/render/camera.hpp"
+#include "pioneer/render/environment.hpp"
 #include "pioneer/render/gl.hpp"
 
 namespace pioneer {
@@ -63,6 +64,12 @@ class MeshRenderer {
   void add(int mesh, const MeshInstance& inst);
 
   // Colour grade, as for sprites: rgb tint and saturation.
+  // Where the light comes from and how much of it comes straight from there
+  // (render/environment.hpp). Default: the classic sun, full strength.
+  void setSun(Vec3f towardsLight, float direct) {
+    sun_ = towardsLight;
+    direct_ = direct < 0.0f ? 0.0f : direct > 1.0f ? 1.0f : direct;
+  }
   void setGrade(float r, float g, float b, float saturation) {
     grade_[0] = r;
     grade_[1] = g;
@@ -117,6 +124,8 @@ class MeshRenderer {
   const Camera* view_ = nullptr;
   const TerrainRenderer* ground_ = nullptr;
   float grade_[4] = {1, 1, 1, 1};
+  Vec3f sun_ = sunDirection();
+  float direct_ = 1.0f;
   size_t drawnInstances_ = 0, drawnTriangles_ = 0;
 };
 

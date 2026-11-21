@@ -20,29 +20,11 @@
 
 #include "pioneer/render/camera.hpp"
 #include "pioneer/render/device.hpp"
+#include "pioneer/render/environment.hpp"
 #include "pioneer/render/gl.hpp"
 #include "pioneer/render/graphics.hpp"
 
 namespace pioneer {
-
-// How the drawn world is turned into what is seen. render/environment.hpp
-// makes one from the hour and the weather; the default changes nothing.
-struct SceneLook {
-  float light[3] = {1.0f, 1.0f, 1.0f};  // multiplies the world: sun and sky together
-  float saturation = 1.0f;
-  float fog[3] = {0.62f, 0.66f, 0.70f};
-  float fogDensity = 0.0f;     // per tile of distance from the eye
-  float groundFog = 0.0f;      // more of it where the ground is low
-  float fogBase = 0.0f;        // the height (tiles) ground fog lies at...
-  float fogHeight = 2.0f;      // ...and how far above it it thins out
-  float skyFog = 0.0f;         // how much of the fog colour the sky takes (0: as drawn)
-  float clouds = 0.0f;         // strength of clouds' shadows on the ground
-  float cloudOffset[2] = {0.0f, 0.0f};  // they drift: tiles
-  float cloudScale = 0.045f;   // 1 / the size of a cloud in tiles
-  float exposure = 1.0f;
-  float vignette = 0.0f;
-  bool identity() const;       // nothing for light() to do
-};
 
 class PostProcess {
  public:
