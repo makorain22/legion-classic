@@ -68,6 +68,8 @@ struct Settings {
   void setGraphics(const pioneer::gfx::Options& o);
   bool artPack = true;
   // Sound: 0..1 each.
+  bool voiceLines = true;  // the player's men answer orders and call out (part 7)
+  bool subtitles = true;   // ... written out at the bottom of the screen
   float volMaster = 0.85f, volEffects = 1.0f, volVoices = 0.9f, volMusic = 0.6f, volAmbience = 0.8f, volInterface = 0.8f;         // use content/art/blitzkrieg when present (takes effect on restart)
   std::vector<std::string> mods;  // enabled mods (folder names), in load order
   std::string toolMod;            // the mod the rules editor and sprite studio save into

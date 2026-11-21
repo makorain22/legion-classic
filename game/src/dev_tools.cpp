@@ -80,6 +80,8 @@ void GameScene::initDevTools() {
   registerKitCommands();
   registerInterfaceScriptCommands();
   registerGraphicsCommands();
+  registerAudioCommands();
+  registerAssetCommands();
 
   // Automated runs (self-tests, screenshots) neither read nor write the
   // player's console settings, so they behave the same on every machine.

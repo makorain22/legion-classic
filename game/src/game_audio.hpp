@@ -8,6 +8,12 @@
 // there is out there. The music follows the fighting near the camera: calm
 // pieces while it is quiet, the battle pieces when it flares up, and back
 // after a lull, with long crossfades.
+//
+// Part 7: the sounds are named in bank files (audio.json, then banks/*.json,
+// then each mod's); the land shapes them (woods, streets and valleys ring
+// differently, a hill between a fight and the camera muffles it); and the
+// player's men talk - acknowledgements over the radio, shouts under fire -
+// with subtitles.
 
 #include <deque>
 #include <memory>
@@ -18,7 +24,10 @@
 
 #include <nlohmann/json.hpp>
 
+#include "pioneer/audio/acoustics.hpp"
 #include "pioneer/audio/audio.hpp"
+#include "pioneer/audio/bank.hpp"
+#include "pioneer/audio/voice_lines.hpp"
 #include "pioneer/map/map.hpp"
 #include "pioneer/sim/simulation.hpp"
 
@@ -47,6 +56,18 @@ class GameAudio {
 
   void setVolumes(const AudioVolumes& v);
   void setBiome(pioneer::Biome b);
+  // The battlefield: its acoustics are worked out from the map (and again when buildings change).
+  void setMap(const pioneer::Map* map);
+  // Which voices speak for the player: the faction ("ger", "rus", "gbr") picks a voice set in audio.json.
+  void setVoiceFaction(const std::string& faction);
+  void setVoiceOptions(bool voiceLines, bool subtitles) {
+    voiceLines_ = voiceLines;
+    subtitles_ = subtitles;
+  }
+  // One of the player's men says a cue ("move", "incoming"); positional when `at` is.
+  pioneer::audio::VoiceDirector::Said say(const std::string& cue, const pioneer::audio::Emitter& at = {});
+  std::vector<pioneer::audio::Subtitle> subtitles() const;
+  const std::string& voiceSet() const { return voiceSet_; }
   // Plays a named sound (audio.json). Positional when `at` is.
   pioneer::audio::VoiceId play(const std::string& name, const pioneer::audio::Emitter& at = {}, float volume = 1.0f);
   void ui(const char* name) { play(name); }
@@ -72,24 +93,23 @@ class GameAudio {
   float nearIntensity() const { return near_; }
   float farIntensity() const { return far_; }
   std::string nowPlaying() const { return nowPlaying_; }
+  const pioneer::audio::SoundBank& bank() const { return bank_; }
+  const pioneer::audio::VoiceLines& voices() const { return voices_; }
+  std::shared_ptr<const pioneer::audio::Acoustics> acoustics() const { return acoustics_; }
+  const std::vector<std::string>& bankFiles() const { return bankFiles_; }
+  // Acoustics on or off (console audio.acoustics): off, every sound rings in the open-ground hall.
+  void setAcousticsEnabled(bool on);
+  const pioneer::audio::Listener& ear() const { return ear_; }
+  bool acousticsEnabled() const { return acousticsOn_; }
 
  private:
-  struct Cls {
-    std::vector<int> sounds;
-    pioneer::audio::Bus bus = pioneer::audio::Bus::Sfx;
-    float volume = 1, range = 12, reverb = 0.15f, pitch = 0.05f;
-    int priority = 0, perSecond = 8, limit = 4;
-    bool loop = false;
-    std::deque<double> starts;
-    std::vector<pioneer::audio::VoiceId> voices;
-  };
   struct Track {
     std::string file, title;
     float volume = 1;
     std::shared_ptr<const std::vector<uint8_t>> bytes;
   };
   std::string resolve(const std::string& rel) const;
-  Cls* cls(const std::string& name);
+  void rebuildAcoustics();
   void startMusic(MusicMood m, float fade);
   void bed(pioneer::audio::VoiceId& v, const char* name, bool on, float volume, float x, float y, bool positional, float fade);
   void addHeat(float x, float y, float weight);
@@ -97,9 +117,24 @@ class GameAudio {
   std::unique_ptr<pioneer::audio::Mixer> mixer_;
   pioneer::audio::AudioDevice device_;
   std::vector<std::string> dirs_;
-  std::unordered_map<std::string, Cls> classes_;
+  pioneer::audio::SoundBank bank_;
+  std::unique_ptr<pioneer::audio::EventPlayer> events_;
+  pioneer::audio::VoiceLines voices_;
+  std::unique_ptr<pioneer::audio::VoiceDirector> director_;
+  std::unordered_map<std::string, std::string> factionVoices_;  // faction -> voice set
+  std::string voiceSet_;
+  bool voiceLines_ = true, subtitles_ = true;
+  std::vector<std::string> bankFiles_;
+  const pioneer::Map* map_ = nullptr;
+  std::shared_ptr<pioneer::audio::Acoustics> acoustics_;
+  bool acousticsOn_ = true;
+  uint32_t mapRevision_ = 0;
+  float acousticsCheck_ = 0;
+  double lastIncoming_ = -10, lastManDown_ = -10;
   std::unordered_map<std::string, std::vector<Track>> playlists_;
   std::unordered_map<std::string, int> ambience_;  // biome id -> sound
+  std::unordered_map<std::string, std::string> ambienceFiles_;  // biome id -> file (the last bank naming it wins)
+  std::unordered_map<std::string, nlohmann::json> musicLists_;  // mood -> tracks (likewise)
   int battleBed_ = -1;
   pioneer::audio::Listener ear_;
   double now_ = 0;

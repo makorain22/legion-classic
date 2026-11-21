@@ -56,6 +56,13 @@ Hearing hear(const Emitter& e, const Listener& l) {
   // Left and right by the sound's place across the screen (isometric: x - y).
   const float across = ((e.x - e.y) - (l.x - l.y)) * 0.70710678f;
   h.pan = std::clamp(across / std::max(4.0f, l.viewTiles * 1.3f), -1.0f, 1.0f) * 0.85f;
+  // Something in the way: quieter, much duller, and more of it arrives by reflection.
+  if (e.occlusion > 0.0f) {
+    const float o = std::clamp(e.occlusion, 0.0f, 1.0f);
+    h.gain *= 1.0f - 0.55f * o;
+    h.cutoff = std::clamp(std::min(h.cutoff, 300.0f + 12000.0f * std::pow(1.0f - o, 1.5f)), 300.0f, 18000.0f);
+    h.wet = std::clamp(h.wet + 0.15f * o, 0.0f, 0.6f);
+  }
   return h;
 }
 
@@ -82,6 +89,12 @@ struct Mixer::Voice {
   float lp[2] = {0, 0};
   float audibility = 1.0f;  // last positional gain, for stealing
   uint64_t started = 0;
+  // Acoustics: occlusion glides towards the last check; checked again when the age runs out.
+  float occ = 0.0f, occTarget = 0.0f;
+  int acousticAge = 0;  // frames until the next check
+  bool radio = false;
+  float hp[2] = {0, 0}, hpIn[2] = {0, 0};  // the radio's high-pass
+  float lp2[2] = {0, 0};                   // ... and a second low-pass stage
 };
 
 // ---------------------------------------------------------------------------
@@ -153,8 +166,18 @@ struct Mixer::Reverb {
   Allpass ap[2][4];
   std::vector<float> pre;
   size_t preI = 0;
-  float feedback = 0.93f, damp = 0.28f;
-  explicit Reverb(int rate) {
+  float feedback = 0.93f, damp = 0.28f, level = 1.0f;
+  // Discrete echoes: a delay line on the input, read at a few taps.
+  std::vector<float> echo;
+  size_t echoI = 0;
+  struct Tap {
+    size_t delay = 0;
+    float gain = 0;
+  };
+  std::vector<Tap> taps;
+  int quiet = 0;  // samples of silent input in a row (a quiet space is skipped once its tail has gone)
+  int tail = 0;   // samples after which a quiet space is silent
+  Reverb(int rate, const SpaceSound& sp) : feedback(sp.feedback), damp(sp.damp), level(sp.level) {
     static const int kComb[8] = {1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617};
     static const int kAp[4] = {556, 441, 341, 225};
     const float k = static_cast<float>(rate) / 44100.0f;
@@ -163,7 +186,20 @@ struct Mixer::Reverb {
       for (int j = 0; j < 8; ++j) comb[c][j].buf.assign(static_cast<size_t>((kComb[j] + spread) * k), 0.0f);
       for (int j = 0; j < 4; ++j) ap[c][j].buf.assign(static_cast<size_t>((kAp[j] + spread) * k), 0.0f);
     }
-    pre.assign(static_cast<size_t>(0.028f * static_cast<float>(rate)), 0.0f);
+    pre.assign(std::max<size_t>(1, static_cast<size_t>(sp.preDelay * static_cast<float>(rate))), 0.0f);
+    size_t longest = 0;
+    for (int i = 0; i < sp.echoCount; ++i) {
+      Tap t;
+      t.delay = std::max<size_t>(1, static_cast<size_t>(sp.echoes[i].delay * static_cast<float>(rate)));
+      t.gain = sp.echoes[i].gain;
+      longest = std::max(longest, t.delay);
+      taps.push_back(t);
+    }
+    if (!taps.empty()) echo.assign(longest + 1, 0.0f);
+    // A comb rings down by 60 dB after about log(0.001)/log(feedback) passes of its loop.
+    const float passes = std::log(0.001f) / std::log(std::clamp(feedback, 0.5f, 0.99f));
+    tail = static_cast<int>(passes * 1617.0f * static_cast<float>(rate) / 44100.0f) + static_cast<int>(longest) +
+           static_cast<int>(pre.size()) + rate / 10;
   }
   void process(float in, float& l, float& r) {
     const float x = pre[preI];
@@ -175,13 +211,24 @@ struct Mixer::Reverb {
       for (int j = 0; j < 8; ++j) o[c] += comb[c][j].process(input, feedback, damp);
       for (int j = 0; j < 4; ++j) o[c] = ap[c][j].process(o[c]);
     }
-    l = o[0] * 3.0f;
-    r = o[1] * 3.0f;
+    l = o[0] * 3.0f * level;
+    r = o[1] * 3.0f * level;
+    if (!taps.empty()) {
+      echo[echoI] = in;
+      for (size_t t = 0; t < taps.size(); ++t) {
+        const size_t j = (echoI + echo.size() - taps[t].delay) % echo.size();
+        const float e = echo[j] * taps[t].gain * 1.5f;
+        if (t & 1) r += e;
+        else l += e;
+      }
+      if (++echoI >= echo.size()) echoI = 0;
+    }
   }
 };
 
 // ---------------------------------------------------------------------------
-Mixer::Mixer(int sampleRate, int maxVoices) : rate_(sampleRate), reverb_(std::make_unique<Reverb>(sampleRate)) {
+Mixer::Mixer(int sampleRate, int maxVoices) : rate_(sampleRate) {
+  for (int i = 0; i < kSpaceCount; ++i) reverb_[i] = std::make_unique<Reverb>(sampleRate, spaceSound(static_cast<Space>(i)));
   voices_.resize(static_cast<size_t>(std::max(4, maxVoices)));
   for (auto& v : voices_) v = std::make_unique<Voice>();
 }
@@ -206,7 +253,12 @@ VoiceId Mixer::play(const PlayDesc& d) {
   if (d.sound < 0 || d.sound >= static_cast<int>(sounds_.size())) return 0;
   const Sound& s = sounds_[static_cast<size_t>(d.sound)];
   if (s.frames() < 2) return 0;
-  const Hearing h = hear(d.at, listener_);
+  Emitter at = d.at;
+  if (acoustics_ && at.positional) {
+    at.space = acoustics_->spaceAt(at.x, at.y);
+    at.occlusion = acoustics_->occlusion(at.x, at.y, listener_.x, listener_.y);
+  }
+  const Hearing h = hear(at, listener_);
   const float audible = h.gain * d.volume;
   if (!d.loop && audible < 0.004f) return 0;  // too far away to matter
   // A free voice, or the least important one that matters less than this.
@@ -242,7 +294,10 @@ VoiceId Mixer::play(const PlayDesc& d) {
   v.priority = d.priority;
   v.volume = d.volume;
   v.reverb = d.reverb;
-  v.at = d.at;
+  v.at = at;
+  v.occ = v.occTarget = at.occlusion;
+  v.acousticAge = rate_ / 8;
+  v.radio = d.radio;
   v.audibility = h.gain;
   if (d.fadeIn > 0) {
     v.env = 0;
@@ -338,6 +393,25 @@ void Mixer::setMaster(float v) {
 void Mixer::setMuffle(float amount) {
   std::lock_guard<std::mutex> lock(m_);
   muffle_ = std::clamp(amount, 0.0f, 1.0f);
+}
+void Mixer::setAcoustics(std::shared_ptr<const Acoustics> a) {
+  std::lock_guard<std::mutex> lock(m_);
+  acoustics_ = std::move(a);
+  for (auto& v : voices_) v->acousticAge = 0;  // check again at once
+}
+std::shared_ptr<const Acoustics> Mixer::acoustics() const {
+  std::lock_guard<std::mutex> lock(m_);
+  return acoustics_;
+}
+bool Mixer::voiceAcoustics(VoiceId id, float& occlusion, Space& space) const {
+  std::lock_guard<std::mutex> lock(m_);
+  for (const auto& v : voices_)
+    if (v->active && v->id == id) {
+      occlusion = v->occ;
+      space = v->at.space;
+      return true;
+    }
+  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -446,13 +520,27 @@ void Mixer::mixMusic(float* out, int frames) {
 // ---------------------------------------------------------------------------
 void Mixer::mixVoices(float* dry, float* front, int frames) {
   const float inv = 1.0f / 32768.0f;
-  std::vector<float>& wet = wet_;
+  // The radio: a one-pole high-pass near 450 Hz and the low-pass held under 3 kHz.
+  const float hpA = std::exp(-2.0f * kPi * 450.0f / static_cast<float>(rate_));
+  const float radioLp = lowpassCoeff(3000.0f, rate_);
   for (auto& vp : voices_) {
     Voice& v = *vp;
     if (!v.active) continue;
     const Sound& s = sounds_[static_cast<size_t>(v.sound)];
     const size_t n = s.frames();
     const int ch = s.channels;
+    // What lies between it and the ear, checked a few times a second.
+    if (v.at.positional && acoustics_) {
+      v.acousticAge -= frames;
+      if (v.acousticAge <= 0) {
+        v.at.space = acoustics_->spaceAt(v.at.x, v.at.y);
+        v.occTarget = acoustics_->occlusion(v.at.x, v.at.y, listener_.x, listener_.y);
+        v.acousticAge = rate_ / 8;
+      }
+      v.occ += (v.occTarget - v.occ) * std::min(1.0f, static_cast<float>(frames) / (0.2f * static_cast<float>(rate_)));
+      v.at.occlusion = v.occ;
+    }
+    std::vector<float>& wet = wet_[static_cast<int>(v.at.space) < kSpaceCount ? static_cast<int>(v.at.space) : 0];
     // Where it is heard from, recomputed once a block and glided across it.
     const Hearing h = hear(v.at, listener_);
     v.audibility = h.gain;
@@ -464,7 +552,7 @@ void Mixer::mixVoices(float* dry, float* front, int frames) {
     tr *= level;
     const float tw = v.bus == Bus::Ui ? 0.0f : (v.reverb + h.wet) * v.volume * bus_[static_cast<int>(v.bus)] * master_ *
                                                    std::sqrt(std::max(h.gain, 0.0f));
-    const float ta = lowpassCoeff(h.cutoff, rate_);
+    const float ta = v.radio ? std::min(radioLp, lowpassCoeff(h.cutoff, rate_)) : lowpassCoeff(h.cutoff, rate_);
     if (!v.primed) {
       v.gl = tl;
       v.gr = tr;
@@ -491,16 +579,28 @@ void Mixer::mixVoices(float* dry, float* front, int frames) {
       } else {
         a = b = (s.pcm[i0] + (s.pcm[i1] - s.pcm[i0]) * t) * inv;
       }
+      if (v.radio) {
+        // Mono, thinned below and overdriven a little, as a field set sounds.
+        const float m = (a + b) * 0.5f;
+        v.hp[0] = hpA * (v.hp[0] + m - v.hpIn[0]);
+        v.hpIn[0] = m;
+        a = b = std::tanh(v.hp[0] * 2.2f) * 0.62f;
+      }
       v.lp[0] += v.lpA * (a - v.lp[0]);
       v.lp[1] += v.lpA * (b - v.lp[1]);
+      float ol = v.lp[0], orr = v.lp[1];
+      if (v.radio) {  // a steeper top for the radio: a second stage
+        v.lp2[0] += radioLp * (v.lp[0] - v.lp2[0]);
+        ol = orr = v.lp2[0];
+      }
       // Envelope.
       if (v.env != v.envTarget) {
         v.env = v.env < v.envTarget ? std::min(v.envTarget, v.env + v.envStep) : std::max(v.envTarget, v.env - v.envStep);
       }
       const float e = v.env;
-      target[i * 2] += v.lp[0] * v.gl * e;
-      target[i * 2 + 1] += v.lp[1] * v.gr * e;
-      wet[static_cast<size_t>(i)] += (v.lp[0] + v.lp[1]) * 0.5f * v.wet * e;
+      target[i * 2] += ol * v.gl * e;
+      target[i * 2 + 1] += orr * v.gr * e;
+      wet[static_cast<size_t>(i)] += (ol + orr) * 0.5f * v.wet * e;
       v.gl += dl;
       v.gr += dr;
       v.wet += dw;
@@ -530,16 +630,32 @@ void Mixer::mix(float* out, int frames) {
   const size_t n2 = static_cast<size_t>(frames) * 2;
   dry_.assign(n2, 0.0f);
   music_.assign(n2, 0.0f);
-  wet_.assign(static_cast<size_t>(frames), 0.0f);
-  std::vector<float> front(n2, 0.0f);
+  front_.assign(n2, 0.0f);
+  for (auto& w : wet_) w.assign(static_cast<size_t>(frames), 0.0f);
+  std::vector<float>& front = front_;
   mixVoices(dry_.data(), front.data(), frames);
   mixMusic(music_.data(), frames);
-  // The hall.
-  for (int i = 0; i < frames; ++i) {
-    float l, r;
-    reverb_->process(wet_[static_cast<size_t>(i)], l, r);
-    dry_[static_cast<size_t>(i) * 2] += l;
-    dry_[static_cast<size_t>(i) * 2 + 1] += r;
+  // The spaces. Open ground always rings (as the single hall did); the others
+  // only while something has been sent to them recently.
+  for (int sp = 0; sp < kSpaceCount; ++sp) {
+    Reverb& rv = *reverb_[sp];
+    const std::vector<float>& w = wet_[sp];
+    if (sp != 0) {
+      bool any = false;
+      for (float x : w)
+        if (x != 0.0f) {
+          any = true;
+          break;
+        }
+      rv.quiet = any ? 0 : rv.quiet + frames;
+      if (rv.quiet > rv.tail) continue;
+    }
+    for (int i = 0; i < frames; ++i) {
+      float l, r;
+      rv.process(w[static_cast<size_t>(i)], l, r);
+      dry_[static_cast<size_t>(i) * 2] += l;
+      dry_[static_cast<size_t>(i) * 2 + 1] += r;
+    }
   }
   // Muffled world (a menu over the battle).
   const float mA = lowpassCoeff(400.0f + 17600.0f * muffle_ * muffle_, rate_);

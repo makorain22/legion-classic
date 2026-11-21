@@ -193,11 +193,13 @@ if(LEGION_BUILD_TESTS)
   file(GLOB_RECURSE TEST_SOURCES CONFIGURE_DEPENDS tests/*.cpp)
   # Editor logic without graphics (undo history) is tested too.
   # So is the Blitzkrieg file reader (it needs no graphics either).
-  # And the sound mixer and decoders (no sound card needed).
+  # And the sound mixer, decoders, banks, voice lines and acoustics (no sound card needed).
   # And the 3D camera and voxel meshing (pure maths, no GL calls).
   add_executable(pioneer_tests ${TEST_SOURCES} editor/src/history.cpp engine/src/assets/blitzkrieg.cpp
-                 engine/src/audio/mixer.cpp engine/src/audio/decode.cpp game/src/campaign.cpp
-                 engine/src/render/camera.cpp engine/src/assets/voxel.cpp engine/src/assets/voxel_mesh.cpp
+                 engine/src/audio/mixer.cpp engine/src/audio/decode.cpp engine/src/audio/acoustics.cpp
+                 engine/src/audio/bank.cpp engine/src/audio/voice_lines.cpp game/src/campaign.cpp
+                 engine/src/render/camera.cpp engine/src/assets/voxel.cpp engine/src/assets/voxel_mesh.cpp engine/src/assets/vox_file.cpp
+                 engine/src/assets/skeleton.cpp engine/src/assets/gltf.cpp engine/src/assets/voxel_rig.cpp
                  engine/src/assets/image.cpp
                  engine/src/ui/timeline_model.cpp engine/src/ui/graph_model.cpp engine/src/ui/mission_views.cpp
                  engine/src/ui/icon_list.cpp engine/src/render/graphics_settings.cpp

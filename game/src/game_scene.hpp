@@ -416,6 +416,7 @@ class GameScene final : public pioneer::Scene {
   void unbindSelection();
   void updateCameraBounds();
   void drawHud();
+  void drawSubtitles();
   void drawHelp();
   void drawDebug();
   void runEditorDemo();
@@ -485,6 +486,8 @@ class GameScene final : public pioneer::Scene {
   void detectGraphics(bool measure);  // picks a preset for this machine (now by the card's name, then by timing)
   void detectFrame(double sceneMs);
   void registerGraphicsCommands();
+  void registerAudioCommands();
+  void registerAssetCommands();
  public:
   void drawGraphicsSettings();      // the Settings page's part
   void setGraphicsPreset(pioneer::gfx::Preset p, bool byGame);

@@ -15,13 +15,6 @@ namespace legion {
 namespace {
 constexpr float kTile = 1.0f / LEPTONS_PER_TILE;
 
-Bus busFrom(const std::string& s) {
-  if (s == "voice") return Bus::Voice;
-  if (s == "music") return Bus::Music;
-  if (s == "ambience") return Bus::Ambience;
-  if (s == "ui") return Bus::Ui;
-  return Bus::Sfx;
-}
 
 // Seconds of silence between calm pieces: space to hear the land.
 constexpr float kCalmGapMin = 8.0f, kCalmGapMax = 25.0f;
@@ -43,71 +36,84 @@ std::string GameAudio::resolve(const std::string& rel) const {
 
 bool GameAudio::init(const std::vector<std::string>& dirs, std::string& error) {
   dirs_ = dirs;
-  const std::string mapPath = resolve("audio.json");
-  if (mapPath.empty()) {
+  // The bank files: each folder's audio.json, then its banks/*.json in name order; base first, mods after.
+  for (const auto& dir : dirs_) {
+    std::error_code ec;
+    if (std::filesystem::exists(dir + "audio.json", ec)) bankFiles_.push_back(dir + "audio.json");
+    std::vector<std::string> more;
+    for (std::filesystem::directory_iterator it(dir + "banks", ec), end; !ec && it != end; it.increment(ec))
+      if (it->path().extension() == ".json") more.push_back(it->path().generic_string());
+    std::sort(more.begin(), more.end());
+    bankFiles_.insert(bankFiles_.end(), more.begin(), more.end());
+  }
+  if (bankFiles_.empty()) {
     error = "no audio/audio.json";
     return false;
   }
-  std::ifstream in(mapPath);
-  const nlohmann::json j = nlohmann::json::parse(in, nullptr, false);
-  if (j.is_discarded() || !j.contains("sounds")) {
-    error = mapPath + " is damaged";
-    return false;
-  }
-  std::unordered_map<std::string, int> loaded;  // file -> sound index
-  auto load = [&](const std::string& rel) {
-    auto it = loaded.find(rel);
-    if (it != loaded.end()) return it->second;
-    Sound s;
-    std::string err;
-    const std::string path = resolve(rel);
-    if (path.empty() || !loadSound(path, s, err)) {
-      PNR_WARN("Sound %s: %s", rel.c_str(), path.empty() ? "missing" : err.c_str());
-      return loaded[rel] = -1;
-    }
-    return loaded[rel] = mixer_->addSound(std::move(s));
-  };
-  for (const auto& [name, d] : j["sounds"].items()) {
-    Cls c;
-    for (const auto& f : d.value("files", nlohmann::json::array()))
-      if (const int s = load(f.get<std::string>()); s >= 0) c.sounds.push_back(s);
-    c.bus = busFrom(d.value("bus", std::string("sfx")));
-    c.volume = d.value("volume", 1.0f);
-    c.range = d.value("range", 12.0f);
-    c.reverb = d.value("reverb", 0.15f);
-    c.pitch = d.value("pitch", 0.05f);
-    c.priority = d.value("priority", 0);
-    c.perSecond = d.value("perSecond", 8);
-    c.limit = d.value("limit", 4);
-    c.loop = d.value("loop", false);
-    classes_[name] = std::move(c);
-  }
-  if (j.contains("ambience"))
-    for (const auto& [biome, f] : j["ambience"].items()) {
-      const int s = load(f.get<std::string>());
-      if (biome == "battle") battleBed_ = s;
-      else ambience_[biome] = s;
-    }
-  if (j.contains("music"))
-    for (const auto& [mood, list] : j["music"].items())
-      for (const auto& t : list) {
-        Track tr;
-        tr.file = t.value("file", std::string());
-        tr.title = t.value("title", tr.file);
-        tr.volume = t.value("volume", 1.0f);
-        auto bytes = std::make_shared<std::vector<uint8_t>>();
-        const std::string path = resolve(tr.file);
-        if (path.empty() || !readFileBytes(path, *bytes)) {
-          PNR_WARN("Music %s missing", tr.file.c_str());
-          continue;
-        }
-        tr.bytes = std::move(bytes);
-        playlists_[mood].push_back(std::move(tr));
+  for (const auto& path : bankFiles_) {
+    std::ifstream in(path);
+    const nlohmann::json j = nlohmann::json::parse(in, nullptr, false);
+    if (j.is_discarded()) {
+      PNR_WARN("Sound bank %s is damaged", path.c_str());
+      if (path == bankFiles_.front()) {
+        error = path + " is damaged";
+        return false;
       }
+      continue;
+    }
+    std::string err;
+    if (!bank_.add(j, path, err)) PNR_WARN("Sound bank: %s", err.c_str());
+    if (!voices_.add(j, path, err)) PNR_WARN("Voice lines: %s", err.c_str());
+    if (j.contains("factions"))
+      for (const auto& [faction, set] : j["factions"].items()) factionVoices_[faction] = set.get<std::string>();
+    if (j.contains("ambience"))
+      for (const auto& [biome, f] : j["ambience"].items()) ambienceFiles_[biome] = f.get<std::string>();
+    if (j.contains("music"))
+      for (const auto& [mood, list] : j["music"].items()) musicLists_[mood] = list;
+  }
+  const auto resolver = [this](const std::string& rel) { return resolve(rel); };
+  std::vector<std::string> missing;
+  bank_.load(*mixer_, resolver, &missing);
+  voices_.load(*mixer_, resolver, &missing);
+  for (const auto& m : missing) PNR_WARN("Sound %s", m.c_str());
+  events_ = std::make_unique<EventPlayer>(*mixer_, bank_);
+  director_ = std::make_unique<VoiceDirector>(*mixer_, voices_);
+  std::unordered_map<std::string, int> loaded;
+  for (const auto& [biome, rel] : ambienceFiles_) {
+    int s = -1;
+    if (auto it = loaded.find(rel); it != loaded.end()) s = it->second;
+    else {
+      Sound snd;
+      std::string err;
+      const std::string path = resolve(rel);
+      if (!path.empty() && loadSound(path, snd, err)) s = mixer_->addSound(std::move(snd));
+      else PNR_WARN("Ambience %s: %s", rel.c_str(), path.empty() ? "missing" : err.c_str());
+      loaded[rel] = s;
+    }
+    if (biome == "battle") battleBed_ = s;
+    else ambience_[biome] = s;
+  }
+  for (const auto& [mood, list] : musicLists_)
+    for (const auto& t : list) {
+      Track tr;
+      tr.file = t.value("file", std::string());
+      tr.title = t.value("title", tr.file);
+      tr.volume = t.value("volume", 1.0f);
+      auto bytes = std::make_shared<std::vector<uint8_t>>();
+      const std::string path = resolve(tr.file);
+      if (path.empty() || !readFileBytes(path, *bytes)) {
+        PNR_WARN("Music %s missing", tr.file.c_str());
+        continue;
+      }
+      tr.bytes = std::move(bytes);
+      playlists_[mood].push_back(std::move(tr));
+    }
   std::string devErr;
   if (!device_.open(*mixer_, devErr)) PNR_WARN("No sound: %s", devErr.c_str());
-  else PNR_INFO("Sound: %d sounds, %d music tracks, 48 kHz", mixer_->soundCount(),
-                static_cast<int>(playlists_["menu"].size() + playlists_["calm"].size() + playlists_["battle"].size()));
+  else PNR_INFO("Sound: %d sounds in %zu events, %d voice lines, %d music tracks, %zu bank files, 48 kHz", mixer_->soundCount(),
+                bank_.size(), voices_.lineCount(),
+                static_cast<int>(playlists_["menu"].size() + playlists_["calm"].size() + playlists_["battle"].size()),
+                bankFiles_.size());
   return true;
 }
 
@@ -130,37 +136,79 @@ void GameAudio::setBiome(Biome b) {
   ambienceSound_ = s;
 }
 
-GameAudio::Cls* GameAudio::cls(const std::string& name) {
-  auto it = classes_.find(name);
-  return it == classes_.end() || it->second.sounds.empty() ? nullptr : &it->second;
+VoiceId GameAudio::play(const std::string& name, const Emitter& at, float volume) {
+  if (!device_.isOpen() || !events_) return 0;
+  return events_->play(name, at, volume);
 }
 
-VoiceId GameAudio::play(const std::string& name, const Emitter& at, float volume) {
-  if (!device_.isOpen()) return 0;
-  Cls* c = cls(name);
-  if (!c) return 0;
-  std::erase_if(c->voices, [&](VoiceId v) { return !mixer_->playing(v); });
-  if (!c->loop && static_cast<int>(c->voices.size()) >= c->limit) return 0;
-  while (!c->starts.empty() && c->starts.front() < now_ - 1.0) c->starts.pop_front();
-  // At high game speed the same battle makes many more sounds a second: thin them out.
-  const int perSecond = std::max(1, static_cast<int>(static_cast<float>(c->perSecond) / std::sqrt(std::max(1.0f, speed_))));
-  if (!c->loop && static_cast<int>(c->starts.size()) >= perSecond) return 0;
-  PlayDesc d;
-  d.sound = c->sounds[std::uniform_int_distribution<size_t>(0, c->sounds.size() - 1)(rng_)];
-  d.bus = c->bus;
-  d.volume = c->volume * volume;
-  d.pitch = 1.0f + std::uniform_real_distribution<float>(-c->pitch, c->pitch)(rng_);
-  d.priority = c->priority;
-  d.loop = c->loop;
-  d.reverb = c->reverb;
-  d.at = at;
-  d.at.range = c->range > 0 ? c->range : at.range;
-  const VoiceId v = mixer_->play(d);
-  if (v) {
-    c->voices.push_back(v);
-    c->starts.push_back(now_);
+void GameAudio::setVoiceFaction(const std::string& faction) {
+  auto it = factionVoices_.find(faction);
+  if (it == factionVoices_.end()) it = factionVoices_.find("default");
+  voiceSet_ = it == factionVoices_.end() ? std::string() : it->second;
+}
+
+VoiceDirector::Said GameAudio::say(const std::string& cue, const Emitter& at) {
+  if (!device_.isOpen() || !director_ || !voiceLines_ || voiceSet_.empty()) return VoiceDirector::Said::Skipped;
+  return director_->say(voiceSet_, cue, at);
+}
+
+std::vector<Subtitle> GameAudio::subtitles() const {
+  if (!director_ || !subtitles_) return {};
+  return director_->subtitles();
+}
+
+void GameAudio::setMap(const Map* map) {
+  map_ = map;
+  mapRevision_ = map ? map->revision() : 0;
+  rebuildAcoustics();
+}
+
+void GameAudio::setAcousticsEnabled(bool on) {
+  acousticsOn_ = on;
+  mixer_->setAcoustics(on ? acoustics_ : nullptr);
+}
+
+// The land as the ear knows it: four-tile cells with their ground height, how
+// much of them is buildings (the occupied tiles) and how much is trees.
+void GameAudio::rebuildAcoustics() {
+  if (!map_ || map_->width() <= 0) {
+    acoustics_.reset();
+    mixer_->setAcoustics(nullptr);
+    return;
   }
-  return v;
+  auto a = std::make_shared<Acoustics>();
+  const Map& m = *map_;
+  a->reset(m.width(), m.height(), 4);
+  const int ct = a->cellTiles();
+  const float tileArea = static_cast<float>(ct * ct);
+  for (int cy = 0; cy < a->cellsY(); ++cy)
+    for (int cx = 0; cx < a->cellsX(); ++cx) {
+      Acoustics::Cell& c = a->cell(cx, cy);
+      float h = 0;
+      int n = 0, built = 0;
+      for (int ty = cy * ct; ty < std::min(m.height(), (cy + 1) * ct); ++ty)
+        for (int tx = cx * ct; tx < std::min(m.width(), (cx + 1) * ct); ++tx) {
+          h += static_cast<float>(m.corner(tx, ty));
+          ++n;
+          if (m.block(tx, ty) & Map::kOccupied) ++built;
+        }
+      c.ground = n ? h / static_cast<float>(n) / static_cast<float>(HEIGHT_UNITS_PER_TILE) : 0.0f;
+      c.solid = static_cast<float>(built) / tileArea;
+    }
+  // Trees: a cell with a tree on every other tile is woodland.
+  for (const Prop& p : m.props()) {
+    if (p.kind != PropKind::Tree && p.kind != PropKind::Pine && p.kind != PropKind::SnowPine && p.kind != PropKind::Palm &&
+        p.kind != PropKind::JungleTree && p.kind != PropKind::DeadTree)
+      continue;
+    const int cx = p.x / LEPTONS_PER_TILE / ct, cy = p.y / LEPTONS_PER_TILE / ct;
+    if (cx < 0 || cy < 0 || cx >= a->cellsX() || cy >= a->cellsY()) continue;
+    Acoustics::Cell& c = a->cell(cx, cy);
+    c.foliage = std::min(1.0f, c.foliage + 2.0f / tileArea);
+  }
+  a->classify();
+  if (acoustics_) for (const auto& z : acoustics_->zones()) a->addZone(z);  // zones a mission laid down stay
+  acoustics_ = std::move(a);
+  if (acousticsOn_) mixer_->setAcoustics(acoustics_);
 }
 
 void GameAudio::addHeat(float x, float y, float weight) {
@@ -204,6 +252,12 @@ void GameAudio::onEvent(const SimEvent& ev, const Simulation& sim, uint8_t playe
       }
       if (!s.empty()) play(s, at);
       if (wh != "bullet") addHeat(at.x, at.y, 1.0f + static_cast<float>(w.damage) / 60.0f);
+      // Enemy shells landing where the player is looking: someone shouts a warning.
+      if (playing && wh == "he" && w.splash >= 192 && !sim.allied(ev.owner, player) && now_ - lastIncoming_ > 3.0 &&
+          hear(at, ear_).gain > 0.45f) {
+        lastIncoming_ = now_;
+        say("incoming", at);
+      }
       break;
     }
     case EventType::UnitDied: {
@@ -212,6 +266,13 @@ void GameAudio::onEvent(const SimEvent& ev, const Simulation& sim, uint8_t playe
       if (d.category == UnitCategory::Fortification) break;
       if (d.isStructure()) play("collapse", at);
       else if (!d.infantry()) play("vehicle_destroyed", at);
+      if (playing && ev.owner == player && !d.isStructure()) {
+        if (!d.infantry()) say("vehicle_lost");
+        else if (now_ - lastManDown_ > 1.5 && hear(at, ear_).gain > 0.3f) {
+          lastManDown_ = now_;
+          say("man_down", at);
+        }
+      }
       addHeat(at.x, at.y, d.infantry() ? 0.5f : 6.0f);
       break;
     }
@@ -221,7 +282,10 @@ void GameAudio::onEvent(const SimEvent& ev, const Simulation& sim, uint8_t playe
       if (ev.owner == player && playing) play("ui_place");
       break;
     case EventType::UnitReady:
-      if (ev.owner == player && playing) play("ui_ready");
+      if (ev.owner == player && playing) {
+        play("ui_ready");
+        if (ev.unitType < sim.types().size() && !sim.types().get(ev.unitType).isStructure()) say("ready");
+      }
       break;
     case EventType::CannotBuild:
       if (ev.owner == player && playing) play("ui_denied");
@@ -235,7 +299,10 @@ void GameAudio::onEvent(const SimEvent& ev, const Simulation& sim, uint8_t playe
       if (playing && (ev.owner == ANY_PLAYER || sim.allied(ev.owner, player))) play("ui_objective");
       break;
     case EventType::PointCaptured:
-      if (playing && sim.allied(ev.owner, player)) play("ui_captured");
+      if (playing && sim.allied(ev.owner, player)) {
+        play("ui_captured");
+        if (ev.owner == player) say("captured");
+      }
       break;
     case EventType::ConvoyArrived:
       if (playing && ev.owner == player) play("ui_convoy");
@@ -250,6 +317,8 @@ void GameAudio::onOrder(bool attack, int infantry, int vehicles, float x, float 
     play("radio");
     lastOrderSound_ = now_;
   }
+  // Someone answers: over the radio for an order, a shout when they go in.
+  say(attack ? "attack" : "move");
   if (attack && infantry >= 3 && now_ - lastWhistle_ > 4.0) {
     play("whistle", Emitter{true, x, y, 14});
     lastWhistle_ = now_;
@@ -265,9 +334,9 @@ void GameAudio::bed(VoiceId& v, const char* name, bool on, float volume, float x
     v = 0;
     return;
   }
+  const SoundEvent* c = bank_.find(name);
   if (!v || !mixer_->playing(v)) {
-    Cls* c = cls(name);
-    if (!c) return;
+    if (!c || c->sounds.empty()) return;
     PlayDesc d;
     d.sound = c->sounds.front();
     d.bus = c->bus;
@@ -280,7 +349,6 @@ void GameAudio::bed(VoiceId& v, const char* name, bool on, float volume, float x
     v = mixer_->play(d);
     return;
   }
-  Cls* c = cls(name);
   mixer_->setVolume(v, (c ? c->volume : 1.0f) * volume, fade);
   if (positional) mixer_->setPosition(v, x, y);
 }
@@ -341,6 +409,7 @@ void GameAudio::scriptMusic(const std::string& what) {
 }
 
 void GameAudio::newBattle() {
+  if (director_) director_->clear();
   near_ = far_ = 0;
   quiet_ = 0;
   scripted_ = false;
@@ -350,11 +419,26 @@ void GameAudio::newBattle() {
 
 void GameAudio::update(float dt, const Listener& ear, bool menu, bool overlay, bool paused, float speed,
                        const AudioBeds& beds) {
+  ear_ = ear;
+  // Buildings go up and come down: look at the land again now and then.
+  acousticsCheck_ -= dt;
+  if (map_ && acousticsCheck_ <= 0) {
+    acousticsCheck_ = 2.0f;
+    if (map_->revision() != mapRevision_) {
+      mapRevision_ = map_->revision();
+      rebuildAcoustics();
+    }
+  }
   if (!device_.isOpen()) return;
   now_ += dt;
   speed_ = speed;
-  ear_ = ear;
   mixer_->setListener(ear);
+  if (events_) events_->tick(now_, speed);
+  if (director_) {
+    if (menu) director_->clear();
+    director_->tick(now_);
+  }
+
   near_ *= std::exp(-dt / 3.0f);
   far_ *= std::exp(-dt / 4.0f);
   mixer_->setMuffle(menu ? 0.22f : (overlay || paused) ? 0.4f : 1.0f);

@@ -311,6 +311,7 @@ void GameScene::replaceWorld(MapFile&& file, bool keepCamera) {
   terrain_.setMap(map_);
   if (audio_) {
     audio_->setBiome(map_.biome);
+    audio_->setMap(&map_);
     if (mode_ != Mode::Menu) audio_->newBattle();
   }
   players_ = defaultPlayers();
@@ -1714,6 +1715,7 @@ void GameScene::updateAudio(float dt) {
     centre(beds.tracked, beds.trackedX, beds.trackedY);
     centre(beds.burning, beds.fireX, beds.fireY);
   }
+  if (player_ < players_.size()) audio_->setVoiceFaction(players_[player_].faction);
   audio_->update(dt, ear, mode_ == Mode::Menu, menus_ && menus_->inGameMenuOpen(), paused_, speed_, beds);
 }
 
@@ -1729,6 +1731,7 @@ void GameScene::applySettings() {
     v.ambience = settings_.volAmbience;
     v.ui = settings_.volInterface;
     audio_->setVolumes(v);
+    audio_->setVoiceOptions(settings_.voiceLines, settings_.subtitles);
   }
   // Switching between the 3D view and the classic one keeps looking at the same place.
   const bool want3D = settings_.view3D && !opt_.classic;
@@ -2583,6 +2586,7 @@ void GameScene::onImGui() {
   if (mode_ == Mode::Game) editor_->imgui();
   drawObjectives();
   drawMission();
+  drawSubtitles();
   drawDebrief();
   if (mode_ != Mode::Menu && !sim_->hint(player_).empty()) {
     const ImGuiIO& io = ImGui::GetIO();
@@ -2742,6 +2746,38 @@ void GameScene::drawHud() {
     ImGui::TextDisabled(editing ? "F2 close editor   F1 help   I hide" : "F2 editor   F1 help   F3 debug   I hide");
   hudBottom_ = ImGui::GetWindowPos().y + ImGui::GetWindowSize().y + 6;
   ImGui::End();
+}
+
+// What the player's men say, written out at the bottom of the battlefield
+// (and, for a foreign language, what it means underneath).
+void GameScene::drawSubtitles() {
+  if (!audio_ || mode_ != Mode::Game || app_.takingPhoto()) return;
+  const std::vector<pioneer::audio::Subtitle> subs = audio_->subtitles();
+  if (subs.empty()) return;
+  const ImGuiIO& io = ImGui::GetIO();
+  const bool cine = sim_ && sim_->cinematic(player_);
+  const float viewW = io.DisplaySize.x - (cine ? 0.0f : Sidebar::kWidth);
+  ImDrawList* fg = ImGui::GetForegroundDrawList();
+  const float now = static_cast<float>(ImGui::GetTime());
+  (void)now;
+  float y = io.DisplaySize.y - (cine ? io.DisplaySize.y * 0.11f + 18 : 150);
+  const auto& loc = pioneer::loc::strings();
+  for (auto it = subs.rbegin(); it != subs.rend(); ++it) {
+    const std::string speaker = loc.resolve(it->speaker) + (it->radio ? " (radio)" : "");
+    const std::string& text = loc.resolve(it->text);
+    const std::string& meaning = loc.resolve(it->meaning);
+    const ImVec2 ss = ImGui::CalcTextSize((speaker + ":  ").c_str());
+    const ImVec2 ts = ImGui::CalcTextSize(text.c_str());
+    const ImVec2 ms = meaning.empty() ? ImVec2(0, 0) : ImGui::CalcTextSize(meaning.c_str());
+    const float w = std::max(ss.x + ts.x, ms.x) + 24, h = ts.y + (meaning.empty() ? 0 : ms.y + 2) + 10;
+    const float x = (viewW - w) * 0.5f;
+    y -= h;
+    fg->AddRectFilled(ImVec2(x, y), ImVec2(x + w, y + h), IM_COL32(12, 11, 8, 170), 4);
+    fg->AddText(ImVec2(x + 12, y + 5), IM_COL32(236, 200, 110, 255), (speaker + ":").c_str());
+    fg->AddText(ImVec2(x + 12 + ss.x, y + 5), IM_COL32(240, 236, 224, 255), text.c_str());
+    if (!meaning.empty()) fg->AddText(ImVec2(x + 12 + (w - 24 - ms.x) * 0.5f, y + 7 + ts.y), IM_COL32(170, 166, 150, 255), meaning.c_str());
+    y -= 4;
+  }
 }
 
 void GameScene::drawHelp() {

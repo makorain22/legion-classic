@@ -130,6 +130,8 @@ bool Settings::load(const std::string& path) {
     volMusic = s.value("music", volMusic);
     volAmbience = s.value("ambience", volAmbience);
     volInterface = s.value("interface", volInterface);
+    voiceLines = s.value("voiceLines", voiceLines);
+    subtitles = s.value("subtitles", subtitles);
   }
   mods.clear();
   if (j.contains("mods") && j["mods"].is_array())
@@ -179,7 +181,8 @@ bool Settings::save(const std::string& path) const {
   j["view3D"] = view3D;
   j["shadows"] = shadows;
   j["sound"] = {{"master", volMaster}, {"effects", volEffects}, {"voices", volVoices},
-                {"music", volMusic},   {"ambience", volAmbience}, {"interface", volInterface}};
+                {"music", volMusic},   {"ambience", volAmbience}, {"interface", volInterface},
+                {"voiceLines", voiceLines}, {"subtitles", subtitles}};
   j["mods"] = mods;
   j["toolMod"] = toolMod;
   auto& ks = j["keys"] = nlohmann::json::object();

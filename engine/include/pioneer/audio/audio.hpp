@@ -6,7 +6,13 @@
 //     end (a far battle is a rumble, not a crackle) and get wetter, so the
 //     front reads as far away rather than merely quiet. Zooming out lifts the
 //     listener: everything is a little more distant.
-//   * A large-hall reverb on a send bus gives guns and explosions their size.
+//   * Reverb on a send bus gives guns and explosions their size: one reverb
+//     per acoustic space (open ground, woods, streets, valleys; see
+//     acoustics.hpp), each voice ringing in the space it comes from. Without
+//     acoustics everything rings in the open-ground hall, as before part 7.
+//   * Occlusion: a hill or houses between a sound and the ear make it quieter,
+//     duller and wetter (Emitter::occlusion, filled from the acoustics).
+//   * Voice lines can go through a field-radio filter (PlayDesc::radio).
 //   * Voices have priorities; when every voice is busy the least important,
 //     least audible one is taken.
 //   * Two music decks stream Ogg Vorbis and crossfade.
@@ -22,6 +28,8 @@
 #include <mutex>
 #include <string>
 #include <vector>
+
+#include "pioneer/audio/acoustics.hpp"
 
 namespace pioneer::audio {
 
@@ -49,6 +57,10 @@ struct Emitter {
   bool positional = false;
   float x = 0, y = 0;
   float range = 12.0f;  // tiles beyond the near zone at which it has faded to half
+  // What the land does to it (acoustics.hpp). The mixer fills both from its
+  // acoustics for positional voices; without acoustics they stay as given.
+  float occlusion = 0.0f;  // 0 clear .. 1 fully blocked
+  Space space = Space::Open;
 };
 
 struct PlayDesc {
@@ -60,6 +72,7 @@ struct PlayDesc {
   bool loop = false;
   float reverb = 0.15f;   // send to the hall, 0..1
   float fadeIn = 0.0f;    // seconds
+  bool radio = false;     // heard through a field radio: thin, band-limited, a little overdriven
   Emitter at;
 };
 
@@ -112,6 +125,14 @@ class Mixer {
   // Muffles everything (menus over a battle): 1 = clear.
   void setMuffle(float amount);
 
+  // The land the sounds travel over (spaces and occlusion); null: open ground
+  // everywhere, nothing in the way. Positional voices are re-checked a few
+  // times a second as they and the ear move.
+  void setAcoustics(std::shared_ptr<const Acoustics> a);
+  std::shared_ptr<const Acoustics> acoustics() const;
+  // What a playing voice is heard through (false when it isn't playing).
+  bool voiceAcoustics(VoiceId v, float& occlusion, Space& space) const;
+
   // Music: streamed from Ogg Vorbis bytes; the old track fades out as the new one fades in.
   bool playMusic(std::shared_ptr<const std::vector<uint8_t>> ogg, float fadeSeconds, float volume = 1.0f);
   void stopMusic(float fadeSeconds);
@@ -128,7 +149,7 @@ class Mixer {
   struct Voice;
   struct Deck;
   struct Reverb;
-  void mixVoices(float* dry, float* wet, int frames);
+  void mixVoices(float* dry, float* front, int frames);
   void mixMusic(float* out, int frames);
 
   int rate_;
@@ -136,7 +157,8 @@ class Mixer {
   std::vector<Sound> sounds_;
   std::vector<std::unique_ptr<Voice>> voices_;
   std::vector<std::unique_ptr<Deck>> decks_;
-  std::unique_ptr<Reverb> reverb_;
+  std::unique_ptr<Reverb> reverb_[kSpaceCount];
+  std::shared_ptr<const Acoustics> acoustics_;
   Listener listener_;
   float bus_[kBusCount] = {1, 1, 1, 1, 1};
   float master_ = 1.0f;
@@ -145,7 +167,8 @@ class Mixer {
   float limiter_ = 1.0f;
   float lastPeak_ = 0.0f;
   uint32_t nextId_ = 1;
-  std::vector<float> dry_, wet_, music_;
+  std::vector<float> dry_, music_, front_;
+  std::vector<float> wet_[kSpaceCount];
 };
 
 // Feeds a Mixer to the sound card through SDL. Safe to use when there is no
