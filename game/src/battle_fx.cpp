@@ -366,6 +366,12 @@ void BattleFx::update(float dt) {
     p.x += p.vx * dt;
     p.y += p.vy * dt;
     p.h = std::max(0.0f, p.h + p.vh * dt);
+    if (p.kind == Kind::Puff) {
+      // Smoke and dust drift with the wind, more as they rise and spread.
+      const float k = std::min(1.0f, p.age / 0.6f) * dt;
+      p.x += wind_.x * k;
+      p.y += wind_.y * k;
+    }
   }
   std::erase_if(particles_, [](const Particle& p) { return p.age >= p.life; });
 

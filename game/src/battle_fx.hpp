@@ -50,6 +50,9 @@ class BattleFx {
   // `visible`: whether the watching player can see where this happened.
   void onEvent(const pioneer::SimEvent& e, bool visible, const std::array<uint32_t, pioneer::MAX_PLAYERS>& teams);
   void update(float dt);
+  // The weather's wind beyond the light breeze smoke always had: flat
+  // classic-plane pixels a second (zero under a clear sky).
+  void setWind(pioneer::Vec2f extra) { wind_ = extra; }
   // Smoke (and, when badly hurt, flames) rising from a damaged building.
   void emitDamage(pioneer::Vec2i atLeptons, int size, float severity, float dt);
 
@@ -118,6 +121,7 @@ class BattleFx {
   std::vector<Decal> decals_, corpses_;
   std::vector<Wreck> wrecks_;
   uint32_t seed_ = 0x9e3779b9u;
+  pioneer::Vec2f wind_{0.0f, 0.0f};
 };
 
 }  // namespace legion

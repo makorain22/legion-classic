@@ -152,6 +152,8 @@ TEST_CASE("environment: night is dark but still readable; dawn and dusk are warm
   CHECK(night.look.saturation < 0.7f);
   CHECK(dawn.look.light[0] > dawn.look.light[2] + 0.3f);  // the low sun is warm
   CHECK(dusk.look.light[0] > dusk.look.light[2] + 0.3f);
+  // Night and the worst weather together still leave the battle readable.
+  for (int w = 0; w < kWeatherCount; ++w) CHECK(seen(at(1.0f, static_cast<Weather>(w))) >= doctest::Approx(0.36f).epsilon(0.01));
   CHECK(dawn.look.groundFog > 0.0f);                       // mist lies in the valleys at dawn
   CHECK(morning.look.groundFog < dawn.look.groundFog);     // and lifts as the morning goes on
   CHECK(noon.look.groundFog == 0.0f);

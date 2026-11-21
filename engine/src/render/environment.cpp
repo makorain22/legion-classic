@@ -211,6 +211,11 @@ Lighting lightingFor(const Environment& e) {
   l.cloudOffset[0] = -out.wind.x * e.seconds;
   l.cloudOffset[1] = -out.wind.y * e.seconds;
   l.exposure = h.exposure;
+  // However dark the hour and the weather together, the battle stays
+  // readable: the exposure rises to keep the world at least this bright.
+  constexpr float kFloor = 0.36f;
+  const float seen = (0.30f * l.light[0] + 0.59f * l.light[1] + 0.11f * l.light[2]) * l.exposure;
+  if (seen < kFloor) l.exposure = std::min(1.6f, l.exposure * kFloor / std::max(seen, 1e-3f));
   out.direct = h.direct * w.direct;
   out.shadows = out.direct >= 0.2f;
   out.sun = lightDirectionAt(e.hour);

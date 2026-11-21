@@ -3,6 +3,7 @@
 // control, and the editor overlay (F2) that edits the world while it runs.
 
 #include "pioneer/render/post.hpp"
+#include "pioneer/render/precipitation.hpp"
 #include "pioneer/core/interface_lua.hpp"
 #include "pioneer/core/events.hpp"
 #include <array>
@@ -464,6 +465,7 @@ class GameScene final : public pioneer::Scene {
   pioneer::ShadowMap shadow_;
   // --- Graphics quality (graphics.cpp) ------------------------------------------
   pioneer::PostProcess post_;
+  pioneer::Precipitation precip_;   // rain and snow in the 3D view
   pioneer::gfx::Options gfx_;       // what is drawn with now: the settings, cut down to what the card can do
   pioneer::SceneLook look_;         // the light, mist and exposure of this frame
   pioneer::Lighting lighting_;      // the hour and the weather of this frame, as light (render/environment.hpp)

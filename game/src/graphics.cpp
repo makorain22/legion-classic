@@ -7,6 +7,7 @@
 #include "game_scene.hpp"
 #include "pioneer/core/console.hpp"
 #include "pioneer/core/weather.hpp"
+#include "pioneer/math/iso.hpp"
 #include "pioneer/render/device.hpp"
 #include "pioneer/ui/fonts.hpp"
 
@@ -18,6 +19,7 @@ void GameScene::initGraphics() {
   gfx::queryCaps();
   std::string why;
   if (!post_.init(why)) PNR_WARN("No post-processing: %s", why.c_str());
+  if (!precip_.init(why)) PNR_WARN("No rain or snow: %s", why.c_str());
 
   gfx::Preset fromOption;
   if (!opt_.gfx.empty() && gfx::presetFromId(opt_.gfx, fromOption)) {
@@ -232,6 +234,12 @@ void GameScene::prepareLighting(bool piped, const float grade[4]) {
   terrain_.setSun(lighting_.sun, lighting_.direct);
   meshes_.setSun(lighting_.sun, lighting_.direct);
   terrain_.setGroundCover(lighting_.wet, lighting_.snowCover);
+  // Smoke has always leaned in a light breeze; the weather's wind adds to it.
+  {
+    static const Vec2f calm = pioneer::lightingFor(pioneer::Environment{}).wind;
+    const Vec2f extra = lighting_.wind - calm;
+    fx_.setWind(iso::worldToScreen(extra.x * LEPTONS_PER_TILE, extra.y * LEPTONS_PER_TILE) - iso::worldToScreen(0.0f, 0.0f));
+  }
   // With the pipeline the light is put over the finished picture; without it
   // (Low, the classic view) it goes into the colours as they are drawn.
   float l[3] = {1.0f, 1.0f, 1.0f}, sat = 1.0f;

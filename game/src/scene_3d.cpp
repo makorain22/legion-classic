@@ -417,6 +417,16 @@ void GameScene::render3D() {
   renderer_.setGrade(grade_[0], grade_[1], grade_[2], grade_[3]);  // fire and flashes are not darkened by the night
   fx_.drawAir(renderer_, view, fogAt);
   renderer_.flush();
+  {
+    // Rain and snow, seen in the scene's light (they darken at night).
+    pioneer::PrecipitationLook pl;
+    pl.rain = lighting_.rain;
+    pl.snow = lighting_.snow;
+    pl.wind = lighting_.wind;
+    pl.detail = gfx_.weather;
+    for (int c = 0; c < 3; ++c) pl.light[c] = look_.light[c] * (piped ? 1.0f : look_.exposure);
+    precip_.draw(cam_, pl, time_);
+  }
   glDepthMask(GL_TRUE);
   glDisable(GL_DEPTH_TEST);
   gpuScene_.end();
