@@ -130,10 +130,14 @@ file(GLOB_RECURSE PIONEER_CORE_SOURCES CONFIGURE_DEPENDS
   engine/src/math/*.cpp
   engine/src/ecs/*.cpp
   engine/src/sim/*.cpp
-  engine/src/map/*.cpp)
+  engine/src/map/*.cpp
+  engine/src/net/*.cpp)
 add_library(pioneer_core STATIC ${PIONEER_CORE_SOURCES})
 target_include_directories(pioneer_core PUBLIC engine/include)
 target_link_libraries(pioneer_core PUBLIC nlohmann_json::nlohmann_json PRIVATE miniz pioneer_lua)
+if(WIN32)
+  target_link_libraries(pioneer_core PUBLIC ws2_32)  # sockets (net/)
+endif()
 legion_warnings(pioneer_core)
 
 # ---------------------------------------------------------------------------
@@ -203,7 +207,7 @@ if(LEGION_BUILD_TESTS)
                  engine/src/assets/image.cpp
                  engine/src/ui/timeline_model.cpp engine/src/ui/graph_model.cpp engine/src/ui/mission_views.cpp
                  engine/src/ui/icon_list.cpp engine/src/render/graphics_settings.cpp
-                 engine/src/render/environment.cpp)
+                 engine/src/render/environment.cpp game/src/net_world.cpp)
   target_include_directories(pioneer_tests PRIVATE editor/src game/src)
   target_link_libraries(pioneer_tests PRIVATE pioneer_core doctest::doctest stb)
   target_compile_definitions(pioneer_tests PRIVATE LEGION_CONTENT_DIR="${CMAKE_SOURCE_DIR}/content/")
