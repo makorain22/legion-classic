@@ -100,6 +100,9 @@ bool Settings::load(const std::string& path) {
   scrollSpeed = j.value("scrollSpeed", scrollSpeed);
   uiScale = std::clamp(j.value("uiScale", uiScale), 0.9f, 2.0f);
   language = j.value("language", language);
+  playerName = j.value("playerName", playerName);
+  lastServer = j.value("lastServer", lastServer);
+  hostPort = std::clamp(j.value("hostPort", hostPort), 1, 65535);
   graphicsPreset = j.value("graphicsPreset", graphicsPreset);
   graphicsAuto = j.value("graphicsAuto", graphicsAuto);
   gfxPost = j.value("gfxPost", gfxPost);
@@ -159,6 +162,9 @@ bool Settings::save(const std::string& path) const {
   j["scrollSpeed"] = scrollSpeed;
   j["uiScale"] = uiScale;
   j["language"] = language;
+  j["playerName"] = playerName;
+  j["lastServer"] = lastServer;
+  j["hostPort"] = hostPort;
   j["graphicsPreset"] = graphicsPreset;
   j["graphicsAuto"] = graphicsAuto;
   j["gfxPost"] = gfxPost;

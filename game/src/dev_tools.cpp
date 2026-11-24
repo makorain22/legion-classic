@@ -332,6 +332,7 @@ void GameScene::registerConsoleCommands() {
                      cmd.player = player_;
                      cmd.count = r.flags;
                      cmd.amount = r.sightPercent;
+                     if (online()) return c.error("Not in a multiplayer game: it would change only your battle");
                      sim_->queue(cmd);
                    }
                    c.printFmt("woodland %d  line of sight %d  sight %u%%  smoke clouds %zu", r.woodland() ? 1 : 0,
@@ -347,6 +348,7 @@ void GameScene::registerConsoleCommands() {
                    cmd.target = {a.integer(1) * LEPTONS_PER_TILE + 128, a.integer(2) * LEPTONS_PER_TILE + 128};
                    cmd.radius = std::clamp(a.size() > 3 ? a.integer(3) : 3, 1, 24) * LEPTONS_PER_TILE;
                    cmd.amount = std::clamp(a.size() > 4 ? a.integer(4) : 30, 1, 3600);
+                   if (online()) return c.error("Not in a multiplayer game: it would change only your battle");
                    sim_->queue(cmd);
                    c.print("Smoke on its way.");
                  });
@@ -470,6 +472,7 @@ void GameScene::registerConsoleCommands() {
                    cmd.type = CommandType::SetCredits;
                    cmd.player = static_cast<uint8_t>(side);
                    cmd.amount = std::clamp(a.integer(1), 0, 9999999);
+                   if (online()) return c.error("Not in a multiplayer game: it would change only your battle");
                    sim_->queue(cmd);
                    c.printFmt("%s now has %d supplies", players_[static_cast<size_t>(side)].name.c_str(), cmd.amount);
                  },
@@ -489,6 +492,7 @@ void GameScene::registerConsoleCommands() {
                    cmd.unitType = static_cast<uint16_t>(type);
                    cmd.count = std::clamp(a.integer(2, 1), 1, 500);
                    cmd.target = mouseWorldLeptons();
+                   if (online()) return c.error("Not in a multiplayer game: it would change only your battle");
                    sim_->queue(cmd);
                    c.printFmt("%d x %s for side %d", static_cast<int>(cmd.count), a[1].c_str(), side);
                  },
@@ -508,6 +512,7 @@ void GameScene::registerConsoleCommands() {
                    Command cmd;
                    cmd.type = CommandType::Kill;
                    cmd.units = selection_;
+                   if (online()) return c.error("Not in a multiplayer game: it would change only your battle");
                    sim_->queue(std::move(cmd));
                    c.printFmt("%zu units destroyed", selection_.size());
                    selection_.clear();

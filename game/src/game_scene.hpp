@@ -43,6 +43,7 @@ namespace legion {
 class Editor;
 class Menus;
 class GameAudio;
+class NetGame;
 class Encyclopedia;
 class RulesEditor;
 
@@ -108,6 +109,11 @@ struct SceneOptions {
   int showcaseWarm = 15 * 60 * 5;  // ticks to fast-forward first
   int showcaseSeconds = 60;               // > 0: random clicks and keys from a human seat (crash hunting)
   bool flowSelfTest = false;    // checks skirmish, save, load and replay through the real game
+  int netSelfTest = 0;          // 1: hosts a multiplayer game and plays it with a second player in this process;
+                                // 2: both join a dedicated server in this process (the scene leads)
+  int hostPort = 0;             // --host [port]: host a multiplayer game at start
+  std::string join;             // --join address[:port]: join one at start
+  std::string playerName;       // --name: the name others see
   bool modsSelfTest = false;    // checks the rules editor and mods through the real game
   std::string tool;             // open a creation tool at start: rules[:id] | sprites[:group] | mods
   std::string campaign;         // --campaign id[:mission]: open a campaign's missions, or a mission's briefing (1-based)
@@ -138,7 +144,8 @@ class GameScene final : public pioneer::Scene {
   void onUpdate(float dt, float alpha) override;
   void onRender() override;
   void onImGui() override;
-  float timeScale() const override { return paused_ ? 0.0f : speed_; }
+  // A multiplayer battle runs at the network's pace: the lockstep pauses it.
+  float timeScale() const override { return online() ? 1.0f : paused_ ? 0.0f : speed_; }
   bool wantsQuit() const override { return quit_; }
 
   // --- Used by the editor -------------------------------------------------
@@ -187,6 +194,11 @@ class GameScene final : public pioneer::Scene {
   void applyPlayers();  // after editing players(): colours, teams
   uint8_t player() const { return player_; }
   void setPlayer(uint8_t p);  // command and watch this side
+  // A player's order: into the battle, or in a multiplayer battle through the network.
+  void issue(pioneer::Command c);
+  // In a multiplayer battle (orders, pause and speed go through the network).
+  bool online() const;
+  NetGame& net();  // made on first use
   // Civilians (owner >= MAX_PLAYERS) are drawn and listed in grey.
   uint32_t teamColor(int p) const {
     return p >= 0 && p < pioneer::MAX_PLAYERS ? teamColors_[static_cast<size_t>(p)] : pioneer::rgba8(150, 150, 146);
@@ -555,6 +567,16 @@ class GameScene final : public pioneer::Scene {
   std::unique_ptr<Encyclopedia> encyclopedia_;
   friend class Sidebar;
   friend class Menus;
+  friend class NetGame;
+  std::unique_ptr<NetGame> net_;
+  // One tick of the battle and what follows it (events, effects, sounds):
+  // onTick's work, run by the lockstep in a multiplayer battle.
+  void simTick();
+  // Keys that work differently in a multiplayer battle (true: used up).
+  bool netKey(const SDL_KeyboardEvent& k);
+  // The battle as a save game in memory (multiplayer snapshots), and loading one.
+  std::vector<uint8_t> netSnapshot() const;
+  bool netRestore(const std::vector<uint8_t>& bytes, std::string& error);
   Mode mode_ = Mode::Game;
   SkirmishSetup lastSkirmish_;
   std::string lastScenarioPath_;

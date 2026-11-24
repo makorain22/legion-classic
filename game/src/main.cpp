@@ -140,6 +140,16 @@ int main(int argc, char** argv) {
     } else if (a == "--showcase-warm") opt.showcaseWarm = std::atoi(next()) * 15;
     else if (a == "--showcase-seconds") opt.showcaseSeconds = std::atoi(next());
     else if (a == "--flow-selftest") opt.flowSelfTest = true;
+    else if (a == "--net-selftest") {
+      opt.netSelfTest = 1;
+      if (i + 1 < argc && std::string(argv[i + 1]) == "dedicated") {
+        opt.netSelfTest = 2;
+        ++i;
+      }
+    }
+    else if (a == "--host") opt.hostPort = (i + 1 < argc && argv[i + 1][0] != '-') ? std::atoi(next()) : 47800;
+    else if (a == "--join") opt.join = next();
+    else if (a == "--name") opt.playerName = next();
     else if (a == "--mods-selftest") {
       opt.modsSelfTest = true;
       opt.aiBattle = true;

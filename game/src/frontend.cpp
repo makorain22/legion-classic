@@ -11,6 +11,7 @@
 
 #include "editor.hpp"
 #include "game_scene.hpp"
+#include "net_game.hpp"
 #include "menus.hpp"
 #include "pioneer/core/log.hpp"
 #include "pioneer/math/iso.hpp"
@@ -360,6 +361,7 @@ void GameScene::missionOver(bool won) {
 }
 
 void GameScene::toMainMenu() {
+  if (net_ && net_->inBattle()) net_->leave("left");
   autosaveReplay();
   if (editor_) editor_->setActive(false);
   startAttract();

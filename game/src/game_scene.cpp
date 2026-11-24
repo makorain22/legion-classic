@@ -1,4 +1,5 @@
 #include "game_scene.hpp"
+#include "net_game.hpp"
 
 #include "encyclopedia.hpp"
 #include "game_audio.hpp"
@@ -73,6 +74,8 @@ GameScene::GameScene(App& app, SceneOptions opt) : app_(app), opt_(opt) {
 }
 
 GameScene::~GameScene() {
+  if (net_) net_->leave("closed the game");
+  net_.reset();
   saveInterfaceScripts();
   uiLuaEvents_ = {};
   shutdownDevTools();
@@ -807,7 +810,7 @@ void GameScene::bindSelection() {
   c.type = CommandType::BindGroup;
   c.player = player_;
   c.units = selection_;
-  sim_->queue(std::move(c));
+  issue(std::move(c));
 }
 
 void GameScene::unbindSelection() {
@@ -817,7 +820,7 @@ void GameScene::unbindSelection() {
   c.type = CommandType::UnbindGroup;
   c.player = player_;
   c.units = selection_;
-  sim_->queue(std::move(c));
+  issue(std::move(c));
   showStatus("Unit disbanded", 2);
 }
 
@@ -1076,7 +1079,7 @@ void GameScene::queueOrder(Command c) {
     Command part = c;
     part.player = p;
     part.units = std::move(byOwner[p]);
-    sim_->queue(std::move(part));
+    issue(std::move(part));
   }
 }
 
@@ -1278,7 +1281,7 @@ void GameScene::rightClick(Vec2f start, bool dragged, Vec2f end) {
       c.player = player_;
       c.units = men;
       c.targetUnit = hit;
-      sim_->queue(std::move(c));
+      issue(std::move(c));
       const CPosition& hp = reg.get<CPosition>(hit);
       markers_.push_back({{static_cast<float>(hp.x), static_cast<float>(hp.y)}, 0, rgba8(236, 200, 96)});
       if (others.empty()) return;
@@ -1304,7 +1307,7 @@ void GameScene::rightClick(Vec2f start, bool dragged, Vec2f end) {
       c.player = player_;
       c.units = engineers;
       c.targetUnit = hit;
-      sim_->queue(std::move(c));
+      issue(std::move(c));
       const CPosition& hp = reg.get<CPosition>(hit);
       markers_.push_back({{static_cast<float>(hp.x), static_cast<float>(hp.y)}, 0, rgba8(120, 200, 255)});
       std::vector<Entity> others;
@@ -1335,7 +1338,7 @@ void GameScene::rightClick(Vec2f start, bool dragged, Vec2f end) {
     c.player = player_;
     c.units = trucks;
     c.targetUnit = hit;
-    sim_->queue(std::move(c));
+    issue(std::move(c));
     showStatus(sim_->officeTrucks(hit) >= std::max(1, types_.get(reg.get<CUnit>(hit).type).convoy)
                    ? "That office has all the trucks it can use: they go where one is short"
                    : "Supply trucks assigned to the office",
@@ -1348,14 +1351,14 @@ void GameScene::rightClick(Vec2f start, bool dragged, Vec2f end) {
     c.type = CommandType::SetRally;
     c.units = producers;
     c.target = g;
-    sim_->queue(std::move(c));
+    issue(std::move(c));
     markers_.push_back({{static_cast<float>(g.x), static_cast<float>(g.y)}, 0, rgba8(236, 200, 96)});
   }
   if (!deployers.empty()) {
     Command c;
     c.type = CommandType::Deploy;
     c.units = deployers;
-    sim_->queue(std::move(c));
+    issue(std::move(c));
   }
   if (!rest.empty()) {
     const auto keep = selection_;
@@ -1522,6 +1525,7 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
 
     case SDL_EVENT_KEY_DOWN: {
       if (uiKeys) break;
+      if (online() && netKey(e.key)) break;
       const SDL_Keycode k = e.key.key;
       const bool ctrl = (e.key.mod & SDL_KMOD_CTRL) != 0;
       const Settings& K = settings_;
@@ -1579,7 +1583,7 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
         Command c;
         c.type = CommandType::Stop;
         c.units = selection_;
-        sim_->queue(std::move(c));
+        issue(std::move(c));
       } else if (K.pressed(InputAction::SelectAll, e.key)) {
         selection_.clear();
         Registry& reg = sim_->registry();
@@ -1590,7 +1594,7 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
         Command c;
         c.type = CommandType::Deploy;
         c.units = selection_;
-        sim_->queue(std::move(c));
+        issue(std::move(c));
       } else if (K.pressed(InputAction::Evacuate, e.key)) {
         evacuateSelection();
       } else if (K.pressed(InputAction::BindGroup, e.key)) {
@@ -1601,7 +1605,7 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
         Command c;
         c.type = CommandType::Remove;
         c.units = selection_;
-        sim_->queue(std::move(c));
+        issue(std::move(c));
         selection_.clear();
       } else if (K.pressed(InputAction::CentreSelection, e.key) && !selection_.empty()) {
         pruneSelection();
@@ -1746,6 +1750,26 @@ void GameScene::applySettings() {
 void GameScene::saveSettings() { settings_.save(app_.userDir() + "settings.json"); }
 
 void GameScene::onTick() {
+  if (net_ && net_->tick()) return;  // a multiplayer battle: the lockstep runs simTick()
+  simTick();
+}
+
+bool GameScene::online() const { return net_ && net_->inBattle() && mode_ == Mode::Game; }
+
+NetGame& GameScene::net() {
+  if (!net_) net_ = std::make_unique<NetGame>(*this);
+  return *net_;
+}
+
+void GameScene::issue(Command c) {
+  if (online()) {
+    net_->submit(c);
+    return;
+  }
+  sim_->queue(std::move(c));
+}
+
+void GameScene::simTick() {
   // Replays feed the recorded orders in at the tick they were given.
   if (mode_ == Mode::Replay) {
     if (sim_->tickCount() >= replayEnd_) {
@@ -1936,6 +1960,7 @@ void GameScene::onUpdate(float dt, float alpha) {
   pioneer::debug::DebugDraw::global().endFrame(dt);  // last frame's shapes have been drawn
   updateDebugSun(dt);
   updateDevTools();
+  if (net_) net_->update();
   hotReload_.update(content_.fileSystem(), dt, &assets_);
   if (opt_.monkey > 0) monkeyStep();
   if (!opt_.showcase.empty() && mode_ == Mode::Game) showcaseStep(dt);
@@ -2007,6 +2032,17 @@ void GameScene::onUpdate(float dt, float alpha) {
   if (opt_.formationDemo) runFormationDemo();
   if (opt_.townDemo) runTownDemo();
   if (opt_.flowSelfTest) runFlowSelfTest();
+  if (opt_.netSelfTest && frame_ == 30) net().startSelfTest(opt_.netSelfTest == 2);
+  if (frame_ == 3 && (opt_.hostPort > 0 || !opt_.join.empty())) {
+    std::string err;
+    const std::string name = opt_.playerName.empty() ? settings_.playerName : opt_.playerName;
+    const bool ok = opt_.hostPort > 0 ? net().host(name, static_cast<uint16_t>(opt_.hostPort), "", err)
+                                      : net().join(opt_.join, name, "", err);
+    if (ok) {
+      if (mode_ != Mode::Menu) toMainMenu();  // the lobby is over the menu's battle
+      menus_->openMultiplayer();
+    } else showStatus("Multiplayer: " + err, 8);
+  }
   if (opt_.modsSelfTest) runModsSelfTest();
   editor_->update(dt);
   sidebar_->update(dt);
@@ -2587,6 +2623,7 @@ void GameScene::onImGui() {
   drawObjectives();
   drawMission();
   drawSubtitles();
+  if (net_ && mode_ == Mode::Game) net_->drawOverlay();
   drawDebrief();
   if (mode_ != Mode::Menu && !sim_->hint(player_).empty()) {
     const ImGuiIO& io = ImGui::GetIO();

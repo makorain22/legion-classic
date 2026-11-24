@@ -28,6 +28,22 @@
 namespace legion {
 
 inline constexpr const char* kNetGameId = "legion-classic";
+// What must be the same on every machine of a game, besides the rules: the
+// game's version and the engine's (session joining checks it).
+std::string netVersion();
+
+// The rules a dedicated server plays by: the base content and the mods
+// enabled, merged as the game merges them. `hash` is what the session
+// compares (the game's own rules hash).
+struct NetRules {
+  pioneer::WeaponRegistry weapons;
+  pioneer::UnitTypeRegistry types;
+  std::string hash;
+  std::vector<std::string> mods;  // in load order
+};
+bool loadNetRules(const std::string& contentDir, const std::vector<std::string>& modDirs,
+                  const std::vector<std::string>& enabledMods, const std::string& cacheDir, NetRules& out,
+                  std::string& error, std::string* warnings = nullptr);
 
 std::vector<uint8_t> encodeOrder(const pioneer::Command& c);
 bool decodeOrder(const std::vector<uint8_t>& bytes, pioneer::Command& out);

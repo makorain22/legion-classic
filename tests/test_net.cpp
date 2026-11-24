@@ -3,6 +3,7 @@
 // UDP on this computer.
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <functional>
 #include <memory>
 

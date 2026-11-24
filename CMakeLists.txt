@@ -141,6 +141,19 @@ endif()
 legion_warnings(pioneer_core)
 
 # ---------------------------------------------------------------------------
+# The dedicated server: the engine core and Legion's headless battle, no
+# graphics or sound (built in the Linux CI too).
+# ---------------------------------------------------------------------------
+add_executable(LegionServer server/main.cpp game/src/net_world.cpp)
+target_include_directories(LegionServer PRIVATE game/src)
+target_link_libraries(LegionServer PRIVATE pioneer_core)
+legion_warnings(LegionServer)
+set_target_properties(LegionServer PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+  RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/bin
+  RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/bin)
+
+# ---------------------------------------------------------------------------
 # Pioneer Engine presentation: window, renderer, assets, UI
 # ---------------------------------------------------------------------------
 if(LEGION_BUILD_GAME)
@@ -215,6 +228,9 @@ if(LEGION_BUILD_TESTS)
   target_compile_definitions(pioneer_tests PRIVATE LEGION_RULES_DIR="${CMAKE_SOURCE_DIR}/content/rules/")
   legion_warnings(pioneer_tests)
   add_test(NAME pioneer_tests COMMAND pioneer_tests)
+  # The server starts, loads the rules, opens its port and stops cleanly.
+  add_test(NAME server_smoke COMMAND LegionServer --port 0 --no-lan --quit-after 1
+           --content ${CMAKE_SOURCE_DIR}/content)
 
   # Builds the shipped maps: tutorial, campaigns, scenarios, skirmish maps (tools/make_content.cpp).
   file(GLOB MAKE_CONTENT_SOURCES CONFIGURE_DEPENDS tools/make_content.cpp tools/campaign_*.cpp)

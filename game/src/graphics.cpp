@@ -363,6 +363,7 @@ void GameScene::registerGraphicsCommands() {
                      cmd.amount = minute * 60;
                      cmd.radius = a.size() > 2 ? std::clamp(a.integer(2), 0, 3600) : -1;
                      cmd.count = 0;
+                     if (online()) return c.error("Not in a multiplayer game: it would change only your battle");
                      sim_->queue(cmd);
                      return c.printFmt("the time becomes %s", pioneer::formatTimeOfDay(minute).c_str());
                    }
@@ -385,6 +386,7 @@ void GameScene::registerGraphicsCommands() {
                      cmd.radius = -1;
                      cmd.count = static_cast<uint16_t>(static_cast<int>(w) + 1);
                      cmd.unitType = static_cast<uint16_t>(a.size() > 2 ? std::clamp(a.integer(2), 0, 3600) : 0);
+                     if (online()) return c.error("Not in a multiplayer game: it would change only your battle");
                      sim_->queue(cmd);
                      return c.printFmt("the weather turns to %s", pioneer::weatherName(w));
                    }

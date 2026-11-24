@@ -26,7 +26,7 @@ class Menus {
 
  private:
   enum class Page { None, Main, Skirmish, Scenarios, LoadGame, Replays, InGame, SaveGame, About, Settings, Mods,
-                    Campaigns, Missions, Briefing };
+                    Campaigns, Missions, Briefing, Multiplayer, Lobby };
   struct FileEntry {
     std::string path, file, title, detail;
   };
@@ -44,6 +44,8 @@ class Menus {
   void drawCampaigns();
   void drawMissions();
   void drawBriefing();
+  void drawMultiplayer();
+  void drawLobby();
   int campaignIndex(const std::string& id) const;
   void openMods();
   void refreshFiles(const std::string& dir, const char* ext, bool replays);
@@ -69,7 +71,15 @@ class Menus {
  private:
   int campaign_ = -1, mission_ = -1;
   std::string briefingText_;
+  // The multiplayer pages.
+  char netName_[32] = "";
+  char netAddress_[128] = "";
+  char netPassword_[64] = "";
+  char lobbyChat_[256] = "";
+  int netPort_ = 47800;
+  bool lobbyChatFocus_ = false;
  public:
+  void openMultiplayer();
 };
 
 }  // namespace legion

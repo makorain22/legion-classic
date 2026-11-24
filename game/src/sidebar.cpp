@@ -131,7 +131,7 @@ bool Sidebar::placeAt(Vec2i g) {
   cmd.unitType = static_cast<uint16_t>(placeType_);
   cmd.target = c;
   if (cmd.type == CommandType::PlaceWalls) cmd.spawns = {{0, 0, c, 0, -1}};
-  scene_.sim().queue(std::move(cmd));
+  scene_.issue(std::move(cmd));
   if (d.category != UnitCategory::Fortification) placeType_ = -1;
   return true;
 }
@@ -157,7 +157,7 @@ bool Sidebar::onEvent(const SDL_Event& e, bool uiMouse) {
         Command s;
         s.type = CommandType::Sell;
         s.units = {hit};
-        scene_.sim().queue(std::move(s));
+        scene_.issue(std::move(s));
       }
       return true;
     }
@@ -179,7 +179,7 @@ bool Sidebar::onEvent(const SDL_Event& e, bool uiMouse) {
       cmd.player = scene_.player();
       cmd.unitType = static_cast<uint16_t>(placeType_);
       for (const Vec2i& t : lineTiles(dragFrom_, to)) cmd.spawns.push_back({0, 0, {t.x * 256 + 128, t.y * 256 + 128}, 0, -1});
-      scene_.sim().queue(std::move(cmd));
+      scene_.issue(std::move(cmd));
       return true;
     }
     return down || up;
@@ -577,7 +577,7 @@ void Sidebar::drawProduction(float width) {
           c.player = me;
           c.unitType = static_cast<uint16_t>(t);
           c.amount = ImGui::GetIO().KeyShift ? 5 : 1;
-          sim.queue(std::move(c));
+          scene_.issue(std::move(c));
         }
       }
       if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && queued > 0) {
@@ -586,7 +586,7 @@ void Sidebar::drawProduction(float width) {
         c.player = me;
         c.unitType = static_cast<uint16_t>(t);
         c.amount = ImGui::GetIO().KeyShift ? -5 : -1;
-        sim.queue(std::move(c));
+        scene_.issue(std::move(c));
         if (placeType_ == t) cancel();
       }
       if (hovered) {
@@ -679,7 +679,7 @@ void Sidebar::drawOrders(float width) {
       c.type = CommandType::SetStance;
       c.units = sel;
       c.stance = static_cast<Stance>(s);
-      sim.queue(std::move(c));
+      scene_.issue(std::move(c));
     }
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", kStanceTips[s]);
   }
@@ -703,7 +703,7 @@ void Sidebar::drawOrders(float width) {
     Command c;
     c.type = CommandType::Deploy;
     c.units = deployers;
-    sim.queue(std::move(c));
+    scene_.issue(std::move(c));
   }
   if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
     ImGui::SetTooltip("Unfold a construction truck into a Construction Yard (Ctrl+D).");

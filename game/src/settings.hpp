@@ -44,6 +44,10 @@ struct Settings {
   float scrollSpeed = 1.0f;
   float uiScale = 1.0f;    // interface size: 1 = as designed (0.9 .. 2)
   std::string language = "en";  // of the interface (a file in lang/)
+  // Multiplayer: the name others see, and the last host joined (address[:port]).
+  std::string playerName = "Commander";
+  std::string lastServer;
+  int hostPort = 47800;
   bool showInfoPanel = false;  // the top-left game info box
   bool showCards = true;       // NATO cards over bound units
   bool showEnemyCards = true;  // cards over the other sides' units too (when seen)

@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <random>
 
 #include "pioneer/core/bytes.hpp"
@@ -159,6 +160,7 @@ void Session::systemChat(const std::string& text) {
   w.str("");
   w.str(text);
   broadcast(kChat, w.bytes());
+  emit(SessionEvent::Type::Chat, kNoMember, text);
 }
 
 void Session::leave(const std::string& why) {

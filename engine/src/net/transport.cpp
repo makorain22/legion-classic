@@ -37,6 +37,7 @@ struct Transport::Conn {
   ConnId id = 0;
   Address addr;
   bool connected = false, outgoing = false;
+  bool fresh = false;  // made before the first update: its clock starts there
   uint32_t clientSalt = 0, serverSalt = 0;
   uint32_t token() const { return clientSalt ^ serverSalt ^ 0x9E3779B9u; }
   uint64_t started = 0, lastReceived = 0, lastSent = 0, lastConnectSent = 0, lastFlush = 0;
@@ -108,6 +109,7 @@ ConnId Transport::connect(const Address& to) {
   c->clientSalt = salt();
   c->started = now_;
   c->lastFlush = now_;
+  c->fresh = true;
   const ConnId id = c->id;
   conns_[id] = std::move(c);
   return id;
@@ -210,6 +212,10 @@ void Transport::update(uint64_t nowMs) {
   for (ConnId id : ids) {
     Conn* c = find(id);
     if (!c) continue;
+    if (c->fresh) {
+      c->started = c->lastFlush = now_;
+      c->fresh = false;
+    }
     if (!c->connected) {
       if (now_ - c->started > static_cast<uint64_t>(cfg_.connectTimeoutMs)) {
         close(*c, DisconnectReason::NoAnswer, false);

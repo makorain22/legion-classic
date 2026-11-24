@@ -2,6 +2,7 @@
 #include "ui_style.hpp"
 #include "rules_editor.hpp"
 #include "game_audio.hpp"
+#include "net_game.hpp"
 
 #include <imgui.h>
 
@@ -73,7 +74,7 @@ Menus::Menus(GameScene& scene) : scene_(scene) {
 
 void Menus::openInGameMenu() {
   page_ = Page::InGame;
-  scene_.setPaused(true);
+  if (!scene_.online()) scene_.setPaused(true);  // a multiplayer battle goes on (P pauses it for everyone)
   error_.clear();
 }
 
@@ -115,6 +116,8 @@ void Menus::draw() {
     case Page::Campaigns: drawCampaigns(); break;
     case Page::Missions: drawMissions(); break;
     case Page::Briefing: drawBriefing(); break;
+    case Page::Multiplayer: drawMultiplayer(); break;
+    case Page::Lobby: drawLobby(); break;
     default: break;
   }
 }
@@ -152,6 +155,7 @@ void Menus::drawMain() {
     page_ = Page::Campaigns;
   }
   if (menuButton("Skirmish", w)) page_ = Page::Skirmish;
+  if (menuButton("Multiplayer", w)) openMultiplayer();
   if (menuButton("Play a scenario", w)) {
     std::vector<FileEntry> builtIn;  // the ones that ship with the game, then the mods' missions
     for (const std::string& dir : scene_.scenarioDirs()) {
@@ -552,10 +556,23 @@ void Menus::drawFileList(bool replays) {
 
 void Menus::drawInGame() {
   centredWindow("##ingame", ImVec2(340, 0));
-  title(scene_.mode() == Mode::Replay ? "Replay" : "Paused");
+  const bool online = scene_.online();
+  title(scene_.mode() == Mode::Replay ? "Replay" : online ? "Multiplayer" : "Paused");
   const float w = 316;
   returnTo_ = Page::InGame;
   if (menuButton("Resume", w)) close();
+  if (online) {
+    // No saving, loading or restarting a battle others are playing.
+    if (menuButton("Settings", w)) page_ = Page::Settings;
+    if (menuButton("Leave the game", w)) {
+      page_ = Page::Main;
+      scene_.net().leave("left");
+      scene_.toMainMenu();
+    }
+    if (menuButton("Quit to desktop", w)) scene_.quit();
+    ImGui::End();
+    return;
+  }
   if (scene_.mode() == Mode::Game) {
     if (menuButton("Save game", w)) {
       const std::time_t t = std::time(nullptr);
@@ -1020,6 +1037,287 @@ void Menus::drawBriefing() {
   if (menuButton("Back", 120)) page_ = Page::Missions;
   ImGui::End();
   ui::setFaction("");
+}
+
+}  // namespace legion
+
+namespace legion {
+
+// ---------------------------------------------------------------------------
+// Multiplayer: hosting, joining, the LAN list
+// ---------------------------------------------------------------------------
+void Menus::openMultiplayer() {
+  Settings& st = scene_.settings();
+  std::snprintf(netName_, sizeof netName_, "%s", st.playerName.c_str());
+  std::snprintf(netAddress_, sizeof netAddress_, "%s", st.lastServer.c_str());
+  netPort_ = st.hostPort;
+  error_.clear();
+  scene_.net().browse(true);
+  page_ = scene_.net().active() ? Page::Lobby : Page::Multiplayer;
+}
+
+void Menus::drawMultiplayer() {
+  NetGame& net = scene_.net();
+  centredWindow("##multiplayer", ImVec2(620, 560));
+  title("Multiplayer");
+  returnTo_ = Page::Main;
+  Settings& st = scene_.settings();
+  ImGui::SetNextItemWidth(260);
+  if (ImGui::InputText("Your name", netName_, sizeof netName_)) {
+    st.playerName = netName_;
+    scene_.saveSettings();
+  }
+  ImGui::Dummy(ImVec2(0, 6));
+  ImGui::PushStyleColor(ImGuiCol_Text, kGold);
+  ImGui::TextUnformatted("Host a game");
+  ImGui::PopStyleColor();
+  ImGui::SetNextItemWidth(120);
+  ImGui::InputInt("Port", &netPort_, 0, 0);
+  netPort_ = std::clamp(netPort_, 1, 65535);
+  ImGui::SameLine();
+  ImGui::SetNextItemWidth(180);
+  ImGui::InputText("Password (optional)", netPassword_, sizeof netPassword_, ImGuiInputTextFlags_Password);
+  auto enterLobby = [&] {
+    page_ = Page::Lobby;
+    error_.clear();
+  };
+  if (menuButton("Host", 180)) {
+    st.hostPort = netPort_;
+    scene_.saveSettings();
+    if (net.host(netName_, static_cast<uint16_t>(netPort_), netPassword_, error_)) enterLobby();
+  }
+  ImGui::TextDisabled("Others join you at your computer's address, port %d (UDP). Over the internet,", netPort_);
+  ImGui::TextDisabled("forward that port on your router; on a LAN the game shows up in the list below.");
+  ImGui::Dummy(ImVec2(0, 6));
+  ImGui::PushStyleColor(ImGuiCol_Text, kGold);
+  ImGui::TextUnformatted("Join a game");
+  ImGui::PopStyleColor();
+  ImGui::SetNextItemWidth(260);
+  const bool enter = ImGui::InputText("Address", netAddress_, sizeof netAddress_, ImGuiInputTextFlags_EnterReturnsTrue);
+  ImGui::SameLine();
+  if (menuButton("Join", 120) || enter) {
+    st.lastServer = netAddress_;
+    scene_.saveSettings();
+    if (net.join(netAddress_, netName_, netPassword_, error_)) enterLobby();
+  }
+  ImGui::Dummy(ImVec2(0, 4));
+  ImGui::TextUnformatted("Games on your network");
+  ImGui::BeginChild("##lan", ImVec2(0, 170), true);
+  const auto& games = net.lanGames();
+  if (games.empty()) ImGui::TextDisabled("None found yet (listening...)");
+  for (size_t i = 0; i < games.size(); ++i) {
+    const auto& g = games[i];
+    ImGui::PushID(static_cast<int>(i));
+    const bool sameVersion = g.version == netVersion();
+    ImGui::BeginDisabled(!sameVersion || g.inGame);
+    if (ImGui::Button("Join")) {
+      if (net.join(g.address.toString(), netName_, netPassword_, error_)) enterLobby();
+    }
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::Text("%s%s - %s - %u/%u players%s%s", g.name.c_str(), g.dedicated ? " (server)" : "", g.description.c_str(),
+                g.members, g.maxMembers, g.inGame ? " - playing" : "", g.password ? " - password" : "");
+    if (!sameVersion) {
+      ImGui::SameLine();
+      ImGui::TextColored(ImVec4(1, 0.5f, 0.4f, 1), "(version %s)", g.version.c_str());
+    }
+    ImGui::PopID();
+  }
+  ImGui::EndChild();
+  if (!net.lastError().empty() && error_.empty()) error_ = net.lastError();
+  if (!error_.empty()) ImGui::TextColored(ImVec4(1, 0.5f, 0.4f, 1), "%s", error_.c_str());
+  if (backButton()) net.browse(false);
+  ImGui::End();
+}
+
+// ---------------------------------------------------------------------------
+// The lobby
+// ---------------------------------------------------------------------------
+void Menus::drawLobby() {
+  NetGame& net = scene_.net();
+  net::Session& s = net.session();
+  if (!net.active()) {  // refused, kicked, or the host went away
+    page_ = Page::Multiplayer;
+    error_ = net.lastError().empty() ? "The session ended" : net.lastError();
+    return;
+  }
+  centredWindow("##lobby", ImVec2(820, 590));
+  if (s.state() == net::SessionState::Connecting) {
+    title("Joining...");
+    ImGui::Text("Connecting to %s", s.hostAddress().toString().c_str());
+    if (menuButton("Cancel", 120)) {
+      net.leave("left");
+      page_ = Page::Multiplayer;
+    }
+    ImGui::End();
+    return;
+  }
+  title(s.isHost() ? "Your game" : "Lobby");
+  const bool leader = s.isLeader();
+  SkirmishSetup setup = net.setup();
+  bool changed = false;
+  // Left: the map and the sides (the leader's to change).
+  ImGui::BeginChild("##lobbysetup", ImVec2(430, 330), false);
+  ImGui::BeginDisabled(!leader);
+  static const char* sizes[] = {"64 x 64 (small)", "128 x 128", "192 x 192", "256 x 256 (large)"};
+  static const int sizeValues[] = {64, 128, 192, 256};
+  int sizeIndex = 1;
+  for (int i = 0; i < 4; ++i)
+    if (sizeValues[i] == setup.mapSize) sizeIndex = i;
+  ImGui::SetNextItemWidth(200);
+  if (ImGui::Combo("Map size", &sizeIndex, sizes, 4)) {
+    setup.mapSize = sizeValues[sizeIndex];
+    changed = true;
+  }
+  ImGui::SetNextItemWidth(200);
+  if (ImGui::BeginCombo("Biome", biomeName(static_cast<Biome>(setup.biome)))) {
+    for (int b = 0; b < static_cast<int>(Biome::Count); ++b)
+      if (ImGui::Selectable(biomeName(static_cast<Biome>(b)), b == setup.biome)) {
+        setup.biome = b;
+        changed = true;
+      }
+    ImGui::EndCombo();
+  }
+  int seed = static_cast<int>(setup.seed % 100000);
+  ImGui::SetNextItemWidth(200);
+  if (ImGui::InputInt("Map seed", &seed)) {
+    setup.seed = static_cast<uint64_t>(std::max(0, seed));
+    changed = true;
+  }
+  ImGui::SetNextItemWidth(200);
+  if (ImGui::InputInt("Supplies", &setup.credits, 1000, 5000)) {
+    setup.credits = std::clamp(setup.credits, 0, 100000);
+    changed = true;
+  }
+  ImGui::Dummy(ImVec2(0, 6));
+  static const char* kinds[] = {"Closed", "A player", "Computer (easy)", "Computer (normal)", "Computer (hard)"};
+  for (int i = 0; i < 4; ++i) {
+    auto& side = setup.sides[static_cast<size_t>(i)];
+    ImGui::PushID(i);
+    ImGui::ColorButton("##c", toImVec(side.color), ImGuiColorEditFlags_NoTooltip, ImVec2(16, 16));
+    ImGui::SameLine();
+    ImGui::Text("Side %d", i + 1);
+    ImGui::SameLine(80);
+    int kind = !side.open ? 0 : side.human ? 1 : 2 + side.difficulty;
+    ImGui::SetNextItemWidth(160);
+    if (ImGui::Combo("##kind", &kind, kinds, 5)) {
+      side.open = kind != 0;
+      side.human = kind == 1;
+      if (kind >= 2) side.difficulty = kind - 2;
+      changed = true;
+    }
+    if (side.open && !side.human) {
+      ImGui::SameLine();
+      int f = factionIndex(side.faction);
+      ImGui::SetNextItemWidth(100);
+      if (ImGui::Combo("##faction", &f, factionComboItems())) {
+        side.faction = kPlayableFactions[f].id;
+        changed = true;
+      }
+    }
+    if (side.open) {
+      ImGui::SameLine();
+      int team = side.team + 1;
+      ImGui::SetNextItemWidth(70);
+      if (ImGui::InputInt("Team", &team, 1, 1)) {
+        side.team = std::clamp(team, 1, 4) - 1;
+        changed = true;
+      }
+    }
+    ImGui::PopID();
+  }
+  ImGui::EndDisabled();
+  if (changed && leader) net.setSetup(setup);
+  ImGui::Dummy(ImVec2(0, 8));
+  // Your own choice: a side open for players, and its army.
+  SeatChoice mine = net.choiceOf(s.localId());
+  std::string sideLabel = mine.side < 0 ? std::string("Watching") : "Side " + std::to_string(mine.side + 1);
+  ImGui::SetNextItemWidth(160);
+  if (ImGui::BeginCombo("Your side", sideLabel.c_str())) {
+    if (ImGui::Selectable("Watching", mine.side < 0)) {
+      mine.side = -1;
+      net.choose(mine);
+    }
+    for (int i = 0; i < 4; ++i) {
+      const auto& side = setup.sides[static_cast<size_t>(i)];
+      if (!side.open || !side.human) continue;
+      bool taken = false;
+      for (const net::Member& m : s.members())
+        if (m.id != s.localId() && net.choiceOf(m.id).side == i) taken = true;
+      ImGui::BeginDisabled(taken);
+      if (ImGui::Selectable(("Side " + std::to_string(i + 1) + (taken ? " (taken)" : "")).c_str(), mine.side == i)) {
+        mine.side = i;
+        net.choose(mine);
+      }
+      ImGui::EndDisabled();
+    }
+    ImGui::EndCombo();
+  }
+  ImGui::SameLine();
+  int f = factionIndex(mine.faction);
+  ImGui::SetNextItemWidth(120);
+  if (ImGui::Combo("Army", &f, factionComboItems())) {
+    mine.faction = kPlayableFactions[f].id;
+    net.choose(mine);
+  }
+  ImGui::EndChild();
+  ImGui::SameLine();
+  // Right: the players.
+  ImGui::BeginChild("##lobbyplayers", ImVec2(0, 330), true);
+  ImGui::TextUnformatted("Players");
+  ImGui::Separator();
+  for (const net::Member& m : s.members()) {
+    const SeatChoice c = net.choiceOf(m.id);
+    ImGui::Text("%s%s", m.name.c_str(), m.id == s.leader() ? " (leader)" : "");
+    ImGui::TextDisabled("   %s, %s%s%s", c.side < 0 ? "watching" : ("side " + std::to_string(c.side + 1)).c_str(),
+                        factionName(c.faction), m.ready || m.id == s.leader() ? ", ready" : "",
+                        m.local ? "" : (", " + std::to_string(m.pingMs) + " ms").c_str());
+  }
+  ImGui::EndChild();
+  // Chat.
+  ImGui::BeginChild("##lobbychat", ImVec2(0, 100), true);
+  for (const net::ChatLine& l : s.chatLog()) {
+    if (l.from == net::kNoMember) ImGui::TextDisabled("%s", l.text.c_str());
+    else ImGui::TextWrapped("%s: %s", l.name.c_str(), l.text.c_str());
+  }
+  if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 4) ImGui::SetScrollHereY(1.0f);
+  ImGui::EndChild();
+  ImGui::SetNextItemWidth(-130);
+  if (lobbyChatFocus_) {
+    ImGui::SetKeyboardFocusHere();
+    lobbyChatFocus_ = false;
+  }
+  if (ImGui::InputText("##lobbysay", lobbyChat_, sizeof lobbyChat_, ImGuiInputTextFlags_EnterReturnsTrue)) {
+    s.chat(lobbyChat_);
+    lobbyChat_[0] = 0;
+    lobbyChatFocus_ = true;
+  }
+  ImGui::SameLine();
+  ImGui::TextDisabled("Enter: say");
+  // Ready / start / leave.
+  std::string why;
+  if (leader) {
+    const bool can = net.canStart(why);
+    if (menuButton("Start the battle", 200, can)) {
+      if (!net.start(error_)) PNR_WARN_CH(Net, "Not started: %s", error_.c_str());
+      else page_ = Page::None;
+    }
+    if (!can && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", why.c_str());
+  } else {
+    const net::Member* me = s.localMember();
+    const bool ready = me && me->ready;
+    if (menuButton(ready ? "Not ready" : "Ready", 200)) s.setReady(!ready);
+  }
+  ImGui::SameLine();
+  if (menuButton("Leave", 120)) {
+    net.leave("left");
+    page_ = Page::Multiplayer;
+  }
+  if (!error_.empty()) ImGui::TextColored(ImVec4(1, 0.5f, 0.4f, 1), "%s", error_.c_str());
+  else if (net.lockstep() && net.lockstep()->phase() == net::LockstepPhase::Loading) ImGui::TextDisabled("Loading the battle...");
+  else if (leader && !why.empty()) ImGui::TextDisabled("Before the start: %s.", why.c_str());
+  else if (!leader) ImGui::TextDisabled("The leader starts the battle when everyone is ready.");
+  ImGui::End();
 }
 
 }  // namespace legion

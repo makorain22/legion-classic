@@ -2,15 +2,42 @@
 #include "net_world.hpp"
 
 #include <algorithm>
+#include <cstdlib>
 #include <nlohmann/json.hpp>
 
 #include "pioneer/core/bytes.hpp"
+#include "pioneer/core/content.hpp"
+#include "pioneer/core/version.hpp"
 #include "pioneer/sim/savefile.hpp"
 #include "pioneer/sim/script.hpp"
 
 using namespace pioneer;
 
 namespace legion {
+
+std::string netVersion() { return std::string("0.9.2/") + kEngineVersion + "/net1"; }
+
+bool loadNetRules(const std::string& contentDir, const std::vector<std::string>& modDirs,
+                  const std::vector<std::string>& enabledMods, const std::string& cacheDir, NetRules& out,
+                  std::string& error, std::string* warnings) {
+  const std::vector<ModInfo> mods = scanMods(modDirs, 1);
+  std::string warn;
+  out.mods = resolveLoadOrder(enabledMods, mods, warn);
+  ContentLayers layers;
+  if (!cacheDir.empty()) layers.setCacheDir(cacheDir);
+  layers.addRoot(contentDir);
+  for (const std::string& id : out.mods) {
+    std::string why;
+    if (!layers.addMod(*findMod(mods, id), why)) warn += "Mod '" + id + "' can't be opened: " + why + "\n";
+  }
+  if (warnings) *warnings = warn;
+  nlohmann::json docs[kRuleFileCount];
+  for (int i = 0; i < kRuleFileCount; ++i)
+    if (!layers.loadRules(kRuleFiles[i], docs[i], error)) return false;
+  if (!loadRuleSet(docs[0], docs[1], docs[2], out.weapons, out.types, error)) return false;
+  out.hash = rulesHash(docs);
+  return true;
+}
 
 std::vector<uint8_t> encodeOrder(const Command& c) {
   ByteWriter w;
