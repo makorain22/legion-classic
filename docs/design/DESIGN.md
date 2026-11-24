@@ -502,6 +502,29 @@ recognition flash on vehicles and a roundel in the interface.
        Not done on purpose: soldiers still drawn from their hand-built
        frames; glTF not drawn in battle; reverb zones not in the editor.
        Tests: test_audio_part7.cpp, test_assets_part7.cpp.
+     - **Part 8, networking groundwork (done 24 Nov):** `engine/net/`, in
+       pioneer_core, game-agnostic: `socket.hpp` (`Address`,
+       `parseAddress`, `UdpSocket`, `DatagramSocket`), `loopback.hpp`
+       (`LoopbackNetwork`: latency, jitter, loss, duplicates, offline),
+       `transport.hpp` (`Transport`: handshake with salts, acks with a
+       32-bit field, reliable ordered pieces of 1100 bytes, unreliable,
+       rate limit, timeouts, `ConnectionStats`), `session.hpp` (`Session`:
+       listen or dedicated host, leader, members with data, settings,
+       chat, join checks, rejoin tokens and reconnecting, app messages
+       from type 32), `discovery.hpp` (beacons, `DiscoveryAnnouncer`,
+       `DiscoveryBrowser`), `lockstep.hpp` (`Lockstep`, `LockstepAdapter`:
+       relay turns, adaptive delay, waiting for slow players, pause,
+       hashes, digest diagnosis, resync, rejoin and start by snapshot,
+       leader upload to a dedicated server). Game: `net_world.hpp`
+       (`encodeOrder`, `orderAllowed`, seats, `prepareOrder`, `NetWorld`,
+       `loadNetRules`, `netVersion`), `net_game.hpp` (`NetGame`: host,
+       join, LAN list, lobby on `SkirmishSetup`, overlay, chat, self-test),
+       `GameScene::issue`, `simTick`, `netSnapshot`, `netRestore`,
+       `netKey`; menus Multiplayer and Lobby; `Settings::playerName`,
+       `lastServer`, `hostPort`. `server/main.cpp` = `LegionServer`.
+       Console `net.*`; `--host`, `--join`, `--name`,
+       `--net-selftest [dedicated]`. Tests: test_net.cpp,
+       test_lockstep.cpp (a two-player Legion battle over a lossy line).
    - **9.14 Mission Maker foundation**, **9.15 Cutscenes and event
      sequences**, **9.16 Set pieces**, **9.17 Map, assets and terrain**,
      **9.18 Combat and controls**, (campaign finalisation when the user's

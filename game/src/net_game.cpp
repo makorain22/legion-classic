@@ -10,6 +10,7 @@
 
 #include "menus.hpp"
 #include "pioneer/core/bytes.hpp"
+#include "pioneer/core/console.hpp"
 #include "pioneer/core/log.hpp"
 #include "pioneer/sim/savefile.hpp"
 
@@ -534,6 +535,64 @@ void NetGame::drawOverlay() {
     }
     ImGui::End();
   }
+}
+
+// --- Console -----------------------------------------------------------------------------
+
+void GameScene::registerNetCommands() {
+  Console& con = Console::global();
+  con.addCommand("net.status", "net.status - the multiplayer session: members, pings, the battle's turns, checks.",
+                 [this](const ConsoleArgs&, Console& c) {
+                   if (!net_ || !net_->active()) return c.print("not in a multiplayer session");
+                   net::Session& s = net_->session();
+                   c.printFmt("%s, %s%s, port %u", net::stateName(s.state()), s.isHost() ? "hosting" : "joined ",
+                              s.isHost() ? "" : s.hostAddress().toString().c_str(), net_->port());
+                   for (const net::Member& m : s.members())
+                     c.printFmt("  %u %-24s %s%s%s %d ms  %s", m.id, m.name.c_str(), m.connected ? "" : "(lost) ",
+                                m.ready ? "ready " : "", m.id == s.leader() ? "leader " : "", m.pingMs, m.data.c_str());
+                   if (net::Lockstep* l = net_->lockstep()) {
+                     const auto& st = l->stats();
+                     c.printFmt("battle: %s, tick %u, last turn %u, delay %d, desyncs %u, resyncs %u, snapshots sent %u",
+                                net::phaseName(l->phase()), l->tick(), l->lastTurn(), l->delay(), st.desyncs, st.resyncs,
+                                st.snapshotsSent);
+                     if (st.desyncs) c.printFmt("last desync at tick %u: %s", st.lastDesyncTick, st.lastDesyncSystems.c_str());
+                   }
+                   const net::ConnectionStats cs = s.stats(s.isHost() ? 1 : 0);
+                   if (!s.isHost())
+                     c.printFmt("link: %.0f ms, %llu sent, %llu received, %llu resent, %llu lost", cs.rttMs,
+                                static_cast<unsigned long long>(cs.packetsSent),
+                                static_cast<unsigned long long>(cs.packetsReceived),
+                                static_cast<unsigned long long>(cs.resent), static_cast<unsigned long long>(cs.packetsLost));
+                 });
+  con.addCommand("net.host", "net.host [port] - host a multiplayer game (opens the lobby).", [this](const ConsoleArgs& a, Console& c) {
+    std::string err;
+    if (!net().host(settings_.playerName, static_cast<uint16_t>(a.integer(1, settings_.hostPort)), "", err))
+      return c.error(err);
+    if (mode_ != Mode::Menu) toMainMenu();
+    menus_->openMultiplayer();
+    c.print("hosting");
+  });
+  con.addCommand("net.join", "net.join <address[:port]> - join a multiplayer game.", [this](const ConsoleArgs& a, Console& c) {
+    if (a.size() < 2) return c.error("net.join <address[:port]>");
+    std::string err;
+    if (!net().join(a.str(1), settings_.playerName, "", err)) return c.error(err);
+    if (mode_ != Mode::Menu) toMainMenu();
+    menus_->openMultiplayer();
+    c.print("joining " + a.str(1));
+  });
+  con.addCommand("net.leave", "net.leave - leave the multiplayer session.", [this](const ConsoleArgs&, Console& c) {
+    if (!net_ || !net_->active()) return c.print("not in a session");
+    const bool battle = online();
+    net_->leave("left");
+    if (battle) toMainMenu();
+    c.print("left");
+  });
+  con.addCommand("net.say", "net.say <text> - say something to everyone in the session.", [this](const ConsoleArgs& a, Console& c) {
+    if (!net_ || !net_->active()) return c.error("not in a session");
+    std::string text;
+    for (size_t i = 1; i < a.size(); ++i) text += (i > 1 ? " " : "") + a.str(i);
+    net_->session().chat(text);
+  });
 }
 
 // --- --net-selftest ------------------------------------------------------------------------

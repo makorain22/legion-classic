@@ -500,6 +500,7 @@ class GameScene final : public pioneer::Scene {
   void registerGraphicsCommands();
   void registerAudioCommands();
   void registerAssetCommands();
+  void registerNetCommands();  // net.* (net_game.cpp)
  public:
   void drawGraphicsSettings();      // the Settings page's part
   void setGraphicsPreset(pioneer::gfx::Preset p, bool byGame);

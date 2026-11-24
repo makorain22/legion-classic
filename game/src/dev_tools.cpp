@@ -82,6 +82,7 @@ void GameScene::initDevTools() {
   registerGraphicsCommands();
   registerAudioCommands();
   registerAssetCommands();
+  registerNetCommands();
 
   // Automated runs (self-tests, screenshots) neither read nor write the
   // player's console settings, so they behave the same on every machine.
@@ -300,6 +301,7 @@ void GameScene::registerConsoleCommands() {
   con.addCommand("lua.run", "lua.run <code> - runs Lua in the mission's script (try: lua.run count(1), lua.run state.x). Changes made this way are not in replays.",
                  [this, inBattle](const ConsoleArgs& a, Console& c) {
                    if (!inBattle(c)) return;
+                   if (online()) return c.error("Not in a multiplayer game: it would change only your battle");
                    if (!sim_->lua()) return c.error("this mission has no Lua script");
                    std::string code;
                    for (size_t i = 1; i < a.size(); ++i) code += (i > 1 ? " " : "") + a.str(i);

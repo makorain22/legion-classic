@@ -141,6 +141,38 @@ mid-battle.
 - Saves (`.lsav`), replays (`.lrep`) and your maps (`.lmap`) live in
   `%APPDATA%\Makorain\LegionClassic\` (`saves`, `replays`, `maps`).
 
+### Multiplayer
+
+- **Multiplayer** on the main menu. Type your name, then either **Host**
+  (others join you) or type the host's address and **Join**. Games on your
+  own network appear in the list by themselves: click **Join**.
+- **Over the internet** the host forwards UDP port 47800 on their router
+  to their computer and tells the others their public address (or everyone
+  uses a VPN such as Tailscale or ZeroTier, then it works like a LAN). A
+  different port: change it before hosting, and join with `address:port`.
+- **The lobby.** The host chooses the map size, landscape, seed and
+  supplies, and what each of the four sides is: closed, open for a player,
+  or a computer (easy, normal, hard), and the teams. Each player picks an
+  open side and an army (or watches), and presses **Ready**. When everyone
+  is ready the host presses **Start the battle**. Chat at the bottom.
+- **Everyone needs the same version and the same mods** (the lobby refuses
+  a player whose rules differ, and says so). A password is optional.
+- **In the battle:** **Enter** opens the chat line (Enter sends, Esc closes);
+  **P** pauses for everyone and anyone can go on; the game speed is fixed;
+  saving, the editor and console cheats are off. The bottom-left corner
+  shows your ping (the host sees the players and the delay).
+- **When something goes wrong:** if a player's computer is slow, everyone
+  waits for it with a banner saying so; if a player's connection drops, the
+  others play on and the player is brought back into the battle when the
+  connection returns (within two minutes). If the computers ever disagree
+  about the battle, the out-of-step one is sent the host's battle and play
+  goes on (the log says which part of the battle differed - please report
+  it).
+- **Dedicated server:** `LegionServer` (next to the game) hosts without
+  playing: `LegionServer --name "Friday battles" --password tiger`. The
+  first player to join leads the lobby and starts the battle. Options:
+  `--port`, `--max`, `--mods a,b`, `--no-lan`; `--help` lists them.
+
 ### The armies
 
 Every army fields the same kinds of unit, built its own way: German armour is
@@ -638,6 +670,7 @@ are typing, **Up/Down** bring back earlier lines, **Esc** closes it.
 | `speed 4`, `pause`, `restart`, `screenshot` | Control the battle |
 | `status`, `hash`, `map`, `goto 64 64` | Look at the battle: sides and supplies, the state checksum, the map, move the camera |
 | `r.showfps 1` | Show frames per second in the corner (remembered) |
+| `net.status`, `net.host`, `net.join 192.168.1.20`, `net.say hello` | Multiplayer: the session and the link, host, join, chat |
 | `sys.threads 1` | Use no extra threads (old machines); `0` = one per core (remembered) |
 | `con.height 0.6` | How far down the console reaches (remembered) |
 | `profiler` (or F8) | Open the profiler; `prof.capture 300` writes a trace file you can send with a bug report |
@@ -832,7 +865,8 @@ the scenario details and its triggers, so you can share them.
 
 ## Command-line options
 
-`--fullscreen`, `--windowed 1920x1080`, `--map 256` (map size in tiles, up to
+`--host [port]` (host a multiplayer game and open the lobby), `--join address[:port]`, `--name Erich` (the
+name others see), `--fullscreen`, `--windowed 1920x1080`, `--map 256` (map size in tiles, up to
 1024), `--seed 1234` (different random map), `--biome winter` (temperate,
 winter, desert, tropical, urban), `--zoom 2`, `--classic` (the old 2D sprite
 view), `--yaw 200 --pitch 35` (start with the view turned and tilted, in

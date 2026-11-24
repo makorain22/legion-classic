@@ -55,6 +55,7 @@ class NetGame {
   bool inLobby() const;
   bool inBattle() const;   // the lockstep runs the scene's battle
   const std::string& lastError() const { return lastError_; }
+  uint16_t port() const { return sock_.localAddress().port; }
 
   // --- The lobby -------------------------------------------------------------
   SkirmishSetup setup() const;           // the leader's settings

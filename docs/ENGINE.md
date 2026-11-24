@@ -18,7 +18,7 @@ stands.
 | 5 | **UI framework:** real fonts and icons, interface size, docking, property grids from the script registry, timeline and graph widgets, string tables, Lua panels | **done** |
 | 6 | **Renderer:** device layer, graphics presets with auto-detect, HDR post-processing, time of day, weather, rain and snow, debug drawing | **done** |
 | 7 | **Assets and audio:** glTF in and out, .vox, materials, skeletal animation, poses; sound banks, voice lines, reverb zones, occlusion | **done** |
-| 8 | **Networking groundwork:** lockstep, hosting, LAN discovery, dedicated server, reconnect | planned |
+| 8 | **Networking groundwork:** lockstep, hosting, LAN discovery, dedicated server, reconnect | **done** |
 | 9 | **Tools:** `pioneer_tool`, asset browser, model viewer, sound bank editor | planned |
 
 ## Layout
@@ -29,7 +29,9 @@ engine/src/core/          log, jobs, profiler, memory, console, virtual file sys
                           hot reload, content layers, fixed-point maths
 engine/src/{ecs,sim,map}  the deterministic simulation
 engine/src/{platform,render,assets,audio,ui}   window, OpenGL 3.3 renderer, art, mixer, the interface kit and developer windows
+engine/src/net/           sockets, transport, sessions, LAN discovery, lockstep (no graphics: in pioneer_core)
 game/src/                 Legion Classic itself
+server/                   LegionServer, the dedicated server (pioneer_core + game/src/net_world.cpp)
 editor/src/               the Live Scenario Editor and the rules editor
 tests/                    doctest cases (pioneer_tests)
 ```
@@ -1367,3 +1369,215 @@ masked blends; sorting joints; glTF round trips of a voxel model and of a
 skinned animated model - twice - and a hand-written .gltf with a node
 transform; the humanoid's joints and poses; standing exact; kneeling,
 prone, walking, falling, nothing lost or smeared).
+
+---
+
+## Part 8 – Networking groundwork
+
+Multiplayer for Legion, built in layers so another game on the engine can
+take the lower ones as they are. Everything under `engine/net/` knows
+nothing about Legion; the game plugs in through two small points (a session
+config and a lockstep adapter). All of it is in `pioneer_core` - the
+dedicated server links nothing else.
+
+```
+LegionClassic / LegionServer      game/src/net_game.cpp (scene, lobby, overlay), net_world.cpp (orders, NetWorld)
+Lockstep                          turns, delay, waiting, pause, checks, snapshots     net/lockstep.hpp
+Session  + DiscoveryAnnouncer/Browser   members, lobby, chat, rejoin / LAN beacons    net/session.hpp, discovery.hpp
+Transport                         connections, reliable + unreliable messages         net/transport.hpp
+DatagramSocket: UdpSocket | LoopbackNetwork (tests)                                   net/socket.hpp, loopback.hpp
+```
+
+Nothing blocks and nothing makes threads: every layer has `update(nowMs)`
+and is given the clock, so tests run whole games over a simulated network
+in a fraction of a second, the same way every time.
+
+### Sockets (`pioneer/net/socket.hpp`, `loopback.hpp`)
+
+- `Address` (IPv4 and port), `parseAddress("host:port", defaultPort, ...)`
+  (numbers, or a name looked up).
+- `DatagramSocket`: send to an address, take the next datagram (never
+  waits). `UdpSocket` is the real one (Winsock or POSIX; non-blocking,
+  broadcast on request, a shared port for LAN browsing, 1 MB buffers, the
+  Windows "connection reset" quirk turned off).
+- `LoopbackNetwork`: sockets in memory with latency, jitter (datagrams
+  overtake each other), loss, doubled datagrams and computers cut off, on
+  the test's clock with seeded dice.
+- Datagrams stay under 1200 bytes (`kMaxDatagram`).
+
+### Transport (`pioneer/net/transport.hpp`)
+
+One socket, any number of connections, each with a **reliable** channel
+(every message once, in order, any size: big ones go in 1100-byte pieces)
+and an **unreliable** one (may be lost, never repeated).
+
+- Every datagram has a sequence number and acknowledges the last 33 the
+  other side sent; a reliable piece stays queued until a datagram carrying
+  it is acknowledged and goes again after 1.5 round trips (50 ms - 1 s).
+  A burst of more than 24 datagrams is acknowledged part-way, so the start
+  of a big message isn't sent twice.
+- The round trip comes from the acknowledgements; sending is limited per
+  connection (`sendRate`, 512 KB/s; a burst of 1/8 s), so a battle's state
+  for a player who rejoins doesn't flood a slow line.
+- Handshake Connect / Accept with a random number from each side that every
+  later datagram must carry; the Connect is padded so no answer is bigger
+  than its question. `protocolId` keeps other games and versions out.
+  Disconnect, or a timeout (8 s of silence); `NoAnswer` and `Refused` for
+  connecting. A computer that connects again from the same address
+  replaces its old connection.
+- `stats()`: round trip, datagrams sent, received and lost, pieces resent,
+  bytes queued, time since anything arrived.
+
+### Sessions (`pioneer/net/session.hpp`)
+
+A host and its members. The host is a player's game (member 0, a *listen
+server*) or a **dedicated server** (no member of its own; the connected
+member with the lowest id is the **leader**, who chooses the settings and
+starts).
+
+- Joining is checked: the same `gameId`, `gameVersion` and `contentHash`
+  (Legion: the merged rules' hash - mods included), the password; a refusal
+  says why ("The host runs version ...", "Your rules or mods are not the
+  same as the host's", "Wrong password", "The game is full", "The game has
+  already started"). The same name twice gets a number.
+- Members: id, name, ready, connected, ping (every two seconds), and a text
+  the game owns (Legion: side and army as JSON). Settings: one text the
+  leader owns (Legion: the skirmish setup). Both reach everyone when they
+  change.
+- Chat with a log; names and lines cleaned (no control characters, cut on
+  whole UTF-8 characters); at most five lines in three seconds per member;
+  joins, leaves and losses are chat lines too.
+- **Rejoining.** In a game (`setInGame(true)`), a member whose connection
+  is lost keeps its place for `rejoinSeconds` (120); its session sees the
+  host go quiet, says `Reconnecting` and keeps trying with the token the
+  host gave it, and gets its old id back (`Rejoined` / `MemberBack`). In the
+  lobby a lost member simply leaves.
+- `kick`, `leave` (members hear why).
+- Messages for the systems on top: types from 32 up, to the host, to one
+  member or to all, by registered handler; listeners for the events, and a
+  queue for the interface.
+
+### LAN discovery (`pioneer/net/discovery.hpp`)
+
+A host broadcasts a beacon once a second to port 47801 (and to the same
+port on this computer, for a second copy of the game running here): game
+id, version, name, description, port, players, in game, password,
+dedicated. A browser listens on that port (shared: two browsers on one
+computer both hear) and keeps the games heard within 3.5 s, one entry per
+host even when heard twice. Hosts listen for nothing.
+
+### Lockstep (`pioneer/net/lockstep.hpp`)
+
+Every machine runs the same simulation; only orders travel. The host is
+relay and referee.
+
+- **Turns.** Players send orders to the host. The host closes one turn per
+  tick on its own clock - the orders that reached it, in the order they
+  came - and sends it to everyone; every machine runs tick *t* once it has
+  turn *t*, applying that turn's orders first. Orders are bytes here; the
+  game says what they mean (`LockstepAdapter::apply`).
+- **Delay.** The host runs its own battle `delay` ticks behind the turns it
+  has closed, so turns arrive before they are needed. The delay follows
+  the slowest round trip (half of it, plus the turn players keep in hand):
+  one tick on a LAN, up at once when a line gets slower, down one step
+  every four seconds. Players keep a turn in hand and catch up (up to 8
+  extra ticks a step) when they fall behind.
+- **Waiting.** A player more than two seconds behind the host's battle
+  whose line is alive (a slow computer) holds everyone: the host stops
+  closing turns and everyone sees *Waiting for ...*. A player whose line
+  has gone silent doesn't hold anyone: it catches up from the turns when
+  its line is back, or rejoins.
+- **Pause** for everyone, from anyone (`anyonePauses`): the host stops the
+  turns.
+- **Checks.** Players send the state hash every second; the host compares
+  it with its own battle's (keeping players' hashes that are ahead of it
+  until it gets there). On a difference - a **desync** - the host asks the
+  player for its per-system digest at a tick neither has run yet, takes its
+  own there, names the systems that differ (log, `onDesync`, a notice to
+  everyone) and sends the player its own battle (**resync**).
+- **Snapshots** - the adapter's saved battle plus the turns after it - start
+  the game for everyone, bring back a player who rejoins and repair a
+  desync. Reports from before a snapshot are told apart by an epoch number.
+- **A dedicated server** builds no battle: the leader's game builds it and
+  sends it up (`start()` on the leader), the server loads it and sends it
+  to everyone - the leader too, so every machine starts from the very same
+  bytes.
+- `setFilter`: the host decides which orders it takes.
+- `phase()`: idle, loading, running, waiting, paused, ended; `stats()`.
+
+### Legion on the lockstep (`game/src/net_world.hpp`, `net_game.hpp`)
+
+- **Orders** are `Command`s in their save-game bytes. Every machine prepares
+  an order the same way before the battle gets it (`prepareOrder`): it is
+  given its sender's side (the **seats** in the snapshot's description),
+  only player orders pass (`orderAllowed`: moving, fighting, building,
+  producing, organising - no spawning, editing, credits, teams, weather),
+  and only the sender's own units take it. The host filters too. Nobody can
+  order another side's units or conjure an army, whatever their game sends.
+- **Snapshots** are save games in memory (`SaveFile`: description with the
+  seats, map, state - about 110 KB for a fresh 128 x 128 skirmish), the
+  format of the game's own saves; the game, the server and the tests read
+  each other's.
+- `NetWorld`: the battle without graphics (dedicated server, tests).
+- The game's adapter runs the scene: `GameScene::simTick()` (the tick and
+  what follows it: events, effects, sounds) is what the lockstep steps;
+  every order a player gives goes through `GameScene::issue()`.
+- `NetGame`: hosting (port 47800 by default), joining by address or from
+  the LAN list, the lobby (the skirmish setup in the session's settings,
+  each member's side and army in its data), starting (the leader's game
+  builds the battle with `startSkirmish`, names the sides after their
+  players), the in-battle overlay (waiting, pause, reconnecting, chat lines,
+  ping) and Enter for chat.
+- In a multiplayer battle: no saving, loading or restarting; no game speed;
+  no editor; console commands that would change the battle say no;
+  replays record as always.
+- `LegionServer` (`server/main.cpp`): `--port`, `--name`, `--password`,
+  `--max`, `--mods`, `--content`, `--no-lan`, `--quit-after`, `--verbose`.
+  Loads the rules with the mods like the game (`loadNetRules`), hosts,
+  announces itself, referees, and goes back to the lobby when everyone has
+  left.
+
+### Console and command line
+
+`net.status`, `net.host [port]`, `net.join <address>`, `net.leave`,
+`net.say <text>`; `--host [port]`, `--join address`, `--name NAME`,
+`--net-selftest [dedicated]`.
+
+### Not done on purpose
+
+- No NAT punch-through or relay service: over the internet the host
+  forwards a port (or players use a VPN such as Tailscale); LAN and direct
+  IP work as they are.
+- No encryption or accounts: it is for LAN parties and friends' servers.
+- IPv4 only.
+- No joining a game in progress as a new player (rejoining your own place
+  works); no spectators beyond players who choose "watching" in the lobby.
+- A player who leaves for good leaves its army standing idle (handing it to
+  the computer is a gameplay decision for later).
+- Skirmish only: campaign missions and scenarios with scripts are not
+  offered in the lobby yet (the lockstep would carry them: the snapshot is
+  a full save with the script).
+- A desync is repaired by sending the host's battle, not prevented: the
+  digest names the system to look at.
+
+### Tests
+
+`tests/test_net.cpp` (10: addresses; reliable messages once and in order
+through a line losing a fifth of its datagrams, with a 150 KB message both
+ways; unreliable ones lost but never repeated; refused, no answer, the
+cable out, closed politely, another game's datagrams ignored; real UDP on
+this computer; LAN beacons found and forgotten, another game's ignored; a
+lobby with names, settings, chat, version and mod refusals, leaving and
+kicking; password, full, started; a lost player back in its own place, and
+gone when away too long; a dedicated server's leader),
+`tests/test_lockstep.cpp` (7: three machines the same through a bad line;
+one tick of delay on a LAN; a slow player holds everyone, a lost one
+doesn't and comes back; a desync found, named and repaired; pause; a
+dedicated server taking the leader's battle; **a Legion battle between two
+players over a lossy line**, cheating orders dropped on every machine, a
+broken machine's desync named (`ECS`) and repaired). The game:
+`--net-selftest` (the scene hosts, a headless second player joins over real
+UDP, chat, sides, start, orders from both, a cheat dropped, a pause,
+battles compared tick for tick) and `--net-selftest dedicated` (the same
+through a dedicated server in the process, the scene leading). ctest
+`server_smoke` starts and stops `LegionServer`.

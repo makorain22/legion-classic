@@ -180,6 +180,30 @@
     skeletal animation and posed voxel figures in the engine.
   - Console: `audio.info`, `audio.play`, `audio.say`, `audio.acoustics`,
     `audio.space`, `model.export`, `model.info`.
+- **Part 8, networking groundwork** (24 Nov):
+  - **Multiplayer.** *Multiplayer* on the main menu: host a game, join one
+    by its address, or pick one from the games found on your network. In
+    the lobby the host chooses the map and the four sides (closed, open for
+    a player, or a computer at any difficulty); each player picks an open
+    side and its army, chats, and says when ready; the host starts. Up to
+    four sides, any mix of players and computers.
+  - **Fair and in step.** Every computer runs the same battle; only orders
+    travel. Orders are checked on every computer: nobody can command
+    another side's units or spawn anything. The state is checked every
+    second; a computer that falls out of step is told which part of the
+    battle differed and is sent the battle again, and play goes on.
+  - **Bad lines.** Lost data is sent again; the game keeps a turn or two in
+    hand on slow lines and needs none on a LAN; a slow computer makes
+    everyone wait (with a banner saying for whom); a player whose
+    connection drops is brought back into the battle when it returns (two
+    minutes), while the others play on.
+  - **In the battle:** **Enter** to chat; **P** pauses for everyone (anyone
+    can go on); no game speed, editor, saving or console cheats.
+  - **Dedicated server:** `LegionServer` runs games without graphics
+    (`--port`, `--name`, `--password`, `--max`, `--mods`); the first player
+    to join leads and starts.
+  - Console: `net.status`, `net.host`, `net.join`, `net.leave`, `net.say`.
+    Command line: `--host [port]`, `--join address`, `--name`.
 
 ## 0.9.1 – in progress (edits after Milestone 9; Milestones 9.1–9.12)
 
