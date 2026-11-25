@@ -28,4 +28,16 @@ bool Image::loadPng(const std::string& path) {
   return true;
 }
 
+bool Image::loadPngBytes(const uint8_t* bytes, size_t size) {
+  if (!bytes || size == 0 || size > 0x7fffffff) return false;
+  int iw = 0, ih = 0, n = 0;
+  unsigned char* data = stbi_load_from_memory(bytes, static_cast<int>(size), &iw, &ih, &n, 4);
+  if (!data) return false;
+  w = iw;
+  h = ih;
+  px.assign(reinterpret_cast<const Rgba*>(data), reinterpret_cast<const Rgba*>(data) + static_cast<size_t>(iw) * ih);
+  stbi_image_free(data);
+  return true;
+}
+
 }  // namespace pioneer

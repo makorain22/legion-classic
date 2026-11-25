@@ -141,6 +141,39 @@ endif()
 legion_warnings(pioneer_core)
 
 # ---------------------------------------------------------------------------
+# Pioneer Engine media: models, images and sound without a window, a GPU or a
+# sound card (glTF, .vox, skeletons, the mixer, decoders, banks, voice lines).
+# Used by the presentation library, the tools and the tests.
+# ---------------------------------------------------------------------------
+set(PIONEER_MEDIA_SOURCES
+  engine/src/assets/gltf.cpp engine/src/assets/vox_file.cpp engine/src/assets/skeleton.cpp
+  engine/src/assets/voxel.cpp engine/src/assets/voxel_mesh.cpp engine/src/assets/voxel_rig.cpp
+  engine/src/assets/image.cpp engine/src/assets/blitzkrieg.cpp
+  engine/src/audio/mixer.cpp engine/src/audio/decode.cpp engine/src/audio/acoustics.cpp
+  engine/src/audio/bank.cpp engine/src/audio/voice_lines.cpp)
+add_library(pioneer_media STATIC ${PIONEER_MEDIA_SOURCES})
+target_include_directories(pioneer_media PUBLIC engine/include)
+target_link_libraries(pioneer_media PUBLIC pioneer_core stb)
+legion_warnings(pioneer_media)
+
+# Pioneer Engine tools: the content validator and the cook (no graphics).
+file(GLOB PIONEER_TOOLS_SOURCES CONFIGURE_DEPENDS engine/src/tools/*.cpp)
+add_library(pioneer_tools STATIC ${PIONEER_TOOLS_SOURCES})
+target_link_libraries(pioneer_tools PUBLIC pioneer_media)
+legion_warnings(pioneer_tools)
+
+# pioneer_tool: validate, cook and look into content from the command line
+# (the engine's checks plus Legion's own, game/src/content_checks.cpp).
+add_executable(pioneer_tool tools/pioneer_tool/main.cpp game/src/content_checks.cpp)
+target_include_directories(pioneer_tool PRIVATE game/src)
+target_link_libraries(pioneer_tool PRIVATE pioneer_tools)
+legion_warnings(pioneer_tool)
+set_target_properties(pioneer_tool PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+  RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/bin
+  RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/bin)
+
+# ---------------------------------------------------------------------------
 # The dedicated server: the engine core and Legion's headless battle, no
 # graphics or sound (built in the Linux CI too).
 # ---------------------------------------------------------------------------
@@ -164,10 +197,13 @@ if(LEGION_BUILD_GAME)
     engine/src/assets/*.cpp
     engine/src/audio/*.cpp
     engine/src/ui/*.cpp)
+  foreach(src ${PIONEER_MEDIA_SOURCES})
+    list(REMOVE_ITEM PIONEER_GFX_SOURCES ${CMAKE_SOURCE_DIR}/${src})
+  endforeach()
   add_library(pioneer STATIC ${PIONEER_GFX_SOURCES})
   target_include_directories(pioneer PUBLIC engine/include)
   find_package(Threads REQUIRED)  # sprites are baked on all cores
-  target_link_libraries(pioneer PUBLIC pioneer_core glad imgui stb SDL3::SDL3-static Threads::Threads)
+  target_link_libraries(pioneer PUBLIC pioneer_core pioneer_media pioneer_tools glad imgui stb SDL3::SDL3-static Threads::Threads)
   if(WIN32)
     target_link_libraries(pioneer PUBLIC dbghelp)  # crash reports
   endif()
@@ -212,17 +248,14 @@ if(LEGION_BUILD_TESTS)
   # So is the Blitzkrieg file reader (it needs no graphics either).
   # And the sound mixer, decoders, banks, voice lines and acoustics (no sound card needed).
   # And the 3D camera and voxel meshing (pure maths, no GL calls).
-  add_executable(pioneer_tests ${TEST_SOURCES} editor/src/history.cpp engine/src/assets/blitzkrieg.cpp
-                 engine/src/audio/mixer.cpp engine/src/audio/decode.cpp engine/src/audio/acoustics.cpp
-                 engine/src/audio/bank.cpp engine/src/audio/voice_lines.cpp game/src/campaign.cpp
-                 engine/src/render/camera.cpp engine/src/assets/voxel.cpp engine/src/assets/voxel_mesh.cpp engine/src/assets/vox_file.cpp
-                 engine/src/assets/skeleton.cpp engine/src/assets/gltf.cpp engine/src/assets/voxel_rig.cpp
-                 engine/src/assets/image.cpp
+  # The media and tools libraries (models, sound, the validator, the cook) are linked whole.
+  add_executable(pioneer_tests ${TEST_SOURCES} editor/src/history.cpp game/src/campaign.cpp
+                 engine/src/render/camera.cpp
                  engine/src/ui/timeline_model.cpp engine/src/ui/graph_model.cpp engine/src/ui/mission_views.cpp
                  engine/src/ui/icon_list.cpp engine/src/render/graphics_settings.cpp
-                 engine/src/render/environment.cpp game/src/net_world.cpp)
+                 engine/src/render/environment.cpp game/src/net_world.cpp game/src/content_checks.cpp)
   target_include_directories(pioneer_tests PRIVATE editor/src game/src)
-  target_link_libraries(pioneer_tests PRIVATE pioneer_core doctest::doctest stb)
+  target_link_libraries(pioneer_tests PRIVATE pioneer_tools doctest::doctest stb)
   target_compile_definitions(pioneer_tests PRIVATE LEGION_CONTENT_DIR="${CMAKE_SOURCE_DIR}/content/")
   # Some tests play whole games with the real rules.
   target_compile_definitions(pioneer_tests PRIVATE LEGION_RULES_DIR="${CMAKE_SOURCE_DIR}/content/rules/")
@@ -231,6 +264,16 @@ if(LEGION_BUILD_TESTS)
   # The server starts, loads the rules, opens its port and stops cleanly.
   add_test(NAME server_smoke COMMAND LegionServer --port 0 --no-lan --quit-after 1
            --content ${CMAKE_SOURCE_DIR}/content)
+
+  # The content passes every check, cooks, and the cooked content passes too
+  # (warnings and notes are allowed; an error fails the build).
+  add_test(NAME tool_validate COMMAND pioneer_tool validate --content ${CMAKE_SOURCE_DIR}/content
+           --mods ${CMAKE_SOURCE_DIR}/mods --all-mods)
+  add_test(NAME tool_cook COMMAND pioneer_tool cook --content ${CMAKE_SOURCE_DIR}/content --clean
+           --out ${CMAKE_BINARY_DIR}/cooked/content --pack ${CMAKE_BINARY_DIR}/cooked/content.pnpack)
+  add_test(NAME tool_validate_cooked COMMAND pioneer_tool validate --content ${CMAKE_BINARY_DIR}/cooked/content.pnpack)
+  set_tests_properties(tool_cook PROPERTIES FIXTURES_SETUP cooked)
+  set_tests_properties(tool_validate_cooked PROPERTIES FIXTURES_REQUIRED cooked)
 
   # Builds the shipped maps: tutorial, campaigns, scenarios, skirmish maps (tools/make_content.cpp).
   file(GLOB MAKE_CONTENT_SOURCES CONFIGURE_DEPENDS tools/make_content.cpp tools/campaign_*.cpp)

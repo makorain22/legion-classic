@@ -1,6 +1,7 @@
 #pragma once
 // Pioneer Engine - CPU-side RGBA images, used to build sprites and atlases.
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -31,6 +32,8 @@ struct Image {
   bool savePng(const std::string& path) const;
   // Loads a PNG (any channel count) as RGBA. False if missing or unreadable.
   bool loadPng(const std::string& path);
+  // The same from a file's bytes (PNG, or anything else stb_image reads).
+  bool loadPngBytes(const uint8_t* data, size_t size);
 };
 
 }  // namespace pioneer

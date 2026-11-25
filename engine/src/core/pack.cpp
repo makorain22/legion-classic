@@ -380,7 +380,9 @@ bool build(const std::string& dirIn, const std::string& outFile, Manifest& m, st
       return false;
     }
     const auto when = fs::last_write_time(dir + paths[i], ec);
-    if (!ec) {
+    if (options.fixedTime >= 0) {
+      loaded[i].mtime = options.fixedTime;
+    } else if (!ec) {
       // file_time_type -> seconds since 1970, portably enough for an archive's date stamp.
       const auto sys = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
           when - fs::file_time_type::clock::now() + std::chrono::system_clock::now());

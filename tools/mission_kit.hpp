@@ -100,6 +100,8 @@ struct Builder {
           const int odd = d.isStructure() ? (d.footW % 2 ? T / 2 : 0) : T / 2;
           const int oddY = d.isStructure() ? (d.footH % 2 ? T / 2 : 0) : T / 2;
           const Vec2i p{(tx + dx) * T + odd, (ty + dy) * T + oddY};
+          // Off the map before dividing: -128 / 256 rounds to row 0 (r06's MCV, found by pioneer_tool).
+          if (p.x < 0 || p.y < 0) continue;
           const int px = p.x / T, py = p.y / T;
           if (!file.map.inBounds(px, py)) continue;
           if (d.isStructure()) {

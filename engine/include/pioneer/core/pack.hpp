@@ -95,6 +95,9 @@ bool engineAllows(const Manifest& m, std::string* why = nullptr);
 struct BuildOptions {
   int level = 6;                        // 0 store .. 9 smallest
   std::vector<std::string> exclude;     // paths containing any of these are left out
+  // >= 0: every entry is dated this (seconds since 1970) instead of its file's
+  // time, so the same files always make the same bytes (cooked releases).
+  int64_t fixedTime = -1;
 };
 // Packs a content folder. Fields of `m` left empty are filled from the
 // folder's mod.json (name, version, author, description, requires) and the
