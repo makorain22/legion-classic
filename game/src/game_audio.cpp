@@ -34,18 +34,24 @@ std::string GameAudio::resolve(const std::string& rel) const {
   return {};
 }
 
-bool GameAudio::init(const std::vector<std::string>& dirs, std::string& error) {
-  dirs_ = dirs;
-  // The bank files: each folder's audio.json, then its banks/*.json in name order; base first, mods after.
-  for (const auto& dir : dirs_) {
+std::vector<std::string> GameAudio::bankFilesIn(const std::vector<std::string>& dirs) {
+  // Each folder's audio.json, then its banks/*.json in name order; base first, mods after.
+  std::vector<std::string> out;
+  for (const auto& dir : dirs) {
     std::error_code ec;
-    if (std::filesystem::exists(dir + "audio.json", ec)) bankFiles_.push_back(dir + "audio.json");
+    if (std::filesystem::exists(dir + "audio.json", ec)) out.push_back(dir + "audio.json");
     std::vector<std::string> more;
     for (std::filesystem::directory_iterator it(dir + "banks", ec), end; !ec && it != end; it.increment(ec))
       if (it->path().extension() == ".json") more.push_back(it->path().generic_string());
     std::sort(more.begin(), more.end());
-    bankFiles_.insert(bankFiles_.end(), more.begin(), more.end());
+    out.insert(out.end(), more.begin(), more.end());
   }
+  return out;
+}
+
+bool GameAudio::init(const std::vector<std::string>& dirs, std::string& error) {
+  dirs_ = dirs;
+  bankFiles_ = bankFilesIn(dirs_);
   if (bankFiles_.empty()) {
     error = "no audio/audio.json";
     return false;
@@ -139,6 +145,47 @@ void GameAudio::setBiome(Biome b) {
 VoiceId GameAudio::play(const std::string& name, const Emitter& at, float volume) {
   if (!device_.isOpen() || !events_) return 0;
   return events_->play(name, at, volume);
+}
+
+VoiceId GameAudio::previewFile(const std::string& diskPath, Bus bus, float volume, float pitch, bool loop) {
+  if (!device_.isOpen() || diskPath.empty()) return 0;
+  auto it = previewSounds_.find(diskPath);
+  if (it == previewSounds_.end()) {
+    Sound s;
+    std::string err;
+    if (!loadSound(diskPath, s, err)) {
+      PNR_LOG(Audio, Warn, "Can't play %s: %s", diskPath.c_str(), err.c_str());
+      return 0;
+    }
+    it = previewSounds_.emplace(diskPath, mixer_->addSound(std::move(s))).first;
+  }
+  PlayDesc d;
+  d.sound = it->second;
+  d.bus = bus;
+  d.volume = volume;
+  d.pitch = pitch;
+  d.loop = loop;
+  d.priority = 100;  // heard over the battle
+  d.reverb = 0.0f;
+  const VoiceId v = mixer_->play(d);
+  if (v) previewVoices_.push_back(v);
+  return v;
+}
+
+VoiceId GameAudio::previewEvent(const SoundEvent& e, const std::function<std::string(const std::string&)>& diskPathOf) {
+  const std::vector<std::string>& files = e.files.empty() ? e.farFiles : e.files;
+  if (files.empty()) return 0;
+  // One file at random and the event's own random pitch, as the game would.
+  std::uniform_int_distribution<size_t> pick(0, files.size() - 1);
+  std::uniform_real_distribution<float> wobble(-e.pitch, e.pitch);
+  static std::mt19937 rng{1946};
+  return previewFile(diskPathOf(files[pick(rng)]), e.bus, e.volume, 1.0f + wobble(rng), e.loop);
+}
+
+void GameAudio::stopPreview() {
+  if (!mixer_) return;
+  for (VoiceId v : previewVoices_) mixer_->stop(v, 0.05f);
+  previewVoices_.clear();
 }
 
 void GameAudio::setVoiceFaction(const std::string& faction) {

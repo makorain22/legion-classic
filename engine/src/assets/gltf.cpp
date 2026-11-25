@@ -761,4 +761,36 @@ ModelAsset voxelModelAsset(const VoxelModel& model, const VoxelPalette& palette,
   return a;
 }
 
+ModelAsset rigModelAsset(const VoxelRig& rig, const VoxelPalette& palette, float voxelTiles, const std::string& name) {
+  ModelAsset a;
+  for (const VoxelPart& part : rig.parts) {
+    // The part's grid cell (0,0,0) sits at rig.origin (voxel units).
+    ModelAsset p = voxelModelAsset(part.voxels, palette, voxelTiles, -rig.origin[0], -rig.origin[1], name + "_" + part.name);
+    if (a.materials.empty()) {
+      a.materials = p.materials;
+      a.materials[0].name = name + "_paint";
+      a.materials[1].name = name + "_team";
+    }
+    for (MeshPart& m : p.meshes) {
+      m.skinned = part.joint >= 0;
+      for (MeshVertexFull& v : m.vertices) {
+        v.pos[2] += rig.origin[2] * voxelTiles;
+        v.joints[0] = static_cast<uint16_t>(std::max(0, part.joint));
+        v.weights[0] = 1.0f;
+      }
+      a.meshes.push_back(std::move(m));
+    }
+  }
+  a.skeleton = rig.skeleton;
+  for (size_t j = 0; j < a.skeleton.size(); ++j)
+    for (float& t : a.skeleton.joint(static_cast<int>(j)).rest.t) t *= voxelTiles;
+  a.skeleton.bindRest();
+  a.clips = rig.clips;
+  for (AnimationClip& c : a.clips)
+    for (Channel& ch : c.channels)
+      if (ch.path == ChannelPath::Translation)
+        for (float& v : ch.values) v *= voxelTiles;
+  return a;
+}
+
 }  // namespace pioneer

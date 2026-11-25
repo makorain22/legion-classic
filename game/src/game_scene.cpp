@@ -2044,6 +2044,7 @@ void GameScene::onUpdate(float dt, float alpha) {
     } else showStatus("Multiplayer: " + err, 8);
   }
   if (opt_.modsSelfTest) runModsSelfTest();
+  if (opt_.toolsSelfTest) runToolsSelfTest();
   editor_->update(dt);
   sidebar_->update(dt);
   drawStructureEffects(dt * timeScale());

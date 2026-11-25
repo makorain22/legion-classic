@@ -16,6 +16,7 @@
 // with subtitles.
 
 #include <deque>
+#include <functional>
 #include <memory>
 #include <random>
 #include <string>
@@ -97,8 +98,18 @@ class GameAudio {
   const pioneer::audio::VoiceLines& voices() const { return voices_; }
   std::shared_ptr<const pioneer::audio::Acoustics> acoustics() const { return acoustics_; }
   const std::vector<std::string>& bankFiles() const { return bankFiles_; }
+  // The bank files the game reads from these audio folders, in order.
+  static std::vector<std::string> bankFilesIn(const std::vector<std::string>& dirs);
   // Acoustics on or off (console audio.acoustics): off, every sound rings in the open-ground hall.
   void setAcousticsEnabled(bool on);
+  // The tool windows (part 9): a sound file, or an event as it is being
+  // edited, played at once and not placed. `diskPathOf` turns a file named
+  // in a bank into a path on disk. Files are kept loaded by path.
+  pioneer::audio::VoiceId previewFile(const std::string& diskPath, pioneer::audio::Bus bus = pioneer::audio::Bus::Ui,
+                                      float volume = 1.0f, float pitch = 1.0f, bool loop = false);
+  pioneer::audio::VoiceId previewEvent(const pioneer::audio::SoundEvent& e,
+                                       const std::function<std::string(const std::string&)>& diskPathOf);
+  void stopPreview();
   const pioneer::audio::Listener& ear() const { return ear_; }
   bool acousticsEnabled() const { return acousticsOn_; }
 
@@ -132,6 +143,8 @@ class GameAudio {
   float acousticsCheck_ = 0;
   double lastIncoming_ = -10, lastManDown_ = -10;
   std::unordered_map<std::string, std::vector<Track>> playlists_;
+  std::unordered_map<std::string, int> previewSounds_;  // disk path -> mixer sound (tool windows)
+  std::vector<pioneer::audio::VoiceId> previewVoices_;
   std::unordered_map<std::string, int> ambience_;  // biome id -> sound
   std::unordered_map<std::string, std::string> ambienceFiles_;  // biome id -> file (the last bank naming it wins)
   std::unordered_map<std::string, nlohmann::json> musicLists_;  // mood -> tracks (likewise)

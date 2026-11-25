@@ -19,7 +19,7 @@
 // (it remembers what it did in .cook_state.json, which packs leave out).
 //
 //   tools::CookOptions o;
-//   o.packFile = "dist/legion-content.pnpack";
+//   o.packFile = "dist/content.pnpack";
 //   tools::CookResult r;
 //   if (!tools::cook(fs, registry, "build/cooked/", o, r)) for (auto& e : r.errors) ...
 //

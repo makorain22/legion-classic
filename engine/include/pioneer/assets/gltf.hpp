@@ -27,6 +27,7 @@
 
 #include "pioneer/assets/skeleton.hpp"
 #include "pioneer/assets/voxel.hpp"
+#include "pioneer/assets/voxel_rig.hpp"
 
 namespace pioneer {
 
@@ -81,5 +82,11 @@ bool writeGlbFile(const std::string& path, const ModelAsset& model, std::string&
 // pivot at the origin.
 ModelAsset voxelModelAsset(const VoxelModel& model, const VoxelPalette& palette, float voxelTiles, float pivotX = 0,
                            float pivotY = 0, const std::string& name = "model");
+
+// A voxel figure on a skeleton (voxel_rig.hpp) as a skinned model: each
+// part's voxels bound wholly to its joint, the rig's skeleton and clips, all
+// scaled to `voxelTiles` per voxel. For the model viewer, and so a soldier
+// goes to Blender with his walk, his kneel and his fall.
+ModelAsset rigModelAsset(const VoxelRig& rig, const VoxelPalette& palette, float voxelTiles, const std::string& name = "figure");
 
 }  // namespace pioneer

@@ -179,6 +179,7 @@ bool GameScene::setMods(const std::vector<std::string>& enabled, std::string& er
   }
   saveSettings();
   if (!reloadArt(error)) return false;
+  reloadSounds();  // a mod's sound banks (part 9: they were heard only after a restart)
   rulesEditor_->reset();
   toMainMenu();  // a fresh battle on the new rules behind the menu
   return true;

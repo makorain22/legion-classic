@@ -24,7 +24,7 @@ void usage() {
   PNR_INFO("Options: --windowed WxH | --fullscreen | --map N | --seed N | --zoom 0.5|1|2 | --spawn N\n"
            "         --offscreen --frames N --screenshot out.png --demo --fixed-dt --no-help --debug\n"
            "         --dump-atlas atlas.png --editor --open map.lmap --editor-demo --live-demo\n"
-           "         --tool rules[:unit_id]|mods --mods-selftest\n"
+           "         --tool rules[:unit_id]|mods --mods-selftest --tools-selftest\n"
            "         --menu --ai-battle --side N --biome temperate|winter|desert|tropical|urban --gallery --works-demo --formation-demo --town-demo --village-demo --bridge-demo --logistics-demo\n"
            "         --ffa (every side for itself) --bench MINUTES (an --ai-battle played without drawing; prints what each side did)\n"
            "         --threads N (job system: 0 = one per core, 1 = no extra threads) --exec \"console commands\"\n"
@@ -152,6 +152,9 @@ int main(int argc, char** argv) {
     else if (a == "--name") opt.playerName = next();
     else if (a == "--mods-selftest") {
       opt.modsSelfTest = true;
+      opt.aiBattle = true;
+    } else if (a == "--tools-selftest") {
+      opt.toolsSelfTest = true;
       opt.aiBattle = true;
     } else if (a == "--tool") opt.tool = next();
     else if (a == "--threads") opt.threads = std::max(0, std::atoi(next()));

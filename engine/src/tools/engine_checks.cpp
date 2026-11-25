@@ -192,9 +192,16 @@ bool looksLikeFile(const std::string& s) {
 }
 
 void checkReferences(Context& c) {
-  // Case-insensitive index of the tree, to tell "missing" from "wrong case".
+  // Every file as it is spelt, and a case-blind index to tell "missing" from
+  // "spelt differently" (which works on Windows and in packs, and fails on
+  // Linux and macOS - so it is looked for on every system, not left to the disk).
+  std::set<std::string> actual;
   std::map<std::string, std::string> byLower;
-  for (const std::string& p : c.files("")) byLower[lower(p)] = p;
+  for (const std::string& p : c.files("")) {
+    actual.insert(p);
+    byLower[lower(p)] = p;
+  }
+  for (const vfs::FileInfo& f : c.fs().list("", true)) actual.insert(f.path);  // ignored files still exist
   for (const std::string& p : c.files("", {".json"})) {
     if (fileOf(p) == "pack.json") continue;  // lists the pack's own files, which the packs check covers
     const json* doc = c.json(p);
@@ -225,7 +232,7 @@ void checkReferences(Context& c) {
       // audio/banks/ names its sounds from audio/), or to the root.
       for (std::string up = folder;; up = folderOf(up.substr(0, up.size() - 1))) {
         std::string candidate;
-        if (vfs::normalise(up + s, candidate) && c.fs().exists(candidate)) return;
+        if (vfs::normalise(up + s, candidate) && actual.count(candidate)) return;
         if (up.empty()) break;
       }
       if (!said.insert(s).second) return;

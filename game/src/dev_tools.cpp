@@ -39,7 +39,8 @@ namespace {
 // again when the scene goes (they hold a pointer to it).
 const char* const kGameCommands[] = {"quit",   "exit",    "screenshot", "photo", "speed", "pause", "hash", "status",
                                      "reveal", "credits", "spawn",      "kill",  "side",  "goto", "map",
-                                     "restart", "editor", "clear",      "profiler", "console", "mod.list", "mod.pack"};
+                                     "restart", "editor", "clear",      "profiler", "console", "mod.list", "mod.pack",
+                                     "tools.assets", "tools.models", "tools.banks", "tools.validate"};
 
 bool readText(const std::string& path, std::string& out) {
   std::ifstream in(path, std::ios::binary);
@@ -83,6 +84,8 @@ void GameScene::initDevTools() {
   registerAudioCommands();
   registerAssetCommands();
   registerNetCommands();
+  registerToolCommands();
+  setupToolWindows();
 
   // Automated runs (self-tests, screenshots) neither read nor write the
   // player's console settings, so they behave the same on every machine.
@@ -143,6 +146,10 @@ bool GameScene::devToolsEvent(const SDL_Event& e) {
     Console::global().execute("profiler");
     return true;
   }
+  if (e.key.key == SDLK_F7 && (e.key.mod & (SDL_KMOD_CTRL | SDL_KMOD_ALT | SDL_KMOD_SHIFT)) == 0) {
+    showAssets_ = !showAssets_;  // the asset browser (part 9)
+    return true;
+  }
   // Keys bound with the console's 'bind' (not while typing a command).
   if (!io.WantTextInput) {
     const KeyCombo combo{e.key.key, modsOf(e.key.mod)};
@@ -170,6 +177,13 @@ void GameScene::drawDevTools() {
   }
   drawInterfaceKit();
   drawInterfaceScripts();
+  // The model list follows the rules and the mods.
+  const size_t key = types_.size() * 1009 + mods_.size() * 31 + content_.modIds().size();
+  if (key != toolSourcesKey_) {
+    toolSourcesKey_ = key;
+    refreshToolSources();
+  }
+  drawToolWindows();
   if (showConsole_) {
     if (const CVar* h = con.find("con.height")) consoleWin_.setHeight(h->f());
     consoleWin_.draw(con, &showConsole_);

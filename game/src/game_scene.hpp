@@ -37,6 +37,7 @@
 #include "pioneer/sim/simulation.hpp"
 #include "pioneer/core/memory.hpp"
 #include "pioneer/ui/dev_ui.hpp"
+#include "pioneer/ui/tool_windows.hpp"
 
 namespace legion {
 
@@ -115,6 +116,7 @@ struct SceneOptions {
   std::string join;             // --join address[:port]: join one at start
   std::string playerName;       // --name: the name others see
   bool modsSelfTest = false;    // checks the rules editor and mods through the real game
+  bool toolsSelfTest = false;   // checks the asset browser, model viewer and sound bank editor (part 9)
   std::string tool;             // open a creation tool at start: rules[:id] | sprites[:group] | mods
   std::string campaign;         // --campaign id[:mission]: open a campaign's missions, or a mission's briefing (1-based)
   std::string mission;          // --mission id:N: play mission N (1-based) of a campaign straight away
@@ -550,6 +552,19 @@ class GameScene final : public pioneer::Scene {
   const void* uiLuaBattle_ = nullptr;
   bool showKit_ = false;
   int kitTab_ = -1;  // a tab to switch to (-1: leave it)
+  // The tool windows (tool_windows.cpp, Pioneer part 9): asset browser (F7),
+  // model viewer, sound bank editor.
+  void setupToolWindows();
+  void refreshToolSources();
+  void drawToolWindows();
+  void registerToolCommands();
+  void runToolsSelfTest();
+  pioneer::ui::AssetBrowserWindow assetWin_;
+  pioneer::ui::ModelViewerWindow modelWin_;
+  pioneer::ui::SoundBankWindow bankWin_;
+  pioneer::ui::ToolHooks toolHooks_;
+  bool showAssets_ = false, showModels_ = false, showBanks_ = false;
+  size_t toolSourcesKey_ = 0;
   bool devToolsReady_ = false;
   std::vector<pioneer::mem::ScopedReporter> memReporters_;
   // --- Data (game_content.cpp): every file the game can read, and what

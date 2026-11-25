@@ -159,11 +159,14 @@ TEST_CASE("validator: finds what is wrong, says where, and names the check") {
   putBytes(d + "models/junk.glb", std::vector<uint8_t>(64, 7));
   put(d + "ui/broken.lua", "panel{\n  title = \"x\",\n  draw = function( end\n}\n");
   put(d + "lang/de.json", R"({"language": "de", "strings": {"hud": {"selected": "{count} gewählt", "helo": "Hallo"}}})");
-  put(d + "notes/Read.txt", "a");
-  put(d + "notes/read.txt", "b");
-  put(d + "notes/con.txt", "c");
   put(d + "fonts/notafont.ttf", "hello, I am text pretending to be a font");
   Loaded c(d);
+  // Names a Windows folder can't even hold, in a layer of their own (a pack made on Linux could carry them).
+  const int mem = c.fs->mountMemory("linuxpack", 1);
+  c.fs->addMemoryFile(mem, "notes/Read.txt", "a");
+  c.fs->addMemoryFile(mem, "notes/read.txt", "b");
+  c.fs->addMemoryFile(mem, "notes/con.txt", "c");
+  c.reg.rebuild();
   const tools::Report r = engineValidator().run(*c.fs, c.reg);
   INFO(r.text(true));
 
