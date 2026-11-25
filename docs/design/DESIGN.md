@@ -553,14 +553,60 @@ recognition flash on vehicles and a roundel in the interface.
        test_tool_models.cpp.
      - **Review stop** (end of 9.13): the user looks over the engine before
        9.14; afterwards the engine moves to a repository of its own.
-   - **9.14 Mission Maker foundation**, **9.15 Cutscenes and event
-     sequences**, **9.16 Set pieces**, **9.17 Map, assets and terrain**,
-     **9.18 Combat and controls**, (campaign finalisation when the user's
-     packs arrive), **9.19 Big scenarios** – large stand-alone battles
-     inspired by great battles and long operations, with many units.
-   - **9.20 Tuning and debugging** – always last: playtest, balance the armies
-     and missions, performance, bugs, documentation.
-   - Parked: air power (air strikes, an air force). Later: packaging and 1.0.
+   - **9.14 Air and naval support** (added 25 Nov at the user's request,
+     before the Mission Maker; skirmish and missions):
+     - **Air call-ins, no air units** (user: "the game isnt big enough to
+       afford actual planes to scale en masse"): a strike panel with charges
+       and cooldowns. Strikes: bombing run (a real barrage along the pass),
+       strafing run (damage along a line), rocket / dive attack on a point,
+       recon flight (reveals an area for a while), supply drop (crates),
+       paratroop drop (units where the parachutes land). Aircraft are drawn
+       along a flight path worked out from the tick, so saves, replays and
+       multiplayer stay in step; flak bursts and anti-aircraft fire can drive
+       a strike off or bring a plane down (smoke trail, crash, wreck).
+     - **Offshore fire support:** a destroyer or cruiser out at sea (not a
+       unit to steer) whose guns can be called on the shore like artillery,
+       on maps with sea within range.
+     - **Landing craft as a set piece** (user: "more of a set piece rather
+       than anything"): scripted craft come in from the sea, beach on sand,
+       drop the ramp and land infantry and vehicles, then pull back; script
+       action, editor tool, and in skirmish a landing from the sea edge as a
+       call-in where the map has a coast.
+     - **Where:** skirmish (a building per army unlocks and recharges the
+       call-ins; offshore guns only on sea maps; the computer player uses
+       them) and missions (scripts turn each call-in on or off, give
+       charges, or fire them themselves).
+     - The air set pieces of 7e B (flyovers, distant dogfights, shot-down
+       planes) move here from Set pieces: they share the aircraft. Voxel
+       aircraft per army (fighter, ground attack, bomber, transport) and
+       offshore ships; no swastikas.
+   - **9.15 Combat and controls** (brought forward 25 Nov at the user's
+     request, before the Mission Maker): artillery firing at chips,
+     attack-ground, counter-battery, units reacting when one of their group
+     is hit, minefields, smoke shells, under-attack alert, retreat order,
+     spotters, suppression, morale and prone (pinned men fire now and then),
+     **woodland concealment and the RUSE-style ambush bonus** (the engine
+     side exists since part 3), idle-units button, a unit bar, colour-blind
+     options, photo mode and replay camera (handoff 7e I-K, M, N).
+   - **9.16 Unit balance** (brought forward 25 Nov at the user's request;
+     after air and combat, which both move the balance): AI-against-AI
+     batches for every pair of armies with `--bench` (before Britain the
+     Soviets led about 3 to 1; after 9.4/9.6/9.7 a 15-minute bench left
+     Germany far behind); costs, health, armour, ranges and rates of fire of
+     every unit and building; the call-ins' prices and charges; a table of
+     each army's strengths kept in the docs; tests that hold the win rates
+     within a band so later changes can't quietly tip it. Mission balance
+     stays with the last milestone.
+   - **9.17 Mission Maker foundation**, **9.18 Cutscenes and event
+     sequences**, **9.19 Set pieces**, **9.20 Map, assets and terrain**,
+     (campaign finalisation when the user's packs arrive), **9.21 Big
+     scenarios** – large stand-alone battles inspired by great battles and
+     long operations, with many units.
+   - **9.22 Tuning and debugging** – always last: playtest, missions'
+     difficulty, performance, bugs, documentation (unit balance is 9.16; a
+     check of it again here).
+   - Not planned: air units and controllable warships (25 Nov: call-ins and
+     set pieces instead). Later: packaging and 1.0.
 
 ## Playtest backlog (31 Oct 2026, after Milestones 6–7)
 

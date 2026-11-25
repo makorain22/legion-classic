@@ -42,7 +42,7 @@ struct CUnit {
 };
 
 // How a man (or a crew) is bearing up, and how he carries himself. The fields
-// are here for 9.18 (suppression, morale, prone, ambush) and for veterancy;
+// are here for 9.15 (suppression, morale, prone, ambush) and for veterancy;
 // nothing in the simulation changes them yet, and only units something has
 // touched carry the component. It is saved, and counts in the state checksum.
 enum class Posture : uint8_t { Standing = 0, Crouched, Prone, Pinned, HandsUp, Cowering, Count };

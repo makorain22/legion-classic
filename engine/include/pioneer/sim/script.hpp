@@ -271,7 +271,7 @@ int goalTypeFromId(const std::string& id);
 
 // A cutscene or event sequence: events on tracks along a timeline. The data
 // model is here so missions and packs can carry sequences; they are played by
-// the sequencer of Milestone 9.15.
+// the sequencer of Milestone 9.18.
 struct MissionSequence {
   struct Event {
     int32_t at = 0;     // tenths of a second from the start

@@ -1510,7 +1510,7 @@ A goal shows as an objective and keeps its own score. It begins with its `phase`
 
 ### Sequences
 
-A sequence is a timeline of events on tracks, for cutscenes and scripted scenes. Missions and packs can carry them now; they are played by the sequencer of Milestone 9.15. Each event has `at` (tenths of a second), a `track`, a `kind` and `params`.
+A sequence is a timeline of events on tracks, for cutscenes and scripted scenes. Missions and packs can carry them now; they are played by the sequencer of Milestone 9.18. Each event has `at` (tenths of a second), a `track`, a `kind` and `params`.
 
 | Track | What | Kinds of event |
 | --- | --- | --- |

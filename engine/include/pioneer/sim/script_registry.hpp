@@ -135,7 +135,7 @@ struct GoalType {
 };
 const std::vector<GoalType>& goalTypes();
 // The tracks a sequence can hold and the kinds of event on each (data for the
-// sequencer of 9.15; listed so tools and packs agree on the names).
+// sequencer of 9.18; listed so tools and packs agree on the names).
 struct SequenceTrack {
   const char* id;
   const char* summary;

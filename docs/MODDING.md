@@ -149,7 +149,7 @@ survive, escort, protect), **waves** (reinforcements with counts for each
 difficulty and orders on arrival) and **paths** (routes units follow), and a
 **Lua script** for whatever triggers can't say. They are described in the
 "mission model" and "Lua" chapters of the reference. Until the Mission Maker
-(Milestone 9.14) brings screens for them, they are written in the map file's
+(Milestone 9.17) brings screens for them, they are written in the map file's
 script JSON (`phases`, `goals`, `waves`, `paths`, `lua`).
 
 ### Conditions
