@@ -525,6 +525,34 @@ recognition flash on vehicles and a roundel in the interface.
        Console `net.*`; `--host`, `--join`, `--name`,
        `--net-selftest [dedicated]`. Tests: test_net.cpp,
        test_lockstep.cpp (a two-player Legion battle over a lossy line).
+     - **Part 9, tools (done 25 Nov):** libraries `pioneer_media` (models,
+       images, sound without a window: glTF, .vox, skeletons, rigs, mixer,
+       decoders, banks, voice lines) and `pioneer_tools` (`engine/src/tools/`).
+       `tools/validate.hpp` (`Validator`, `Check`, `Context`, `Issue`,
+       `Report` with text and JSON; `addEngineChecks`: paths, json,
+       references, packs, mods, sounds, audio, images, models, strings,
+       scripts, fonts), `tools/cook.hpp` (`cook`: minified JSON, deterministic,
+       incremental with `.cook_state.json`, `asset_index.json`, packs with
+       `pack::BuildOptions::fixedTime`; `AssetIndex`, `indexOf`, `diff`),
+       `tools/asset_browser_model.hpp`, `tools/model_view.hpp`
+       (`OrbitCamera`, `ModelView`: clips, CPU skinning, bones),
+       `tools/bank_document.hpp` (copy-on-edit into a mod's bank, undo,
+       checks, save, revert); `render/model_renderer.hpp` (glTF drawn for
+       the first time); `ui/tool_windows.hpp` (`AssetBrowserWindow`,
+       `ModelViewerWindow`, `SoundBankWindow`, `ToolHooks`);
+       `rigModelAsset` in `assets/gltf.hpp`. Game: `content_checks.cpp`
+       (rules, maps, missions, campaigns), `tool_windows.cpp` (F7,
+       `tools.assets`, `tools.models`, `tools.banks`, `tools.validate`, unit
+       and rigged-figure model sources, `--tools-selftest`),
+       `GameAudio::previewFile/previewEvent/stopPreview/bankFilesIn`; a mod
+       switch reloads the sound banks. `tools/pioneer_tool/main.cpp`
+       (validate, cook, checks, info, ls, deps, index, diff, pack, model,
+       bank); ctest `tool_validate`, `tool_cook`, `tool_validate_cooked`;
+       `pioneer_tool.exe` in the Windows package. Found and fixed: r06's MCV
+       off the map (mission kit rounding). Tests: test_tools.cpp,
+       test_tool_models.cpp.
+     - **Review stop** (end of 9.13): the user looks over the engine before
+       9.14; afterwards the engine moves to a repository of its own.
    - **9.14 Mission Maker foundation**, **9.15 Cutscenes and event
      sequences**, **9.16 Set pieces**, **9.17 Map, assets and terrain**,
      **9.18 Combat and controls**, (campaign finalisation when the user's

@@ -19,7 +19,7 @@ stands.
 | 6 | **Renderer:** device layer, graphics presets with auto-detect, HDR post-processing, time of day, weather, rain and snow, debug drawing | **done** |
 | 7 | **Assets and audio:** glTF in and out, .vox, materials, skeletal animation, poses; sound banks, voice lines, reverb zones, occlusion | **done** |
 | 8 | **Networking groundwork:** lockstep, hosting, LAN discovery, dedicated server, reconnect | **done** |
-| 9 | **Tools:** `pioneer_tool`, asset browser, model viewer, sound bank editor | planned |
+| 9 | **Tools:** `pioneer_tool` (validate, cook, in CI), asset browser, model and animation viewer, sound bank editor | **done** |
 
 ## Layout
 
@@ -30,19 +30,27 @@ engine/src/core/          log, jobs, profiler, memory, console, virtual file sys
 engine/src/{ecs,sim,map}  the deterministic simulation
 engine/src/{platform,render,assets,audio,ui}   window, OpenGL 3.3 renderer, art, mixer, the interface kit and developer windows
 engine/src/net/           sockets, transport, sessions, LAN discovery, lockstep (no graphics: in pioneer_core)
+engine/src/tools/         the content validator, cooking, and the models behind the tool windows (no graphics)
 game/src/                 Legion Classic itself
+tools/pioneer_tool/       pioneer_tool, the content tool for the command line and CI
 server/                   LegionServer, the dedicated server (pioneer_core + game/src/net_world.cpp)
 editor/src/               the Live Scenario Editor and the rules editor
 tests/                    doctest cases (pioneer_tests)
 ```
 
-Two libraries:
+Four libraries:
 
 - **`pioneer_core`** – everything with no graphics and no sound card: the
-  core systems, the ECS, the simulation, maps. Tests, the content tools and
-  the future dedicated server link only this.
-- **`pioneer`** – window, renderer, art, audio and the ImGui developer
-  windows, on top of `pioneer_core`.
+  core systems, the ECS, the simulation, maps, networking. The dedicated
+  server links only this.
+- **`pioneer_media`** (part 9) – models, images and sound without a window,
+  a GPU or a sound card: glTF, .vox, skeletons and rigs, the mixer and
+  decoders, sound banks and voice lines.
+- **`pioneer_tools`** (part 9) – the content validator, cooking, and the
+  models of the tool windows, on `pioneer_media`. `pioneer_tool` and the
+  tests link it.
+- **`pioneer`** – window, renderer, art, audio device and the ImGui
+  developer and tool windows, on top of the others.
 
 Namespace `pioneer`; macros `PNR_*` (short, used everywhere) and
 `PIONEER_*` (constants). The game's code lives in namespace `legion`.
@@ -1581,3 +1589,208 @@ UDP, chat, sides, start, orders from both, a cheat dropped, a pause,
 battles compared tick for tick) and `--net-selftest dedicated` (the same
 through a dedicated server in the process, the scene leading). ctest
 `server_smoke` starts and stops `LegionServer`.
+
+---
+
+## Part 9 – Tools
+
+Everything a person making content needs to see what they have, find what
+is wrong with it and get it ready to ship - from the command line (and CI)
+and inside the game. The rule of part 5 holds: **models without graphics,
+windows apart.** The validator, the cook and the models behind the three
+windows live in `engine/src/tools/` (`pioneer_tools`) and are tested
+without a window; `engine/src/ui/tool_windows.cpp` draws them.
+
+### pioneer_tool (`tools/pioneer_tool/main.cpp`)
+
+```
+pioneer_tool validate [content] [--only a,b] [--skip a,b] [--ignore text] [--notes] [--json FILE|-] [--werror] [--all-mods]
+pioneer_tool cook [content] --out DIR [--pack FILE] [--pack-id ID --pack-name N --pack-version V]
+                  [--no-minify] [--clean] [--full] [--exclude text] [--force] [--no-validate]
+pioneer_tool checks | info PATH | ls [FOLDER] [--type KIND] | deps PATH [--users] [--all]
+pioneer_tool index [--out FILE] | diff A B
+pioneer_tool pack build DIR FILE | verify FILE | info FILE | extract FILE DIR
+pioneer_tool model info FILE | model convert IN OUT.glb       (.gltf, .glb or .vox in)
+pioneer_tool bank list | bank show EVENT
+```
+
+The content is given as the game layers it: `--content DIR` (the base; a
+pack there is taken as the whole content), `--mods DIR` (any number;
+default: `mods/` beside the content), `--mod ID` (any number; the load order
+follows what they require). `validate --all-mods` checks the base alone and
+then the base with each mod. Exit codes: 0 fine, 1 errors found or the job
+failed, 2 a wrong command line. `diff` takes two content folders, packs or
+`asset_index.json` files and lists what was added, removed and changed - for
+patch notes and mod updates.
+
+### The validator (`pioneer/tools/validate.hpp`)
+
+A `Validator` holds named checks; each looks at the merged content tree
+(a `vfs::Vfs`) and its asset registry and reports `Issue`s: an **error** (the
+game would fail or misbehave), a **warning** (it works, but probably isn't
+what was meant) or a **note**. An issue names the file, where in it
+(`line 4, column 1`, `/sounds/x: key 'volume'`, `sound rifle`, `trigger 6
+'Ruins taken', action 2`), where the file comes from
+(`veterans.pnpack:rules/units.json`) and the check. Reports are sorted, so
+they read the same however the work was split; `text()` for people,
+`json()` for machines. Checks share one parse of each JSON file.
+
+The engine's checks (`addEngineChecks`, game-agnostic):
+
+| Check | Looks for |
+| --- | --- |
+| `paths` | two files differing only in case, names Windows reserves (`con`, `aux` ...) or refuses (`a:b`, `x.`), very long paths |
+| `json` | every .json parses (line and column of the first fault); a key given twice in one object |
+| `references` | every file name a JSON file holds names a file, spelt exactly (relative to its folder, any folder above it, or the root) |
+| `packs` | packs in the content match their manifests and run on this engine |
+| `mods` | mod.json/pack.json: name, version, engine range, requirements |
+| `sounds` | banks and voice lines, layer by layer: known fields, kinds and ranges, files there, fallbacks and factions that resolve; a mod replacing a sound is noted |
+| `audio` | every .ogg/.wav decodes (on all cores); a sound nothing names is noted |
+| `images` | every image decodes; over 4096 pixels on a side is a warning |
+| `models` | glTF and .vox read; materials, triangles, skins, weights, clips and images that make sense |
+| `strings` | string tables: English there; other languages' keys and `{placeholders}` match it |
+| `scripts` | interface scripts (`ui/*.lua`) load in the sandbox (line of a syntax error) |
+| `fonts` | .ttf/.otf are fonts |
+
+A game adds its own: Legion's are in `game/src/content_checks.cpp`
+(`legion::addContentChecks`): `rules` (the three rule files merged over
+every layer build a rule set), `maps` (every map opens; placed units are
+types the rules know, standing on the map; sides play real factions),
+`missions` (every mission script passes the Mission Maker's checker against
+its map, the rules and the sound list), `campaigns` (missions with unique
+ids, maps and briefings that exist). On its first run the validator found
+the player's construction truck in *The Chir* (r06) standing half a tile
+off the map - a rounding fault in the mission kit; both are fixed.
+
+The base content today: **no errors**, 7 warnings (the mission checker's,
+for six scripted waves of 0 units and a trigger without actions) and 103
+notes, in about 2.5 seconds.
+
+### Cooking (`pioneer/tools/cook.hpp`)
+
+`tools::cook(fs, registry, outDir, options, result)` writes the merged
+content into one folder the game can run from as it is (and optionally a
+pack): JSON minified (`ordered_json`, so key order and every value are kept;
+comments dropped), everything else byte for byte, editors' leftovers and
+`exclude`d paths left behind, and **`asset_index.json`**: every file's kind,
+size, hash and what it uses, and one content hash over all of them.
+
+- **Deterministic:** the same input gives the same bytes on any machine and
+  thread count. Packs too: `pack::BuildOptions::fixedTime` dates every entry
+  1 Jan 1980, so cooking twice gives the same pack, byte for byte.
+- **Incremental:** `.cook_state.json` (left out of packs) remembers each
+  file's source hash; cooking again rewrites only what changed and removes
+  what is gone. `--full` rewrites everything; `--clean` removes only what an
+  earlier cook made.
+- **Safe:** it refuses a folder that overlaps the content, or one holding
+  files it did not cook.
+- The cooked game content is 37.8 MB in 363 files; its pack validates on
+  its own.
+
+`indexOf(registry)` makes an index of any content, `diff(a, b)` compares
+two (`added`, `removed`, `changed`).
+
+### In CI
+
+ctest runs `tool_validate` (the base, and the base with each mod: an error
+fails the build), `tool_cook` (cook into `build/cooked/` and pack it) and
+`tool_validate_cooked` (the pack, validated on its own), on Linux and
+Windows. The Windows package carries `pioneer_tool.exe`.
+
+### The asset browser (`pioneer/tools/asset_browser_model.hpp`, F7)
+
+Every file of the content as a folder tree with sizes and file counts.
+Filter words match the path; keywords: `kind:sound` (any asset kind),
+`from:veterans` (the layer the winning copy comes from), `is:missing` (named
+but not there), `is:problem`, `is:error`, `is:layered` (a mod replaces it),
+`is:unused`. Order by name, size or kind. **Check** runs every content check
+(the same as `pioneer_tool validate`) and marks files and folders with their
+errors and warnings. The details show where the file comes from, the layers
+under it, its version and hash, **Uses** and **Used by** (click to go there;
+back and forward like a web browser), its issues, and a look inside: JSON
+laid out, text, images, a map's name, size, units and script, a sound to
+play, a model to open in the viewer, a bank file to open in the bank
+editor.
+
+### The model viewer (`pioneer/tools/model_view.hpp`, `pioneer/render/model_renderer.hpp`)
+
+The **first code that draws glTF**. A model (any `.glb`, `.gltf` or `.vox`
+of the content, or one the game hands over) on a turntable: drag to turn,
+right-drag to slide, the wheel to come closer, **F** to frame it. Clips with
+play, pause, scrub, speed and loop; bones and joints over the model; grid,
+bounding box, wireframe, turntable; a team colour for team-painted
+materials; **Export .glb** to the exports folder.
+
+- `tools::ModelView`: the model, an `OrbitCamera`, the clip and its time,
+  the pose, the skinned vertices (on the CPU: one model in a viewer, and the
+  same code on every card the engine supports) and the bones as lines.
+- `ModelRenderer`: meshes in GPU buffers (skinned ones streamed when the
+  pose changes), one sun and a sky term, metal and roughness, team paint;
+  draws into its own target and puts back the GL state, so it can be called
+  while ImGui builds a frame (GL 3.3 / ES 3.0 shaders).
+- `rigModelAsset(rig, palette, voxelTiles)` (`assets/gltf.hpp`) turns a
+  voxel figure on the rig into a skinned model with the rig's clips. Legion
+  lists every unit, and each infantry unit also **as a figure on the
+  humanoid rig with all ten infantry poses** (`ger_rifleman (figure)`), so
+  the poses of part 7 can be seen moving for the first time - and exported
+  to Blender with their animations.
+
+### The sound bank editor (`pioneer/tools/bank_document.hpp`)
+
+Every sound event as the game layers them (base `audio.json` and
+`banks/*.json`, then each mod's). Edits go into **one bank file in one of
+the player's own mods** (`audio/banks/edits.json` by default): editing a
+sound the base game gives copies it into that file as it is and changes the
+copy, so the base stays untouched and the mod carries only what it changes.
+Fields with their ranges and help (bus, volume, range, priority, reverb,
+pitch, farBelow, perSecond, limit, loop), files and far recordings (add from
+the content's sounds, reorder, remove, play one), **Play** the event as
+edited (a random file and pitch, as the game would), new sounds, duplicate,
+**Revert** (takes it out of the mod), undo and redo (Ctrl+Z / Ctrl+Y), save
+(Ctrl+S). Each sound is checked as you go, by the validator's rules.
+Saving writes the file through a temporary one; hot reload brings it into
+the running game, and switching a mod on now reloads the sound banks.
+
+### Console, keys and command line
+
+**F7** opens the asset browser. `tools.assets [path|filter]`,
+`tools.models [unit|file]`, `tools.banks [sound]`, `tools.validate [check
+...]` (lists what the checks find in the console and marks the asset
+browser). `--tools-selftest` drives all three windows through the real
+game: the browser and its checks, a grenadier walking in the viewer (drawn,
+read back and saved as `tools_selftest_model.png` in the user folder), and a
+sound edited into a fresh mod, saved, and heard by the game once the mod is
+on.
+
+### Not done on purpose
+
+- The viewer draws one model at a time with CPU skinning; glTF is still not
+  drawn in battle, and soldiers in battle are still drawn from sprites and
+  voxel models, not from the rig.
+- No glTF textures in the viewer (base colours, vertex colours and team
+  paint only); embedded images are not kept by the reader (part 7).
+- The bank editor edits sound events, not voice sets or music lists (those
+  are a few lines of JSON, checked by the validator).
+- Cooking does not convert formats (a .gltf stays a .gltf): the game reads
+  everything it ships as it is. The game does not yet start from a cooked
+  pack as its base content.
+- The Khronos glTF validator is still not used (it could not be installed);
+  the `models` check and round-trip tests stand in.
+
+### Tests
+
+`tests/test_tools.cpp` (9: a clean content folder passes every engine
+check; a broken one gets every fault named with its place and check; only,
+skip and ignore; names Windows refuses; Legion's checks over the real
+content with a broken mod layered on; **the game's own content and its mods
+have no errors**; minified JSON keeps values and order; cooking twice gives
+the same bytes, cooking again redoes only what changed and the index diff
+says what; packs byte for byte the same, the pack is content, foreign
+folders and the content itself refused).
+`tests/test_tool_models.cpp` (6: the browser's tree, totals, filters, order
+and issues; selection, links and history; previews; **a block man on the rig
+walks: skinning moves the feet and keeps the head on**, loops, held ends,
+pauses, a .glb round trip with clips; the orbit camera; the bank document's
+copy-on-edit, ranges, files, undo, duplicate, save, revert and layers).
+ctest `tool_validate`, `tool_cook`, `tool_validate_cooked`. The game:
+`--tools-selftest`.

@@ -465,6 +465,50 @@ The interface is being moved to string tables: files `lang/<id>.json`.
   Latin, Cyrillic and Greek. A mod can replace them with files of the same
   names, for another script or another look; put the font's licence beside it.
 
+## Checking a mod: pioneer_tool and the asset browser (new in 0.9.2)
+
+`pioneer_tool` comes with the game. Before you share a mod, let it look:
+
+```
+pioneer_tool validate --mod my_mod            the game's content with your mod on top
+pioneer_tool validate --mod my_mod --notes    ... and the notes too
+pioneer_tool validate --mods DIR --mod my_mod a mod (a folder or a pack) from another mods folder
+```
+
+It names every problem with the file, the place in it and what is wrong:
+JSON that doesn't parse (line and column), a key written twice, a file
+named but not there (or spelt in other capitals: that works on Windows and
+fails on Linux), sounds with unknown or out-of-range fields, recordings that
+don't decode, broken models, text keys a language has that English
+doesn't, interface scripts that don't load, rules that don't fit together,
+units off a map, mission scripts with mistakes, campaigns with missing maps
+or briefings. Errors are what will go wrong; warnings what probably isn't
+meant; notes are worth knowing. `pioneer_tool checks` lists the checks;
+`--only sounds,references` runs some of them.
+
+In the game, **F7** opens the asset browser: every file, which layer it
+comes from and which mod replaces it, what it uses and what uses it.
+**Check** runs the same checks and marks the files. `kind:sound`,
+`from:my_mod`, `is:problem`, `is:missing` and plain words filter the tree.
+
+`pioneer_tool diff old.pnpack new.pnpack` lists what changed between two
+versions of a mod - a start for its release notes.
+
+## Sounds of your own: the sound bank editor (new in 0.9.2)
+
+`tools.banks` in the console opens the sound bank editor. Choose one of your
+mods at the top: edits go into `audio/banks/edits.json` in it. Pick a sound,
+change its volume, range, pitch or limits, add recordings (any `.ogg` or
+`.wav` under `audio/`, the game's or your mod's) and press **Play** to hear
+it as the game would. **Save** (Ctrl+S) writes the file; the game picks it up
+at once. The game's own files are never changed: your mod carries only the
+sounds you changed, and **Revert** takes a sound out of it again. Undo and
+redo with Ctrl+Z and Ctrl+Y.
+
+Models: `tools.models` opens the model viewer with every unit; infantry can
+be seen on the skeleton in every pose, and **Export .glb** takes any of them
+to Blender.
+
 ## The console, for testing a mod
 
 Press **`** or **F9** in the game. For mod work the useful lines are:
@@ -479,6 +523,7 @@ Press **`** or **F9** in the game. For mod work the useful lines are:
 | `vfs.which rules/units.json` | Show every copy of a file, the game's and each mod's; the last one listed is the one in use |
 | `assets.info campaigns/my_war/campaign.json` | Show what a file uses and what uses it; a map or briefing the campaign names but that is not there is marked MISSING |
 | `mod.list`, `mod.pack my_mod` | List the mods; pack one into a single file |
+| `tools.validate`, `tools.assets`, `tools.banks`, `tools.models` | Check the content; open the asset browser (F7), the sound bank editor, the model viewer |
 | `bind f6 "spawn my_new_tank 4"` | Put a line you type often on a key |
 
 Lines you want at every start (binds, `cheats 1`) go in `autoexec.cfg` in the

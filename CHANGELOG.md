@@ -204,6 +204,36 @@
     to join leads and starts.
   - Console: `net.status`, `net.host`, `net.join`, `net.leave`, `net.say`.
     Command line: `--host [port]`, `--join address`, `--name`.
+- **Part 9, tools** (25 Nov):
+  - **`pioneer_tool`**, the content tool, beside the game:
+    `pioneer_tool validate` checks the content and any mods (sixteen checks:
+    JSON, file references, names that break on Windows, sound banks and
+    voice lines, every sound and image decoding, models, string tables,
+    interface scripts, packs and mod.json, and Legion's own: rules, maps,
+    mission scripts, campaigns), naming the file, the place in it and what
+    is wrong. `pioneer_tool cook` makes the content ready to ship as a folder
+    and a pack - the same bytes every time, redoing only what changed - with
+    an index to compare releases (`pioneer_tool diff`). Also `info`, `ls`,
+    `deps`, `pack`, `model` (convert .gltf/.vox to .glb), `bank`. The build
+    checks the content with it on every change.
+  - **The asset browser (F7):** every file of the game and the mods as a
+    tree; filter by words, kind, mod, missing, problems; where a file comes
+    from and which mod replaces it; what it uses and what uses it (click
+    through, back and forth); **Check** marks every problem; a look inside
+    (text, images, maps, sounds to play, models, bank files).
+  - **The model viewer:** any unit, any .glb/.gltf/.vox, turned with the
+    mouse; animations with a timeline; bones, grid, team colour; export to
+    .glb. Infantry also as figures on the skeleton, walking, running,
+    kneeling, going prone and falling.
+  - **The sound bank editor:** every sound as the game layers them; change
+    volume, range, pitch, limits, files and far recordings, hear the result
+    at once, and save into a mod of your own (the game's files are never
+    touched; undo, revert).
+  - **Fixed:** the construction truck in *The Chir* stood half a tile off
+    the top of the map; switching a mod on now brings in its sounds at once
+    (before, only after a restart).
+  - Console: `tools.assets`, `tools.models`, `tools.banks`,
+    `tools.validate`.
 
 ## 0.9.1 – in progress (edits after Milestone 9; Milestones 9.1–9.12)
 
