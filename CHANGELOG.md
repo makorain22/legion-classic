@@ -94,14 +94,14 @@
     branches), goals keep their own score (destroy, reach, clear, hold,
     survive, escort, protect), waves arrive with counts per difficulty and
     carry out their orders, units follow drawn paths. They live in the map
-    file today; the screens to edit them come with the Mission Maker (9.17).
+    file today; the screens to edit them come with the Mission Maker (9.20).
   - **Lua scripting** for missions, sandboxed so replays, saves and
     multiplayer stay exact: every action and condition is a Lua function
     (`spawn_units{player = 1, area = "North road", unit = "rus_rifleman",
     value = 8}`), with handlers such as `on_start()` and
     `on_unit_died(...)`. A mistake in a script is reported and the mission
     goes on. See the "Lua" chapter of the script reference.
-  - Cutscene sequences can be stored in missions (they are played from 9.18).
+  - Cutscene sequences can be stored in missions (they are played from 9.21).
   - Console: `script.help`, `script.check`, `lua.run`, `lua.errors`.
 - **Part 5, the UI framework** (14 Nov):
   - **Real text.** The interface is set in IBM Plex Sans (with a mono face

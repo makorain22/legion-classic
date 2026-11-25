@@ -342,7 +342,7 @@ pack::extract(file, "somewhere/", err);
   same id, because the folder can be edited.
 - In the game: *Mods > Pack into one file*, or `mod.pack <id>` in the console,
   writes `<user folder>/exports/<id>-<version>.pnpack`. The Mission Maker's
-  exporter (9.17) and asset packs use the same format.
+  exporter (9.20) and asset packs use the same format.
 
 ### Asset registry (`pioneer/core/assets.hpp`)
 
@@ -533,7 +533,7 @@ Console: `hash`, `sim.digest`, `sim.twincheck [seconds]`, `replay.check`.
 - **Flow fields.** `flowField(goal, loco[, rect])` gives every tile its
   step towards one goal (a Dijkstra pass outwards from it), `flowPath`
   reads one unit's smoothed way off it. One field serves any number of
-  units: this is the mover for crowds (civilians, 9.19) and hordes.
+  units: this is the mover for crowds (civilians, 9.22) and hordes.
 - `Pathfinder::stats()`, console `path.stats`.
 
 Routes can differ from 0.9.1's, so replays recorded before part 3 stop
@@ -586,7 +586,7 @@ blocks on a 256 x 256 map for a minute and prints the time per tick
 (real time is 66.7 ms a tick). On the development container (two cores):
 under 1 ms a tick on average, 2 ms at worst. Two formations of 750 marching
 as one body each are the dear case (about 12 ms a tick): formations that
-large are for 9.21 to look at.
+large are for 9.24 to look at.
 
 ### Console
 
@@ -607,7 +607,7 @@ sight, smoke, woodland, weather, condition, the budget).
 
 ## Part 4 – Scripting
 
-What the Mission Maker (9.17) and the cutscene tools (9.18) stand on: one
+What the Mission Maker (9.20) and the cutscene tools (9.21) stand on: one
 description of everything a script can do, missions as structured data
 instead of a pile of triggers, and a real programming language for what
 triggers can't say.
@@ -651,7 +651,7 @@ Beside areas and triggers a `ScenarioScript` now holds:
 | **Goals** | Objectives the simulation keeps score of: destroy, reach, clear, hold, survive, escort, protect; each begins with its phase and runs actions when done or failed | yes |
 | **Waves** | Units that arrive together: types with counts for easy / normal / hard, where, after what delay, how often, and their orders (attack or move to an area, follow a path), name, set-piece flags, stance, binding | yes |
 | **Paths** | Named routes, point by point, optionally looping; *Follow path* and waves walk them | yes |
-| **Sequences** | Timelines of events on tracks (camera, actor, effects, dialogue, screen, flow) for cutscenes | **data only**: carried, saved in maps and checked; played by the sequencer of 9.18 |
+| **Sequences** | Timelines of events on tracks (camera, actor, effects, dialogue, screen, flow) for cutscenes | **data only**: carried, saved in maps and checked; played by the sequencer of 9.21 |
 
 New conditions `phase_is`, `phase_elapsed`, `goal_done`, `goal_failed`,
 `script_says`; new actions `goto_phase`, `send_wave`, `follow_path`,
@@ -661,7 +661,7 @@ written only when present, so older maps are byte for byte what they were.
 The run-time state (current phase, waves on their way, routes, goal states)
 is saved in section `MIS2`.
 
-What 9.17 adds on top is the editing: the phase columns, the wave designer,
+What 9.20 adds on top is the editing: the phase columns, the wave designer,
 drawing paths on the map, checkpoints and "test from any phase".
 
 ### Lua for missions (`pioneer/sim/mission_lua.hpp`)
@@ -830,7 +830,7 @@ begins by itself, dashed ones for *Go to phase* actions of triggers,
 on-entry actions and goals; a jump from "any phase" is written on the box
 instead of drawn from everywhere. `sequenceTimeline` / `applyTimeline`: a
 `MissionSequence` to tracks and items and back after editing.
-`waveTimeline`: when each wave arrives. These are what 9.17 and 9.18 put
+`waveTimeline`: when each wave arrives. These are what 9.20 and 9.21 put
 on screen.
 
 ### String tables (`pioneer/core/strings.hpp`)
@@ -1101,7 +1101,7 @@ their own selection rings, health bars, markers and debug shapes. Console
 
 - Haze and mist don't change what units can see (see *Only the look*).
 - Render-only objects moving along splines (aircraft overhead, trains) were
-  listed as optional for this part; they are left to 9.19, which needs them.
+  listed as optional for this part; they are left to 9.22, which needs them.
 - Lightning, puddles and splashes: effects for their own sake.
 
 ### Tests
@@ -1357,7 +1357,7 @@ to the ear), `model.export <unit> [glb|vox]`, `model.info <file>`.
   language). A set is a few lines of JSON: recorded lines can be added
   without code.
 - Reverb zones are not yet placed from the editor (the engine and the
-  console have them; the mission editor's turn comes with 9.17).
+  console have them; the mission editor's turn comes with 9.20).
 
 ### Tests
 

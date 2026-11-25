@@ -1897,7 +1897,7 @@ void GameScene::announce(const SimEvent& ev) {
       onMissionEvent(ev);
       break;
     case EventType::PhaseChanged:
-      // (The chapter card belongs to the cutscene tools of 9.18; for now the phase is announced in a line.)
+      // (The chapter card belongs to the cutscene tools of 9.21; for now the phase is announced in a line.)
       if (mode_ != Mode::Menu && ev.amount > 0 && !ev.text.empty()) showStatus(ev.text, 5.0f);
       PNR_INFO_CH(Script, "Phase %d: %s", ev.amount, ev.text.c_str());
       break;

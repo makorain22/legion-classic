@@ -1077,7 +1077,7 @@ std::string referenceMarkdown() {
           (g.usesUnit ? "yes" : "") + " |\n";
   md += "\n### Sequences\n\n"
         "A sequence is a timeline of events on tracks, for cutscenes and scripted scenes. Missions and packs can carry "
-        "them now; they are played by the sequencer of Milestone 9.18. Each event has `at` (tenths of a second), a "
+        "them now; they are played by the sequencer of Milestone 9.21. Each event has `at` (tenths of a second), a "
         "`track`, a `kind` and `params`.\n\n| Track | What | Kinds of event |\n| --- | --- | --- |\n";
   for (const SequenceTrack& t : sequenceTracks()) {
     std::string kinds = t.kinds;

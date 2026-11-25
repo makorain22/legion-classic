@@ -332,7 +332,7 @@ recognition flash on vehicles and a roundel in the interface.
      are shelved (the user builds the campaigns himself with the Mission
      Maker and sends packs for finalisation), and the engine is upgraded
      first.
-   - **9.13 Engine upgrade: the Pioneer Engine 2.0** (in progress) – the
+   - **9.13 Engine upgrade: the Pioneer Engine 2.0** (done 25 Nov, review stop pending) – the
      engine renamed from Slave Engine and rebuilt in nine parts, deliberately
      over-engineered ("whatever you plan to add, add more"): core, data,
      simulation, scripting, UI framework, renderer, assets and audio,
@@ -553,8 +553,8 @@ recognition flash on vehicles and a roundel in the interface.
        test_tool_models.cpp.
      - **Review stop** (end of 9.13): the user looks over the engine before
        9.14; afterwards the engine moves to a repository of its own.
-   - **9.14 Air and naval support** (added 25 Nov at the user's request,
-     before the Mission Maker; skirmish and missions):
+   - **9.14 Air and naval support** (added 25 Nov at the user's request;
+     skirmish and missions):
      - **Air call-ins, no air units** (user: "the game isnt big enough to
        afford actual planes to scale en masse"): a strike panel with charges
        and cooldowns. Strikes: bombing run (a real barrage along the pass),
@@ -581,30 +581,90 @@ recognition flash on vehicles and a roundel in the interface.
        aircraft per army (fighter, ground attack, bomber, transport) and
        offshore ships; no swastikas.
    - **9.15 Combat and controls** (brought forward 25 Nov at the user's
-     request, before the Mission Maker): artillery firing at chips,
-     attack-ground, counter-battery, units reacting when one of their group
-     is hit, minefields, smoke shells, under-attack alert, retreat order,
-     spotters, suppression, morale and prone (pinned men fire now and then),
-     **woodland concealment and the RUSE-style ambush bonus** (the engine
-     side exists since part 3), idle-units button, a unit bar, colour-blind
-     options, photo mode and replay camera (handoff 7e I-K, M, N).
-   - **9.16 Unit balance** (brought forward 25 Nov at the user's request;
-     after air and combat, which both move the balance): AI-against-AI
-     batches for every pair of armies with `--bench` (before Britain the
-     Soviets led about 3 to 1; after 9.4/9.6/9.7 a 15-minute bench left
-     Germany far behind); costs, health, armour, ranges and rates of fire of
-     every unit and building; the call-ins' prices and charges; a table of
-     each army's strengths kept in the docs; tests that hold the win rates
-     within a band so later changes can't quietly tip it. Mission balance
-     stays with the last milestone.
-   - **9.17 Mission Maker foundation**, **9.18 Cutscenes and event
-     sequences**, **9.19 Set pieces**, **9.20 Map, assets and terrain**,
-     (campaign finalisation when the user's packs arrive), **9.21 Big
-     scenarios** – large stand-alone battles inspired by great battles and
-     long operations, with many units.
-   - **9.22 Tuning and debugging** – always last: playtest, missions'
-     difficulty, performance, bugs, documentation (unit balance is 9.16; a
-     check of it again here).
+     request): artillery firing at chips, attack-ground, counter-battery,
+     units reacting when one of their group is hit, minefields, smoke
+     shells, under-attack alert, retreat order, spotters, suppression,
+     morale and prone (pinned men fire now and then), **woodland
+     concealment and the RUSE-style ambush bonus** (the engine side exists
+     since part 3), night and weather cutting sight (the vision rules of
+     part 3 switched on where a mission or skirmish asks), idle-units
+     button, a unit bar, colour-blind options, photo mode and replay
+     camera (handoff 7e I-K, M, N). Engine: **unit abilities** - an order
+     with a cooldown, charges or a cost (grenade, smoke, sprint, dig in,
+     banzai charge ...), described as data like the script lines, drawn as
+     buttons, used by the computer; the call-ins of 9.14 are the same
+     machinery at army level.
+   - **New armies** (added 25 Nov at the user's request: Americans, French,
+     Japanese, Commonwealth). Not all as full as Germany, Russia and
+     Britain (15-16 units each): each gets what makes it itself, a base,
+     a computer doctrine, its look, voice set and encyclopedia, and a
+     first balance against the others (the full pass is 9.19).
+     - **9.16 Armies as data, and the United States.** Engine first: a
+       faction is data (`factions.json`: id, names, insignia, interface
+       theme, colours, computer doctrine, voice set, music, soldiers' kit)
+       instead of four places in the code (the faction list and its menu
+       string, `ai.cpp` doctrines, `ui_style.cpp` themes, kit flags in the
+       model builders); **rule inheritance** (`"base": "gbr_rifleman"`: a
+       unit that differs only where it says, so armies sharing equipment
+       stay short); **kit as data** for the voxel soldiers (helmet, cap,
+       uniform, webbing, camouflage) and vehicle families shared between
+       armies (the Sherman for the Americans, French and Commonwealth).
+       Then the **United States**, full roster (~15: M1 riflemen, BAR and
+       .30 cal teams, bazooka, engineers, sniper, M8, half-track, Stuart,
+       Sherman 75/76, Jackson or Hellcat, Priest, Calliope, Pershing,
+       Long Tom; a doctrine of firepower: artillery, call-ins, mass armour).
+     - **9.17 The Commonwealth and France** (lighter rosters, 8-12 each).
+       **Commonwealth:** on the British base by inheritance, its own men
+       and kit (Canadians, Australians and New Zealanders, Indians and
+       Gurkhas, South Africans): Ram and Grizzly, Kangaroo carriers, Wasp
+       flamethrower carriers, Gurkha rifles; a doctrine of infantry and
+       night work. **France:** the Free French in American and their own
+       kit (Sherman, M10, Somua and B1 bis as veterans), Foreign Legion,
+       goumiers; a doctrine of mobile columns.
+     - **9.18 Japan and the Pacific.** **Japan** (~12): riflemen, Nambu and
+       knee-mortar teams, lunge-mine and satchel men, snipers in trees,
+       Ha-Go and Chi-Ha, Ho-Ni gun, Type 92 gun, naval landing forces;
+       a doctrine of infiltration, night attacks and **banzai charges**
+       (an ability), **spider holes and tunnels** (hidden positions that
+       open fire and move men between them). **The Pacific** as a theatre:
+       a jungle landscape (dense palms and undergrowth that hide men,
+       swamp, coral beaches), islands and atolls in the generator, landing
+       beaches for 9.14's landing craft and offshore guns, Pacific skirmish
+       maps.
+   - **9.19 Unit balance** (all seven armies; after air, combat and the new
+     armies, which all move it): AI-against-AI batches for every pair with
+     `--bench`; costs, health, armour, ranges and rates of fire of every
+     unit and building; the call-ins' and abilities' prices; each army's
+     strengths written down in the docs; tests that hold the win rates in
+     a band so later changes can't quietly tip it. Mission balance stays
+     with the last milestone.
+   - **9.20 Mission Maker foundation** - **simple and intuitive first** (user,
+     25 Nov: it is what the campaigns will be made with, so it comes first
+     among the mission tools): a **new-mission wizard** (map, sides, the
+     kind of mission, objectives) and **templates** (attack, defend, hold
+     until relieved, breakthrough, escort, beach landing, raid, last
+     stand); **triggers written as sentences** ("When *any of my units*
+     enter *the bridge* → *phase 2 starts*") picked from lists, never
+     typed; phases as columns with drag and drop; everything placed on
+     the map by clicking and dragging; a **Simple / Advanced** switch
+     (Advanced shows the full script set and Lua); every condition and
+     action explained with an example; the checker's problems shown where
+     they are with a one-click fix where there is one; test from any
+     phase, checkpoints; undo everywhere and autosave; a short playable
+     tutorial for the Mission Maker itself. **Campaign editor:** missions
+     in order (or branching), briefings with a live preview, carried flags
+     shown as links between missions, one-click pack export (handoff 7d).
+   - **9.21 Cutscenes and event sequences**, **9.22 Set pieces**, **9.23
+     Map, assets and terrain**, (campaign finalisation when the user's packs
+     arrive), **9.24 Big scenarios** – large stand-alone battles inspired by
+     great battles and long operations, with many units.
+   - **9.25 In-game interface revamp** (asked for "later" on 13 Nov; placed
+     here because seven armies, call-ins and abilities outgrow the sidebar):
+     the battle sidebar, unit cards, menus and the encyclopedia rebuilt on
+     the part 5 framework (fonts, interface size, string tables).
+   - **9.26 Tuning and debugging** – always last: playtest, missions'
+     difficulty, performance, bugs, documentation, unit balance checked
+     again.
    - Not planned: air units and controllable warships (25 Nov: call-ins and
      set pieces instead). Later: packaging and 1.0.
 
