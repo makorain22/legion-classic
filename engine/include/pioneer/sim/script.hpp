@@ -68,6 +68,9 @@ enum class CondType : uint8_t {
   GoalDone,        // goal number `value` of the mission model is done
   GoalFailed,      // goal number `value` has failed
   ScriptSays,      // the mission's Lua function `text` returns true
+  // --- Support (9.14) -----------------------------------------------------------------
+  SupportReady,    // `player`'s call-in `text` is open and has a charge ready
+  SupportUsedAtLeast,  // `player` has called call-in `text` (or any, "") at least `value` times
   Count
 };
 
@@ -151,6 +154,15 @@ enum class ActionType : uint8_t {
   // --- The hour and the weather (Pioneer) -----------------------------------------------
   SetTimeOfDay,     // the time becomes `text` ("05:30"); from then on the clock runs `value` times as fast as the battle (0: stands still)
   SetWeather,       // the weather turns to `text` ("rain", see core/weather.hpp) over `value` seconds (0: at once)
+  // --- Support (9.14) -----------------------------------------------------------------
+  SupportEnable,    // `player`'s call-in `text` ("all": every one) is closed (`value` 0), open (1) or left to the rules (2)
+  SupportCharges,   // `player`'s call-in `text` holds `value` charges
+  SupportCall,      // `player`'s call-in `text` comes down on `area` now (free: no supplies, no charge)
+  Landing,          // landing craft put the units `text` ("ger_rifleman*6, ger_halftrack") of `player` ashore near `area`
+  Flyover,          // `value` planes of `player`'s army (kind `player2`: fighter, attack, bomber, transport, recon) fly over
+                    // `area` (from `area2`, if given): only the look and the sound
+  Dogfight,         // a fight between fighters over `area` for `value` seconds: only the look
+  PlaneCrash,       // a plane of `player`'s army (kind `player2`) comes down in `area` (flying in from `area2`, if given)
   Count
 };
 

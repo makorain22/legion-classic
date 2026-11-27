@@ -50,6 +50,7 @@ struct WeaponDef {
   int32_t burstSpread = 0;   // leptons of extra scatter for each shell of a burst
   std::string sound;         // presentation: the firing sound (content/audio/audio.json), "" = by kind
   std::string impact;        // presentation: the sound where it lands, "" = by warhead
+  bool antiAir = false;      // flak: also fires at aircraft overhead (call-ins, 9.14)
 };
 
 class WeaponRegistry {

@@ -154,7 +154,8 @@ constexpr uint32_t Head = fourcc("HEAD"), Cmds = fourcc("CMDS"), Ecs = fourcc("E
                    Movers = fourcc("MOVE"), Paths = fourcc("PATH"), Sides = fourcc("SIDE"), Tiles = fourcc("TILE"),
                    Vision_ = fourcc("VISN"), Script = fourcc("SCRP"), Ai = fourcc("AI  "), Tutorial = fourcc("TUTR"),
                    Formations = fourcc("FORM"), Logistics = fourcc("LOGI"), Mission = fourcc("MISN"),
-                   Vision2 = fourcc("VIS2"), Mission2 = fourcc("MIS2"), Lua = fourcc("LUA "), Environment = fourcc("ENV ");
+                   Vision2 = fourcc("VIS2"), Mission2 = fourcc("MIS2"), Lua = fourcc("LUA "), Environment = fourcc("ENV "),
+                   Support = fourcc("SUPP");
 }
 
 const std::vector<Simulation::SectionInfo>& Simulation::stateSections() {
@@ -180,6 +181,7 @@ const std::vector<Simulation::SectionInfo>& Simulation::stateSections() {
       {sect::Mission2, "MIS2", "the mission model: phase, waves on their way, routes, goals", false, 9},
       {sect::Lua, "LUA", "the mission's Lua script: its `state` table and timers", false, 9},
       {sect::Environment, "ENV", "the time of day, the clock and the weather", false, 9},
+      {sect::Support, "SUPP", "call-ins: charges, planes and ships on their way, crates, downed planes", false, 9},
   };
   return list;
 }
@@ -375,6 +377,9 @@ void Simulation::saveSection(uint32_t tag, ByteWriter& w) const {
       w.u8(env_.previous);
       w.u32(env_.changeTick);
       w.u32(env_.changeTicks);
+      break;
+    case sect::Support:
+      saveSupport(w);
       break;
     default:
       break;
@@ -684,6 +689,8 @@ bool Simulation::loadSection(uint32_t tag, ByteReader& r, int version, std::stri
       env_.changeTick = r.u32();
       env_.changeTicks = r.u32();
       return r.ok() || damaged("time and weather");
+    case sect::Support:
+      return loadSupport(r) || damaged("call-ins");
     default:
       return true;
   }
@@ -729,6 +736,9 @@ void Simulation::resetSection(uint32_t tag) {
       env_.daySeconds = std::clamp(script_.startMinute, 0, 24 * 60 - 1) * 60;
       env_.rate = std::clamp(script_.clockRate, 0, 3600);
       env_.weather = env_.previous = static_cast<uint8_t>(std::min<int>(script_.startWeather, kWeatherCount - 1));
+      break;
+    case sect::Support:
+      resetSupport();
       break;
     default:
       break;

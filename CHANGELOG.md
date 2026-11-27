@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.9.3 – in progress (Milestone 9.14: air and naval support)
+
+- **Call-ins** (27 Nov, part 1: the rules and the simulation). Aircraft are
+  not units: you call them in, they fly across, do their job and leave.
+  Each army has eight call-ins, opened by its new **liaison post** (one per
+  construction yard) and recharging while it stands: recon flight, ground
+  attack, bombing raid and strafing run (drag to choose the line), paratroop
+  drop, supply drop (crates go to whoever reaches them first), a warship's
+  guns, and a landing from the sea. Ships only reach targets near open sea;
+  landing craft need a beach.
+- **Flak.** New anti-aircraft gun pits per army (2 cm Flak 38, 61-K,
+  Bofors). Every gun under a flight's path gets a chance at each plane once a
+  second; a raid that loses half its planes turns for home, and the wrecks
+  come down burning.
+- **Missions:** call-ins are opened, closed, charged and called free from
+  triggers (*Open or close a call-in*, *Set call-in charges*, *Call in
+  support*), with two new conditions (*Call-in ready*, *Call-in used*). Set
+  pieces for scripts only: *Landing from the sea* (any units), *Planes fly
+  over*, *Dogfight overhead*, *Plane comes down*.
+- Call-ins are data: `"support"` in `buildings.json`, merged by id from mods
+  like everything else. Saves carry them (section `SUPP`).
+
 ## 0.9.2 – in progress (Milestone 9.13: the Pioneer Engine)
 
 - **The engine has a new name: Pioneer Engine 2.0** (was Slave Engine 1.0).

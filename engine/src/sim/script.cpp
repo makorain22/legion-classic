@@ -20,7 +20,8 @@ const char* kCondNames[] = {"Always", "Timer", "Units in area", "No units in are
                             "Countdown ran out", "Countdown below", "Counter at least", "Counter at most",
                             "Kills at least", "Losses at least", "Objective done", "Objective failed",
                             "Difficulty at least", "Chance", "Supplies at most", "Health below", "Allied with",
-                            "Phase is", "Phase running for", "Goal done", "Goal failed", "Script says"};
+                            "Phase is", "Phase running for", "Goal done", "Goal failed", "Script says",
+                            "Call-in ready", "Call-in used"};
 const char* kCondIds[] = {"always", "timer", "units_in_area", "no_units_in_area", "unit_count_at_most",
                           "player_defeated", "supplies", "trigger_fired", "unit_count_at_least", "in_cover",
                           "order_given", "flag_at_least",
@@ -29,7 +30,8 @@ const char* kCondIds[] = {"always", "timer", "units_in_area", "no_units_in_area"
                           "countdown_done", "countdown_below", "counter_at_least", "counter_at_most",
                           "kills_at_least", "losses_at_least", "objective_done", "objective_failed",
                           "difficulty_at_least", "chance", "supplies_at_most", "health_below", "allied_with",
-                          "phase_is", "phase_elapsed", "goal_done", "goal_failed", "script_says"};
+                          "phase_is", "phase_elapsed", "goal_done", "goal_failed", "script_says",
+                          "support_ready", "support_used"};
 const char* kOrderIds[] = {"move", "attack_move", "attack", "stop", "spawn", "remove", "spawn_list", "edit", "kill",
                            "strike", "set_team", "set_stance", "produce", "place_building", "place_walls", "sell",
                            "deploy", "harvest", "set_rally", "set_credits", "set_controller", "repair", "bind_group",
@@ -48,7 +50,9 @@ const char* kActionNames[] = {"Message", "Add objective", "Complete objective", 
                               "Cinematic", "Pan camera", "Mark area", "Clear marker", "Play sound", "Play music",
                               "Income rate", "Add logistics point", "Fire trigger", "Reset trigger", "Hide objective",
                               "Spawn named units", "Freeze water", "Break the ice", "Flood the land", "Drain the land",
-                              "Go to phase", "Send wave", "Follow path", "Call script", "Set the time of day", "Set the weather"};
+                              "Go to phase", "Send wave", "Follow path", "Call script", "Set the time of day", "Set the weather",
+                              "Open or close a call-in", "Set call-in charges", "Call in support", "Landing from the sea",
+                              "Planes fly over", "Dogfight overhead", "Plane comes down"};
 const char* kActionIds[] = {"message", "add_objective", "complete_objective", "fail_objective", "victory", "defeat",
                             "spawn_units", "give_supplies", "reveal_area", "attack_move", "move_units",
                             "change_owner", "kill_units", "enable_trigger", "disable_trigger", "set_computer",
@@ -61,7 +65,9 @@ const char* kActionIds[] = {"message", "add_objective", "complete_objective", "f
                             "transmission", "cinematic", "camera_pan", "mark_area", "clear_marker", "play_sound",
                             "play_music", "set_income_rate", "add_logistics_point", "fire_trigger", "reset_trigger",
                             "hide_objective", "spawn_named", "freeze_water", "break_ice", "flood_area", "drain_area",
-                            "goto_phase", "send_wave", "follow_path", "call_script", "set_time_of_day", "set_weather"};
+                            "goto_phase", "send_wave", "follow_path", "call_script", "set_time_of_day", "set_weather",
+                            "support_enable", "support_charges", "support_call", "landing", "flyover", "dogfight",
+                            "plane_crash"};
 static_assert(sizeof(kCondIds) / sizeof(kCondIds[0]) == static_cast<size_t>(CondType::Count));
 static_assert(sizeof(kCondNames) / sizeof(kCondNames[0]) == static_cast<size_t>(CondType::Count));
 static_assert(sizeof(kActionIds) / sizeof(kActionIds[0]) == static_cast<size_t>(ActionType::Count));
@@ -102,6 +108,8 @@ bool actionUsesText(ActionType t) {
     case ActionType::SpawnFromFlag: case ActionType::Transmission: case ActionType::MarkArea:
     case ActionType::ClearMarker: case ActionType::PlaySound: case ActionType::PlayMusic: case ActionType::SpawnNamed:
     case ActionType::CallScript: case ActionType::SetTimeOfDay: case ActionType::SetWeather:
+    case ActionType::SupportEnable: case ActionType::SupportCharges: case ActionType::SupportCall:
+    case ActionType::Landing:
       return true;
     default:
       return false;
@@ -601,6 +609,19 @@ bool Simulation::test(const Condition& c, size_t trigger) const {
     case CondType::GoalDone: return goalState(c.value) == 2;
     case CondType::GoalFailed: return goalState(c.value) == 3;
     case CondType::ScriptSays: return lua_ && lua_->ask(c.text);
+    case CondType::SupportReady: {
+      const int pw = types_.support().find(c.text);
+      if (pw < 0 || c.player >= MAX_PLAYERS) return false;
+      const SupportState& st = supportState(c.player, pw);
+      return supportOpen(c.player, pw) && st.charges > 0 && tick_ >= st.readyTick;
+    }
+    case CondType::SupportUsedAtLeast: {
+      if (c.player >= MAX_PLAYERS) return false;
+      uint32_t used = 0;
+      for (size_t i = 0; i < types_.support().size(); ++i)
+        if (c.text.empty() || types_.support().get(static_cast<int>(i)).id == c.text) used += supportState(c.player, static_cast<int>(i)).used;
+      return used >= static_cast<uint32_t>(std::max(0, c.value));
+    }
     default: return false;
   }
 }
@@ -863,6 +884,55 @@ void Simulation::perform(const Action& a, size_t depth) {
     case ActionType::SetWeather: {
       Weather w = Weather::Clear;
       if (weatherFromId(a.text, w)) setWeather(static_cast<uint8_t>(w), a.value);
+      break;
+    }
+    case ActionType::SupportEnable:
+    case ActionType::SupportCharges: {
+      if (a.player >= MAX_PLAYERS) break;
+      for (size_t i = 0; i < types_.support().size(); ++i) {
+        if (a.text != "all" && types_.support().get(static_cast<int>(i)).id != a.text) continue;
+        if (a.type == ActionType::SupportCharges) {
+          setSupportCharges(a.player, static_cast<int>(i), a.value);
+        } else {
+          const auto g = a.value == 0 ? SupportState::Gate::Off : a.value == 1 ? SupportState::Gate::On : SupportState::Gate::Auto;
+          setSupportGate(a.player, static_cast<int>(i), g);
+        }
+      }
+      break;
+    }
+    case ActionType::SupportCall: {
+      const int pw = types_.support().find(a.text);
+      const Vec2i c = areaCentre(a.area);
+      if (pw < 0 || c.x < 0 || a.player >= MAX_PLAYERS) break;
+      const SupportPowerDef& d = types_.support().get(pw);
+      if (d.kind == SupportKind::Landing) {
+        scriptLanding(a.player, c, d.units);
+        break;
+      }
+      launchStrike(pw, d.kind, d.aircraft, a.player, c, strikeHeading(a.player, c), d.planes, d.shots, d.speed, d.delay,
+                   d.kind == SupportKind::Naval ? d.duration : 0);
+      ++support_[a.player][static_cast<size_t>(pw)].used;
+      break;
+    }
+    case ActionType::Landing: {
+      const Vec2i c = areaCentre(a.area);
+      std::vector<std::pair<int, int>> units;
+      if (c.x < 0 || a.player >= MAX_PLAYERS || !parseUnitList(a.text, types_, units, nullptr)) break;
+      scriptLanding(a.player, c, units);
+      break;
+    }
+    case ActionType::Flyover:
+    case ActionType::Dogfight:
+    case ActionType::PlaneCrash: {
+      const Vec2i c = areaCentre(a.area);
+      if (c.x < 0) break;
+      const Vec2i from = areaCentre(a.area2);
+      const Vec2i dir = from.x < 0 ? Vec2i{} : c - from;
+      const uint8_t owner = a.player < MAX_PLAYERS ? a.player : 0;
+      const AircraftRole role = static_cast<AircraftRole>(std::min<int>(a.player2, static_cast<int>(AircraftRole::Count) - 1));
+      if (a.type == ActionType::Flyover) startSetPiece(SupportKind::Flyover, owner, c, dir, std::clamp(a.value, 1, 8), 0, role);
+      else if (a.type == ActionType::Dogfight) startSetPiece(SupportKind::Dogfight, owner, c, dir, 4, std::clamp(a.value, 1, 600), AircraftRole::Fighter);
+      else startSetPiece(SupportKind::Crash, owner, c, dir, 1, 0, role);
       break;
     }
     case ActionType::DrainArea: {

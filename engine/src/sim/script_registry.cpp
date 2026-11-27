@@ -216,6 +216,15 @@ std::vector<Entry> buildConditions() {
     "Script says 'flank_is_open': a test too involved for conditions, written in Lua.",
     "The function is called three times a second while the trigger waits: keep it cheap, and don't change the world from it.",
     {text(Kind::Text, "Function", "The name of a global function of the mission's Lua script.")});
+  const char* kSupport = "Support (call-ins)";
+  C(CondType::SupportReady, kSupport, "True while a side's call-in is open and has a charge ready to use.",
+    "Call-in ready 'ger_stuka' for side 0: tell the player the Stukas can be called.",
+    "Ready does not mean affordable: the side may still lack the supplies it costs.",
+    {side("Whose call-in."), text(Kind::Support, "Call-in", "The call-in's id in the rules (buildings.json, \"support\").")});
+  C(CondType::SupportUsedAtLeast, kSupport, "True once a side has called a call-in (or any, if left empty) this many times.",
+    "Call-in used 'gbr_typhoon' 1 time: the first rocket attack went in, carry on with the briefing.", "",
+    {side("Whose call-ins."), text(Kind::Support, "Call-in", "The call-in's id, or empty for any.", true),
+     number("Times", "At least this many calls.", 1, 0, 1000)});
   return v;
 }
 
@@ -438,6 +447,45 @@ std::vector<Entry> buildActions() {
     "chooses (Settings > Display > Graphics quality > Rain and snow in the air).",
     {text(Kind::Weather, "Weather", "clear, fair, overcast, rain, storm, snow, blizzard or mist."),
      seconds("Over", "How long the change takes (0: at once).", 30, 3600)});
+  const char* kSupport = "Support (call-ins)";
+  const Field aircraft = {Slot::Player2, Kind::Choice, "player2", "Aircraft", "Which planes: their look follows the side's army.",
+                          2, 0, 4, "fighter|attack|bomber|transport|recon", false};
+  A(ActionType::SupportEnable, kSupport,
+    "Opens a call-in to a side, closes it, or leaves it to the rules (open while the side has the structure it needs, "
+    "such as a liaison post).",
+    "Open 'ger_stuka' for side 0 when the airfield is taken; close 'all' for side 1 during the opening.",
+    "Opening gives no charge by itself: charges come back over the call-in's recharge time, or set them with Set call-in "
+    "charges.",
+    {side("Whose call-in."), text(Kind::Support, "Call-in", "The call-in's id in the rules, or 'all' for every one."),
+     choice("Open", "Closed, open, or as the rules say.", "closed|open|by the rules", 1)});
+  A(ActionType::SupportCharges, kSupport, "Sets how many charges of a call-in a side holds (up to its most).",
+    "Side 0 gets 2 charges of 'rus_il2' at the start of phase 2.", "The call-in must also be open for the side to use them.",
+    {side("Whose call-in."), text(Kind::Support, "Call-in", "The call-in's id in the rules, or 'all'."),
+     number("Charges", "How many.", 1, 0, 9)});
+  A(ActionType::SupportCall, kSupport,
+    "The call-in comes down on an area now, for a side: no supplies, no charge, whether open or not. For scripted "
+    "bombardments, an air raid that opens the battle, paratroops dropping on a phase.",
+    "'gbr_naval_guns' on 'Beach defences' for side 0 at the start of the landing.",
+    "The planes take a few seconds to arrive (their delay in the rules) and fly in from the side's side of the map. Flak "
+    "still fires at them. Naval guns and landings need open sea within reach.",
+    {side("Whose planes or ships."), text(Kind::Support, "Call-in", "The call-in's id in the rules."), area("The target.")});
+  A(ActionType::Landing, kSupport,
+    "Landing craft come in from the open sea, beach near the area, put the units ashore and pull back.",
+    "'gbr_rifleman*12, gbr_bren*2, gbr_carrier*2' for side 0 near 'Gold Beach'.",
+    "There must be open sea (deep water joined to the map's edge) with a beach next to it within reach of the area. "
+    "The units arrive with no orders: follow with Attack-move.",
+    {side("Whose men."), area("Where to land (the nearest beach to it)."),
+     text(Kind::UnitList, "Units", "Unit types and how many, separated by commas: ger_rifleman*6, ger_halftrack.")});
+  A(ActionType::Flyover, kSupport, "Planes fly over an area: the look and the sound of air power, nothing more.",
+    "3 bombers of side 0 over 'Town' from 'Coast': the raid goes in somewhere ahead.", "",
+    {side("Whose army they belong to (their look)."), area("What they fly over."), number("Planes", "How many.", 3, 1, 8),
+     aircraft, area2("Where they come from (or none: from the side's side of the map).", "From area")});
+  A(ActionType::Dogfight, kSupport, "Fighters fight over an area for a while: tracer, engines, a plane falling now and then. Only the look.",
+    "A dogfight over 'Ridge' for 40 s while the attack begins.", "", {side("Whose army the friendly fighters belong to."), area("Where."),
+                                                                    seconds("Lasting", "How long.", 30, 600)});
+  A(ActionType::PlaneCrash, kSupport, "A plane comes down in an area, trailing smoke, and burns where it falls. Only the look.",
+    "A bomber of side 1 comes down in 'Wood' after the flak opens up.", "",
+    {side("Whose plane (its look)."), area("Where it falls."), aircraft, area2("Where it flies in from (or none).", "From area")});
   return v;
 }
 }  // namespace
@@ -714,6 +762,20 @@ std::vector<Issue> check(const ScenarioScript& s, const CheckContext& ctx) {
       case Kind::Weapon:
         if (!txt.empty() && !ctx.weapons.empty() && std::find(ctx.weapons.begin(), ctx.weapons.end(), txt) == ctx.weapons.end())
           add(Issue::Warning, ti, item, e.action, where + "there is no weapon '" + txt + "'");
+        break;
+      case Kind::Support:
+        if (txt.empty() && !f.optional) add(Issue::Error, ti, item, e.action, where + "no call-in named");
+        else if (!txt.empty() && txt != "all" && ctx.types && ctx.types->support().find(txt) < 0)
+          add(Issue::Error, ti, item, e.action, where + "there is no call-in '" + txt + "' in the rules");
+        break;
+      case Kind::UnitList:
+        if (ctx.types) {
+          std::vector<std::pair<int, int>> units;
+          std::string why;
+          if (!parseUnitList(txt, *ctx.types, units, &why)) add(Issue::Error, ti, item, e.action, where + why);
+        } else if (txt.empty()) {
+          add(Issue::Error, ti, item, e.action, where + "no units");
+        }
         break;
       case Kind::Int:
       case Kind::Seconds:
@@ -1018,6 +1080,8 @@ std::string referenceMarkdown() {
       case Kind::Path: return "path number";
       case Kind::Goal: return "goal number";
       case Kind::TimeOfDay: return "time hh:mm";
+      case Kind::Support: return f.optional ? "call-in id or empty" : "call-in id";
+      case Kind::UnitList: return "units: id*count, id*count";
       case Kind::Weather: {
         std::string s = weatherChoices();
         std::replace(s.begin(), s.end(), '|', '/');

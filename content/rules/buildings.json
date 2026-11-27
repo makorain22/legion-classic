@@ -2140,6 +2140,653 @@
       "autoTarget": false,
       "garrison": 4,
       "description": "A lighthouse on the shore, banded red and white. A fine observation post."
+    },
+    {
+      "id": "ger_air_post",
+      "faction": "ger",
+      "armor": "structure",
+      "name": "Luftwaffe Liaison Post",
+      "model": "air_post",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 700,
+      "power": -15,
+      "cost": 1000,
+      "buildTime": 14,
+      "sight": 9,
+      "builtAt": "yard",
+      "requires": [
+        "ger_factory"
+      ],
+      "role": "airpost",
+      "perYard": 1,
+      "group": "Support",
+      "description": "A radio post with a forward air controller and a naval liaison officer. While it stands, the army's call-ins recharge: air strikes, recon flights, supply and paratroop drops, and on a coast the fleet's guns and landings. One for each construction yard."
+    },
+    {
+      "id": "ger_flak",
+      "faction": "ger",
+      "armor": "structure",
+      "name": "2 cm Flak Position",
+      "model": "flak_pit",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 350,
+      "cost": 500,
+      "buildTime": 8,
+      "sight": 10,
+      "category": "defense",
+      "weapons": [
+        "flak_20"
+      ],
+      "turret": {
+        "turnTicks": 1
+      },
+      "builtAt": "yard",
+      "requires": [
+        "ger_barracks"
+      ],
+      "group": "Emplacements",
+      "description": "A quick-firing anti-aircraft gun in a sandbagged pit. Fires at planes overhead and can bring them down or drive a raid off; it also cuts up infantry in the open."
+    },
+    {
+      "id": "rus_air_post",
+      "faction": "rus",
+      "armor": "structure",
+      "name": "Air Army Liaison",
+      "model": "air_post",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 700,
+      "power": -15,
+      "cost": 1000,
+      "buildTime": 14,
+      "sight": 9,
+      "builtAt": "yard",
+      "requires": [
+        "rus_factory"
+      ],
+      "role": "airpost",
+      "perYard": 1,
+      "group": "Support",
+      "description": "A radio post with a forward air controller and a naval liaison officer. While it stands, the army's call-ins recharge: air strikes, recon flights, supply and paratroop drops, and on a coast the fleet's guns and landings. One for each construction yard."
+    },
+    {
+      "id": "rus_flak",
+      "faction": "rus",
+      "armor": "structure",
+      "name": "61-K Anti-Aircraft Gun",
+      "model": "flak_pit",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 350,
+      "cost": 500,
+      "buildTime": 8,
+      "sight": 10,
+      "category": "defense",
+      "weapons": [
+        "flak_37"
+      ],
+      "turret": {
+        "turnTicks": 1
+      },
+      "builtAt": "yard",
+      "requires": [
+        "rus_barracks"
+      ],
+      "group": "Emplacements",
+      "description": "A quick-firing anti-aircraft gun in a sandbagged pit. Fires at planes overhead and can bring them down or drive a raid off; it also cuts up infantry in the open."
+    },
+    {
+      "id": "gbr_air_post",
+      "faction": "gbr",
+      "armor": "structure",
+      "name": "RAF Forward Control",
+      "model": "air_post",
+      "footprint": [
+        2,
+        2
+      ],
+      "health": 700,
+      "power": -15,
+      "cost": 1000,
+      "buildTime": 14,
+      "sight": 9,
+      "builtAt": "yard",
+      "requires": [
+        "gbr_factory"
+      ],
+      "role": "airpost",
+      "perYard": 1,
+      "group": "Support",
+      "description": "A radio post with a forward air controller and a naval liaison officer. While it stands, the army's call-ins recharge: air strikes, recon flights, supply and paratroop drops, and on a coast the fleet's guns and landings. One for each construction yard."
+    },
+    {
+      "id": "gbr_flak",
+      "faction": "gbr",
+      "armor": "structure",
+      "name": "Bofors Gun Pit",
+      "model": "flak_pit",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 350,
+      "cost": 500,
+      "buildTime": 8,
+      "sight": 10,
+      "category": "defense",
+      "weapons": [
+        "flak_40"
+      ],
+      "turret": {
+        "turnTicks": 1
+      },
+      "builtAt": "yard",
+      "requires": [
+        "gbr_barracks"
+      ],
+      "group": "Emplacements",
+      "description": "A quick-firing anti-aircraft gun in a sandbagged pit. Fires at planes overhead and can bring them down or drive a raid off; it also cuts up infantry in the open."
+    }
+  ],
+  "support": [
+    {
+      "id": "ger_recon",
+      "faction": "ger",
+      "name": "Fw 189 reconnaissance",
+      "kind": "recon",
+      "requires": [
+        "ger_air_post"
+      ],
+      "description": "A plane flies over the target: for a while your side sees everything there, men hidden in woods included.",
+      "cost": 150,
+      "charges": 2,
+      "recharge": 90,
+      "cooldown": 10,
+      "planes": 1,
+      "radius": 9,
+      "duration": 40,
+      "speed": 140
+    },
+    {
+      "id": "ger_attack",
+      "faction": "ger",
+      "name": "Stuka dive attack",
+      "kind": "attack",
+      "requires": [
+        "ger_air_post"
+      ],
+      "description": "Ground-attack planes hit one point hard: tanks, guns, a strongpoint.",
+      "cost": 700,
+      "charges": 1,
+      "recharge": 150,
+      "cooldown": 20,
+      "planes": 3,
+      "shots": 1,
+      "weapon": "bomb_500",
+      "radius": 1.3,
+      "speed": 120
+    },
+    {
+      "id": "ger_bombing",
+      "faction": "ger",
+      "name": "He 111 bombing raid",
+      "kind": "bombing",
+      "requires": [
+        "ger_air_post"
+      ],
+      "description": "Bombers fly a line across the target and drop their bombs along it. Drag to choose the line.",
+      "cost": 1100,
+      "charges": 1,
+      "recharge": 300,
+      "cooldown": 30,
+      "planes": 3,
+      "shots": 6,
+      "weapon": "bomb_250",
+      "length": 10,
+      "speed": 100,
+      "delay": 6,
+      "aaChance": 10
+    },
+    {
+      "id": "ger_strafing",
+      "faction": "ger",
+      "name": "Fw 190 strafing run",
+      "kind": "strafing",
+      "requires": [
+        "ger_air_post"
+      ],
+      "description": "Fighters rake a line with their guns: deadly to men and lorries in the open. Drag to choose the line.",
+      "cost": 400,
+      "charges": 2,
+      "recharge": 120,
+      "cooldown": 15,
+      "planes": 2,
+      "shots": 12,
+      "weapon": "strafe_cannon",
+      "length": 8,
+      "speed": 150,
+      "aaChance": 8
+    },
+    {
+      "id": "ger_paradrop",
+      "faction": "ger",
+      "name": "Fallschirmj\u00e4ger drop",
+      "kind": "paradrop",
+      "requires": [
+        "ger_air_post"
+      ],
+      "description": "Transports drop a platoon of paratroopers where you point.",
+      "cost": 900,
+      "charges": 1,
+      "recharge": 360,
+      "cooldown": 30,
+      "planes": 2,
+      "radius": 2.5,
+      "speed": 95,
+      "units": [
+        "ger_rifleman*8",
+        "ger_mg_team*2",
+        "ger_at_team*2"
+      ]
+    },
+    {
+      "id": "ger_supply",
+      "faction": "ger",
+      "name": "Ju 52 supply drop",
+      "kind": "supply",
+      "requires": [
+        "ger_air_post"
+      ],
+      "description": "Transports drop crates of supplies. Whoever reaches a crate first takes it - keep the drop zone safe.",
+      "cost": 0,
+      "charges": 1,
+      "recharge": 240,
+      "cooldown": 20,
+      "planes": 2,
+      "crates": 4,
+      "crateValue": 300,
+      "radius": 2.0,
+      "speed": 95
+    },
+    {
+      "id": "ger_naval",
+      "faction": "ger",
+      "name": "Kriegsmarine destroyer",
+      "kind": "naval",
+      "requires": [
+        "ger_air_post"
+      ],
+      "description": "A warship off the coast shells the target. Only within reach of the open sea.",
+      "cost": 900,
+      "charges": 1,
+      "recharge": 300,
+      "cooldown": 30,
+      "shots": 12,
+      "weapon": "naval_shell",
+      "radius": 3.0,
+      "duration": 20,
+      "delay": 4,
+      "seaRange": 30,
+      "model": "ger_warship"
+    },
+    {
+      "id": "ger_landing",
+      "faction": "ger",
+      "name": "Marinef\u00e4hrprahm landing",
+      "kind": "landing",
+      "requires": [
+        "ger_air_post"
+      ],
+      "description": "Landing craft put a company ashore on the beach nearest the target. Only where there is open sea and a beach.",
+      "cost": 1400,
+      "charges": 1,
+      "recharge": 480,
+      "cooldown": 60,
+      "speed": 28,
+      "seaRange": 40,
+      "units": [
+        "ger_rifleman*10",
+        "ger_mg_team*2",
+        "ger_at_team*2",
+        "ger_halftrack*1"
+      ],
+      "model": "ger_landing_craft"
+    },
+    {
+      "id": "rus_recon",
+      "faction": "rus",
+      "name": "Po-2 night reconnaissance",
+      "kind": "recon",
+      "requires": [
+        "rus_air_post"
+      ],
+      "description": "A plane flies over the target: for a while your side sees everything there, men hidden in woods included.",
+      "cost": 150,
+      "charges": 2,
+      "recharge": 90,
+      "cooldown": 10,
+      "planes": 1,
+      "radius": 9,
+      "duration": 40,
+      "speed": 140
+    },
+    {
+      "id": "rus_attack",
+      "faction": "rus",
+      "name": "Il-2 rocket attack",
+      "kind": "attack",
+      "requires": [
+        "rus_air_post"
+      ],
+      "description": "Ground-attack planes hit one point hard: tanks, guns, a strongpoint.",
+      "cost": 700,
+      "charges": 1,
+      "recharge": 150,
+      "cooldown": 20,
+      "planes": 3,
+      "shots": 4,
+      "weapon": "rocket_aircraft",
+      "radius": 1.3,
+      "speed": 120
+    },
+    {
+      "id": "rus_bombing",
+      "faction": "rus",
+      "name": "Pe-2 bombing raid",
+      "kind": "bombing",
+      "requires": [
+        "rus_air_post"
+      ],
+      "description": "Bombers fly a line across the target and drop their bombs along it. Drag to choose the line.",
+      "cost": 1100,
+      "charges": 1,
+      "recharge": 300,
+      "cooldown": 30,
+      "planes": 3,
+      "shots": 6,
+      "weapon": "bomb_250",
+      "length": 10,
+      "speed": 100,
+      "delay": 6,
+      "aaChance": 10
+    },
+    {
+      "id": "rus_strafing",
+      "faction": "rus",
+      "name": "Yak-9 strafing run",
+      "kind": "strafing",
+      "requires": [
+        "rus_air_post"
+      ],
+      "description": "Fighters rake a line with their guns: deadly to men and lorries in the open. Drag to choose the line.",
+      "cost": 400,
+      "charges": 2,
+      "recharge": 120,
+      "cooldown": 15,
+      "planes": 2,
+      "shots": 12,
+      "weapon": "strafe_mg",
+      "length": 8,
+      "speed": 150,
+      "aaChance": 8
+    },
+    {
+      "id": "rus_paradrop",
+      "faction": "rus",
+      "name": "Guards airborne drop",
+      "kind": "paradrop",
+      "requires": [
+        "rus_air_post"
+      ],
+      "description": "Transports drop a platoon of paratroopers where you point.",
+      "cost": 900,
+      "charges": 1,
+      "recharge": 360,
+      "cooldown": 30,
+      "planes": 2,
+      "radius": 2.5,
+      "speed": 95,
+      "units": [
+        "rus_rifleman*8",
+        "rus_mg_team*2",
+        "rus_at_team*2"
+      ]
+    },
+    {
+      "id": "rus_supply",
+      "faction": "rus",
+      "name": "Li-2 supply drop",
+      "kind": "supply",
+      "requires": [
+        "rus_air_post"
+      ],
+      "description": "Transports drop crates of supplies. Whoever reaches a crate first takes it - keep the drop zone safe.",
+      "cost": 0,
+      "charges": 1,
+      "recharge": 240,
+      "cooldown": 20,
+      "planes": 2,
+      "crates": 4,
+      "crateValue": 300,
+      "radius": 2.0,
+      "speed": 95
+    },
+    {
+      "id": "rus_naval",
+      "faction": "rus",
+      "name": "Red Banner Fleet destroyer",
+      "kind": "naval",
+      "requires": [
+        "rus_air_post"
+      ],
+      "description": "A warship off the coast shells the target. Only within reach of the open sea.",
+      "cost": 900,
+      "charges": 1,
+      "recharge": 300,
+      "cooldown": 30,
+      "shots": 12,
+      "weapon": "naval_shell",
+      "radius": 3.0,
+      "duration": 20,
+      "delay": 4,
+      "seaRange": 30,
+      "model": "rus_warship"
+    },
+    {
+      "id": "rus_landing",
+      "faction": "rus",
+      "name": "Naval infantry landing",
+      "kind": "landing",
+      "requires": [
+        "rus_air_post"
+      ],
+      "description": "Landing craft put a company ashore on the beach nearest the target. Only where there is open sea and a beach.",
+      "cost": 1400,
+      "charges": 1,
+      "recharge": 480,
+      "cooldown": 60,
+      "speed": 28,
+      "seaRange": 40,
+      "units": [
+        "rus_rifleman*10",
+        "rus_mg_team*2",
+        "rus_at_team*2",
+        "rus_halftrack*1"
+      ],
+      "model": "rus_landing_craft"
+    },
+    {
+      "id": "gbr_recon",
+      "faction": "gbr",
+      "name": "Mosquito reconnaissance",
+      "kind": "recon",
+      "requires": [
+        "gbr_air_post"
+      ],
+      "description": "A plane flies over the target: for a while your side sees everything there, men hidden in woods included.",
+      "cost": 150,
+      "charges": 2,
+      "recharge": 90,
+      "cooldown": 10,
+      "planes": 1,
+      "radius": 9,
+      "duration": 40,
+      "speed": 140
+    },
+    {
+      "id": "gbr_attack",
+      "faction": "gbr",
+      "name": "Typhoon rocket attack",
+      "kind": "attack",
+      "requires": [
+        "gbr_air_post"
+      ],
+      "description": "Ground-attack planes hit one point hard: tanks, guns, a strongpoint.",
+      "cost": 700,
+      "charges": 1,
+      "recharge": 150,
+      "cooldown": 20,
+      "planes": 3,
+      "shots": 4,
+      "weapon": "rocket_aircraft",
+      "radius": 1.3,
+      "speed": 120
+    },
+    {
+      "id": "gbr_bombing",
+      "faction": "gbr",
+      "name": "Mitchell bombing raid",
+      "kind": "bombing",
+      "requires": [
+        "gbr_air_post"
+      ],
+      "description": "Bombers fly a line across the target and drop their bombs along it. Drag to choose the line.",
+      "cost": 1100,
+      "charges": 1,
+      "recharge": 300,
+      "cooldown": 30,
+      "planes": 3,
+      "shots": 6,
+      "weapon": "bomb_250",
+      "length": 10,
+      "speed": 100,
+      "delay": 6,
+      "aaChance": 10
+    },
+    {
+      "id": "gbr_strafing",
+      "faction": "gbr",
+      "name": "Spitfire strafing run",
+      "kind": "strafing",
+      "requires": [
+        "gbr_air_post"
+      ],
+      "description": "Fighters rake a line with their guns: deadly to men and lorries in the open. Drag to choose the line.",
+      "cost": 400,
+      "charges": 2,
+      "recharge": 120,
+      "cooldown": 15,
+      "planes": 2,
+      "shots": 12,
+      "weapon": "strafe_cannon",
+      "length": 8,
+      "speed": 150,
+      "aaChance": 8
+    },
+    {
+      "id": "gbr_paradrop",
+      "faction": "gbr",
+      "name": "Airborne drop",
+      "kind": "paradrop",
+      "requires": [
+        "gbr_air_post"
+      ],
+      "description": "Transports drop a platoon of paratroopers where you point.",
+      "cost": 900,
+      "charges": 1,
+      "recharge": 360,
+      "cooldown": 30,
+      "planes": 2,
+      "radius": 2.5,
+      "speed": 95,
+      "units": [
+        "gbr_rifleman*8",
+        "gbr_mg_team*2",
+        "gbr_at_team*2"
+      ]
+    },
+    {
+      "id": "gbr_supply",
+      "faction": "gbr",
+      "name": "Dakota supply drop",
+      "kind": "supply",
+      "requires": [
+        "gbr_air_post"
+      ],
+      "description": "Transports drop crates of supplies. Whoever reaches a crate first takes it - keep the drop zone safe.",
+      "cost": 0,
+      "charges": 1,
+      "recharge": 240,
+      "cooldown": 20,
+      "planes": 2,
+      "crates": 4,
+      "crateValue": 300,
+      "radius": 2.0,
+      "speed": 95
+    },
+    {
+      "id": "gbr_naval",
+      "faction": "gbr",
+      "name": "Royal Navy cruiser",
+      "kind": "naval",
+      "requires": [
+        "gbr_air_post"
+      ],
+      "description": "A warship off the coast shells the target. Only within reach of the open sea.",
+      "cost": 900,
+      "charges": 1,
+      "recharge": 300,
+      "cooldown": 30,
+      "shots": 16,
+      "weapon": "naval_shell",
+      "radius": 3.0,
+      "duration": 20,
+      "delay": 4,
+      "seaRange": 30,
+      "model": "gbr_warship"
+    },
+    {
+      "id": "gbr_landing",
+      "faction": "gbr",
+      "name": "LCVP landing",
+      "kind": "landing",
+      "requires": [
+        "gbr_air_post"
+      ],
+      "description": "Landing craft put a company ashore on the beach nearest the target. Only where there is open sea and a beach.",
+      "cost": 1400,
+      "charges": 1,
+      "recharge": 480,
+      "cooldown": 60,
+      "speed": 28,
+      "seaRange": 40,
+      "units": [
+        "gbr_rifleman*10",
+        "gbr_mg_team*2",
+        "gbr_at_team*2",
+        "gbr_halftrack*1"
+      ],
+      "model": "gbr_landing_craft"
     }
   ]
 }

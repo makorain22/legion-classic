@@ -478,6 +478,7 @@ void Simulation::stepVision() {
     for (uint8_t p = 0; p < MAX_PLAYERS; ++p)
       if (ra.player == ANY_PLAYER || p == ra.player) vision_.stamp(p, (a.x0 + a.x1) / 2, (a.y0 + a.y1) / 2, r);
   }
+  stampSupportVision();  // recon flights and what they have seen (9.14)
   // Every unit's sight, gathered first; then each side's grid is filled by its
   // own job. A grid is only ever written by the job of its side, and marking
   // tiles is the same in any order, so the result does not depend on how many

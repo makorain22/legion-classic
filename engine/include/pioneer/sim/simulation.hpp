@@ -29,6 +29,7 @@
 #include "pioneer/sim/ai.hpp"
 #include "pioneer/sim/pathfinder.hpp"
 #include "pioneer/sim/script.hpp"
+#include "pioneer/sim/support.hpp"
 #include "pioneer/sim/spatial_hash.hpp"
 #include "pioneer/sim/unit_types.hpp"
 #include "pioneer/sim/vision.hpp"
@@ -80,6 +81,9 @@ enum class CommandType : uint8_t {
   SetEnvironment, // `amount`: the time of day in seconds after midnight (-1: as it is); `radius`: how many times as
                   // fast as the battle the day runs (-1: as it is); `count`: Weather + 1 (0: as it is), turning over
                   // `unitType` seconds
+  // --- Support from outside the battlefield (9.14) -------------------------------------
+  CallSupport,    // player calls call-in `unitType` (SupportRegistry index) on `target`; with `amount` 1 the planes
+                  // fly along the Angle `facing`, else from the player's side of the map
 };
 
 // Production lines: one per kind of thing a side builds.
@@ -198,6 +202,13 @@ enum class EventType : uint8_t {
   // --- Mission model (Pioneer) -------------------------------------------------------
   PhaseChanged,     // the mission entered phase `amount`, called `text`
   WaveArrived,      // wave `text` arrived for owner at `at`: `amount` units
+  // --- Support (9.14) ------------------------------------------------------------------
+  SupportCalled,    // owner called call-in `unitType` on `at` (strike `amount`)
+  SupportReady,     // owner's call-in `unitType` has another charge (`amount` now)
+  FlakFire,         // an anti-aircraft gun of owner at `from` fires at a plane over `at` (`amount` 1: a ship's guns at `from`)
+  AircraftDown,     // a plane of owner's comes down at `at`
+  CrateTaken,       // owner's men took a supply crate at `at`: `amount` supplies
+  TroopsLanded,     // owner's men came ashore or down by parachute at `at`: `amount`
 };
 
 struct SimEvent {
@@ -336,6 +347,29 @@ class Simulation {
   uint8_t team(uint8_t player) const { return player < MAX_PLAYERS ? team_[player] : NEUTRAL_OWNER; }
   bool allied(uint8_t a, uint8_t b) const { return a == b || (a < MAX_PLAYERS && b < MAX_PLAYERS && team_[a] == team_[b]); }
   const SimStats& stats() const { return stats_; }
+
+  // --- Support from outside the battlefield (9.14, sim/support.hpp) ---------------------
+  const SupportRegistry& support() const { return types_.support(); }
+  const SupportState& supportState(uint8_t player, int power) const;
+  // Open to the side: a script said so, or (left to the rules) it has a structure the call-in requires.
+  bool supportOpen(uint8_t player, int power) const;
+  // Can the side call it on `at` now? If not, why ("not ready: recharging", "not enough supplies"...).
+  bool canCallSupport(uint8_t player, int power, Vec2i at, std::string* why = nullptr) const;
+  int32_t supportRechargeLeft(uint8_t player, int power) const;  // ticks until the next charge (0: full)
+  const std::vector<Strike>& strikes() const { return strikes_; }
+  const std::vector<SupplyCrate>& crates() const { return crates_; }
+  const std::vector<DownedPlane>& downedPlanes() const { return downed_; }
+  // Tiles from `at` to the open sea (deep water joined to the map's edge), -1 if none.
+  int32_t seaDistance(Vec2i at) const;
+  // A beach near `at` (land beside the open sea, within `rangeTiles`) and a point out at sea off it.
+  bool findLanding(Vec2i at, int32_t rangeTiles, Vec2i& sea, Vec2i& beach) const;
+  // Scripts.
+  void setSupportGate(uint8_t player, int power, SupportState::Gate g);
+  void setSupportCharges(uint8_t player, int power, int32_t charges);
+  // Planes for the look only (flyover, dogfight, crash), along `dir` (0,0: from owner's side). Returns the strike id.
+  uint32_t startSetPiece(SupportKind kind, uint8_t owner, Vec2i at, Vec2i dir, int planes, int seconds, AircraftRole role);
+  // Landing craft bring these units (type, count) ashore at the beach nearest `at`. 0 if there is no beach.
+  uint32_t scriptLanding(uint8_t owner, Vec2i at, const std::vector<std::pair<int, int>>& units);
 
   // --- Scenario script ----------------------------------------------------------
   // `keepProgress`: an edit during play keeps what has fired so far.
@@ -544,6 +578,20 @@ class Simulation {
   void stepVision();
   void rebuildGround();  // woodland and smoke on the vision's ground layer
 
+  // support (support.cpp)
+  void resetSupport();
+  void stepSupport();
+  void callSupport(const Command& cmd);
+  void stampSupportVision();
+  void rebuildSea() const;
+  Vec2i strikeHeading(uint8_t owner, Vec2i target);
+  void layFlight(Strike& s, Vec2i dir) const;
+  uint32_t launchStrike(int power, SupportKind kind, AircraftRole role, uint8_t owner, Vec2i target, Vec2i dir, int planes,
+                        int shots, int32_t speed, int32_t delay, int32_t value);
+  void supportEvent(EventType t, uint8_t owner, Vec2i at, int32_t amount, uint16_t unitType = 0);
+  void saveSupport(ByteWriter& w) const;
+  bool loadSupport(ByteReader& r);
+
   // economy and structures (economy.cpp)
   void occupy(uint32_t e, const UnitTypeDef& def, Vec2i origin);
   // Levels a new building's plot and eases the ground round it into the slope.
@@ -710,6 +758,33 @@ class Simulation {
   VisionRules visionRules_;
   std::vector<SmokeCloud> smoke_;
   Environment env_;
+  // Support (9.14).
+  std::vector<std::vector<SupportState>> support_;  // [player][call-in]
+  std::vector<Strike> strikes_;
+  std::vector<SupplyCrate> crates_;
+  std::vector<DownedPlane> downed_;
+  struct SupportReveal {
+    uint8_t owner = 0;
+    Vec2i at;
+    int16_t radius = 0;  // tiles
+    uint32_t until = 0;
+  };
+  std::vector<SupportReveal> supportReveals_;
+  struct PendingDrop {  // men under their parachutes
+    uint32_t tick = 0;
+    uint8_t owner = 0;
+    Vec2i at;
+    int32_t radius = 0;
+    int32_t first = 0, count = 0;  // which of the call-in's men (in its list) this plane carried
+    int32_t power = -1;
+    uint32_t strike = 0;
+  };
+  std::vector<PendingDrop> pendingDrops_;
+  std::map<uint32_t, std::vector<std::pair<int, int>>> landingUnits_;  // scripted landings: strike -> (type, count)
+  uint32_t nextStrikeId_ = 1;
+  std::array<std::vector<uint16_t>, MAX_PLAYERS> ownedTypes_;  // structures each side has, by type (scratch, once a second)
+  mutable std::vector<uint16_t> seaDist_;  // tiles to the open sea (scratch)
+  mutable uint32_t seaRevision_ = UINT32_MAX;
   bool groundDirty_ = true;       // the woodland layer must be worked out again
   uint32_t groundProps_ = 0;      // how many props the map had when it was
   std::vector<int32_t> tileHeights_;  // for line of sight: each tile's height at its middle (scratch)

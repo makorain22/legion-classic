@@ -174,6 +174,11 @@ TEST_CASE("a game saved with an older roster loads with its units renumbered by 
     list.erase(std::remove_if(list.begin(), list.end(), [](const nlohmann::json& e) { return e["faction"] == "gbr"; }),
                list.end());
   }
+  if (b.contains("support")) {  // and their call-ins
+    auto& list = b["support"];
+    list.erase(std::remove_if(list.begin(), list.end(), [](const nlohmann::json& e) { return e["faction"] == "gbr"; }),
+               list.end());
+  }
   WeaponRegistry oldWeapons;
   UnitTypeRegistry oldTypes;
   std::string err;

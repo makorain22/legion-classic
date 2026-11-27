@@ -57,6 +57,8 @@ enum class Kind : uint8_t {
   Goal,         // a goal of the mission model, by number
   TimeOfDay,    // a time of day, "hh:mm" (text)
   Weather,      // a kind of weather by id: clear, fair, overcast... (text)
+  Support,      // a call-in of the rules by id ("ger_stuka"), or "all" where the action allows (text)
+  UnitList,     // units and how many: "ger_rifleman*6, ger_halftrack" (text)
 };
 
 struct Field {

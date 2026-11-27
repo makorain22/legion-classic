@@ -502,6 +502,34 @@ True when a function of the mission's Lua script returns true.
 
 *Watch out:* The function is called three times a second while the trigger waits: keep it cheap, and don't change the world from it.
 
+### Support (call-ins)
+
+#### Call-in ready (`support_ready`)
+
+True while a side's call-in is open and has a charge ready to use.
+
+| Field | In files | Kind | What |
+| --- | --- | --- | --- |
+| Side | `player` | side 0-7 | Whose call-in. |
+| Call-in | `text` | call-in id | The call-in's id in the rules (buildings.json, "support"). |
+
+*Example:* Call-in ready 'ger_stuka' for side 0: tell the player the Stukas can be called.
+
+*Watch out:* Ready does not mean affordable: the side may still lack the supplies it costs.
+
+#### Call-in used (`support_used`)
+
+True once a side has called a call-in (or any, if left empty) this many times.
+
+| Field | In files | Kind | What |
+| --- | --- | --- | --- |
+| Side | `player` | side 0-7 | Whose call-ins. |
+| Call-in | `text` | call-in id or empty | The call-in's id, or empty for any. |
+| Times | `value` | number | At least this many calls. |
+
+*Example:* Call-in used 'gbr_typhoon' 1 time: the first rocket attack went in, carry on with the briefing.
+
+
 ## Actions
 
 ### Messages and story
@@ -1477,6 +1505,106 @@ The weather turns to another over some seconds: the light, the mist, rain or sno
 *Example:* Turn to 'rain' over 90 s when the attack begins; to 'mist' at once for a dawn crossing.
 
 *Watch out:* Only the look changes: units see and move as before. Rain and snow fall in the 3D view, as much as the player chooses (Settings > Display > Graphics quality > Rain and snow in the air).
+
+### Support (call-ins)
+
+#### Open or close a call-in (`support_enable`)
+
+Opens a call-in to a side, closes it, or leaves it to the rules (open while the side has the structure it needs, such as a liaison post).
+
+| Field | In files | Kind | What |
+| --- | --- | --- | --- |
+| Side | `player` | side 0-7 | Whose call-in. |
+| Call-in | `text` | call-in id | The call-in's id in the rules, or 'all' for every one. |
+| Open | `value` | closed/open/by the rules | Closed, open, or as the rules say. |
+
+*Example:* Open 'ger_stuka' for side 0 when the airfield is taken; close 'all' for side 1 during the opening.
+
+*Watch out:* Opening gives no charge by itself: charges come back over the call-in's recharge time, or set them with Set call-in charges.
+
+#### Set call-in charges (`support_charges`)
+
+Sets how many charges of a call-in a side holds (up to its most).
+
+| Field | In files | Kind | What |
+| --- | --- | --- | --- |
+| Side | `player` | side 0-7 | Whose call-in. |
+| Call-in | `text` | call-in id | The call-in's id in the rules, or 'all'. |
+| Charges | `value` | number | How many. |
+
+*Example:* Side 0 gets 2 charges of 'rus_il2' at the start of phase 2.
+
+*Watch out:* The call-in must also be open for the side to use them.
+
+#### Call in support (`support_call`)
+
+The call-in comes down on an area now, for a side: no supplies, no charge, whether open or not. For scripted bombardments, an air raid that opens the battle, paratroops dropping on a phase.
+
+| Field | In files | Kind | What |
+| --- | --- | --- | --- |
+| Side | `player` | side 0-7 | Whose planes or ships. |
+| Call-in | `text` | call-in id | The call-in's id in the rules. |
+| Area | `area` | area | The target. |
+
+*Example:* 'gbr_naval_guns' on 'Beach defences' for side 0 at the start of the landing.
+
+*Watch out:* The planes take a few seconds to arrive (their delay in the rules) and fly in from the side's side of the map. Flak still fires at them. Naval guns and landings need open sea within reach.
+
+#### Landing from the sea (`landing`)
+
+Landing craft come in from the open sea, beach near the area, put the units ashore and pull back.
+
+| Field | In files | Kind | What |
+| --- | --- | --- | --- |
+| Side | `player` | side 0-7 | Whose men. |
+| Area | `area` | area | Where to land (the nearest beach to it). |
+| Units | `text` | units: id*count, id*count | Unit types and how many, separated by commas: ger_rifleman*6, ger_halftrack. |
+
+*Example:* 'gbr_rifleman*12, gbr_bren*2, gbr_carrier*2' for side 0 near 'Gold Beach'.
+
+*Watch out:* There must be open sea (deep water joined to the map's edge) with a beach next to it within reach of the area. The units arrive with no orders: follow with Attack-move.
+
+#### Planes fly over (`flyover`)
+
+Planes fly over an area: the look and the sound of air power, nothing more.
+
+| Field | In files | Kind | What |
+| --- | --- | --- | --- |
+| Side | `player` | side 0-7 | Whose army they belong to (their look). |
+| Area | `area` | area | What they fly over. |
+| Planes | `value` | number | How many. |
+| Aircraft | `player2` | fighter/attack/bomber/transport/recon | Which planes: their look follows the side's army. |
+| From area | `area2` | area | Where they come from (or none: from the side's side of the map). |
+
+*Example:* 3 bombers of side 0 over 'Town' from 'Coast': the raid goes in somewhere ahead.
+
+
+#### Dogfight overhead (`dogfight`)
+
+Fighters fight over an area for a while: tracer, engines, a plane falling now and then. Only the look.
+
+| Field | In files | Kind | What |
+| --- | --- | --- | --- |
+| Side | `player` | side 0-7 | Whose army the friendly fighters belong to. |
+| Area | `area` | area | Where. |
+| Lasting | `value` | seconds | How long. |
+
+*Example:* A dogfight over 'Ridge' for 40 s while the attack begins.
+
+
+#### Plane comes down (`plane_crash`)
+
+A plane comes down in an area, trailing smoke, and burns where it falls. Only the look.
+
+| Field | In files | Kind | What |
+| --- | --- | --- | --- |
+| Side | `player` | side 0-7 | Whose plane (its look). |
+| Area | `area` | area | Where it falls. |
+| Aircraft | `player2` | fighter/attack/bomber/transport/recon | Which planes: their look follows the side's army. |
+| From area | `area2` | area | Where it flies in from (or none). |
+
+*Example:* A bomber of side 1 comes down in 'Wood' after the flak opens up.
+
 
 ## The mission model
 

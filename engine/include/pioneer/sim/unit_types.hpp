@@ -8,6 +8,7 @@
 
 #include <nlohmann/json_fwd.hpp>
 
+#include "pioneer/sim/support.hpp"
 #include "pioneer/sim/weapons.hpp"
 
 namespace pioneer {
@@ -101,9 +102,13 @@ class UnitTypeRegistry {
   const UnitTypeDef& get(int index) const { return types_[static_cast<size_t>(index)]; }
   size_t size() const { return types_.size(); }
   const std::vector<UnitTypeDef>& all() const { return types_; }
+  // Call-ins (9.14): the "support" list of buildings.json.
+  const SupportRegistry& support() const { return support_; }
+  SupportRegistry& support() { return support_; }
 
  private:
   std::vector<UnitTypeDef> types_;
+  SupportRegistry support_;
 };
 
 // Builds both registries from the three merged rule documents (weapons.json,

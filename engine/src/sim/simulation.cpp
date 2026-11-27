@@ -18,6 +18,7 @@ Simulation::Simulation(Map& map, const UnitTypeRegistry& types, const WeaponRegi
   map_.clearBlocks();  // structures re-mark their tiles as they are created
   tileStructure_.assign(static_cast<size_t>(map.width()) * map.height(), UINT32_MAX);
   cover_.assign(static_cast<size_t>(map.width()) * map.height(), 0);
+  resetSupport();
 }
 
 int32_t Simulation::maxRange(const UnitTypeDef& def) const {
@@ -209,6 +210,10 @@ void Simulation::tick() {
     stepScouts();
   }
   lap(stats_.msTargeting);
+  {
+    PNR_PROFILE("Sim: support");
+    stepSupport();  // call-ins: what they drop flies with the other projectiles this tick
+  }
   {
     PNR_PROFILE("Sim: weapons");
     stepWeapons();
@@ -430,6 +435,9 @@ void Simulation::applyCommandBody(const Command& cmd) {
       visionRules_.flags = static_cast<uint16_t>(cmd.count & (VisionRules::kWoodland | VisionRules::kLineOfSight));
       visionRules_.sightPercent = static_cast<uint16_t>(std::clamp(cmd.amount <= 0 ? 100 : cmd.amount, 10, 200));
       groundDirty_ = true;
+      break;
+    case CommandType::CallSupport:
+      callSupport(cmd);
       break;
     case CommandType::SetEnvironment:
       if (cmd.amount >= 0 || cmd.radius >= 0)

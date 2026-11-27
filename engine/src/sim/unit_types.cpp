@@ -217,6 +217,12 @@ bool loadRuleSet(const nlohmann::json& weapons, const nlohmann::json& units, con
     return false;
   }
   if (!t.resolveWeapons(w, error) || !t.resolveLinks(error)) return false;
+  if (!t.support().loadJson(buildings.is_object() && buildings.contains("support") ? buildings["support"] : nlohmann::json(),
+                            error) ||
+      !t.support().resolve(t, w, error)) {
+    error = "buildings.json: " + error;
+    return false;
+  }
   weaponsOut = std::move(w);
   typesOut = std::move(t);
   return true;

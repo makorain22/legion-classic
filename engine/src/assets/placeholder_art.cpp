@@ -603,6 +603,41 @@ VoxelModel makeMgNestGun(const FactionLook&) {
   return m;
 }
 
+// A light anti-aircraft gun: a pedestal mount, the barrel pointing at the sky (9.14).
+VoxelModel makeFlakGun(const FactionLook& look) {
+  VoxelModel m(12, 12, 10);
+  m.box(4, 4, 1, 8, 8, 2, STEEL_DARK);                 // cross base
+  m.box(5, 5, 2, 7, 7, 4, STEEL_DARK);                 // pedestal
+  m.box(4, 4, 4, 8, 8, 5, TANK_PAINT);                 // cradle and shield
+  for (int i = 0; i < 6; ++i) m.box(7 + i / 2, 5, 5 + i, 8 + i / 2, 7, 6 + i, i > 3 ? STEEL : STEEL_DARK);  // barrel, raised
+  if (!look.sloped) m.box(3, 4, 4, 4, 8, 7, TANK_PAINT_DARK);  // a flat shield behind the sights
+  m.box(3, 8, 1, 4, 9, 4, UNIFORM);                    // the layer, at his seat
+  m.box(3, 8, 4, 4, 9, 5, HELMET);
+  m.box(5, 5, 4, 7, 7, 5, TEAM);
+  return m;
+}
+
+// A liaison post: a sandbagged dugout, a radio truck's tent, a tall aerial and an
+// air-recognition panel pegged out on the grass for the pilots (9.14).
+VoxelModel makeAirPost(const FactionLook& look) {
+  VoxelModel m = makeAtGunPit(look);
+  m.box(6, 6, 1, 18, 18, 1, EARTH_DARK);
+  m.box(7, 7, 1, 16, 14, 4, CANVAS);                   // the tent
+  m.box(8, 8, 4, 15, 13, 5, CANVAS_DARK);
+  m.box(10, 9, 5, 13, 12, 6, CANVAS_DARK);
+  m.box(15, 15, 1, 18, 18, 3, WOOD);                   // radio sets on crates
+  m.box(15, 15, 3, 17, 17, 4, STEEL_DARK);
+  m.box(4, 18, 1, 5, 19, 14, STEEL_DARK);              // the aerial
+  m.box(3, 17, 13, 6, 20, 13, STEEL);
+  for (int i = 0; i < 6; ++i) {                        // recognition panel: a white cross
+    m.set(18 + i / 2, 3 + i / 2, 0, MARK_WHITE);
+    m.set(20 - i / 2 + 1, 3 + i / 2, 0, MARK_WHITE);
+  }
+  m.box(7, 15, 1, 9, 17, 6, WOOD_DARK);                // flagpole
+  m.box(9, 15, 5, 12, 16, 6, TEAM);
+  return m;
+}
+
 // A howitzer emplacement: a wide sandbag ring, shell cases and crates.
 VoxelModel makeHowitzerPit(const FactionLook& look) {
   VoxelModel m = makeAtGunPit(look);
@@ -965,6 +1000,8 @@ bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error, const ArtOption
   addStructure(ab, cat, "tower", &makeWatchtower);
   addStructure(ab, cat, "bunker", &makePillbox, &makePillboxGun, kFineStructureVoxel);
   addStructure(ab, cat, "atgun", &makeAtGunPit, &makeAtGun);
+  addStructure(ab, cat, "flak_pit", &makeMgNest, &makeFlakGun);
+  addStructure(ab, cat, "air_post", &makeAirPost);
   addStructure(ab, cat, "sandbags", &makeSandbagPiece, nullptr, kFineStructureVoxel);
   addStructure(ab, cat, "wire", &makeWirePiece, nullptr, kFineStructureVoxel);
   addStructure(ab, cat, "traps", &makeHedgehogPiece, nullptr, kFineStructureVoxel);
