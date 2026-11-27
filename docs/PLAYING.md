@@ -415,6 +415,21 @@ valuable thing among them. Chips can't be shot; send someone to look.
 Fortifications are bought and placed on the spot, a tile at a time; bunkers,
 guns and towers are built and placed like other structures.
 
+### Fire orders, counter-battery and alerts (9.15)
+
+- **Fire here** (V, or the button under the formations) shells a point
+  whether anything is seen there or not.
+- A gun firing **indirectly** (artillery, mortars and rockets: 12 tiles or
+  more) shows itself to every enemy for three seconds, flash and sound
+  giving it away, and the enemy's guns in range answer it.
+  A man hidden in woods who opens fire is seen for three seconds too.
+- When one man of a bound unit is hit, the whole unit answers.
+- **Under attack** away from where you are looking: a message, a red ring
+  on the minimap, and Ctrl+Space takes you there.
+- **Retreat** (H) pulls the selection back to the nearest construction
+  yard without stopping to fight.
+- Smoke rounds lay a cloud nobody sees through.
+
 ### Call-ins (Support tab)
 
 Build your army's **liaison post** (Luftwaffe Liaison Post, Air Army
@@ -637,6 +652,9 @@ These are the defaults:
 | Alt+right click | Forced march (don't stop to fight) |
 | W A S D, arrow keys, screen edges | Scroll |
 | Ctrl+A, then left click (or F) | Attack-move to that point (Esc or right click cancels) |
+| V, then left click | Fire at the ground there: a wood, a crossroads, a chip in the fog (guns move into range and keep firing until given another order) |
+| H | Retreat: back to the nearest construction yard at a forced march |
+| Ctrl+Space (or J) | Go to the last place you were attacked (again: the one before) |
 | Ctrl+S (or X) | Stop |
 | E (or Ctrl+E) | Evacuate: the selected men climb out of their trench or from behind their sandbags |
 | Ctrl+D (or G) | Deploy a construction truck |

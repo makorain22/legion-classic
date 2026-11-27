@@ -39,7 +39,8 @@ namespace pioneer {
 
 constexpr int TICKS_PER_SECOND = 15;
 constexpr int MAX_PLAYERS = 8;
-constexpr uint8_t NEUTRAL_OWNER = 255;  // owner of editor strikes: hurts everyone
+constexpr uint8_t NEUTRAL_OWNER = 255;
+constexpr uint32_t kRevealTicks = 45;  // a shot gives the shooter away this long (9.15)  // owner of editor strikes: hurts everyone
 
 enum class CommandType : uint8_t {
   Move,        // units -> target
@@ -84,6 +85,10 @@ enum class CommandType : uint8_t {
   // --- Support from outside the battlefield (9.14) -------------------------------------
   CallSupport,    // player calls call-in `unitType` (SupportRegistry index) on `target`; with `amount` 1 the planes
                   // fly along the Angle `facing`, else from the player's side of the map
+  // --- Combat and controls (9.15) ---------------------------------------------------------
+  AttackGround,   // `units` keep firing at the point `target` (artillery on a chip, a wood, a crossroads)
+  Retreat,        // `units` fall back to their side's nearest construction yard (else any of its buildings) at a
+                  // forced march, not stopping to fight
 };
 
 // Production lines: one per kind of thing a side builds.
@@ -210,6 +215,9 @@ enum class EventType : uint8_t {
   CrateTaken,       // owner's men took a supply crate at `at`: `amount` supplies
   TroopsLanded,     // owner's men came ashore or down by parachute at `at`: `amount`
   ChutesOpen,       // owner's paratroopers jump over `at`: `amount` men, spread over `weapon` leptons (the look)
+  // --- Combat and controls (9.15) ---------------------------------------------------------
+  UnderAttack,      // owner's unit or building (`unitType`) is hit by the enemy at `at`; at most one every few
+                    // seconds for each side and place (the alert)
 };
 
 struct SimEvent {
@@ -565,6 +573,7 @@ class Simulation {
   void releaseFormation(CFormation& f);
   void reactToFire(uint32_t ei, CCombat& c, CUnit& u, const CPosition& p, COrder& o);
   void setOrderIdle(Entity e);
+  void retreat(const std::vector<Entity>& units);
   void applyEdit(const UnitEdit& ed);
 
   // movement (movement.cpp)
@@ -802,6 +811,9 @@ class Simulation {
   std::vector<MissionMarker> markers_;
   std::map<std::string, int32_t> counters_;
   std::array<int32_t, MAX_PLAYERS> kills_{}, losses_{};
+  // The under-attack alert's pace (9.15): presentation only, not saved.
+  std::array<uint32_t, MAX_PLAYERS> alertTick_{};
+  std::array<Vec2i, MAX_PLAYERS> alertAt_{};
   std::array<int32_t, MAX_PLAYERS> incomeRate_{100, 100, 100, 100, 100, 100, 100, 100};
   std::array<bool, MAX_PLAYERS> cinematic_{};
   uint8_t difficulty_ = 1;

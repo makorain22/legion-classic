@@ -402,6 +402,14 @@ void Sidebar::drawMinimap(float width) {
   const ImVec2 c = toMini(scene_.groundAt({vw, vh})), d = toMini(scene_.groundAt({0, vh}));
   dl->PushClipRect(p0, ImVec2(p0.x + mw, p0.y + mh), true);
   dl->AddQuad(a, b, c, d, IM_COL32(240, 230, 190, 220), 1.0f);
+  // Where we are under attack (9.15): red rings closing in, for ten seconds.
+  for (const auto& [at, age] : scene_.recentAlerts()) {
+    if (age > 10.0f) continue;
+    const ImVec2 m = toMini(at);
+    const float k = std::fmod(age, 1.25f) / 1.25f;
+    dl->AddCircle(m, 4.0f + (1.0f - k) * 14.0f, IM_COL32(240, 70, 50, static_cast<int>(230 * (1.0f - age / 10.0f))), 0, 2.0f);
+    dl->AddCircleFilled(m, 2.5f, IM_COL32(255, 90, 60, 230));
+  }
   dl->PopClipRect();
   dl->AddRect(ImVec2(p0.x - 1, p0.y - 1), ImVec2(p0.x + mw + 1, p0.y + mh + 1), IM_COL32(110, 100, 70, 255));
 
@@ -729,6 +737,14 @@ void Sidebar::drawOrders(float width) {
     scene_.evacuateSelection();
   if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
     ImGui::SetTooltip("Men in trenches stay dug in until evacuated; men in buildings come out too (E).");
+  ImGui::SameLine(0, 4);
+  const bool canFire = scene_.selectionCanFire();
+  const bool fireClicked = ui::plateButton("fireground", "Fire here", ImVec2(bw, bh), scene_.attackGroundMode(), false, canFire);
+  ui::glowIfHighlighted("order.fireground");
+  if (fireClicked) scene_.startAttackGround();
+  if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+    ImGui::SetTooltip("Fire at a point, seen or not: a wood, a crossroads, a chip in the fog (V, then click). Guns keep "
+                      "firing there until given another order.");
   const bool sellClicked = ui::plateButton("sell", sellMode_ ? "Selling" : "Sell", ImVec2(bw, bh), sellMode_);
   ui::glowIfHighlighted("order.sell");
   if (sellClicked) {
@@ -737,7 +753,13 @@ void Sidebar::drawOrders(float width) {
   }
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Click your structures to sell them for half their cost. Esc stops.");
   ImGui::SameLine(0, 4);
-  const bool encyclopediaClicked = ui::plateButton("book", "Encyclopedia", ImVec2(bw * 2 + 4, bh));
+  const bool retreatClicked = ui::plateButton("retreat", "Retreat", ImVec2(bw, bh), false, false, scene_.selectionCanFire());
+  ui::glowIfHighlighted("order.retreat");
+  if (retreatClicked) scene_.retreatSelection();
+  if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+    ImGui::SetTooltip("Fall back to the nearest construction yard at a forced march, not stopping to fight (H).");
+  ImGui::SameLine(0, 4);
+  const bool encyclopediaClicked = ui::plateButton("book", "Encyclopedia", ImVec2(bw, bh));
   ui::glowIfHighlighted("order.encyclopedia");
   if (encyclopediaClicked) scene_.openEncyclopedia(hoveredType_ >= 0 ? hoveredType_ : -1);
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Every unit and building, with its weapons and numbers (K).");

@@ -47,7 +47,8 @@ struct CUnit {
 // touched carry the component. It is saved, and counts in the state checksum.
 enum class Posture : uint8_t { Standing = 0, Crouched, Prone, Pinned, HandsUp, Cowering, Count };
 struct CCondition {
-  enum : uint8_t { kHidden = 1, kAmbush = 2, kRouting = 4, kSurrendered = 8 };
+  // kGunFlash (9.15): `revealedTick` was a shot of indirect fire, which shows the gun to every enemy for a while.
+  enum : uint8_t { kHidden = 1, kAmbush = 2, kRouting = 4, kSurrendered = 8, kGunFlash = 16 };
   uint16_t suppression = 0;  // 0 calm .. 1000 pinned
   uint16_t morale = 1000;    // 1000 steady .. 0 broken
   Posture posture = Posture::Standing;
@@ -101,7 +102,8 @@ struct CTurret {
   uint8_t wait = 0;
 };
 
-enum class OrderType : uint8_t { Idle = 0, Move, AttackMove, Attack, Harvest, Repair, Occupy };
+// AttackGround (9.15): keep firing at the point `goal` (moving into range first).
+enum class OrderType : uint8_t { Idle = 0, Move, AttackMove, Attack, Harvest, Repair, Occupy, AttackGround };
 
 struct COrder {
   OrderType type = OrderType::Idle;

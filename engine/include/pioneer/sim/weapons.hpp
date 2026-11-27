@@ -51,6 +51,10 @@ struct WeaponDef {
   std::string sound;         // presentation: the firing sound (content/audio/audio.json), "" = by kind
   std::string impact;        // presentation: the sound where it lands, "" = by warhead
   bool antiAir = false;      // flak: also fires at aircraft overhead (call-ins, 9.14)
+  int32_t smoke = 0;         // seconds: the round lays a smoke cloud where it lands, as wide as its splash (9.15)
+  // Indirect fire: shells that reach 12 tiles or more (artillery, mortars, rockets). Firing gives the gun away to
+  // the enemy for three seconds (flash spotting and sound ranging): counter-battery fire (9.15).
+  bool indirect() const { return projectile == ProjectileKind::Shell && range >= 12 * 256; }
 };
 
 class WeaponRegistry {

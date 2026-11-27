@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.4 – in progress (Milestone 9.15: combat and controls)
+
+- **Part 1, fire orders** (27 Nov): **fire at the ground** (V, or *Fire
+  here*): guns move into range of a point and keep shelling it, seen or not.
+  **Counter-battery:** a gun firing indirectly (12 tiles or more) is shown to
+  every enemy for three seconds and their guns in range answer; men hidden in
+  woods who open fire give themselves away likewise. A bound unit answers
+  together when one of it is hit. **Under-attack alert** (off-screen fights:
+  a message, a ring on the minimap, Ctrl+Space or J to go there). **Retreat**
+  (H): back to the nearest construction yard at a forced march. Weapons may
+  fire **smoke** (`"smoke": seconds`), laying a cloud as wide as their burst.
+
 ## 0.9.3 – in progress (Milestone 9.14: air and naval support)
 
 - **Call-ins** (27 Nov, part 1: the rules and the simulation). Aircraft are

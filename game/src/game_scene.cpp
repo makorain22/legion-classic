@@ -279,6 +279,46 @@ void GameScene::evacuateSelection() {
   queueOrder(std::move(c));
 }
 
+bool GameScene::selectionCanFire() const {
+  Registry& reg = sim_->registry();
+  for (Entity e : selection_)
+    if (reg.alive(e) && reg.has<CCombat>(e) && reg.get<CUnit>(e).owner == player_ &&
+        !types_.get(reg.get<CUnit>(e).type).weapons.empty())
+      return true;
+  return false;
+}
+
+void GameScene::startAttackGround() {
+  pruneSelection();
+  attackGroundMode_ = selectionCanFire();
+  attackMoveMode_ = false;
+  if (sidebar_) sidebar_->cancel();
+}
+
+void GameScene::retreatSelection() {
+  pruneSelection();
+  if (selection_.empty()) return;
+  Command c;
+  c.type = CommandType::Retreat;
+  c.player = player_;
+  c.units = selection_;
+  queueOrder(std::move(c));
+  showStatus("Falling back", 2);
+  if (audio_) audio_->onOrder(false, 0, 0, 0, 0);
+}
+
+void GameScene::jumpToAlert() {
+  if (alerts_.empty()) {
+    showStatus("No recent attacks", 1.5f);
+    return;
+  }
+  // Newest first; pressing again goes to the one before.
+  const Alert a = alerts_.back();
+  alerts_.pop_back();
+  alerts_.insert(alerts_.begin(), a);
+  centerOn({static_cast<int32_t>(a.at.x), static_cast<int32_t>(a.at.y)});
+}
+
 bool GameScene::selectionCanEvacuate() const {
   Registry& reg = sim_->registry();
   for (Entity e : selection_) {
@@ -1450,6 +1490,19 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
       if (uiMouse) break;
       if (e.button.button == SDL_BUTTON_LEFT) {
+        if (attackGroundMode_) {
+          attackGroundMode_ = false;
+          pruneSelection();
+          Command c;
+          c.type = CommandType::AttackGround;
+          c.player = player_;
+          c.units = selection_;
+          c.target = mouseWorldLeptons();
+          queueOrder(std::move(c));
+          orderSound(true);
+          markers_.push_back({{static_cast<float>(c.target.x), static_cast<float>(c.target.y)}, 0, kAttackRed});
+          break;
+        }
         if (attackMoveMode_) {
           attackMoveMode_ = false;
           const Entity hit = pickUnit(mouse_, false);
@@ -1461,8 +1514,8 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
         dragging_ = false;
         dragStart_ = mouse_;
       } else if (e.button.button == SDL_BUTTON_RIGHT) {
-        if (attackMoveMode_) {
-          attackMoveMode_ = false;
+        if (attackMoveMode_ || attackGroundMode_) {
+          attackMoveMode_ = attackGroundMode_ = false;
           break;
         }
         // Decided on release: a click orders, a drag lays out a formation front.
@@ -1536,12 +1589,19 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
       if (K.pressed(InputAction::Menu, e.key)) {
         if (k == SDLK_ESCAPE && encyclopedia_->isOpen()) encyclopedia_->close();
         else if (k == SDLK_ESCAPE && formationPicker_) formationPicker_ = false;
-        else if (k == SDLK_ESCAPE && attackMoveMode_) attackMoveMode_ = false;
+        else if (k == SDLK_ESCAPE && (attackMoveMode_ || attackGroundMode_)) attackMoveMode_ = attackGroundMode_ = false;
         else if (k == SDLK_ESCAPE && !selection_.empty()) selection_.clear();
         else menus_->openInGameMenu();
       } else if (K.pressed(InputAction::AttackMove, e.key)) {
         pruneSelection();
         attackMoveMode_ = !selection_.empty();
+        attackGroundMode_ = false;
+      } else if (K.pressed(InputAction::AttackGround, e.key)) {
+        startAttackGround();
+      } else if (K.pressed(InputAction::Retreat, e.key)) {
+        retreatSelection();
+      } else if (K.pressed(InputAction::LastAlert, e.key)) {
+        jumpToAlert();
       } else if (K.pressed(InputAction::Help, e.key)) {
         showHelp_ = !showHelp_;
       } else if (K.pressed(InputAction::Encyclopedia, e.key)) {
@@ -1862,6 +1922,25 @@ void GameScene::announce(const SimEvent& ev) {
       else showStatus("Can't build " + d.name + " there", 2.5f);
       break;
     }
+    case EventType::UnderAttack: {
+      if (ev.owner != player_ || mode_ != Mode::Game) break;
+      const Vec2f at{static_cast<float>(ev.at.x), static_cast<float>(ev.at.y)};
+      // A fight already flagged close by: just bring it up to date.
+      for (Alert& a : alerts_)
+        if (std::hypot(a.at.x - at.x, a.at.y - at.y) < 20.0f * LEPTONS_PER_TILE) {
+          a = {at, 0};
+          return;
+        }
+      alerts_.push_back({at, 0});
+      if (alerts_.size() > 8) alerts_.erase(alerts_.begin());
+      // Said only when the fight is off screen: on screen you can see it.
+      if (!watching(ev.at.x, ev.at.y)) {
+        const UnitTypeDef& d = types_.get(ev.unitType);
+        showStatus(std::string(d.isStructure() ? "Our base is under attack" : "Our units are under attack") + "  (Ctrl+Space: go there)", 3);
+        if (audio_) audio_->ui("ui_denied");
+      }
+      break;
+    }
     case EventType::PointCaptured:
       if (mode_ != Mode::Game) break;
       if (ev.owner == player_) showStatus("Logistics point taken: the office is up and three supply trucks are on their way", 4);
@@ -2069,10 +2148,12 @@ void GameScene::onUpdate(float dt, float alpha) {
   updateCursor();
 
   for (Marker& m : markers_) m.age += dt;
-  if (attackMoveMode_) {
+  if (attackMoveMode_ || attackGroundMode_) {
     pruneSelection();
-    if (selection_.empty()) attackMoveMode_ = false;
+    if (selection_.empty()) attackMoveMode_ = attackGroundMode_ = false;
   }
+  for (Alert& a : alerts_) a.age += dt;
+  std::erase_if(alerts_, [](const Alert& a) { return a.age > 60.0f; });
   std::erase_if(markers_, [](const Marker& m) { return m.age > (m.slot ? 1.2f : 0.6f); });
   for (Floater& f : floaters_) f.age += dt;
   std::erase_if(floaters_, [](const Floater& f) { return f.age > 2.2f; });
@@ -2585,7 +2666,7 @@ void GameScene::drawHealthBar(uint32_t e, bool selected) {
 
 void GameScene::updateCursor() {
   if (!cursorCross_) return;
-  bool cross = attackMoveMode_;
+  bool cross = attackMoveMode_ || attackGroundMode_;
   if (!cross && !selection_.empty() && hovered_.valid() && sim_->registry().alive(hovered_))
     cross = sim_->registry().get<CUnit>(hovered_).owner != player_;
   if (cross != crossShown_) {
@@ -2761,7 +2842,7 @@ void GameScene::drawObjectives() {
 
 void GameScene::drawHud() {
   const bool editing = editor_->active();
-  const bool transient = paused_ || speed_ != 1.0f || attackMoveMode_ || statusTime_ > 0;
+  const bool transient = paused_ || speed_ != 1.0f || attackMoveMode_ || attackGroundMode_ || statusTime_ > 0;
   if (!settings_.showInfoPanel && !transient) {
     hudBottom_ = 8;
     return;
@@ -2786,6 +2867,7 @@ void GameScene::drawHud() {
   if (paused_) ImGui::TextColored(ImVec4(1, 0.6f, 0.3f, 1), "PAUSED (Space)");
   else if (speed_ != 1.0f) ImGui::TextColored(ImVec4(1, 0.85f, 0.4f, 1), "Speed x%.2g", speed_);
   if (attackMoveMode_) ImGui::TextColored(ImVec4(1, 0.45f, 0.35f, 1), "ATTACK-MOVE: left-click a destination (Esc cancels)");
+  if (attackGroundMode_) ImGui::TextColored(ImVec4(1, 0.45f, 0.35f, 1), "FIRE AT GROUND: left-click a point (Esc cancels)");
   if (statusTime_ > 0) ImGui::TextColored(ImVec4(0.6f, 0.95f, 0.6f, 1), "%s", status_.c_str());
   if (settings_.showInfoPanel)
     ImGui::TextDisabled(editing ? "F2 close editor   F1 help   I hide" : "F2 editor   F1 help   F3 debug   I hide");

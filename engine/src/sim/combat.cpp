@@ -17,6 +17,10 @@ void Simulation::stepTargeting() {
       c.target = (reg_.alive(o.target) && units.has(o.target.index)) ? o.target : kNullEntity;
       return;
     }
+    if (o.type == OrderType::AttackGround) {  // firing at a point: nothing else (stepWeapons)
+      c.target = kNullEntity;
+      return;
+    }
     if ((tick_ + ei) % 4 != 0) return;  // scan for targets 4 times a second, staggered
 
     const UnitTypeDef& def = types_.get(u.type);
@@ -74,7 +78,9 @@ void Simulation::reactToFire(uint32_t ei, CCombat& c, CUnit& u, const CPosition&
   const Entity attacker = c.hurtBy;
   c.hurtBy = kNullEntity;  // handled once per hit
   if (tick_ - c.hurtTick > 30 || !reg_.alive(attacker) || !reg_.has<CUnit>(attacker)) return;
-  if (o.forced || u.stance != Stance::Aggressive || o.type == OrderType::Attack || o.type == OrderType::Harvest) return;
+  if (o.forced || u.stance != Stance::Aggressive || o.type == OrderType::Attack || o.type == OrderType::Harvest ||
+      o.type == OrderType::AttackGround)
+    return;
   const UnitTypeDef& def = types_.get(u.type);
   if (def.speed <= 0 || def.scout) return;  // scouts fall back instead (stepScouts)
   const CPosition& ap = reg_.get<CPosition>(attacker);
@@ -93,6 +99,7 @@ void Simulation::stepWeapons() {
   auto& units = reg_.pool<CUnit>();
   auto& pos = reg_.pool<CPosition>();
   auto& turrets = reg_.pool<CTurret>();
+  auto& orders = reg_.pool<COrder>();
   struct Shot {
     uint32_t shooter;
     int weapon;
@@ -109,12 +116,15 @@ void Simulation::stepWeapons() {
         const UnitTypeDef& def = types_.get(u.type);
         CTurret* t = turrets.tryGet(ei);
 
-        if (!c.target.valid() || !reg_.alive(c.target) || !units.has(c.target.index)) {
+        // Firing at a point (9.15): the ground, with the rounds one uses on men in the open.
+        const COrder* ord = orders.tryGet(ei);
+        const bool ground = ord && ord->type == OrderType::AttackGround;
+        if (!ground && (!c.target.valid() || !reg_.alive(c.target) || !units.has(c.target.index))) {
           if (t) turnToward(t->angle, f.angle, t->wait, def.turretTurnTicks);  // turret back to the front
           return;
         }
-        const CPosition& tp = pos.get(c.target.index);
-        const Angle desired = atan2Angle(tp.y - p.y, tp.x - p.x);
+        const Vec2i aim = ground ? ord->goal : Vec2i{pos.get(c.target.index).x, pos.get(c.target.index).y};
+        const Angle desired = atan2Angle(aim.y - p.y, aim.x - p.x);
         bool aligned;
         if (t) {
           aligned = turnToward(t->angle, desired, t->wait, def.turretTurnTicks);
@@ -122,10 +132,11 @@ void Simulation::stepWeapons() {
           if (m.active) return;  // no turret: must stop to fire
           aligned = turnToward(f.angle, desired, f.turnWait, def.turnTicks);
         }
-        if (!aligned || !unitVisibleTo(u.owner, c.target.index)) return;
+        if (!aligned || (!ground && !unitVisibleTo(u.owner, c.target.index))) return;
 
-        const uint32_t d = static_cast<uint32_t>(effectiveDistance(distance(tp.x - p.x, tp.y - p.y), c.target.index));
-        const ArmorClass armor = types_.get(units.get(c.target.index).type).armor;
+        const uint32_t d = ground ? distance(aim.x - p.x, aim.y - p.y)
+                                  : static_cast<uint32_t>(effectiveDistance(distance(aim.x - p.x, aim.y - p.y), c.target.index));
+        const ArmorClass armor = ground ? ArmorClass::Infantry : types_.get(units.get(c.target.index).type).armor;
         for (size_t slot = 0; slot < def.weapons.size(); ++slot) {
           const int w = weapons_.forTarget(def.weapons[slot], armor);
           const WeaponDef& wd = weapons_.get(w);
@@ -136,7 +147,7 @@ void Simulation::stepWeapons() {
           const int32_t per = 100 + fireRateBonus(u.owner, p.x, p.y);
           const int32_t dither = per > 100 ? static_cast<int32_t>(hash32(tick_ * 2654435761u + ei * 40503u + static_cast<uint32_t>(slot)) % static_cast<uint32_t>(per)) : 0;
           c.cooldown[slot] = static_cast<uint16_t>(std::max(1, (wd.cooldown * 100 + dither) / per));
-          shots.push_back({ei, w, {p.x, p.y}, {tp.x, tp.y}, c.target});
+          shots.push_back({ei, w, {p.x, p.y}, aim, ground ? kNullEntity : c.target});
         }
       });
 
@@ -151,8 +162,16 @@ void Simulation::stepWeapons() {
     fire.from = s.from;
     fire.at = s.at;
     events_.push_back(fire);
+    // Firing gives the shooter away (9.15): a gun firing indirectly to every enemy, for a few seconds (counter-battery
+    // fire answers it); a man hidden in the woods to those who can see the spot.
+    if (wd.indirect() || concealed(s.shooter)) {
+      CCondition& cond = conditionOf(reg_.handle(s.shooter));
+      cond.revealedTick = tick_;
+      if (wd.indirect()) cond.flags |= CCondition::kGunFlash;
+      else cond.flags &= static_cast<uint8_t>(~CCondition::kGunFlash);
+    }
     if (wd.projectile == ProjectileKind::Instant) {
-      if (static_cast<int32_t>(rng_.below(100)) < wd.accuracy) {
+      if (s.target.valid() && static_cast<int32_t>(rng_.below(100)) < wd.accuracy) {
         impact(s.weapon, owner, s.at, s.target, s.from, reg_.handle(s.shooter));
       } else {
         const Vec2i miss{s.at.x + rng_.range(-110, 110), s.at.y + rng_.range(-110, 110)};
@@ -283,6 +302,10 @@ void Simulation::impact(int weapon, uint8_t owner, Vec2i at, Entity directTarget
       hit = true;
     }
   }
+  // Smoke rounds (9.15) lay a cloud as wide as their burst.
+  if (wd.smoke > 0 && smoke_.size() < 256)
+    smoke_.push_back({at, std::clamp(std::max(wd.splash * 2, 2 * LEPTONS_PER_TILE), 256, 8 * LEPTONS_PER_TILE),
+                      tick_ + static_cast<uint32_t>(wd.smoke) * TICKS_PER_SECOND});
   // A heavy shell landing on river ice breaks it (9.11): artillery and the big
   // guns' high explosive, rocket salvoes. Whatever stood on that tile goes through.
   if (wd.splash >= 256) {
@@ -316,11 +339,37 @@ void Simulation::damage(uint32_t victim, int32_t amount, Entity shooter) {
   }
   // Remember who is shooting at us, so we can answer.
   if (shooter.valid() && reg_.alive(shooter) && reg_.has<CUnit>(shooter) &&
-      !allied(reg_.get<CUnit>(shooter).owner, u.owner))
+      !allied(reg_.get<CUnit>(shooter).owner, u.owner)) {
     if (CCombat* c = reg_.pool<CCombat>().tryGet(victim)) {
       c->hurtBy = shooter;
       c->hurtTick = tick_;
     }
+    // The rest of its unit hears it too and answers as if hit (9.15).
+    if (const CGroup* g = groupOf(reg_.handle(victim)))
+      for (Entity m : g->members) {
+        if (m.index == victim || !reg_.alive(m)) continue;
+        if (CCombat* mc = reg_.pool<CCombat>().tryGet(m.index); mc && (!mc->hurtBy.valid() || tick_ - mc->hurtTick > 30)) {
+          mc->hurtBy = shooter;
+          mc->hurtTick = tick_;
+        }
+      }
+    // The alert (9.15): at most one every eight seconds for a side, sooner for a fight somewhere else.
+    const CPosition& vp = reg_.pool<CPosition>().get(victim);
+    if (u.owner < MAX_PLAYERS && vd.category != UnitCategory::Fortification) {
+      const uint32_t since = tick_ - alertTick_[u.owner];
+      const bool elsewhere = distance(vp.x - alertAt_[u.owner].x, vp.y - alertAt_[u.owner].y) > 20u * LEPTONS_PER_TILE;
+      if (alertTick_[u.owner] == 0 || since >= 8 * TICKS_PER_SECOND || (elsewhere && since >= 2 * TICKS_PER_SECOND)) {
+        alertTick_[u.owner] = tick_ ? tick_ : 1;
+        alertAt_[u.owner] = {vp.x, vp.y};
+        SimEvent al;
+        al.type = EventType::UnderAttack;
+        al.owner = u.owner;
+        al.unitType = u.type;
+        al.at = {vp.x, vp.y};
+        events_.push_back(al);
+      }
+    }
+  }
   const int64_t total = static_cast<int64_t>(amount) + u.damageFrac;
   const int64_t whole = total / 100;
   u.damageFrac = static_cast<uint8_t>(total % 100);

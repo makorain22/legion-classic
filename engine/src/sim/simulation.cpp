@@ -246,6 +246,54 @@ void Simulation::setOrderIdle(Entity e) {
   if (auto* c = reg_.tryGet<CCombat>(e)) c->target = kNullEntity;
 }
 
+// Retreat (9.15): each side's men in the order fall back together to the
+// nearest construction yard of theirs (else the nearest building; else they
+// stay), on a forced march.
+void Simulation::retreat(const std::vector<Entity>& units) {
+  std::map<uint8_t, std::vector<Entity>> bySide;
+  for (Entity e : units)
+    if (reg_.alive(e) && reg_.has<CUnit>(e) && reg_.has<COrder>(e) && types_.get(reg_.get<CUnit>(e).type).speed > 0 &&
+        !reg_.has<CGarrisoned>(e))
+      bySide[reg_.get<CUnit>(e).owner].push_back(e);
+  for (auto& [side, men] : bySide) {
+    int64_t cx = 0, cy = 0;
+    for (Entity e : men) {
+      const CPosition& p = reg_.get<CPosition>(e);
+      cx += p.x;
+      cy += p.y;
+    }
+    const Vec2i centre{static_cast<int32_t>(cx / static_cast<int64_t>(men.size())), static_cast<int32_t>(cy / static_cast<int64_t>(men.size()))};
+    Vec2i home{-1, -1};
+    uint32_t best = UINT32_MAX;
+    bool bestYard = false;
+    for (uint32_t s : reg_.pool<CStructure>().entities()) {
+      const CUnit& u = reg_.pool<CUnit>().get(s);
+      if (u.owner != side) continue;
+      const UnitTypeDef& d = types_.get(u.type);
+      if (d.category == UnitCategory::Fortification) continue;
+      const bool yard = d.role == "yard";
+      const CPosition& p = reg_.pool<CPosition>().get(s);
+      const uint32_t dist = distance(p.x - centre.x, p.y - centre.y);
+      if ((yard && !bestYard) || (yard == bestYard && dist < best)) {
+        best = dist;
+        bestYard = yard;
+        // Stop short of it, on the side we come from.
+        const int32_t back = static_cast<int32_t>(std::min<uint32_t>(dist, (d.footW + 3) * LEPTONS_PER_TILE));
+        home = {p.x + static_cast<int32_t>(static_cast<int64_t>(centre.x - p.x) * back / std::max<uint32_t>(1, dist)),
+                p.y + static_cast<int32_t>(static_cast<int64_t>(centre.y - p.y) * back / std::max<uint32_t>(1, dist))};
+      }
+    }
+    if (home.x < 0) continue;
+    Command c;
+    c.type = CommandType::Move;
+    c.player = side;
+    c.units = men;
+    c.target = home;
+    c.forced = true;
+    orderMove(men, home, OrderType::Move, c);
+  }
+}
+
 void Simulation::applyCommand(const Command& cmd) {
   // What humans do, for tutorials waiting on an order (replays count the same).
   if (cmd.player < MAX_PLAYERS && !ai_.player(cmd.player).enabled && !scriptCommand_ && static_cast<size_t>(cmd.type) < 32)
@@ -332,6 +380,22 @@ void Simulation::applyCommandBody(const Command& cmd) {
     case CommandType::Stop:
       for (Entity e : cmd.units)
         if (reg_.alive(e)) setOrderIdle(e);
+      break;
+    case CommandType::AttackGround: {
+      const Vec2i at{std::clamp(cmd.target.x, 0, map_.widthLeptons() - 1), std::clamp(cmd.target.y, 0, map_.heightLeptons() - 1)};
+      for (Entity e : cmd.units) {
+        if (!reg_.alive(e) || !reg_.has<CCombat>(e) || !reg_.has<COrder>(e)) continue;
+        if (types_.get(reg_.get<CUnit>(e).type).weapons.empty()) continue;
+        setOrderIdle(e);
+        COrder& o = reg_.get<COrder>(e);
+        o.type = OrderType::AttackGround;
+        o.goal = at;
+        reg_.get<CCombat>(e).target = kNullEntity;
+      }
+      break;
+    }
+    case CommandType::Retreat:
+      retreat(cmd.units);
       break;
     case CommandType::Spawn: {
       if (cmd.unitType >= types_.size()) break;

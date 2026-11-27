@@ -234,6 +234,18 @@ class GameScene final : public pioneer::Scene {
   void openEncyclopedia(int type = -1);
   void evacuateSelection();
   bool selectionCanEvacuate() const;
+  // Combat orders (9.15).
+  bool selectionCanFire() const;  // something selected that is ours and armed
+  void startAttackGround();       // the next left click fires at the ground there
+  bool attackGroundMode() const { return attackGroundMode_; }
+  void retreatSelection();
+  void jumpToAlert();             // the camera to the last place we were attacked
+  // Recent attacks on our side: ground point (leptons) and seconds since (the minimap pings them).
+  std::vector<std::pair<pioneer::Vec2f, float>> recentAlerts() const {
+    std::vector<std::pair<pioneer::Vec2f, float>> out;
+    for (const Alert& a : alerts_) out.push_back({a.at, a.age});
+    return out;
+  }
   const pioneer::WeaponRegistry& weapons() const { return weapons_; }
   pioneer::SpriteRenderer& renderer() { return renderer_; }
   BattleFx& fx() { return fx_; }
@@ -721,6 +733,13 @@ class GameScene final : public pioneer::Scene {
   bool quit_ = false;
   bool showHelp_ = true, showDebug_ = false;
   bool attackMoveMode_ = false;  // "A": next left click attack-moves
+  bool attackGroundMode_ = false;  // "V": next left click fires at the ground (9.15)
+  // Under-attack alerts (9.15): where, and how long ago (seconds), newest last.
+  struct Alert {
+    pioneer::Vec2f at;
+    float age = 0;
+  };
+  std::vector<Alert> alerts_;
   bool revealMap_ = false;       // debug: no fog of war
   bool allHealthBars_ = false;   // debug: health bars on every damaged unit
   pioneer::Entity hovered_;

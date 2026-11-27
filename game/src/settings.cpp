@@ -15,7 +15,8 @@ const char* actionLabel(InputAction a) {
                                 "Evacuate (leave trenches and buildings)",
                                 "Turn the view left", "Turn the view right", "Tilt the view up", "Tilt the view down",
                                 "Reset the view", "Next formation for the selection", "Radio log (mission messages)", "Range circles: selection / all units / off",
-                                "Developer console", "Profiler (where the time goes)"};
+                                "Developer console", "Profiler (where the time goes)",
+                                "Fire at the ground (then click)", "Retreat to base", "Go to the last attack"};
   return names[static_cast<int>(a)];
 }
 
@@ -69,6 +70,9 @@ void Settings::resetKeys() {
   set(InputAction::RangeRings, {SDLK_T, 0});
   set(InputAction::Console, {SDLK_GRAVE, 0}, {SDLK_F9, 0});
   set(InputAction::Profiler, {SDLK_F8, 0});
+  set(InputAction::AttackGround, {SDLK_V, 0});
+  set(InputAction::Retreat, {SDLK_H, 0});
+  set(InputAction::LastAlert, {SDLK_SPACE, kModCtrl}, {SDLK_J, 0});
 }
 
 bool Settings::pressed(InputAction a, const SDL_KeyboardEvent& e) const {

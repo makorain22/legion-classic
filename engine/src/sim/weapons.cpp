@@ -59,6 +59,7 @@ bool WeaponRegistry::loadJson(const nlohmann::json& doc, std::string& error) {
       d.sound = w.value("sound", std::string());
       d.impact = w.value("impact", std::string());
       d.antiAir = w.value("antiAir", false);
+      d.smoke = std::clamp(w.value("smoke", 0), 0, 600);
       d.burst = std::max(1, w.value("burst", 1));
       if (w.contains("burstSpread")) d.burstSpread = tilesToLeptons(w["burstSpread"]);
       const std::string wh = w.at("warhead").get<std::string>();

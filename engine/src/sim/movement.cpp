@@ -148,6 +148,18 @@ void Simulation::stepOrders() {
         }
         break;
       }
+      case OrderType::AttackGround: {
+        // Into range of the point, then stand and keep firing at it (combat.cpp).
+        if (def.speed <= 0 || reg_.pool<CGarrisoned>().has(ei)) break;
+        const int32_t d = static_cast<int32_t>(distance(o.goal.x - p.x, o.goal.y - p.y));
+        if (d <= maxRange(def) - 64) {
+          m.active = false;
+          m.request = 0;
+        } else if (!m.active && !m.request) {
+          requestPath(e, o.goal);
+        }
+        break;
+      }
       case OrderType::AttackMove: {
         const CCombat* c = reg_.pool<CCombat>().tryGet(ei);
         if (c && reg_.alive(c->target)) {
@@ -436,6 +448,9 @@ bool Simulation::concealed(uint32_t unit) const {
   const CUnit* u = reg_.pool<CUnit>().tryGet(unit);
   if (!u || !types_.get(u->type).infantry()) return false;
   if (reg_.pool<CGarrisoned>().has(unit)) return false;  // in a building or a trench: that is seen as itself
+  // Opening fire gives a hidden man away for a few seconds (9.15).
+  if (const CCondition* c = reg_.pool<CCondition>().tryGet(unit); c && c->revealedTick && tick_ - c->revealedTick < kRevealTicks)
+    return false;
   const CPosition& p = reg_.pool<CPosition>().get(unit);
   const uint8_t g = vision_.ground(p.x >> LEPTON_SHIFT, p.y >> LEPTON_SHIFT);
   return (g & Vision::kWood) && !(g & Vision::kWoodEdge);
@@ -446,6 +461,10 @@ bool Simulation::unitVisibleTo(uint8_t player, uint32_t unit) const {
   const CPosition* p = reg_.pool<CPosition>().tryGet(unit);
   if (!p) return false;
   if (const CUnit* u = reg_.pool<CUnit>().tryGet(unit); u && allied(u->owner, player)) return true;  // one's own are never hidden
+  // A gun that has just fired indirectly is placed by its flash and its sound: every enemy knows where it is (9.15).
+  if (const CCondition* c = reg_.pool<CCondition>().tryGet(unit);
+      c && (c->flags & CCondition::kGunFlash) && tick_ - c->revealedTick < kRevealTicks)
+    return true;
   const int tx = p->x >> LEPTON_SHIFT, ty = p->y >> LEPTON_SHIFT;
   if (!vision_.visible(player, tx, ty)) return false;
   return !concealed(unit) || vision_.scouted(player, tx, ty);
