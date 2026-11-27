@@ -249,6 +249,17 @@ class GameScene final : public pioneer::Scene {
   std::vector<int> selectionAbilities() const;
   void useAbility(int ability);
   int aimingAbility() const { return abilityMode_; }
+  // Controls (controls.cpp, 9.15).
+  std::vector<pioneer::Entity> idleUnits() const;
+  void selectIdle(bool all);
+  void togglePhotoMode();
+  bool photoMode() const { return photoMode_; }
+  // The battlefield alone: a photo being taken, or photo mode.
+  bool bareView() const { return app_.takingPhoto() || photoMode_; }
+  // Replays: ride with a unit, or go where the fighting is.
+  void followUnit(pioneer::Entity e) { followUnit_ = e; }
+  pioneer::Entity followedUnit() const { return followUnit_; }
+  bool& followAction() { return followAction_; }
   // Recent attacks on our side: ground point (leptons) and seconds since (the minimap pings them).
   std::vector<std::pair<pioneer::Vec2f, float>> recentAlerts() const {
     std::vector<std::pair<pioneer::Vec2f, float>> out;
@@ -745,6 +756,20 @@ class GameScene final : public pioneer::Scene {
   bool attackMoveMode_ = false;  // "A": next left click attack-moves
   bool attackGroundMode_ = false;  // "V": next left click fires at the ground (9.15)
   int abilityMode_ = -1;           // an ability whose point the next left click picks (9.15)
+  // Controls (9.15).
+  size_t idleCursor_ = 0;
+  bool photoMode_ = false, photoWasPaused_ = false;
+  float photoHint_ = 0;
+  std::string photoSaved_;
+  pioneer::Entity followUnit_;
+  bool followAction_ = false;
+  pioneer::Vec2f actionAt_;
+  float actionHeat_ = 0;
+  void drawUnitBar();
+  bool photoModeEvent(const SDL_Event& e, bool uiMouse);
+  void drawPhotoHint(float dt);
+  void updateReplayCamera(float dt);
+  void noteAction(const pioneer::SimEvent& ev);
   // Under-attack alerts (9.15): where, and how long ago (seconds), newest last.
   struct Alert {
     pioneer::Vec2f at;

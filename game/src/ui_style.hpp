@@ -3,6 +3,7 @@
 // with bevelled edges and rivets, brass highlights and stencilled labels, in
 // the manner of the period RTS games it follows.
 
+#include <cstdint>
 #include <imgui.h>
 
 #include <functional>
@@ -22,6 +23,16 @@ inline ImU32 kStencil = IM_COL32(222, 212, 182, 255);   // label text
 inline ImU32 kStencilDim = IM_COL32(140, 134, 114, 255);
 constexpr ImU32 kGood = IM_COL32(124, 214, 96, 255);
 constexpr ImU32 kBad = IM_COL32(226, 92, 70, 255);
+
+// Good and bad on the battlefield (health, valid placement, orders): green and red, or colour-blind safe ones
+// (9.15). setColourBlind: 0 as designed, 1 red-green safe, 2 blue-yellow safe.
+void setColourBlind(int mode);
+int colourBlind();
+uint32_t uiGood(uint8_t alpha = 255);
+uint32_t uiBad(uint8_t alpha = 255);
+uint32_t uiMiddling();
+// A side's colour as the player sees it: its own, or slot `index` of a colour-blind safe palette.
+uint32_t sideColour(uint32_t designed, int index);
 
 enum class Theme { Olive, German, Soviet, British };
 // Switches the palette: "ger", "rus", "gbr", anything else = olive.

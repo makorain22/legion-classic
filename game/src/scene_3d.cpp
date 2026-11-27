@@ -13,6 +13,7 @@
 
 #include "editor.hpp"
 #include "game_scene.hpp"
+#include "ui_style.hpp"
 #include "pioneer/core/rng.hpp"
 #include "pioneer/math/iso.hpp"
 #include "pioneer/render/rock_faces.hpp"
@@ -22,7 +23,6 @@ using namespace pioneer;
 namespace legion {
 
 namespace {
-constexpr uint32_t kSelectGreen = rgba8(120, 236, 96);
 constexpr float kTilesPerSpritePixel = 1.0f / Camera::kClassicPxPerTile;
 constexpr float kDecalLift = 0.012f;  // tiles above the ground, against z-fighting
 }  // namespace
@@ -299,15 +299,15 @@ void GameScene::drawSelection3D() {
           const float L = 0.45f, W = 0.07f;
           const Vec3f a[4] = {{x, y, z}, {x + sx * L, y, z}, {x + sx * L, y + sy * W, z}, {x, y + sy * W, z}};
           const Vec3f b[4] = {{x, y, z}, {x + sx * W, y, z}, {x + sx * W, y + sy * L, z}, {x, y + sy * L, z}};
-          renderer_.solidQuad(a, kSelectGreen);
-          renderer_.solidQuad(b, kSelectGreen);
+          renderer_.solidQuad(a, ui::uiGood());
+          renderer_.solidQuad(b, ui::uiGood());
         }
       continue;
     }
     const CPosition& p = reg.get<CPosition>(e);
     const CPrevPosition& q = reg.get<CPrevPosition>(e);
     const float lx = q.x + (p.x - q.x) * alpha_, ly = q.y + (p.y - q.y) * alpha_;
-    renderer_.decal(d.radius > 60 ? art_.selectLarge : art_.selectSmall, lx, ly, kSelectGreen, kWhite, 3, ground);
+    renderer_.decal(d.radius > 60 ? art_.selectLarge : art_.selectSmall, lx, ly, ui::uiGood(), kWhite, 3, ground);
   }
   for (const Marker& m : markers_) {
     const uint8_t alpha = static_cast<uint8_t>(255 * (1.0f - m.age / 0.6f));
@@ -391,7 +391,7 @@ void GameScene::render3D() {
   glPolygonOffset(-1.0f, -2.0f);
   drawGround3D();
   fx_.drawGround(renderer_, view, fogAt, bodies);
-  const bool photo = app_.takingPhoto();  // the battlefield alone: no rings, ghosts or markers
+  const bool photo = bareView();  // the battlefield alone: no rings, ghosts or markers
   if (!photo) {
     drawSelection3D();
     editor_->renderWorld(renderer_);  // ghosts of what is being placed

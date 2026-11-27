@@ -228,7 +228,7 @@ void Sidebar::renderWorld(SpriteRenderer& r) {
     for (int y = o.y; y < o.y + d.footH; ++y)
       for (int x = o.x; x < o.x + d.footW; ++x) {
         const bool tileOk = scene_.map().buildable(x, y);
-        const uint32_t tileTint = (ok && tileOk) ? rgba8(110, 230, 90, 170) : rgba8(240, 70, 50, 190);
+        const uint32_t tileTint = (ok && tileOk) ? ui::uiGood(170) : ui::uiBad(190);
         if (threeD) {
           r.decal(scene_.art().moveMarker, x * 256.0f + 128, y * 256.0f + 128, tileTint, kWhite, 2, ground);
           continue;

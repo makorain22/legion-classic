@@ -664,7 +664,15 @@ void Menus::drawReplayBar() {
   ImGui::SameLine();
   ImGui::Checkbox("Reveal (V)", &scene_.revealMap());
   ImGui::SameLine();
-  ImGui::TextDisabled("Tab: watch another side");
+  if (ImGui::Checkbox("Follow the fighting (F)", &scene_.followAction()) && scene_.followAction()) scene_.followUnit({});
+  ImGui::SameLine();
+  if (ImGui::Button("Photo (P)")) scene_.togglePhotoMode();
+  ImGui::SameLine();
+  if (scene_.followedUnit().valid()) {
+    if (ImGui::Button("Let go")) scene_.followUnit({});
+  } else {
+    ImGui::TextDisabled("Click a unit to ride with it; Tab: another side");
+  }
   ImGui::End();
 }
 
@@ -768,6 +776,13 @@ void Menus::drawSettings() {
       changed |= ImGui::Checkbox("Unit cards over fireteams, platoons and companies", &st.showCards);
       changed |= ImGui::Checkbox("Unit cards over the other sides' units too", &st.showEnemyCards);
       changed |= ImGui::Checkbox("Chips for enemy forces out of sight", &st.showChips);
+      changed |= ImGui::Checkbox("Unit bar: control groups and idle units along the bottom", &st.unitBar);
+      ImGui::SetNextItemWidth(320);
+      changed |= ImGui::Combo("Colours", &st.colourSafe,
+                              "As designed\0Red-green safe (deuteranopia, protanopia)\0Blue-yellow safe (tritanopia)\0");
+      if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Side colours, health bars and good/bad markers in colours told apart with colour blindness.\n"
+                          "(Graphics > Colour filter recolours the whole picture instead.)");
       {
         static const char* ringNames[] = {"Off", "Selection and the unit under the mouse", "Every unit in view"};
         ImGui::SetNextItemWidth(260);

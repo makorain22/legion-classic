@@ -21,6 +21,7 @@ enum class InputAction : uint8_t {
   RadioLog, RangeRings,
   Console, Profiler,
   AttackGround, Retreat, LastAlert,  // 9.15
+  SelectIdle, PhotoMode,             // 9.15
   Count
 };
 constexpr int ACTION_COUNT = static_cast<int>(InputAction::Count);
@@ -53,6 +54,8 @@ struct Settings {
   bool showCards = true;       // NATO cards over bound units
   bool showEnemyCards = true;  // cards over the other sides' units too (when seen)
   bool showChips = true;       // chips for enemies detected in the fog
+  int colourSafe = 0;          // side and marker colours: 0 as designed, 1 red-green safe, 2 blue-yellow safe (9.15)
+  bool unitBar = true;         // the strip of control groups and idle units along the bottom (9.15)
   int rangeRings = 1;          // circles showing weapon range: 0 off, 1 selection and the unit under the mouse, 2 every unit in view
   int campaignDifficulty = 1;  // 0 easy, 1 normal, 2 hard: enemy reinforcements and computer skill in missions
   bool atmosphere = true;      // colour grading and a vignette over the battlefield

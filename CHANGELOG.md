@@ -35,6 +35,11 @@
   men in buildings or bunched up, smoke when pinned, sprints on long marches,
   digging in while it waits, rallies, charges, smoke over enemies who have
   its men pinned. Abilities are data (`"abilities"` in `units.json`).
+- **Part 4, controls** (27 Nov): the **unit bar** along the bottom (control
+  groups and idle units); **next idle unit** (`.`, Shift: all); **photo mode**
+  (P: no interface, paused, F12 or Enter for a photo); the **replay camera**
+  (click a unit to ride with it, or follow the fighting with F); **colour-blind
+  safe colours** for sides, health bars and markers (Settings → Display).
 
 ## 0.9.3 – in progress (Milestone 9.14: air and naval support)
 

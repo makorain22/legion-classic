@@ -16,7 +16,8 @@ const char* actionLabel(InputAction a) {
                                 "Turn the view left", "Turn the view right", "Tilt the view up", "Tilt the view down",
                                 "Reset the view", "Next formation for the selection", "Radio log (mission messages)", "Range circles: selection / all units / off",
                                 "Developer console", "Profiler (where the time goes)",
-                                "Fire at the ground (then click)", "Retreat to base", "Go to the last attack"};
+                                "Fire at the ground (then click)", "Retreat to base", "Go to the last attack",
+                                "Select the next idle unit (Shift: all of them)", "Photo mode (hide the interface)"};
   return names[static_cast<int>(a)];
 }
 
@@ -73,6 +74,8 @@ void Settings::resetKeys() {
   set(InputAction::AttackGround, {SDLK_V, 0});
   set(InputAction::Retreat, {SDLK_H, 0});
   set(InputAction::LastAlert, {SDLK_SPACE, kModCtrl}, {SDLK_J, 0});
+  set(InputAction::SelectIdle, {SDLK_PERIOD, 0});
+  set(InputAction::PhotoMode, {SDLK_P, 0});
 }
 
 bool Settings::pressed(InputAction a, const SDL_KeyboardEvent& e) const {
@@ -122,6 +125,8 @@ bool Settings::load(const std::string& path) {
   showInfoPanel = j.value("showInfoPanel", showInfoPanel);
   showCards = j.value("showCards", showCards);
   showChips = j.value("showChips", showChips);
+  colourSafe = std::clamp(j.value("colourSafe", colourSafe), 0, 2);
+  unitBar = j.value("unitBar", unitBar);
   rangeRings = std::clamp(j.value("rangeRings", rangeRings), 0, 2);
   campaignDifficulty = std::clamp(j.value("campaignDifficulty", campaignDifficulty), 0, 2);
   artPack = j.value("artPack", artPack);
@@ -183,6 +188,8 @@ bool Settings::save(const std::string& path) const {
   j["showInfoPanel"] = showInfoPanel;
   j["showCards"] = showCards;
   j["showChips"] = showChips;
+  j["colourSafe"] = colourSafe;
+  j["unitBar"] = unitBar;
   j["rangeRings"] = rangeRings;
   j["campaignDifficulty"] = campaignDifficulty;
   j["artPack"] = artPack;

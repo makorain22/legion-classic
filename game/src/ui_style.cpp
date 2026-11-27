@@ -1,5 +1,7 @@
 #include "ui_style.hpp"
 
+#include "pioneer/render/sprite_renderer.hpp"
+
 #include <cctype>
 #include <cmath>
 #include <string>
@@ -146,6 +148,30 @@ bool plateButton(const char* id, const char* label, ImVec2 size, bool lit, bool 
               !enabled ? kStencilDim : lit ? kBrass : kStencil, label, end);
   ImGui::PopID();
   return clicked;
+}
+
+namespace {
+int gColourBlind = 0;
+}
+void setColourBlind(int mode) { gColourBlind = std::clamp(mode, 0, 2); }
+int colourBlind() { return gColourBlind; }
+uint32_t uiGood(uint8_t a) {
+  return gColourBlind == 1 ? pioneer::rgba8(86, 180, 233, a) : gColourBlind == 2 ? pioneer::rgba8(23, 190, 207, a) : pioneer::rgba8(120, 236, 96, a);
+}
+uint32_t uiBad(uint8_t a) {
+  return gColourBlind == 1 ? pioneer::rgba8(213, 94, 0, a) : gColourBlind == 2 ? pioneer::rgba8(214, 39, 40, a) : pioneer::rgba8(236, 70, 52, a);
+}
+uint32_t uiMiddling() { return gColourBlind == 1 ? pioneer::rgba8(240, 228, 66) : gColourBlind == 2 ? pioneer::rgba8(227, 119, 194) : pioneer::rgba8(230, 200, 60); }
+uint32_t sideColour(uint32_t designed, int index) {
+  // Okabe and Ito's palette (red-green safe), and one for blue-yellow blindness.
+  static const uint32_t kRedGreen[8] = {pioneer::rgba8(230, 159, 0),  pioneer::rgba8(0, 114, 178),  pioneer::rgba8(240, 228, 66),
+                                        pioneer::rgba8(204, 121, 167), pioneer::rgba8(86, 180, 233), pioneer::rgba8(213, 94, 0),
+                                        pioneer::rgba8(0, 158, 115),  pioneer::rgba8(255, 255, 255)};
+  static const uint32_t kBlueYellow[8] = {pioneer::rgba8(214, 39, 40),  pioneer::rgba8(23, 190, 207), pioneer::rgba8(227, 119, 194),
+                                          pioneer::rgba8(127, 127, 127), pioneer::rgba8(44, 160, 44), pioneer::rgba8(140, 86, 75),
+                                          pioneer::rgba8(255, 127, 14),  pioneer::rgba8(255, 255, 255)};
+  if (gColourBlind == 0 || index < 0) return designed;
+  return (gColourBlind == 1 ? kRedGreen : kBlueYellow)[index % 8] | 0xFF000000u;
 }
 
 void pictogram(ImDrawList* dl, Picto p, ImVec2 c, float s, ImU32 col) {

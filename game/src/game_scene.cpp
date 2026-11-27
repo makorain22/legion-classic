@@ -35,8 +35,6 @@ using namespace pioneer;
 namespace legion {
 
 namespace {
-constexpr uint32_t kSelectGreen = rgba8(120, 236, 96);
-constexpr uint32_t kAttackRed = rgba8(236, 70, 52);
 constexpr float kEdgeScrollPx = 6.0f;
 constexpr float kScrollSpeed = 1100.0f;  // screen pixels per second
 constexpr float kPxPerUnit = iso::HEIGHT_PX_PER_TILE / HEIGHT_UNITS_PER_TILE;
@@ -490,6 +488,10 @@ void GameScene::replaceWorld(MapFile&& file, bool keepCamera) {
   if (sidebar_) sidebar_->cancel();
   chutes_.clear();
   brokeShownAt_ = -100.0f;
+  photoMode_ = false;
+  followUnit_ = {};
+  followAction_ = false;
+  actionHeat_ = 0;
   heardStrikes_.clear();
   bombsHeard_.clear();
   crashed_.clear();
@@ -500,7 +502,7 @@ void GameScene::applyPlayers() {
   for (uint8_t i = 0; i < MAX_PLAYERS; ++i) {
     PlayerSetup& p = players_[i];
     p.color |= 0xFF000000u;
-    teamColors_[i] = p.color;
+    teamColors_[i] = ui::sideColour(p.color, i);
     if (sim_) {
       Command c;
       c.type = CommandType::SetTeam;
@@ -1228,7 +1230,7 @@ void GameScene::setFormation(Formation f) {
                   centre.y * 2 - static_cast<int32_t>(sy / static_cast<int64_t>(slots.size()))};
     }
   }
-  markSlots(sim_->formationPreview(movers, c.target, f, c.formFacing, 0), kSelectGreen);
+  markSlots(sim_->formationPreview(movers, c.target, f, c.formFacing, 0), ui::uiGood());
   queueOrder(std::move(c));
   showStatus(std::string("Formation: ") + names[static_cast<int>(f)], 1.5f);
 }
@@ -1243,11 +1245,11 @@ void GameScene::orderMove(Vec2i target, CommandType type, int formation) {
   c.units = selection_;
   c.formation = static_cast<Formation>(formation >= 0 ? formation : std::max(0, selectionShape()));
   c.forced = (SDL_GetModState() & SDL_KMOD_ALT) != 0;  // Alt: forced march, don't stop to fight
-  markSlots(sim_->formationPreview(c.units, target, c.formation, -1, 0), type == CommandType::AttackMove ? kAttackRed : kSelectGreen);
+  markSlots(sim_->formationPreview(c.units, target, c.formation, -1, 0), type == CommandType::AttackMove ? ui::uiBad() : ui::uiGood());
   queueOrder(std::move(c));
   orderSound(type == CommandType::AttackMove);
   markers_.push_back({{static_cast<float>(target.x), static_cast<float>(target.y)}, 0,
-                      type == CommandType::AttackMove ? kAttackRed : kSelectGreen});
+                      type == CommandType::AttackMove ? ui::uiBad() : ui::uiGood()});
 }
 
 bool GameScene::draggedFront(Vec2f startPx, Vec2f endPx, Vec2i& mid, Angle& facing, int32_t& width) {
@@ -1286,7 +1288,7 @@ void GameScene::orderAttack(Entity target) {
   queueOrder(std::move(c));
   orderSound(true);
   const CPosition& p = sim_->registry().get<CPosition>(target);
-  markers_.push_back({{static_cast<float>(p.x), static_cast<float>(p.y)}, 0, kAttackRed});
+  markers_.push_back({{static_cast<float>(p.x), static_cast<float>(p.y)}, 0, ui::uiBad()});
 }
 
 // Right mouse button released. A click: attack an enemy under the mouse,
@@ -1317,11 +1319,11 @@ void GameScene::rightClick(Vec2f start, bool dragged, Vec2f end) {
     c.formFacing = facing;
     c.formWidth = width;
     c.forced = (SDL_GetModState() & SDL_KMOD_ALT) != 0;
-    markSlots(sim_->formationPreview(c.units, mid, c.formation, c.formFacing, c.formWidth), ctrl ? kAttackRed : kSelectGreen);
+    markSlots(sim_->formationPreview(c.units, mid, c.formation, c.formFacing, c.formWidth), ctrl ? ui::uiBad() : ui::uiGood());
     queueOrder(std::move(c));
     orderSound(ctrl);
     markers_.push_back({{static_cast<float>(mid.x), static_cast<float>(mid.y)}, 0,
-                        ctrl ? kAttackRed : kSelectGreen});
+                        ctrl ? ui::uiBad() : ui::uiGood()});
     return;
   }
   Entity hit = pickUnit(start, false);
@@ -1464,6 +1466,7 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
   }
   // The developer console and profiler work everywhere, menus included.
   if (devToolsEvent(e)) return;
+  if (mode_ != Mode::Menu && !menus_->wantsInput() && photoModeEvent(e, uiMouse)) return;  // photo mode (9.15)
   // Menus take everything while open; in the main menu the battle behind is scenery.
   if (mode_ == Mode::Menu || menus_->wantsInput()) {
     if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_ESCAPE && mode_ != Mode::Menu) menus_->close();
@@ -1474,7 +1477,12 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
     if (e.type == SDL_EVENT_KEY_DOWN && !uiKeys) {
       const SDL_Keycode k = e.key.key;
       if (settings_.pressed(InputAction::Menu, e.key)) menus_->openInGameMenu();
-      else if (k == SDLK_V) revealMap_ = !revealMap_;
+      else if (settings_.pressed(InputAction::PhotoMode, e.key)) togglePhotoMode();
+      else if (k == SDLK_F) {
+        followAction_ = !followAction_;
+        followUnit_ = {};
+        showStatus(followAction_ ? "Following the fighting" : "Free camera", 1.5f);
+      } else if (k == SDLK_V) revealMap_ = !revealMap_;
       else if (settings_.pressed(InputAction::Pause, e.key)) paused_ = !paused_;
       else if (settings_.pressed(InputAction::SpeedUp, e.key)) speed_ = std::min(16.0f, speed_ * 2);
       else if (settings_.pressed(InputAction::SpeedDown, e.key)) speed_ = std::max(0.25f, speed_ / 2);
@@ -1492,6 +1500,14 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
     if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && e.button.button == SDL_BUTTON_MIDDLE) mmbDown_ = true;
     if (e.type == SDL_EVENT_MOUSE_BUTTON_UP && e.button.button == SDL_BUTTON_MIDDLE) mmbDown_ = false;
     if (e.type == SDL_EVENT_MOUSE_WHEEL && !uiMouse && e.wheel.y != 0) cam_.zoomStep(e.wheel.y > 0 ? +1 : -1, mouse_);
+    // Click a unit to ride with it; click the ground to let go (9.15).
+    if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && e.button.button == SDL_BUTTON_LEFT && !uiMouse) {
+      followUnit_ = pickUnit(mouse_, false);
+      if (followUnit_.valid()) {
+        followAction_ = false;
+        showStatus("Following " + types_.get(sim_->registry().get<CUnit>(followUnit_).type).name, 1.5f);
+      }
+    }
     return;
   }
   // A mission's cinematic: the script has the camera; the menu, pause and speed keys still work.
@@ -1530,7 +1546,7 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
           c.target = mouseWorldLeptons();
           queueOrder(std::move(c));
           orderSound(true);
-          markers_.push_back({{static_cast<float>(c.target.x), static_cast<float>(c.target.y)}, 0, kAttackRed});
+          markers_.push_back({{static_cast<float>(c.target.x), static_cast<float>(c.target.y)}, 0, ui::uiBad()});
           if (!(SDL_GetModState() & SDL_KMOD_SHIFT)) abilityMode_ = -1;
           break;
         }
@@ -1544,7 +1560,7 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
           c.target = mouseWorldLeptons();
           queueOrder(std::move(c));
           orderSound(true);
-          markers_.push_back({{static_cast<float>(c.target.x), static_cast<float>(c.target.y)}, 0, kAttackRed});
+          markers_.push_back({{static_cast<float>(c.target.x), static_cast<float>(c.target.y)}, 0, ui::uiBad()});
           break;
         }
         if (attackMoveMode_) {
@@ -1650,6 +1666,10 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
         retreatSelection();
       } else if (K.pressed(InputAction::LastAlert, e.key)) {
         jumpToAlert();
+      } else if (K.pressed(InputAction::SelectIdle, e.key) || (k == SDLK_PERIOD && (e.key.mod & SDL_KMOD_SHIFT))) {
+        selectIdle((e.key.mod & SDL_KMOD_SHIFT) != 0);
+      } else if (K.pressed(InputAction::PhotoMode, e.key)) {
+        togglePhotoMode();
       } else if (K.pressed(InputAction::Help, e.key)) {
         showHelp_ = !showHelp_;
       } else if (K.pressed(InputAction::Encyclopedia, e.key)) {
@@ -1841,6 +1861,9 @@ void GameScene::updateAudio(float dt) {
 }
 
 void GameScene::applySettings() {
+  ui::setColourBlind(settings_.colourSafe);
+  for (int i = 0; i < MAX_PLAYERS; ++i)
+    teamColors_[static_cast<size_t>(i)] = ui::sideColour(players_[static_cast<size_t>(i)].color | 0xFF000000u, i);
   app_.setFpsLimit(settings_.fpsLimit);
   app_.setVsync(settings_.vsync);
   if (audio_) {
@@ -1943,6 +1966,7 @@ void GameScene::simTick() {
     if (audio_) audio_->onEvent(ev, *sim_, player_, mode_ == Mode::Game);
     announce(ev);
     callInEvent(ev);
+    if (seen || mode_ == Mode::Replay) noteAction(ev);
     if (!opt_.showcase.empty() && (ev.type == EventType::Impact || ev.type == EventType::UnitDied) && seen)
       hot_.push_back({ev.at, showTime_});
     if (mode_ == Mode::Menu && (ev.type == EventType::Impact || ev.type == EventType::UnitDied) && (frame_ % 90 == 0 || attractFocus_.x < 0))
@@ -2208,6 +2232,7 @@ void GameScene::onUpdate(float dt, float alpha) {
       abilityMode_ = -1;
     }
   }
+  updateReplayCamera(dt);
   for (Alert& a : alerts_) a.age += dt;
   std::erase_if(alerts_, [](const Alert& a) { return a.age > 60.0f; });
   std::erase_if(markers_, [](const Marker& m) { return m.age > (m.slot ? 1.2f : 0.6f); });
@@ -2260,18 +2285,18 @@ void GameScene::onRender() {
       for (int cy : {st.ty, st.ty + st.h})
         for (int cx : {st.tx, st.tx + st.w}) {
           const Vec2f s = groundToScreenWorld(cx * 256.0f, cy * 256.0f);
-          renderer_.rect(std::floor(s.x) - 2, std::floor(s.y) - 1, 5, 3, kSelectGreen);
+          renderer_.rect(std::floor(s.x) - 2, std::floor(s.y) - 1, 5, 3, ui::uiGood());
         }
       continue;
     }
     const Vec2f s = unitScreenWorld(e.index);
-    renderer_.sprite(d.radius > 60 ? art_.selectLarge : art_.selectSmall, s.x, s.y, kWhite, kSelectGreen);
+    renderer_.sprite(d.radius > 60 ? art_.selectLarge : art_.selectSmall, s.x, s.y, kWhite, ui::uiGood());
   }
   drawUnits(view);
   renderer_.flush();
   renderer_.setGrade(grade_[0], grade_[1], grade_[2], grade_[3]);  // fire and flashes keep their brightness at night
   fx_.drawAir(renderer_, view, fogAt);
-  if (!app_.takingPhoto()) drawOverlays(view, true);
+  if (!bareView()) drawOverlays(view, true);
 }
 
 // Health bars, order markers, the editor's and sidebar's tools, a formation
@@ -2314,7 +2339,7 @@ void GameScene::drawOverlays(const RectF& view, bool markers) {
     for (int i = 0; i <= n; ++i) {
       const float t = static_cast<float>(i) / n;
       const Vec2f s = groundToScreenWorld(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
-      renderer_.rect(std::floor(s.x) - 1, std::floor(s.y) - 1, 3, 3, kSelectGreen);
+      renderer_.rect(std::floor(s.x) - 1, std::floor(s.y) - 1, 3, 3, ui::uiGood());
     }
     Vec2i mid;
     Angle facing = 0;
@@ -2342,7 +2367,7 @@ void GameScene::drawOverlays(const RectF& view, bool markers) {
     const RectF r = RectF::fromPoints(dragStart_, mouse_);
     renderer_.rect(r.x0, r.y0, r.width(), r.height(), rgba8(120, 236, 96, 28));
     renderer_.rectOutline(std::floor(r.x0), std::floor(r.y0), std::floor(r.width()), std::floor(r.height()), 1,
-                          kSelectGreen);
+                          ui::uiGood());
     renderer_.flush();
   }
 }
@@ -2722,7 +2747,7 @@ void GameScene::drawHealthBar(uint32_t e, bool selected) {
   }
   const float x = std::floor(s.x - w / 2);
   const float frac = std::clamp(static_cast<float>(u.health) / def.maxHealth, 0.0f, 1.0f);
-  const uint32_t col = frac > 0.6f ? kSelectGreen : frac > 0.3f ? rgba8(230, 200, 60) : kAttackRed;
+  const uint32_t col = frac > 0.6f ? ui::uiGood() : frac > 0.3f ? ui::uiMiddling() : ui::uiBad();
   renderer_.rect(x - 1, y - 1, w + 2, 4, rgba8(10, 10, 8, selected ? 255 : 200));
   renderer_.rect(x, y, std::max(1.0f, std::floor(w * frac)), 2, col);
   // Under fire (9.15): suppression as an orange strip below (red once pinned), white while it waits in ambush.
@@ -2761,6 +2786,13 @@ void GameScene::onImGui() {
   }
   showCards_ = settings_.showCards;
   showChips_ = settings_.showChips;
+  if (photoMode_) {
+    // Photo mode (9.15): nothing over the battlefield but a hint that fades.
+    drawPhotoHint(ImGui::GetIO().DeltaTime);
+    menus_->draw();
+    drawDevTools();
+    return;
+  }
   if (settings_.atmosphere) {
     // A soft dark vignette round the battlefield.
     ImDrawList* bg = ImGui::GetBackgroundDrawList();
@@ -2773,7 +2805,7 @@ void GameScene::onImGui() {
     bg->AddRectFilledMultiColor(ImVec2(w - e, 0), ImVec2(w, h), clear, dark, dark, clear);
   }
   drawWorldOverlays();
-  if (!app_.takingPhoto()) drawDebugShapes();
+  if (!bareView()) drawDebugShapes();
   drawHud();
   // A tutorial's hint and the interface element it points at.
   ui::setHighlight(mode_ != Mode::Menu ? sim_->highlight(player_) : std::string());
@@ -2808,6 +2840,7 @@ void GameScene::onImGui() {
   if (showHelp_ && !missionInputBlocked()) drawHelp();
   if (showDebug_) drawDebug();
   if (formationPicker_) drawFormationPicker();
+  drawUnitBar();
   drawDevTools();
 }
 

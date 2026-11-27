@@ -453,6 +453,23 @@ guns and towers are built and placed like other structures.
   only by scouts close by), *Hills hide*, *Night and weather* (darkness, rain,
   snow and mist shorten everyone's sight).
 
+### The unit bar, idle units, photo mode and the replay camera (9.15)
+
+Along the bottom of the battlefield, the **unit bar** shows each control
+group (1 to 9: its number, size and commonest unit; click to select, again
+to look) and how many of your units are **idle** (click or **.** for the
+next, Shift for all). It can be turned off under Settings → Display, which
+also has **Colours**: red-green or blue-yellow safe colours for the sides,
+health bars and markers (besides the graphics' whole-picture colour filter).
+
+**Photo mode** (P) hides the interface and pauses the battle so you can
+frame a picture with the camera keys and mouse; F12 or Enter saves it to
+your user folder.
+
+In a **replay**, click a unit to ride with it (*Let go* or click the ground
+to stop), or tick **Follow the fighting** (F) to let the camera go where
+shells are landing and men are falling. P works there too.
+
 ### Unit abilities (9.15)
 
 Under the orders, a button for each ability the selection has (**Alt+1..4**).
@@ -695,6 +712,9 @@ These are the defaults:
 | V, then left click | Fire at the ground there: a wood, a crossroads, a chip in the fog (guns move into range and keep firing until given another order) |
 | H | Retreat: back to the nearest construction yard at a forced march |
 | Ctrl+Space (or J) | Go to the last place you were attacked (again: the one before) |
+| . (full stop) | Select the next idle unit and look at it; Shift+. selects every idle unit |
+| Alt+1 … Alt+4 | The selection's abilities, as on the buttons under the orders |
+| P | Photo mode: the interface hidden and the battle paused; F12 or Enter takes a photo, P or Esc goes back |
 | Ctrl+S (or X) | Stop |
 | E (or Ctrl+E) | Evacuate: the selected men climb out of their trench or from behind their sandbags |
 | Ctrl+D (or G) | Deploy a construction truck |
