@@ -8,6 +8,7 @@
 
 #include <nlohmann/json_fwd.hpp>
 
+#include "pioneer/sim/abilities.hpp"
 #include "pioneer/sim/support.hpp"
 #include "pioneer/sim/weapons.hpp"
 
@@ -87,6 +88,8 @@ struct UnitTypeDef {
   int mineWeapon = -1;           // ...resolved
   uint8_t mineAgainst = 0;       // ...set off by 0 infantry, 1 vehicles, 2 either
   bool isMine() const { return mineWeapon >= 0; }
+  std::vector<std::string> abilityIds;  // abilities it has (9.15; "abilities" in units.json), at most four...
+  std::vector<int> abilities;           // ...resolved (AbilityRegistry indices)
 
   bool isStructure() const { return footW > 0; }
   bool infantry() const { return locomotor == Locomotor::Foot && !isStructure(); }
@@ -111,10 +114,17 @@ class UnitTypeRegistry {
   // Call-ins (9.14): the "support" list of buildings.json.
   const SupportRegistry& support() const { return support_; }
   SupportRegistry& support() { return support_; }
+  // Unit abilities (9.15): the "abilities" list of units.json, and each unit's ids looked up.
+  const AbilityRegistry& abilities() const { return abilities_; }
+  AbilityRegistry& abilities() { return abilities_; }
+  bool resolveAbilities(const WeaponRegistry& weapons, std::string& error);
+  // The slot (0..3) of ability `ability` in a type's list, or -1.
+  int abilitySlot(int type, int ability) const;
 
  private:
   std::vector<UnitTypeDef> types_;
   SupportRegistry support_;
+  AbilityRegistry abilities_;
 };
 
 // Builds both registries from the three merged rule documents (weapons.json,

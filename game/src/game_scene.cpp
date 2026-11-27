@@ -295,6 +295,35 @@ void GameScene::startAttackGround() {
   if (sidebar_) sidebar_->cancel();
 }
 
+std::vector<int> GameScene::selectionAbilities() const {
+  std::vector<int> out;
+  Registry& reg = sim_->registry();
+  for (Entity e : selection_) {
+    if (!reg.alive(e) || reg.get<CUnit>(e).owner != player_) continue;
+    for (int a : types_.get(reg.get<CUnit>(e).type).abilities)
+      if (std::find(out.begin(), out.end(), a) == out.end() && out.size() < static_cast<size_t>(kMaxAbilities)) out.push_back(a);
+  }
+  return out;
+}
+
+void GameScene::useAbility(int ability) {
+  pruneSelection();
+  if (ability < 0 || static_cast<size_t>(ability) >= types_.abilities().size()) return;
+  const AbilityDef& ab = types_.abilities().get(ability);
+  if (abilityNeedsTarget(ab.kind)) {
+    abilityMode_ = ability;
+    attackMoveMode_ = attackGroundMode_ = false;
+    if (sidebar_) sidebar_->cancel();
+    return;
+  }
+  Command c;
+  c.type = CommandType::UseAbility;
+  c.player = player_;
+  c.units = selection_;
+  c.unitType = static_cast<uint16_t>(ability);
+  queueOrder(std::move(c));
+}
+
 void GameScene::retreatSelection() {
   pruneSelection();
   if (selection_.empty()) return;
@@ -1491,6 +1520,20 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
       if (uiMouse) break;
       if (e.button.button == SDL_BUTTON_LEFT) {
+        if (abilityMode_ >= 0) {
+          pruneSelection();
+          Command c;
+          c.type = CommandType::UseAbility;
+          c.player = player_;
+          c.units = selection_;
+          c.unitType = static_cast<uint16_t>(abilityMode_);
+          c.target = mouseWorldLeptons();
+          queueOrder(std::move(c));
+          orderSound(true);
+          markers_.push_back({{static_cast<float>(c.target.x), static_cast<float>(c.target.y)}, 0, kAttackRed});
+          if (!(SDL_GetModState() & SDL_KMOD_SHIFT)) abilityMode_ = -1;
+          break;
+        }
         if (attackGroundMode_) {
           attackGroundMode_ = false;
           pruneSelection();
@@ -1515,8 +1558,9 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
         dragging_ = false;
         dragStart_ = mouse_;
       } else if (e.button.button == SDL_BUTTON_RIGHT) {
-        if (attackMoveMode_ || attackGroundMode_) {
+        if (attackMoveMode_ || attackGroundMode_ || abilityMode_ >= 0) {
           attackMoveMode_ = attackGroundMode_ = false;
+          abilityMode_ = -1;
           break;
         }
         // Decided on release: a click orders, a drag lays out a formation front.
@@ -1590,7 +1634,10 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
       if (K.pressed(InputAction::Menu, e.key)) {
         if (k == SDLK_ESCAPE && encyclopedia_->isOpen()) encyclopedia_->close();
         else if (k == SDLK_ESCAPE && formationPicker_) formationPicker_ = false;
-        else if (k == SDLK_ESCAPE && (attackMoveMode_ || attackGroundMode_)) attackMoveMode_ = attackGroundMode_ = false;
+        else if (k == SDLK_ESCAPE && (attackMoveMode_ || attackGroundMode_ || abilityMode_ >= 0)) {
+          attackMoveMode_ = attackGroundMode_ = false;
+          abilityMode_ = -1;
+        }
         else if (k == SDLK_ESCAPE && !selection_.empty()) selection_.clear();
         else menus_->openInGameMenu();
       } else if (K.pressed(InputAction::AttackMove, e.key)) {
@@ -1678,6 +1725,11 @@ void GameScene::onEvent(const SDL_Event& e, bool uiMouse, bool uiKeys) {
           const CPosition& p = sim_->registry().get<CPosition>(selection_.front());
           centerOn({p.x, p.y});
         }
+      } else if (k >= SDLK_1 && k <= SDLK_4 && (e.key.mod & SDL_KMOD_ALT)) {
+        // Alt+1..4: the selection's abilities, as on the buttons (9.15).
+        const std::vector<int> list = selectionAbilities();
+        const size_t i = static_cast<size_t>(k - SDLK_1);
+        if (i < list.size()) useAbility(list[i]);
       } else if (k >= SDLK_0 && k <= SDLK_9) {
         const size_t g = static_cast<size_t>(k - SDLK_0);
         if (ctrl) {
@@ -2149,9 +2201,12 @@ void GameScene::onUpdate(float dt, float alpha) {
   updateCursor();
 
   for (Marker& m : markers_) m.age += dt;
-  if (attackMoveMode_ || attackGroundMode_) {
+  if (attackMoveMode_ || attackGroundMode_ || abilityMode_ >= 0) {
     pruneSelection();
-    if (selection_.empty()) attackMoveMode_ = attackGroundMode_ = false;
+    if (selection_.empty()) {
+      attackMoveMode_ = attackGroundMode_ = false;
+      abilityMode_ = -1;
+    }
   }
   for (Alert& a : alerts_) a.age += dt;
   std::erase_if(alerts_, [](const Alert& a) { return a.age > 60.0f; });
@@ -2532,8 +2587,8 @@ void GameScene::drawUnits(const RectF& view) {
     }
     int bodyFrame = art.body.frame(facing, anim);
     if (const CCondition* cond = reg.pool<CCondition>().tryGet(e);
-        cond && (cond->posture == Posture::Prone || cond->posture == Posture::Pinned) && u.type < postArt_.size() &&
-        (postArt_[u.type] & 1) && !reg.pool<CGarrisoned>().has(e)) {
+        ((cond && (cond->posture == Posture::Prone || cond->posture == Posture::Pinned)) || sim_->abilityShelterPercent(e) < 100) &&
+        u.type < postArt_.size() && (postArt_[u.type] & 1) && !reg.pool<CGarrisoned>().has(e)) {
       // Heads down under fire (9.15): drawn low, as men in a scrape.
       const CCombat* cb = combats.tryGet(e);
       bodyFrame = dugArt_[u.type].body.frame(facing, cb && cb->target.valid() ? 1 : 0);
@@ -2684,7 +2739,7 @@ void GameScene::drawHealthBar(uint32_t e, bool selected) {
 
 void GameScene::updateCursor() {
   if (!cursorCross_) return;
-  bool cross = attackMoveMode_ || attackGroundMode_;
+  bool cross = attackMoveMode_ || attackGroundMode_ || abilityMode_ >= 0;
   if (!cross && !selection_.empty() && hovered_.valid() && sim_->registry().alive(hovered_))
     cross = sim_->registry().get<CUnit>(hovered_).owner != player_;
   if (cross != crossShown_) {
@@ -2860,7 +2915,7 @@ void GameScene::drawObjectives() {
 
 void GameScene::drawHud() {
   const bool editing = editor_->active();
-  const bool transient = paused_ || speed_ != 1.0f || attackMoveMode_ || attackGroundMode_ || statusTime_ > 0;
+  const bool transient = paused_ || speed_ != 1.0f || attackMoveMode_ || attackGroundMode_ || abilityMode_ >= 0 || statusTime_ > 0;
   if (!settings_.showInfoPanel && !transient) {
     hudBottom_ = 8;
     return;
@@ -2886,6 +2941,9 @@ void GameScene::drawHud() {
   else if (speed_ != 1.0f) ImGui::TextColored(ImVec4(1, 0.85f, 0.4f, 1), "Speed x%.2g", speed_);
   if (attackMoveMode_) ImGui::TextColored(ImVec4(1, 0.45f, 0.35f, 1), "ATTACK-MOVE: left-click a destination (Esc cancels)");
   if (attackGroundMode_) ImGui::TextColored(ImVec4(1, 0.45f, 0.35f, 1), "FIRE AT GROUND: left-click a point (Esc cancels)");
+  if (abilityMode_ >= 0 && static_cast<size_t>(abilityMode_) < types_.abilities().size())
+    ImGui::TextColored(ImVec4(1, 0.75f, 0.35f, 1), "%s: left-click a point, up to %.0f tiles off (Shift: again; Esc cancels)",
+                       types_.abilities().get(abilityMode_).name.c_str(), types_.abilities().get(abilityMode_).range / 256.0);
   if (statusTime_ > 0) ImGui::TextColored(ImVec4(0.6f, 0.95f, 0.6f, 1), "%s", status_.c_str());
   if (settings_.showInfoPanel)
     ImGui::TextDisabled(editing ? "F2 close editor   F1 help   I hide" : "F2 editor   F1 help   F3 debug   I hide");

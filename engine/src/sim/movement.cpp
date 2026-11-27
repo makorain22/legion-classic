@@ -258,8 +258,9 @@ void Simulation::stepMovement() {
         }
 
         // The ground underfoot sets the pace (slopes, mud, fords); men under fire crawl, or don't move at all (9.15).
-        const int32_t under = def.infantry() ? conditionSpeedPercent(ei) : 100;
+        int32_t under = def.infantry() ? conditionSpeedPercent(ei) : 100;
         if (under == 0) return;
+        under = under * abilitySpeedPercent(ei) / 100;  // sprinting, charging
         const int32_t speed = std::max<int32_t>(
             1, def.speed * map_.speedPercent(pos.x >> LEPTON_SHIFT, pos.y >> LEPTON_SHIFT, def.locomotor) / 100 *
                    (reverse ? kReverseSpeed : 100) / 100 * under / 100);

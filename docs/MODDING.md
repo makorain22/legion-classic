@@ -372,6 +372,19 @@ Indirect fire (shells reaching 12 tiles or more) gives the gun away to the
 enemy for three seconds. Suppression, morale, prone and pinned, and the
 ambush volley need no keys: they apply to every infantry unit.
 
+## Unit abilities (new in 0.9.4, Milestone 9.15)
+
+`units.json` has an `"abilities"` list beside `"units"` (mods merge it by
+`id`); a unit lists up to four by id: `"abilities": ["grenade", "sprint"]`.
+
+| Key | Meaning |
+| --- | --- |
+| `kind` | `throw` (one round of `weapon` at a point within `range` tiles; out of reach, the unit walks up first), `barrage` (`shots` rounds of `weapon` over `duration` seconds), `sprint` (`percent` faster for `duration`), `dig_in` (`percent` less damage until it moves), `charge` (`percent` faster for `duration` toward a point, deaf to fire, half as hard again at close quarters), `rally` (men within `radius` tiles: suppression gone, morale steadied, the broken stop running). |
+| `cooldown` | Seconds before the same unit may use it again. |
+| `charges` | Uses a battle (0 or absent: no limit). |
+| `cost` | Supplies a use. |
+| `name`, `icon`, `description` | The tooltip, the button's label, the text. |
+
 ## The rules editor
 
 Open it from **Mods and creation tools**, or from the Live Scenario Editor

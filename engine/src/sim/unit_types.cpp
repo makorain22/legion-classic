@@ -120,6 +120,11 @@ bool UnitTypeRegistry::loadJson(const nlohmann::json& doc, std::string& error) {
       d.targetable = u.value("targetable", true);
       d.hidden = u.value("hidden", false);
       d.spotter = u.value("spotter", false);
+      if (u.contains("abilities")) d.abilityIds = u["abilities"].get<std::vector<std::string>>();
+      if (d.abilityIds.size() > static_cast<size_t>(kMaxAbilities)) {
+        error = "unit '" + d.id + "': at most four abilities";
+        return false;
+      }
       if (u.contains("mine")) {
         const auto& m = u["mine"];
         d.mineWeaponId = m.value("weapon", std::string());
@@ -236,6 +241,11 @@ bool loadRuleSet(const nlohmann::json& weapons, const nlohmann::json& units, con
     return false;
   }
   if (!t.resolveWeapons(w, error) || !t.resolveLinks(error)) return false;
+  if (!t.abilities().loadJson(units.is_object() && units.contains("abilities") ? units["abilities"] : nlohmann::json(), error) ||
+      !t.resolveAbilities(w, error)) {
+    error = "units.json: " + error;
+    return false;
+  }
   if (!t.support().loadJson(buildings.is_object() && buildings.contains("support") ? buildings["support"] : nlohmann::json(),
                             error) ||
       !t.support().resolve(t, w, error)) {
@@ -245,6 +255,30 @@ bool loadRuleSet(const nlohmann::json& weapons, const nlohmann::json& units, con
   weaponsOut = std::move(w);
   typesOut = std::move(t);
   return true;
+}
+
+bool UnitTypeRegistry::resolveAbilities(const WeaponRegistry& weapons, std::string& error) {
+  if (!abilities_.resolve(weapons, error)) return false;
+  for (UnitTypeDef& d : types_) {
+    d.abilities.clear();
+    for (const std::string& id : d.abilityIds) {
+      const int a = abilities_.find(id);
+      if (a < 0) {
+        error = "unit '" + d.id + "' has unknown ability '" + id + "'";
+        return false;
+      }
+      d.abilities.push_back(a);
+    }
+  }
+  return true;
+}
+
+int UnitTypeRegistry::abilitySlot(int type, int ability) const {
+  if (type < 0 || static_cast<size_t>(type) >= types_.size()) return -1;
+  const std::vector<int>& list = types_[static_cast<size_t>(type)].abilities;
+  for (size_t i = 0; i < list.size(); ++i)
+    if (list[i] == ability) return static_cast<int>(i);
+  return -1;
 }
 
 int UnitTypeRegistry::find(const std::string& id) const {

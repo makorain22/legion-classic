@@ -25,6 +25,16 @@
   approach. **Observers** (snipers, scout cars) halve the scatter of artillery
   on what they watch. Skirmish options: **concealment in woods** (on), **hills
   hide** and **night and weather** cutting sight (on).
+- **Part 3, unit abilities** (27 Nov): buttons under the orders (Alt+1..4)
+  for what the selection can do: **grenades** (walked up to if out of reach),
+  **smoke grenades**, **sprint**, **dig in** (less damage until moving),
+  **rally** (men round the sergeant get up, the broken stop running),
+  **Hurrah!** for Soviet riflemen (a charge: faster, deaf to fire, harder at
+  close quarters) and a **smoke barrage** for the guns. Each has a cooldown,
+  and may have limited uses and a price. The computer uses them: grenades on
+  men in buildings or bunched up, smoke when pinned, sprints on long marches,
+  digging in while it waits, rallies, charges, smoke over enemies who have
+  its men pinned. Abilities are data (`"abilities"` in `units.json`).
 
 ## 0.9.3 – in progress (Milestone 9.14: air and naval support)
 

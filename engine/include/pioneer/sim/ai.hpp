@@ -121,6 +121,7 @@ class SkirmishAi {
   void manageArmy(Simulation& sim, uint8_t p, bool saving);
   void fortify(Simulation& sim, uint8_t p);
   void useSupport(Simulation& sim, uint8_t p);  // call-ins (9.14)
+  void useAbilities(Simulation& sim, uint8_t p);  // unit abilities (9.15)
   bool placeStructure(Simulation& sim, uint8_t p, int type, bool defensive);
   bool placeNear(Simulation& sim, uint8_t p, int type, Vec2i want, int radius);
 

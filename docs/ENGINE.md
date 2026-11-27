@@ -1829,3 +1829,21 @@ without ground shadows).
 
 Console (cheat): `callin <id> [side] [centre]` opens, charges and calls a
 call-in free. Tests: `tests/test_support.cpp` (9).
+
+## After 9.13: combat and controls (Milestone 9.15)
+
+| Piece | Where | What |
+| --- | --- | --- |
+| Fire at the ground | `CommandType::AttackGround`, `OrderType::AttackGround` | Into range of a point, then firing at it (HE against the open; instant weapons scatter round it). |
+| Gun flash | `CCondition::kGunFlash`, `kRevealTicks` | Indirect fire (`WeaponDef::indirect()`: shells reaching 12+ tiles) shows the gun to every enemy for 45 ticks; concealed men who fire are seen for as long. Counter-battery fire follows from ordinary targeting. |
+| Group answer, alert, retreat | `damage()`, `EventType::UnderAttack`, `CommandType::Retreat` | A hit alerts the victim's whole group; the alert is throttled per side and place (not saved: presentation); retreat is a forced march to the nearest own yard. |
+| Suppression and morale | `sim/condition.cpp`, `CCondition` | Rounds landing near infantry add suppression (decays when the firing stops); prone at 400, pinned at 850 (speed, damage taken and fire rate scaled); morale falls under heavy fire and with deaths close by; broken men retreat (`UnitBroke`). |
+| Ambush | `CCondition::kAmbush` | Ten seconds unseen while holding fire or concealed: the first shot opens a 45-tick volley at 3x damage, 6x against armour the warhead is made for (`Ambush`). |
+| Minefields | `UnitTypeDef::mineWeapon`, `stepMines()` | A fortification with `"mine"`: the first enemy of its kind sets it off; enemy engineers lift it (`MineCleared`). |
+| Observers | `UnitTypeDef::spotter`, `spotted()` | Indirect fire on what an observer sees scatters half as much. |
+| Weather sight | `VisionRules::kWeatherSight`, `weatherSightPercent()` | Night, twilight, rain, storm, snow, blizzard and mist scale every sight radius (integer arithmetic). |
+| Abilities | `sim/abilities.hpp`, `CAbilities` (pool `CABL`), `CommandType::UseAbility` | Data-driven unit abilities: throw, barrage, sprint, dig in, charge, rally; cooldowns, uses, costs; `AbilityUsed`. The computer player's `useAbilities()` runs about every two seconds. |
+
+`fireShot()` is the one place a round is fired (weapons, thrown grenades,
+barrages). Tests: `tests/test_combat_orders.cpp` (4),
+`tests/test_condition.cpp` (5), `tests/test_abilities.cpp` (5).

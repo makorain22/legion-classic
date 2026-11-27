@@ -453,6 +453,23 @@ guns and towers are built and placed like other structures.
   only by scouts close by), *Hills hide*, *Night and weather* (darkness, rain,
   snow and mist shorten everyone's sight).
 
+### Unit abilities (9.15)
+
+Under the orders, a button for each ability the selection has (**Alt+1..4**).
+Abilities that need a point (grenades, smoke, a charge, a barrage) wait for a
+left click (Shift: again; Esc cancels); the rest act at once. A button shows
+how many of the selected have it ready, and the seconds until the next.
+
+| Ability | Who | What |
+| --- | --- | --- |
+| Grenades | riflemen, engineers, levies | Up to four tiles: out of reach, they walk up first. Best on men in buildings or bunched up. |
+| Smoke grenades | riflemen, engineers | A screen nobody sees through for half a minute. |
+| Sprint | riflemen, MG and AT teams, levies | 60 % faster for eight seconds. |
+| Dig in | MG and AT teams, engineers, snipers | 35 % less damage until they move. |
+| Rally | German and British riflemen | Men within five tiles shake off suppression; the broken stop running. |
+| Hurrah! | Soviet riflemen | A charge at the point: half as fast again, deaf to fire, half as hard again at close quarters. Once a battle. |
+| Smoke barrage | artillery | Four smoke rounds on a point. |
+
 ### Call-ins (Support tab)
 
 Build your army's **liaison post** (Luftwaffe Liaison Post, Air Army

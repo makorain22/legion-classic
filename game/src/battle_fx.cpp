@@ -172,6 +172,7 @@ void BattleFx::onEvent(const SimEvent& ev, bool visible, const std::array<uint32
     case EventType::Fire: {
       if (!visible) return;
       const WeaponDef& w = weapons_->get(ev.weapon);
+      if (w.muzzle == 0 && w.projectile == ProjectileKind::Shell) return;  // thrown: no flash (9.15)
       // Muzzle: a little way along the line of fire, at gun height.
       const float dx = static_cast<float>(ev.at.x - ev.from.x), dy = static_cast<float>(ev.at.y - ev.from.y);
       const float len = std::max(1.0f, std::sqrt(dx * dx + dy * dy));

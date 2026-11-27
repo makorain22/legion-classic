@@ -174,6 +174,168 @@ void SkirmishAi::think(Simulation& sim, uint8_t p) {
   // Call-ins: looked at about every five seconds (the first think in each five-second slot).
   const uint32_t every = kTuning[static_cast<int>(ai.difficulty)].thinkTicks;
   if ((sim.tick_ + p * 11u) / 75u != (sim.tick_ + p * 11u - std::min(sim.tick_ + p * 11u, every)) / 75u) useSupport(sim, p);
+  // Abilities: about every two seconds.
+  if ((sim.tick_ + p * 7u) / 30u != (sim.tick_ + p * 7u - std::min(sim.tick_ + p * 7u, every)) / 30u) useAbilities(sim, p);
+}
+
+// Each of its men with an ability ready uses it when it fits: grenades on
+// enemies close by (a knot of them, or men in a building), smoke when pinned
+// down, a sprint on a long march with nobody near, digging in while waiting,
+// a rally when men round it are pinned or breaking, a charge at enemy
+// infantry close by when there are enough to go in, a smoke barrage over the
+// enemy when its own men are pinned in front of them.
+void SkirmishAi::useAbilities(Simulation& sim, uint8_t p) {
+  const AbilityRegistry& abilities = sim.types_.abilities();
+  if (abilities.size() == 0) return;
+  Registry& reg = sim.reg_;
+  auto& units = reg.pool<CUnit>();
+  auto& pos = reg.pool<CPosition>();
+  struct Use {
+    Entity e;
+    int ability;
+    Vec2i at;
+  };
+  std::vector<Use> uses;
+  for (uint32_t e : units.entities()) {
+    const CUnit& u = units.get(e);
+    if (u.owner != p || u.health <= 0) continue;
+    const UnitTypeDef& d = sim.types_.get(u.type);
+    if (d.abilities.empty() || !sim.aiMayCommand(e)) continue;
+    const CPosition& me = pos.get(e);
+    const CCondition* cond = reg.pool<CCondition>().tryGet(e);
+    const COrder* order = reg.pool<COrder>().tryGet(e);
+    // The nearest enemy it can see, and the enemy men round it.
+    uint32_t nearest = UINT32_MAX, nearestDist = UINT32_MAX;
+    int foesClose = 0, friendsClose = 0, friendsDown = 0;
+    sim.spatial_.query(me.x, me.y, 10 * T, [&](uint32_t o) {
+      if (o == e || !units.has(o)) return;  // (the hash is from last tick: some may be gone)
+      const CUnit& v = units.get(o);
+      if (v.health <= 0 || v.owner >= MAX_PLAYERS) return;
+      const UnitTypeDef& vd = sim.types_.get(v.type);
+      const CPosition& q = pos.get(o);
+      const uint32_t dd = distance(q.x - me.x, q.y - me.y);
+      if (sim.allied(v.owner, p)) {
+        if (vd.infantry() && dd <= 5u * T) {
+          ++friendsClose;
+          if (const CCondition* fc = reg.pool<CCondition>().tryGet(o);
+              fc && (fc->posture == Posture::Pinned || (fc->flags & CCondition::kRouting)))
+            ++friendsDown;
+        }
+        return;
+      }
+      if (vd.category == UnitCategory::Fortification || !sim.unitVisibleTo(p, o)) return;
+      if (dd <= 6u * T) ++foesClose;
+      if (dd < nearestDist) {
+        nearestDist = dd;
+        nearest = o;
+      }
+    });
+    for (size_t slot = 0; slot < d.abilities.size(); ++slot) {
+      if (!sim.abilityReady(e, static_cast<int>(slot))) continue;
+      const int ab = d.abilities[slot];
+      const AbilityDef& a = abilities.get(ab);
+      const WeaponDef* w = a.weapon >= 0 ? &sim.weapons_.get(a.weapon) : nullptr;
+      bool use = false;
+      Vec2i at{me.x, me.y};
+      switch (a.kind) {
+        case AbilityKind::Throw:
+          if (w && w->smoke > 0) {
+            // Pinned with the enemy in view: smoke between.
+            if (cond && cond->suppression >= 500 && nearest != UINT32_MAX) {
+              const CPosition& q = pos.get(nearest);
+              const int32_t k = std::min<int32_t>(static_cast<int32_t>(nearestDist), a.range - 64);
+              at = {me.x + static_cast<int32_t>(static_cast<int64_t>(q.x - me.x) * k / std::max<uint32_t>(1, nearestDist)),
+                    me.y + static_cast<int32_t>(static_cast<int64_t>(q.y - me.y) * k / std::max<uint32_t>(1, nearestDist))};
+              use = true;
+            }
+          } else if (nearest != UINT32_MAX && nearestDist <= static_cast<uint32_t>(a.range)) {
+            // On men in a building, or two or more men close together.
+            const CPosition& q = pos.get(nearest);
+            const bool inside = reg.pool<CGarrisoned>().has(nearest);
+            int knot = 0;
+            sim.spatial_.query(q.x, q.y, 384, [&](uint32_t o) {
+              if (!units.has(o)) return;
+              const CUnit& v = units.get(o);
+              if (v.health > 0 && v.owner < MAX_PLAYERS && !sim.allied(v.owner, p) && sim.types_.get(v.type).infantry()) ++knot;
+            });
+            if (inside || knot >= 2) {
+              at = {q.x, q.y};
+              use = true;
+            }
+          }
+          break;
+        case AbilityKind::Sprint:
+          if (order && (order->type == OrderType::Move || order->type == OrderType::AttackMove) && nearestDist > 8u * T &&
+              distance(order->goal.x - me.x, order->goal.y - me.y) > 10u * T)
+            use = true;
+          break;
+        case AbilityKind::DigIn:
+          if (order && order->type == OrderType::Idle && foesClose == 0) {
+            const CMover* m = reg.pool<CMover>().tryGet(e);
+            const CAbilities* now = reg.pool<CAbilities>().tryGet(e);
+            use = (!m || (!m->active && !m->request)) && !(now && now->active);
+          }
+          break;
+        case AbilityKind::Rally:
+          use = friendsDown >= 2;
+          break;
+        case AbilityKind::Charge:
+          if (nearest != UINT32_MAX && nearestDist <= static_cast<uint32_t>(std::min(a.range, 8 * T)) && friendsClose >= 3 &&
+              (!cond || cond->suppression < 600) && sim.types_.get(units.get(nearest).type).infantry()) {
+            at = {pos.get(nearest).x, pos.get(nearest).y};
+            use = true;
+          }
+          break;
+        case AbilityKind::Barrage:
+          // A screen over enemies who have our men pinned in front of them.
+          if (w && w->smoke > 0) {
+            // (Guns stand back: look for pinned friends anywhere in reach.)
+            for (uint32_t o : units.entities()) {
+              const CUnit& v = units.get(o);
+              if (v.owner != p || !sim.types_.get(v.type).infantry()) continue;
+              const CCondition* fc = reg.pool<CCondition>().tryGet(o);
+              if (!fc || fc->posture != Posture::Pinned) continue;
+              const CPosition& q = pos.get(o);
+              if (distance(q.x - me.x, q.y - me.y) > static_cast<uint32_t>(a.range)) continue;
+              // The enemy it can see nearest that man.
+              uint32_t best = 8u * T, foe = UINT32_MAX;
+              sim.spatial_.query(q.x, q.y, 8 * T, [&](uint32_t f) {
+                if (!units.has(f)) return;
+                const CUnit& fv = units.get(f);
+                if (fv.health <= 0 || fv.owner >= MAX_PLAYERS || sim.allied(fv.owner, p) || !sim.unitVisibleTo(p, f)) return;
+                const CPosition& fq = pos.get(f);
+                const uint32_t fd = distance(fq.x - q.x, fq.y - q.y);
+                if (fd < best) {
+                  best = fd;
+                  foe = f;
+                }
+              });
+              if (foe != UINT32_MAX) {
+                at = {pos.get(foe).x, pos.get(foe).y};
+                use = distance(at.x - me.x, at.y - me.y) <= static_cast<uint32_t>(a.range);
+                break;
+              }
+            }
+          }
+          break;
+        default:
+          break;
+      }
+      if (use) {
+        uses.push_back({reg.handle(e), ab, at});
+        break;  // one at a time
+      }
+    }
+  }
+  for (const Use& u : uses) {
+    Command c;
+    c.type = CommandType::UseAbility;
+    c.player = p;
+    c.units = {u.e};
+    c.unitType = static_cast<uint16_t>(u.ability);
+    c.target = u.at;
+    sim.queueInternal(std::move(c));
+  }
 }
 
 // Calls in what is ready where it will do most good: strikes on the thickest

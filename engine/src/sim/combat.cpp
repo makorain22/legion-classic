@@ -158,50 +158,55 @@ void Simulation::stepWeapons() {
       });
 
   // Resolve shots after the loop (creating projectiles adds components).
-  for (const Shot& s : shots) {
-    const WeaponDef& wd = weapons_.get(s.weapon);
-    const uint8_t owner = units.get(s.shooter).owner;
-    SimEvent fire;
-    fire.type = EventType::Fire;
-    fire.owner = owner;
-    fire.weapon = static_cast<uint16_t>(s.weapon);
-    fire.from = s.from;
-    fire.at = s.at;
-    events_.push_back(fire);
-    openFire(s.shooter, wd);  // an ambush sprung, a gun given away (condition.cpp)
-    if (wd.projectile == ProjectileKind::Instant) {
-      if (s.target.valid() && static_cast<int32_t>(rng_.below(100)) < wd.accuracy) {
-        impact(s.weapon, owner, s.at, s.target, s.from, reg_.handle(s.shooter));
-      } else {
-        const Vec2i miss{s.at.x + rng_.range(-110, 110), s.at.y + rng_.range(-110, 110)};
-        impact(s.weapon, owner, miss, kNullEntity, s.from, reg_.handle(s.shooter));
-      }
+  for (const Shot& s : shots) fireShot(s.shooter, s.weapon, s.from, s.at, s.target);
+}
+
+// One round fired: the flash and sound, what it gives away, and the round
+// itself (a hit or a miss at once, or shells on their way).
+void Simulation::fireShot(uint32_t shooter, int weapon, Vec2i from, Vec2i at, Entity target) {
+  auto& units = reg_.pool<CUnit>();
+  const WeaponDef& wd = weapons_.get(weapon);
+  const uint8_t owner = units.get(shooter).owner;
+  SimEvent fire;
+  fire.type = EventType::Fire;
+  fire.owner = owner;
+  fire.weapon = static_cast<uint16_t>(weapon);
+  fire.from = from;
+  fire.at = at;
+  events_.push_back(fire);
+  openFire(shooter, wd);  // an ambush sprung, a gun given away (condition.cpp)
+  if (wd.projectile == ProjectileKind::Instant) {
+    if (target.valid() && static_cast<int32_t>(rng_.below(100)) < wd.accuracy) {
+      impact(weapon, owner, at, target, from, reg_.handle(shooter));
     } else {
-      // Shells scatter more the farther they fly; salvo rockets scatter more still.
-      const uint32_t d = distance(s.at.x - s.from.x, s.at.y - s.from.y);
-      // An observer watching the target halves the scatter of indirect fire (9.15).
-      const int32_t spread = static_cast<int32_t>(d / 20) / (wd.indirect() && spotted(owner, s.at) ? 2 : 1);
-      for (int32_t b = 0; b < wd.burst; ++b) {
-        Vec2i aim = s.at;
-        const int32_t sp = spread + (wd.burst > 1 ? wd.burstSpread : 0);
-        if (sp > 0) {
-          aim.x += rng_.range(-sp, sp);
-          aim.y += rng_.range(-sp, sp);
-        }
-        const Entity pe = reg_.create();
-        CProjectile pr;
-        pr.from = s.from;
-        pr.to = aim;
-        pr.x = s.from.x;
-        pr.y = s.from.y;
-        pr.total = static_cast<int32_t>(std::max<uint32_t>(1, distance(aim.x - s.from.x, aim.y - s.from.y)));
-        pr.weapon = static_cast<uint16_t>(s.weapon);
-        pr.owner = owner;
-        pr.shooter = reg_.handle(s.shooter);
-        pr.delay = static_cast<uint16_t>(b * 2);  // a ripple, not one bang
-        reg_.add<CProjectile>(pe, pr);
-      }
+      const Vec2i miss{at.x + rng_.range(-110, 110), at.y + rng_.range(-110, 110)};
+      impact(weapon, owner, miss, kNullEntity, from, reg_.handle(shooter));
     }
+    return;
+  }
+  // Shells scatter more the farther they fly; salvo rockets scatter more still. An observer watching the target
+  // halves the scatter of indirect fire (9.15).
+  const uint32_t d = distance(at.x - from.x, at.y - from.y);
+  const int32_t spread = static_cast<int32_t>(d / 20) / (wd.indirect() && spotted(owner, at) ? 2 : 1);
+  for (int32_t b = 0; b < wd.burst; ++b) {
+    Vec2i aim = at;
+    const int32_t sp = spread + (wd.burst > 1 ? wd.burstSpread : 0);
+    if (sp > 0) {
+      aim.x += rng_.range(-sp, sp);
+      aim.y += rng_.range(-sp, sp);
+    }
+    const Entity pe = reg_.create();
+    CProjectile pr;
+    pr.from = from;
+    pr.to = aim;
+    pr.x = from.x;
+    pr.y = from.y;
+    pr.total = static_cast<int32_t>(std::max<uint32_t>(1, distance(aim.x - from.x, aim.y - from.y)));
+    pr.weapon = static_cast<uint16_t>(weapon);
+    pr.owner = owner;
+    pr.shooter = reg_.handle(shooter);
+    pr.delay = static_cast<uint16_t>(b * 2);  // a ripple, not one bang
+    reg_.add<CProjectile>(pe, pr);
   }
 }
 
@@ -237,7 +242,10 @@ void Simulation::stepProjectiles() {
 
 void Simulation::impact(int weapon, uint8_t owner, Vec2i at, Entity directTarget, Vec2i from, Entity shooter) {
   const WeaponDef& wd = weapons_.get(weapon);
-  const int32_t bonus = 100 + groupBonus(shooter);  // bound units hit harder
+  int32_t bonus = 100 + groupBonus(shooter);  // bound units hit harder
+  // Charging men at close quarters hit half as hard again (9.15).
+  if (shooter.valid() && reg_.alive(shooter) && charging(shooter.index) && distance(at.x - from.x, at.y - from.y) <= 384u)
+    bonus = bonus * 3 / 2;
   auto& units = reg_.pool<CUnit>();
   auto& pos = reg_.pool<CPosition>();
   auto& facings = reg_.pool<CFacing>();
@@ -345,6 +353,8 @@ void Simulation::damage(uint32_t victim, int32_t amount, Entity shooter) {
     const int32_t low = conditionShelterPercent(victim);  // prone or pinned: harder to hit (9.15)
     if (low < 100) amount = std::max(1, static_cast<int32_t>(static_cast<int64_t>(amount) * low / 100));
   }
+  if (const int32_t dug = abilityShelterPercent(victim); dug < 100)  // dug in (9.15)
+    amount = std::max(1, static_cast<int32_t>(static_cast<int64_t>(amount) * dug / 100));
   // Remember who is shooting at us, so we can answer.
   if (shooter.valid() && reg_.alive(shooter) && reg_.has<CUnit>(shooter) &&
       !allied(reg_.get<CUnit>(shooter).owner, u.owner)) {

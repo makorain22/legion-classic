@@ -277,6 +277,7 @@ void GameAudio::onEvent(const SimEvent& ev, const Simulation& sim, uint8_t playe
     case EventType::Fire: {
       if (ev.weapon >= sim.weapons().size()) break;
       const WeaponDef& w = sim.weapons().get(ev.weapon);
+      if (w.sound.empty() && w.muzzle == 0 && w.projectile == ProjectileKind::Shell) break;  // thrown: no report (9.15)
       std::string s = w.sound;
       if (s.empty()) {
         if (w.projectile == ProjectileKind::Instant) s = w.cooldown <= 6 ? "mg" : w.damage >= 60 ? "sniper" : "rifle";
@@ -379,6 +380,21 @@ void GameAudio::onEvent(const SimEvent& ev, const Simulation& sim, uint8_t playe
     case EventType::CrateTaken:
       if (playing && ev.owner == player) play("ui_convoy");
       break;
+    case EventType::AbilityUsed: {
+      // Abilities (9.15): a whistle for a charge or a rally, spades for digging in.
+      if (ev.unitType >= sim.types().abilities().size()) break;
+      const AbilityKind k = sim.types().abilities().get(ev.unitType).kind;
+      const Emitter who{true, ev.from.x * kTile, ev.from.y * kTile, 12.0f};
+      if (k == AbilityKind::Charge) {
+        play("whistle", who);
+        if (playing && ev.owner == player) say("attack", who);
+      } else if (k == AbilityKind::Rally) {
+        play("whistle", who, 0.8f);
+      } else if (k == AbilityKind::DigIn) {
+        play("construction", who, 0.35f);
+      }
+      break;
+    }
     default:
       break;
   }

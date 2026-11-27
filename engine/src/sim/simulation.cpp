@@ -226,6 +226,7 @@ void Simulation::tick() {
   lap(stats_.msProjectiles);
   {
     PNR_PROFILE("Sim: condition and mines");
+    stepAbilities();
     stepCondition();
     stepMines();
   }
@@ -401,6 +402,9 @@ void Simulation::applyCommandBody(const Command& cmd) {
     }
     case CommandType::Retreat:
       retreat(cmd.units);
+      break;
+    case CommandType::UseAbility:
+      useAbility(cmd);
       break;
     case CommandType::Spawn: {
       if (cmd.unitType >= types_.size()) break;
@@ -589,7 +593,14 @@ uint64_t Simulation::stateHash() {
     mix(c.suppression | (uint64_t{c.morale} << 16) | (uint64_t(c.posture) << 32) | (uint64_t{c.flags} << 40) | (uint64_t{c.experience} << 48));
     mix(c.revealedTick);
   });
-  if (phase_ >= 0) mix(uint64_t(uint32_t(phase_)) | (uint64_t{phaseTick_} << 32));
+  reg_.each<CAbilities>([&](uint32_t e, CAbilities& a) {
+    mix(e);
+    for (size_t i = 0; i < a.cooldown.size(); ++i) mix(a.cooldown[i] | (uint64_t{a.used[i]} << 16));
+    mix(a.activeUntil | (uint64_t{a.active} << 32) | (uint64_t{a.pending} << 40) | (uint64_t{a.shotsLeft} << 48));
+  });
+  // Call-ins (9.14).
+  for (const Strike& s : strikes_) mix(s.id ^ (uint64_t{s.startTick} << 20) ^ (uint64_t{s.alive} << 52) ^ (uint64_t{s.delivered} << 60));
+  for (const SupplyCrate& c : crates_) mix(uint64_t(uint32_t(c.at.x)) ^ (uint64_t(uint32_t(c.at.y)) << 24) ^ (uint64_t{c.landTick} << 40));
   for (const GoalState& g : goalState_) mix(g.state | (uint64_t{g.held} << 8));
   for (const WaveRun& wr : waveRuns_) mix(uint64_t(uint32_t(wr.wave)) ^ (uint64_t{wr.nextTick} << 20) ^ (uint64_t(uint32_t(wr.left)) << 52));
   if (visionRules_.flags || visionRules_.sightPercent != 100) mix(visionRules_.flags | (uint64_t{visionRules_.sightPercent} << 16));

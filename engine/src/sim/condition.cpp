@@ -30,6 +30,7 @@ void Simulation::suppress(uint32_t victim, int32_t amount) {
   if (amount <= 0) return;
   const CUnit* u = reg_.pool<CUnit>().tryGet(victim);
   if (!u || u->health <= 0 || !types_.get(u->type).infantry()) return;
+  if (charging(victim)) return;  // deaf to it
   if (reg_.pool<CGarrisoned>().has(victim)) amount /= 2;  // walls and parapets
   CCondition& c = conditionOf(reg_.handle(victim));
   c.suppression = static_cast<uint16_t>(std::min<int32_t>(kMaxSuppression, c.suppression + amount));
@@ -100,6 +101,7 @@ void Simulation::suppressAround(int weapon, uint8_t owner, Vec2i at) {
   auto& pos = reg_.pool<CPosition>();
   std::vector<std::pair<uint32_t, int32_t>> hit;
   spatial_.query(at.x, at.y, reach, [&](uint32_t o) {
+    if (!units.has(o)) return;
     const CUnit& v = units.get(o);
     if (v.health <= 0 || v.owner >= MAX_PLAYERS || allied(v.owner, owner) || !types_.get(v.type).infantry()) return;
     const CPosition& q = pos.get(o);
@@ -115,6 +117,7 @@ void Simulation::shaken(Vec2i at, uint8_t owner) {
   auto& units = reg_.pool<CUnit>();
   std::vector<uint32_t> near;
   spatial_.query(at.x, at.y, 4 * LEPTONS_PER_TILE, [&](uint32_t o) {
+    if (!units.has(o)) return;
     const CUnit& v = units.get(o);
     if (v.health > 0 && v.owner == owner && types_.get(v.type).infantry()) near.push_back(o);
   });
@@ -131,6 +134,7 @@ bool Simulation::spotted(uint8_t owner, Vec2i at) const {
   auto& pos = reg_.pool<CPosition>();
   spatial_.query(at.x, at.y, 16 * LEPTONS_PER_TILE, [&](uint32_t o) {
     if (seen) return;
+    if (!units.has(o)) return;
     const CUnit& v = units.get(o);
     const UnitTypeDef& d = types_.get(v.type);
     if (!d.spotter || v.health <= 0 || !allied(v.owner, owner)) return;
@@ -265,7 +269,8 @@ void Simulation::stepMines() {
     uint32_t victim = UINT32_MAX, engineer = UINT32_MAX;
     spatial_.query(mp.x, mp.y, 384, [&](uint32_t o) {
       if (o == s) return;
-      const CUnit& v = units.get(o);
+      if (!units.has(o)) return;
+    const CUnit& v = units.get(o);
       const UnitTypeDef& vd = types_.get(v.type);
       if (v.health <= 0 || vd.isStructure() || v.owner >= MAX_PLAYERS || allied(v.owner, mu.owner)) return;
       const CPosition& q = pos.get(o);

@@ -244,6 +244,11 @@ class GameScene final : public pioneer::Scene {
   bool attackGroundMode() const { return attackGroundMode_; }
   void retreatSelection();
   void jumpToAlert();             // the camera to the last place we were attacked
+  // Unit abilities (9.15): those the selection has (at most four, in order), using one (a point to pick, or at
+  // once), and the one being aimed (-1: none).
+  std::vector<int> selectionAbilities() const;
+  void useAbility(int ability);
+  int aimingAbility() const { return abilityMode_; }
   // Recent attacks on our side: ground point (leptons) and seconds since (the minimap pings them).
   std::vector<std::pair<pioneer::Vec2f, float>> recentAlerts() const {
     std::vector<std::pair<pioneer::Vec2f, float>> out;
@@ -739,6 +744,7 @@ class GameScene final : public pioneer::Scene {
   bool showHelp_ = true, showDebug_ = false;
   bool attackMoveMode_ = false;  // "A": next left click attack-moves
   bool attackGroundMode_ = false;  // "V": next left click fires at the ground (9.15)
+  int abilityMode_ = -1;           // an ability whose point the next left click picks (9.15)
   // Under-attack alerts (9.15): where, and how long ago (seconds), newest last.
   struct Alert {
     pioneer::Vec2f at;

@@ -24,7 +24,13 @@
       "aiWeight": 5,
       "nato": "infantry",
       "group": "Infantry",
-      "description": "The backbone of the army. Cheap, quick to train and best in numbers: five men form a fireteam on their own."
+      "description": "The backbone of the army. Cheap, quick to train and best in numbers: five men form a fireteam on their own.",
+      "abilities": [
+        "grenade",
+        "smoke_grenade",
+        "sprint",
+        "rally"
+      ]
     },
     {
       "id": "ger_mg_team",
@@ -49,7 +55,11 @@
       "aiWeight": 2,
       "nato": "mg",
       "group": "Infantry",
-      "description": "A machine gun and its loader. Pins down and cuts through infantry in the open; helpless against armour."
+      "description": "A machine gun and its loader. Pins down and cuts through infantry in the open; helpless against armour.",
+      "abilities": [
+        "dig_in",
+        "sprint"
+      ]
     },
     {
       "id": "ger_at_team",
@@ -74,7 +84,11 @@
       "aiWeight": 2,
       "nato": "antitank",
       "group": "Infantry",
-      "description": "Two men with a Panzerschreck rocket launcher. Deadly to tanks from the side and rear at short range."
+      "description": "Two men with a Panzerschreck rocket launcher. Deadly to tanks from the side and rear at short range.",
+      "abilities": [
+        "dig_in",
+        "sprint"
+      ]
     },
     {
       "id": "ger_engineer",
@@ -98,7 +112,12 @@
       "weapons": [],
       "nato": "engineer",
       "group": "Specialists",
-      "description": "Builds field works, repairs vehicles and buildings, and clears the way. Unarmed: keep him out of the fight."
+      "description": "Builds field works, repairs vehicles and buildings, and clears the way. Unarmed: keep him out of the fight.",
+      "abilities": [
+        "smoke_grenade",
+        "grenade",
+        "dig_in"
+      ]
     },
     {
       "id": "ger_sniper",
@@ -126,7 +145,10 @@
       "nato": "sniper",
       "group": "Specialists",
       "description": "Picks off infantry from long range and sees far. Fragile, slow to fire, and no use against vehicles.",
-      "spotter": true
+      "spotter": true,
+      "abilities": [
+        "dig_in"
+      ]
     },
     {
       "id": "ger_scout_car",
@@ -322,7 +344,10 @@
       "aiWeight": 1,
       "nato": "artillery",
       "group": "Support",
-      "description": "A self-propelled 105 mm howitzer. Shells infantry, guns and buildings from far out of sight."
+      "description": "A self-propelled 105 mm howitzer. Shells infantry, guns and buildings from far out of sight.",
+      "abilities": [
+        "smoke_barrage"
+      ]
     },
     {
       "id": "ger_heavy_tank",
@@ -379,7 +404,13 @@
       "aiWeight": 5,
       "nato": "infantry",
       "group": "Infantry",
-      "description": "The backbone of the army. Cheaper than his German counterpart and trained in great numbers."
+      "description": "The backbone of the army. Cheaper than his German counterpart and trained in great numbers.",
+      "abilities": [
+        "grenade",
+        "smoke_grenade",
+        "sprint",
+        "hurrah"
+      ]
     },
     {
       "id": "rus_mg_team",
@@ -404,7 +435,11 @@
       "aiWeight": 2,
       "nato": "mg",
       "group": "Infantry",
-      "description": "A Maxim gun on its wheeled carriage. Pins down and cuts through infantry in the open."
+      "description": "A Maxim gun on its wheeled carriage. Pins down and cuts through infantry in the open.",
+      "abilities": [
+        "dig_in",
+        "sprint"
+      ]
     },
     {
       "id": "rus_at_team",
@@ -429,7 +464,11 @@
       "aiWeight": 2,
       "nato": "antitank",
       "group": "Infantry",
-      "description": "A long anti-tank rifle and its crew. Punches through thin armour; needs flank shots against heavy tanks."
+      "description": "A long anti-tank rifle and its crew. Punches through thin armour; needs flank shots against heavy tanks.",
+      "abilities": [
+        "dig_in",
+        "sprint"
+      ]
     },
     {
       "id": "rus_engineer",
@@ -453,7 +492,12 @@
       "weapons": [],
       "nato": "engineer",
       "group": "Specialists",
-      "description": "Builds field works, repairs vehicles and buildings, and clears the way. Unarmed."
+      "description": "Builds field works, repairs vehicles and buildings, and clears the way. Unarmed.",
+      "abilities": [
+        "smoke_grenade",
+        "grenade",
+        "dig_in"
+      ]
     },
     {
       "id": "rus_sniper",
@@ -481,7 +525,10 @@
       "nato": "sniper",
       "group": "Specialists",
       "description": "Picks off infantry from long range and sees far. Fragile and slow to fire.",
-      "spotter": true
+      "spotter": true,
+      "abilities": [
+        "dig_in"
+      ]
     },
     {
       "id": "rus_scout_car",
@@ -677,7 +724,10 @@
       "aiWeight": 1,
       "nato": "artillery",
       "group": "Support",
-      "description": "A rocket truck that drenches an area in a salvo of rockets, then must reload for a long time."
+      "description": "A rocket truck that drenches an area in a salvo of rockets, then must reload for a long time.",
+      "abilities": [
+        "smoke_barrage"
+      ]
     },
     {
       "id": "rus_heavy_tank",
@@ -734,7 +784,13 @@
       "aiWeight": 5,
       "nato": "infantry",
       "group": "Infantry",
-      "description": "The backbone of the army. A well-drilled regular whose Lee-Enfield fires faster than any other bolt-action rifle."
+      "description": "The backbone of the army. A well-drilled regular whose Lee-Enfield fires faster than any other bolt-action rifle.",
+      "abilities": [
+        "grenade",
+        "smoke_grenade",
+        "sprint",
+        "rally"
+      ]
     },
     {
       "id": "gbr_mg_team",
@@ -759,7 +815,11 @@
       "aiWeight": 2,
       "nato": "mg",
       "group": "Infantry",
-      "description": "A Bren gun and its number two. Lighter than a heavy machine gun but more accurate, and it keeps up with the section."
+      "description": "A Bren gun and its number two. Lighter than a heavy machine gun but more accurate, and it keeps up with the section.",
+      "abilities": [
+        "dig_in",
+        "sprint"
+      ]
     },
     {
       "id": "gbr_at_team",
@@ -784,7 +844,11 @@
       "aiWeight": 2,
       "nato": "antitank",
       "group": "Infantry",
-      "description": "A spring-fired anti-tank projector. Short-ranged and slow to reload, but it knocks out tanks from the side and rear."
+      "description": "A spring-fired anti-tank projector. Short-ranged and slow to reload, but it knocks out tanks from the side and rear.",
+      "abilities": [
+        "dig_in",
+        "sprint"
+      ]
     },
     {
       "id": "gbr_engineer",
@@ -808,7 +872,12 @@
       "weapons": [],
       "nato": "engineer",
       "group": "Specialists",
-      "description": "Builds field works, repairs vehicles and buildings, and clears the way. Unarmed."
+      "description": "Builds field works, repairs vehicles and buildings, and clears the way. Unarmed.",
+      "abilities": [
+        "smoke_grenade",
+        "grenade",
+        "dig_in"
+      ]
     },
     {
       "id": "gbr_sniper",
@@ -836,7 +905,10 @@
       "nato": "sniper",
       "group": "Specialists",
       "description": "A trained marksman with a scoped rifle. Picks off infantry from long range and sees far; fragile and slow to fire.",
-      "spotter": true
+      "spotter": true,
+      "abilities": [
+        "dig_in"
+      ]
     },
     {
       "id": "gbr_scout_car",
@@ -1032,7 +1104,10 @@
       "aiWeight": 2,
       "nato": "artillery",
       "group": "Support",
-      "description": "A 25-pounder on a tracked chassis. Shorter-ranged than heavier guns but fires quickly: the Royal Artillery's answer to every problem."
+      "description": "A 25-pounder on a tracked chassis. Shorter-ranged than heavier guns but fires quickly: the Royal Artillery's answer to every problem.",
+      "abilities": [
+        "smoke_barrage"
+      ]
     },
     {
       "id": "gbr_firefly",
@@ -1121,7 +1196,11 @@
       "aiWeight": 2,
       "nato": "infantry",
       "group": "Levies",
-      "description": "Old men and boys with armbands and old rifles, called up at the post office. Worth little one by one, cheap enough to send by the hundred: they hold trenches, take logistics points and soak up fire."
+      "description": "Old men and boys with armbands and old rifles, called up at the post office. Worth little one by one, cheap enough to send by the hundred: they hold trenches, take logistics points and soak up fire.",
+      "abilities": [
+        "grenade",
+        "sprint"
+      ]
     },
     {
       "id": "ger_supply_truck",
@@ -1169,7 +1248,11 @@
       "aiWeight": 3,
       "nato": "infantry",
       "group": "Levies",
-      "description": "Men called up at the post office and marched off the same day. Poorly armed and barely trained, but there are always more of them: mass them and they carry a position by weight of numbers."
+      "description": "Men called up at the post office and marched off the same day. Poorly armed and barely trained, but there are always more of them: mass them and they carry a position by weight of numbers.",
+      "abilities": [
+        "grenade",
+        "sprint"
+      ]
     },
     {
       "id": "rus_supply_truck",
@@ -1217,7 +1300,11 @@
       "aiWeight": 2,
       "nato": "infantry",
       "group": "Levies",
-      "description": "Fresh from the recruiting counter at the post office with a few weeks' drill. No match for regulars man for man; in numbers they hold a line and free the riflemen for the attack."
+      "description": "Fresh from the recruiting counter at the post office with a few weeks' drill. No match for regulars man for man; in numbers they hold a line and free the riflemen for the attack.",
+      "abilities": [
+        "grenade",
+        "sprint"
+      ]
     },
     {
       "id": "gbr_supply_truck",
@@ -1241,6 +1328,79 @@
       "nato": "supply",
       "group": "Engineering",
       "description": "Runs between a logistics office and your headquarters, paying in 400 supplies every time it arrives. Unarmed and thin-skinned: escort it, and hunt the enemy's. A new one goes to whichever of your offices is short of a truck; right-click an office to send it there yourself."
+    }
+  ],
+  "abilities": [
+    {
+      "id": "grenade",
+      "name": "Grenades",
+      "icon": "Grenade",
+      "kind": "throw",
+      "weapon": "grenade",
+      "range": 4,
+      "cooldown": 25,
+      "description": "The men lob grenades at a point up to four tiles off: deadly to men behind cover and in buildings."
+    },
+    {
+      "id": "smoke_grenade",
+      "name": "Smoke grenades",
+      "icon": "Smoke",
+      "kind": "throw",
+      "weapon": "smoke_grenade",
+      "range": 4,
+      "cooldown": 45,
+      "description": "A smoke screen up to four tiles off: nobody sees into or through it for half a minute. Cover for a dash or a withdrawal."
+    },
+    {
+      "id": "sprint",
+      "name": "Sprint",
+      "icon": "Sprint",
+      "kind": "sprint",
+      "percent": 60,
+      "duration": 8,
+      "cooldown": 40,
+      "description": "Sixty per cent faster for eight seconds: across open ground, out of the line of fire."
+    },
+    {
+      "id": "dig_in",
+      "name": "Dig in",
+      "icon": "Dig in",
+      "kind": "dig_in",
+      "percent": 35,
+      "cooldown": 10,
+      "description": "Scrapes and foxholes: thirty-five per cent less damage until the men move again."
+    },
+    {
+      "id": "rally",
+      "name": "Rally",
+      "icon": "Rally",
+      "kind": "rally",
+      "radius": 5,
+      "cooldown": 90,
+      "description": "The sergeant gets his men up: everyone within five tiles shakes off suppression, steadies, and the broken stop running."
+    },
+    {
+      "id": "hurrah",
+      "name": "Hurrah! (charge)",
+      "icon": "Charge",
+      "kind": "charge",
+      "percent": 50,
+      "duration": 7,
+      "range": 12,
+      "cooldown": 75,
+      "description": "The men charge the point with a cheer: half as fast again for seven seconds, deaf to fire, and half as hard again at close quarters."
+    },
+    {
+      "id": "smoke_barrage",
+      "name": "Smoke barrage",
+      "icon": "Smoke",
+      "kind": "barrage",
+      "weapon": "smoke_shell",
+      "shots": 4,
+      "duration": 6,
+      "range": 22,
+      "cooldown": 60,
+      "description": "Four smoke rounds on a point: a screen across the enemy's view for half a minute."
     }
   ]
 }

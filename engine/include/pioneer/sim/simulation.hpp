@@ -89,6 +89,7 @@ enum class CommandType : uint8_t {
   AttackGround,   // `units` keep firing at the point `target` (artillery on a chip, a wood, a crossroads)
   Retreat,        // `units` fall back to their side's nearest construction yard (else any of its buildings) at a
                   // forced march, not stopping to fight
+  UseAbility,     // `units` that have ability `unitType` (AbilityRegistry index) and have it ready use it, at `target`
 };
 
 // Production lines: one per kind of thing a side builds.
@@ -221,6 +222,7 @@ enum class EventType : uint8_t {
   Ambush,           // owner's unit sprang an ambush from `at` (its volley hits three to six times as hard)
   UnitBroke,        // owner's man (`unitType`) at `at` broke and runs for home
   MineCleared,      // owner's engineers lifted a mine (`unitType`) at `at`
+  AbilityUsed,      // owner's unit used ability `unitType` (AbilityRegistry index) at `at`
 };
 
 struct SimEvent {
@@ -356,6 +358,15 @@ class Simulation {
   int32_t conditionFirePercent(uint32_t unit) const;
   int32_t conditionShelterPercent(uint32_t unit) const;
   bool routing(uint32_t unit) const;
+  // Adds suppression to a man (0..1000; scripts and tests; fire does it by itself).
+  void suppress(uint32_t victim, int32_t amount);
+  // Abilities (9.15): may this unit use the ability in `slot` of its type's list now (and why not)?
+  bool abilityReady(uint32_t unit, int slot, std::string* why = nullptr) const;
+  // Ticks before it may (0: ready).
+  int32_t abilityCooldown(uint32_t unit, int slot) const;
+  int32_t abilitySpeedPercent(uint32_t unit) const;    // sprinting or charging: faster
+  int32_t abilityShelterPercent(uint32_t unit) const;  // dug in: less damage
+  bool charging(uint32_t unit) const;                  // charging: deaf to fire
   // Does `player`'s side see this unit: its tile in sight, and the unit not hidden from it?
   bool unitVisibleTo(uint8_t player, uint32_t unit) const;
   // A unit's bearing (suppression, morale, posture...); null for one nothing has touched.
@@ -589,7 +600,6 @@ class Simulation {
   void setOrderIdle(Entity e);
   void retreat(const std::vector<Entity>& units);
   // The soldier's condition (condition.cpp, 9.15).
-  void suppress(uint32_t victim, int32_t amount);
   void suppressAround(int weapon, uint8_t owner, Vec2i at);
   void shaken(Vec2i at, uint8_t owner);
   void openFire(uint32_t shooter, const WeaponDef& wd);
@@ -597,6 +607,12 @@ class Simulation {
   int32_t ambushPercent(Entity shooter, int weapon, ArmorClass armor) const;
   void stepCondition();
   void stepMines();
+  // Unit abilities (abilities.cpp, 9.15).
+  void useAbility(const Command& cmd);
+  bool performAbility(uint32_t unit, int slot, Vec2i at);
+  void stepAbilities();
+  void fireShot(uint32_t shooter, int weapon, Vec2i from, Vec2i at, Entity target);
+  CAbilities& abilitiesOf(Entity e);
   void applyEdit(const UnitEdit& ed);
 
   // movement (movement.cpp)

@@ -467,7 +467,7 @@ void Sidebar::drawProduction(float width) {
   }
   ImGui::Dummy(ImVec2(0, 2));
   if (tab_ == 4) {
-    drawSupport(width, std::max(60.0f, ImGui::GetContentRegionAvail().y - 168));
+    drawSupport(width, std::max(60.0f, ImGui::GetContentRegionAvail().y - 196));
     return;
   }
   // Which types belong on this tab, under their group headings.
@@ -490,9 +490,9 @@ void Sidebar::drawProduction(float width) {
   const SpriteRenderer& r = scene_.renderer();
   ui::panel(dl, ImGui::GetCursorScreenPos(),
             ImVec2(ImGui::GetCursorScreenPos().x + width, ImGui::GetCursorScreenPos().y +
-                                                              std::max(60.0f, ImGui::GetContentRegionAvail().y - 168)),
+                                                              std::max(60.0f, ImGui::GetContentRegionAvail().y - 196)),
             true);
-  ImGui::BeginChild("##cameos", ImVec2(width, std::max(60.0f, ImGui::GetContentRegionAvail().y - 168)), false);
+  ImGui::BeginChild("##cameos", ImVec2(width, std::max(60.0f, ImGui::GetContentRegionAvail().y - 196)), false);
   // Plates share the width left beside the scrollbar (when the list is long enough to have one).
   const float cw = (std::min(width, ImGui::GetContentRegionAvail().x) - 4) * 0.5f;
   dl = ImGui::GetWindowDrawList();
@@ -763,6 +763,49 @@ void Sidebar::drawOrders(float width) {
   ui::glowIfHighlighted("order.encyclopedia");
   if (encyclopediaClicked) scene_.openEncyclopedia(hoveredType_ >= 0 ? hoveredType_ : -1);
   if (ImGui::IsItemHovered()) ImGui::SetTooltip("Every unit and building, with its weapons and numbers (K).");
+  // Abilities of the selection (9.15): a button each, Alt+1..4.
+  {
+    const std::vector<int> list = scene_.selectionAbilities();
+    const AbilityRegistry& abilities = scene_.types().abilities();
+    for (size_t i = 0; i < static_cast<size_t>(kMaxAbilities); ++i) {
+      if (i) ImGui::SameLine(0, 4);
+      const float aw = (width - 12) / 4.0f;
+      if (i >= list.size()) {
+        ImGui::Dummy(ImVec2(aw, bh));
+        continue;
+      }
+      const int ab = list[i];
+      const AbilityDef& a = abilities.get(ab);
+      // Ready in any of the selected that have it? Otherwise the soonest.
+      int ready = 0, have = 0;
+      int32_t soonest = INT32_MAX;
+      for (Entity e : own) {
+        if (!reg.alive(e)) continue;
+        const int slot = scene_.types().abilitySlot(reg.get<CUnit>(e).type, ab);
+        if (slot < 0) continue;
+        ++have;
+        if (sim.abilityReady(e.index, slot)) ++ready;
+        else soonest = std::min(soonest, sim.abilityCooldown(e.index, slot));
+      }
+      std::string label = a.icon;
+      if (!ready && soonest > 0 && soonest != INT32_MAX) label += " " + std::to_string(soonest / TICKS_PER_SECOND + 1) + "s";
+      ImGui::PushID(static_cast<int>(100 + i));
+      const bool clicked = ui::plateButton("ability", label.c_str(), ImVec2(aw, bh), scene_.aimingAbility() == ab, false, ready > 0);
+      ui::glowIfHighlighted(("ability:" + a.id).c_str());
+      if (clicked) scene_.useAbility(ab);
+      if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+        ImGui::BeginTooltip();
+        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(ui::kBrass), "%s  (Alt+%d)", a.name.c_str(), static_cast<int>(i + 1));
+        ImGui::PushTextWrapPos(320);
+        ImGui::TextUnformatted(a.description.c_str());
+        ImGui::PopTextWrapPos();
+        ImGui::TextDisabled("%d of %d ready; every %d s%s", ready, have, a.cooldown / TICKS_PER_SECOND,
+                            a.cost > 0 ? (", $" + std::to_string(a.cost)).c_str() : "");
+        ImGui::EndTooltip();
+      }
+      ImGui::PopID();
+    }
+  }
   if (!producers.empty()) ImGui::TextDisabled("Right-click the map: rally point");
 }
 

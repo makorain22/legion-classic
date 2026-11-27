@@ -58,7 +58,8 @@ void loadPool(ByteReader& r, Registry& reg) {
   X(CHarvester, "CHAR")     \
   X(CGroupMember, "CGRM")   \
   X(CGarrisoned, "CGAR")    \
-  X(CCondition, "CCND")
+  X(CCondition, "CCND")      \
+  X(CAbilities, "CABL")
 
 template <class T>
 void savePoolTagged(ByteWriter& w, Registry& reg, uint32_t tag) {
@@ -488,7 +489,7 @@ bool Simulation::loadSection(uint32_t tag, ByteReader& r, int version, std::stri
       } else {
         // The old stream: the fourteen pools it had, in its order.
 #define PNR_LOAD(T, TAG) \
-  if (fourcc(TAG) != fourcc("CCND")) loadPool<T>(r, reg_);
+  if (fourcc(TAG) != fourcc("CCND") && fourcc(TAG) != fourcc("CABL")) loadPool<T>(r, reg_);
         PNR_POD_POOLS(PNR_LOAD)
 #undef PNR_LOAD
       }
