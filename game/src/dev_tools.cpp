@@ -38,7 +38,7 @@ namespace {
 // Every command and variable this file registers, so they can be taken away
 // again when the scene goes (they hold a pointer to it).
 const char* const kGameCommands[] = {"quit",   "exit",    "screenshot", "photo", "speed", "pause", "hash", "status",
-                                     "reveal", "credits", "spawn",      "kill",  "side",  "goto", "map",
+                                     "reveal", "credits", "spawn",      "callin", "kill",  "side",  "goto", "map",
                                      "restart", "editor", "clear",      "profiler", "console", "mod.list", "mod.pack",
                                      "tools.assets", "tools.models", "tools.banks", "tools.validate"};
 
@@ -517,6 +517,41 @@ void GameScene::registerConsoleCommands() {
                    std::vector<std::string> out;
                    if (a.size() == 1)
                      for (const UnitTypeDef& t : types_.all()) out.push_back(t.id);
+                   return out;
+                 });
+
+  con.addCommand("callin", "callin <call-in id> [side] [centre] - opens, charges and calls a call-in under the mouse "
+                 "(or at the middle of the screen with 'centre'), free.",
+                 [this, inBattle](const ConsoleArgs& a, Console& c) {
+                   if (!inBattle(c)) return;
+                   if (a.size() < 2) return c.error("callin <call-in id> [side] [centre]");
+                   const int power = sim_->support().find(a[1]);
+                   if (power < 0) return c.error("There is no call-in called '" + a[1] + "'.");
+                   const int side = a.integer(2, player_);
+                   if (side < 0 || side >= MAX_PLAYERS) return c.error("Sides are 0 to 7.");
+                   if (online()) return c.error("Not in a multiplayer game: it would change only your battle");
+                   sim_->setSupportGate(static_cast<uint8_t>(side), power, SupportState::Gate::On);
+                   sim_->setSupportCharges(static_cast<uint8_t>(side), power, 9);
+                   Command cmd;
+                   cmd.type = CommandType::SetCredits;
+                   cmd.player = static_cast<uint8_t>(side);
+                   cmd.amount = sim_->playerState(static_cast<uint8_t>(side)).credits + sim_->support().get(power).cost;
+                   sim_->queue(cmd);
+                   Command call;
+                   call.type = CommandType::CallSupport;
+                   call.player = static_cast<uint8_t>(side);
+                   call.unitType = static_cast<uint16_t>(power);
+                   const bool centre = a.size() > 3 && a[3] == "centre";
+                   const Vec2f f = cameraFocus();
+                   call.target = centre ? Vec2i{static_cast<int32_t>(f.x), static_cast<int32_t>(f.y)} : mouseWorldLeptons();
+                   sim_->queue(call);
+                   c.printFmt("%s called for side %d", sim_->support().get(power).name.c_str(), side);
+                 },
+                 kCmdCheat,
+                 [this](const ConsoleArgs& a, const std::string&) {
+                   std::vector<std::string> out;
+                   if (a.size() == 1)
+                     for (const SupportPowerDef& d : sim_->support().all()) out.push_back(d.id);
                    return out;
                  });
 

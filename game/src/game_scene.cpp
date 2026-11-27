@@ -419,6 +419,10 @@ void GameScene::replaceWorld(MapFile&& file, bool keepCamera) {
     }
   if (editor_) editor_->onWorldReplaced();
   if (sidebar_) sidebar_->cancel();
+  chutes_.clear();
+  heardStrikes_.clear();
+  bombsHeard_.clear();
+  crashed_.clear();
   beginRecording();
 }
 
@@ -1816,6 +1820,7 @@ void GameScene::simTick() {
     }
   }
   editor_->onSimTick(sim_->spawnLog());
+  updateCallIns();
   const auto& events = sim_->events();
   for (const SimEvent& ev : events) bus_.publish(ev);
   bus_.dispatch();
@@ -1824,6 +1829,7 @@ void GameScene::simTick() {
     fx_.onEvent(ev, seen, teamColors_);
     if (audio_) audio_->onEvent(ev, *sim_, player_, mode_ == Mode::Game);
     announce(ev);
+    callInEvent(ev);
     if (!opt_.showcase.empty() && (ev.type == EventType::Impact || ev.type == EventType::UnitDied) && seen)
       hot_.push_back({ev.at, showTime_});
     if (mode_ == Mode::Menu && (ev.type == EventType::Impact || ev.type == EventType::UnitDied) && (frame_ % 90 == 0 || attractFocus_.x < 0))
@@ -2535,6 +2541,7 @@ void GameScene::drawUnits(const RectF& view) {
                            teamColor(owner), kWhite, lx, ly, gh});
     }
   }
+  queueCallIns(view, order);
   if (threeD) {
     queueItems3D();
     return;

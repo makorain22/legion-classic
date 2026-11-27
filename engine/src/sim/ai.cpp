@@ -171,6 +171,113 @@ void SkirmishAi::think(Simulation& sim, uint8_t p) {
     fortify(sim, p);
   }
   manageArmy(sim, p, saving);
+  // Call-ins: looked at about every five seconds (the first think in each five-second slot).
+  const uint32_t every = kTuning[static_cast<int>(ai.difficulty)].thinkTicks;
+  if ((sim.tick_ + p * 11u) / 75u != (sim.tick_ + p * 11u - std::min(sim.tick_ + p * 11u, every)) / 75u) useSupport(sim, p);
+}
+
+// Calls in what is ready where it will do most good: strikes on the thickest
+// knot of enemies it can see (well clear of its own men), recon over the
+// enemy's base, paratroopers ahead of an attack, supplies at home when short.
+void SkirmishAi::useSupport(Simulation& sim, uint8_t p) {
+  AiPlayer& ai = players_[p];
+  const SupportRegistry& sr = sim.types_.support();
+  if (sr.size() == 0 || ai.base.x < 0) return;
+  const PlayerState& ps = sim.players_[p];
+  Registry& reg = sim.reg_;
+  const int minutes = static_cast<int>(sim.tick_ / (TICKS_PER_SECOND * 60));
+  if (ai.difficulty == AiDifficulty::Easy && (sim.tick_ / 75u) % 4u != 0) return;  // easy: seldom
+  // Enemies it can see and its own men, in bins of 6 x 6 tiles.
+  constexpr int B = 6;
+  const int bw = (sim.map_.width() + B - 1) / B, bh = (sim.map_.height() + B - 1) / B;
+  struct Bin {
+    int32_t foe = 0, friends = 0, vehicles = 0;
+    int64_t x = 0, y = 0;
+  };
+  std::vector<Bin> bins(static_cast<size_t>(bw) * bh);
+  for (uint32_t e : reg.pool<CUnit>().entities()) {
+    const CUnit& u = reg.pool<CUnit>().get(e);
+    if (u.owner >= MAX_PLAYERS) continue;
+    const UnitTypeDef& d = sim.types_.get(u.type);
+    if (d.category == UnitCategory::Fortification) continue;
+    const CPosition& c = reg.pool<CPosition>().get(e);
+    Bin& b = bins[static_cast<size_t>(std::clamp((c.y >> LEPTON_SHIFT) / B, 0, bh - 1)) * bw +
+                  std::clamp((c.x >> LEPTON_SHIFT) / B, 0, bw - 1)];
+    if (sim.allied(u.owner, p)) {
+      b.friends += d.isStructure() ? 3 : d.infantry() ? 1 : 3;
+      continue;
+    }
+    if (!d.isStructure() && !sim.unitVisibleTo(p, e)) continue;
+    if (d.isStructure() && !sim.vision_.explored(p, c.x >> LEPTON_SHIFT, c.y >> LEPTON_SHIFT)) continue;
+    const int w = d.isStructure() ? 2 : d.infantry() ? 1 : 3;
+    b.foe += w;
+    b.vehicles += d.isStructure() || d.infantry() ? 0 : 1;
+    b.x += static_cast<int64_t>(c.x) * w;
+    b.y += static_cast<int64_t>(c.y) * w;
+  }
+  // The best bin for a strike, and the point in it to hit.
+  auto bestStrike = [&](bool vehicles, int need, Vec2i& at) {
+    int32_t best = 0;
+    for (const Bin& b : bins) {
+      if (b.foe < need || b.friends > b.foe / 3) continue;  // not on our own men
+      const int32_t score = (vehicles ? b.vehicles * 4 : 0) + b.foe - b.friends * 2;
+      if (score > best) {
+        best = score;
+        at = {static_cast<int32_t>(b.x / b.foe), static_cast<int32_t>(b.y / b.foe)};
+      }
+    }
+    return best > 0;
+  };
+  auto call = [&](int power, Vec2i at) {
+    if (!sim.canCallSupport(p, power, at)) return false;
+    Command c;
+    c.type = CommandType::CallSupport;
+    c.player = p;
+    c.unitType = static_cast<uint16_t>(power);
+    c.target = at;
+    sim.queueInternal(std::move(c));
+    return true;
+  };
+  for (size_t i = 0; i < sr.size(); ++i) {
+    const int power = static_cast<int>(i);
+    const SupportPowerDef& d = sr.get(power);
+    const SupportState& st = sim.supportState(p, power);
+    if (!sim.supportOpen(p, power) || st.charges <= 0 || sim.tick_ < st.readyTick) continue;
+    if (d.kind != SupportKind::Supply && ps.credits < d.cost + 600) continue;  // keep something for the army
+    Vec2i at{-1, -1};
+    switch (d.kind) {
+      case SupportKind::Bombing:
+      case SupportKind::Naval:
+        if (bestStrike(false, 8, at) && call(power, at)) return;
+        break;
+      case SupportKind::Attack:
+        if (bestStrike(true, 6, at) && call(power, at)) return;
+        break;
+      case SupportKind::Strafing:
+        if (bestStrike(false, 5, at) && call(power, at)) return;
+        break;
+      case SupportKind::Recon:
+        if (ai.enemyAt.x >= 0 && !sim.vision_.visible(p, ai.enemyAt.x >> LEPTON_SHIFT, ai.enemyAt.y >> LEPTON_SHIFT) &&
+            call(power, ai.enemyAt))
+          return;
+        break;
+      case SupportKind::Paradrop:
+        // Ahead of the main force while it attacks: a little short of what it is going for.
+        if (ai.phase == 1 && ai.waveTarget.x >= 0 && minutes >= 8) {
+          at = {ai.waveTarget.x - ai.toward.x * 5, ai.waveTarget.y - ai.toward.y * 5};
+          if (call(power, at)) return;
+        }
+        break;
+      case SupportKind::Supply:
+        if (ps.credits < 1500 && call(power, {ai.base.x + ai.toward.x * 4, ai.base.y + ai.toward.y * 4})) return;
+        break;
+      case SupportKind::Landing:
+        if (ai.difficulty != AiDifficulty::Easy && ai.enemyAt.x >= 0 && minutes >= 10 && call(power, ai.enemyAt)) return;
+        break;
+      default:
+        break;
+    }
+  }
 }
 
 // Finds a spot for a structure near `want`, inside build range, leaving a lane
@@ -258,7 +365,7 @@ bool SkirmishAi::manageEconomy(Simulation& sim, uint8_t p) {
   std::string faction;
   int roleCount[6] = {};  // yard, power, income buildings, barracks, factory, other
   int posts = 0, warehouses = 0, fuels = 0, offices = 0, trucks = 0;
-  int bunkers = 0, atGuns = 0, towers = 0, nests = 0, guns = 0;
+  int bunkers = 0, atGuns = 0, towers = 0, nests = 0, guns = 0, airPosts = 0, flak = 0;
   std::vector<Entity> mcvList;
   for (uint32_t e : reg.pool<CUnit>().entities()) {
     const CUnit& u = reg.pool<CUnit>().get(e);
@@ -278,6 +385,8 @@ bool SkirmishAi::manageEconomy(Simulation& sim, uint8_t p) {
       if (d.model == "tower") ++towers;
       if (d.model == "mg_nest") ++nests;
       if (d.model == "howitzer_pit") ++guns;
+      if (r == "airpost") ++airPosts;
+      if (d.model == "flak_pit") ++flak;
     } else if (d.deploysTo >= 0) {
       mcvList.push_back(reg.handle(e));
     } else if (d.capacity > 0) {
@@ -406,6 +515,9 @@ bool SkirmishAi::manageEconomy(Simulation& sim, uint8_t p) {
     }
     if (roleCount[3] < tune.barracks && ps.credits > 1200) wants.push_back(typeOf("barracks"));
     if (roleCount[4] < tune.factories && ps.credits > 2500) wants.push_back(typeOf("factory"));
+    // A liaison post for call-ins once the base is up (9.14).
+    if (airPosts < 1 && roleCount[4] > 0 && ps.credits > 1800 && minutes >= (ai.difficulty == AiDifficulty::Easy ? 14 : 8))
+      wants.push_back(typeByRole("airpost"));
     // Money piling up faster than the lines can spend it: more works and
     // barracks (each further one speeds its line up).
     if (ai.difficulty != AiDifficulty::Easy) {
@@ -468,6 +580,8 @@ bool SkirmishAi::manageEconomy(Simulation& sim, uint8_t p) {
     else if (bunkers < tune.bunkers) produce(typeOf("bunker"));
     else if (atGuns < tune.atGuns + (doc.fortify >= 3 ? 1 : 0)) produce(typeOf("atgun"));
     else if (towers < tune.towers) produce(typeOf("tower"));
+    else if (flak < (minutes >= 10 ? 1 : 0) + (ai.difficulty == AiDifficulty::Hard && minutes >= 16 ? 1 : 0))
+      produce(typeOf("flak_pit"));
     else if (guns < (ai.difficulty == AiDifficulty::Hard ? 1 : 0) + (ai.difficulty != AiDifficulty::Easy ? doc.guns : 0) &&
              ps.credits > 2500)
       produce(typeOf("howitzer_pit"));

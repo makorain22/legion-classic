@@ -415,6 +415,29 @@ valuable thing among them. Chips can't be shot; send someone to look.
 Fortifications are bought and placed on the spot, a tile at a time; bunkers,
 guns and towers are built and placed like other structures.
 
+### Call-ins (Support tab)
+
+Build your army's **liaison post** (Luftwaffe Liaison Post, Air Army
+Liaison, RAF Forward Control; one for each construction yard) and the
+**Support** tab fills with call-ins. Each charges up while the post stands
+(the dots show charges; the bar, the next one) and costs supplies when you
+use it. Click one, then click the battlefield:
+
+| Call-in | What comes |
+| --- | --- |
+| Reconnaissance | A plane over the target: you see everything there for a while, men in woods included. |
+| Ground attack | Stukas, Il-2s or Typhoons on one point: tanks, guns, strongpoints. |
+| Bombing raid, strafing run | Bombers or fighters along a line. Click, or **drag** to choose the line they fly. |
+| Paratroopers | A platoon dropped where you point. |
+| Supply drop | Crates: whoever reaches one first gets its supplies. |
+| Warship | Shells on targets near the open sea. |
+| Landing | Landing craft put a company ashore on the nearest beach. |
+
+Shift-click to call again without picking it from the tab; right-click or
+Esc cancels. **Flak pits** (Emplacements) fire at enemy planes overhead and
+can bring them down; a raid that loses half its planes turns for home.
+Missions may give or take call-ins whatever you have built.
+
 ### Moving and fighting
 
 - **Formations.** A group you send somewhere **marches as one body**: it

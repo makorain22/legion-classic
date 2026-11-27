@@ -2,6 +2,8 @@
 // supply and paratroop drops, naval guns and landings.
 #include <doctest/doctest.h>
 
+#include <fstream>
+
 #include <nlohmann/json.hpp>
 
 #include "pioneer/core/bytes.hpp"
@@ -384,4 +386,51 @@ TEST_CASE("scripts open call-ins, call them free, and stage landings and fly-ove
   CHECK(std::string(actionId(ActionType::SupportCall)) == "support_call");
   CHECK(std::string(actionId(ActionType::Landing)) == "landing");
   CHECK(std::string(condId(CondType::SupportReady)) == "support_ready");
+}
+
+TEST_CASE("the computer calls in strikes on enemies it can see, clear of its own men") {
+  auto read = [](const char* f) {
+    std::ifstream in(std::string(LEGION_RULES_DIR) + f);
+    return nlohmann::json::parse(in);
+  };
+  WeaponRegistry weapons;
+  UnitTypeRegistry types;
+  std::string err;
+  REQUIRE_MESSAGE(loadRuleSet(read("weapons.json"), read("units.json"), read("buildings.json"), weapons, types, err), err);
+  REQUIRE(types.support().find("ger_attack") >= 0);
+  Map map(96, 96, 300);
+  Simulation sim(map, types, weapons, 23);
+  auto place = [&](const char* id, uint8_t owner, Vec2i at) {
+    Command c;
+    c.type = CommandType::SpawnList;
+    c.spawns = {{static_cast<uint16_t>(types.find(id)), owner, at, 0, -1}};
+    sim.queue(c);
+    sim.tick();
+  };
+  place("ger_yard", 0, tile(20, 48));
+  place("ger_air_post", 0, tile(14, 44));
+  place("ger_tower", 0, tile(28, 48));
+  credits(sim, 0, 20000);
+  Command ai;
+  ai.type = CommandType::SetController;
+  ai.player = 0;
+  ai.amount = 2;
+  sim.queue(ai);
+  // An enemy column in the open in front of the watchtower.
+  spawn(sim, types.find("rus_rifleman"), 1, tile(36, 48), 10);
+  spawn(sim, types.find("rus_medium_tank"), 1, tile(37, 50), 3);
+  place("rus_yard", 1, tile(80, 48));
+  run(sim, 16);
+  for (const char* id : {"ger_attack", "ger_strafing", "ger_bombing"}) sim.setSupportCharges(0, types.support().find(id), 1);
+  bool called = false;
+  for (int i = 0; i < 15 * 20 && !called; ++i) {
+    sim.tick();
+    for (const SimEvent& e : sim.events())
+      if (e.type == EventType::SupportCalled && e.owner == 0 && e.amount > 0) {
+        called = true;
+        // On the enemy, not on itself.
+        CHECK(distance(e.at.x - tile(36, 48).x, e.at.y - tile(36, 48).y) < 8u * 256u);
+      }
+  }
+  CHECK(called);
 }

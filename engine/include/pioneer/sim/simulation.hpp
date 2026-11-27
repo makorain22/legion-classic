@@ -203,12 +203,13 @@ enum class EventType : uint8_t {
   PhaseChanged,     // the mission entered phase `amount`, called `text`
   WaveArrived,      // wave `text` arrived for owner at `at`: `amount` units
   // --- Support (9.14) ------------------------------------------------------------------
-  SupportCalled,    // owner called call-in `unitType` on `at` (strike `amount`)
+  SupportCalled,    // owner called call-in `unitType` on `at` (strike `amount`; 0: refused, see canCallSupport)
   SupportReady,     // owner's call-in `unitType` has another charge (`amount` now)
   FlakFire,         // an anti-aircraft gun of owner at `from` fires at a plane over `at` (`amount` 1: a ship's guns at `from`)
   AircraftDown,     // a plane of owner's comes down at `at`
   CrateTaken,       // owner's men took a supply crate at `at`: `amount` supplies
   TroopsLanded,     // owner's men came ashore or down by parachute at `at`: `amount`
+  ChutesOpen,       // owner's paratroopers jump over `at`: `amount` men, spread over `weapon` leptons (the look)
 };
 
 struct SimEvent {

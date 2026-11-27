@@ -11,6 +11,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <imgui.h>
@@ -339,6 +340,19 @@ class GameScene final : public pioneer::Scene {
     std::string text;
   };
   std::vector<Floater> floaters_;
+  // Call-ins on screen (call_ins.cpp).
+  struct Chute {
+    pioneer::Vec2f at;  // leptons
+    uint32_t start = 0;  // tick the man jumped
+    int manFrame = -1;
+    uint32_t team = 0;
+  };
+  std::vector<Chute> chutes_;
+  std::unordered_set<uint32_t> heardStrikes_, bombsHeard_;
+  std::unordered_set<uint64_t> crashed_;
+  void queueCallIns(const pioneer::RectF& view, uint32_t& order);
+  void updateCallIns();
+  void callInEvent(const pioneer::SimEvent& ev);
   // A front being dragged with the right button: where it is, which way it
   // faces and how wide. False while there is nothing to lay out.
   bool draggedFront(pioneer::Vec2f startPx, pioneer::Vec2f endPx, pioneer::Vec2i& mid, pioneer::Angle& facing, int32_t& width);

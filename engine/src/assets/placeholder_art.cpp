@@ -986,6 +986,7 @@ bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error, const ArtOption
   {
     BakeQueue q(ab);
     addUnitModels(q, cat);
+    addCallInModels(q, cat);
     q.run();
   }
   addEffects(ab, cat.effects);

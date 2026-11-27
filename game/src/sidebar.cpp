@@ -20,8 +20,8 @@ const uint32_t kLayerColor[LAYER_COUNT] = {
     rgba8(78, 92, 48),  rgba8(124, 116, 76), rgba8(108, 90, 66),  rgba8(64, 54, 42),
     rgba8(150, 138, 108), rgba8(104, 102, 96), rgba8(212, 216, 222), rgba8(136, 122, 96),
 };
-const char* kTabNames[4] = {"Build", "Defend", "Train", "Vehicles"};
-const char* kTabIds[4] = {"build", "defend", "train", "vehicles"};
+const char* kTabNames[5] = {"Build", "Defend", "Train", "Vehicles", "Support"};
+const char* kTabIds[5] = {"build", "defend", "train", "vehicles", "support"};
 const char* kStanceNames[3] = {"Aggressive", "Hold", "Hold fire"};
 const char* kStanceTips[3] = {
     "Fight back when shot, even on the march, and go after attackers out of reach.",
@@ -68,12 +68,19 @@ void drawIcon(ImDrawList* dl, const SpriteRenderer& r, const UnitArt& art, ImVec
 }
 }  // namespace
 
+// For the Support tab (call_ins.cpp).
+void drawUnitIcon(ImDrawList* dl, const SpriteRenderer& r, const UnitArt& art, ImVec2 p0, ImVec2 size, ImU32 tint) {
+  drawIcon(dl, r, art, p0, size, tint);
+}
+
 Sidebar::Sidebar(GameScene& scene) : scene_(scene) {}
 
 void Sidebar::cancel() {
   placeType_ = -1;
   dragging_ = false;
   sellMode_ = false;
+  supportPower_ = -1;
+  supportDragging_ = false;
 }
 
 void Sidebar::startPlacing(int type) {
@@ -148,6 +155,7 @@ bool Sidebar::onEvent(const SDL_Event& e, bool uiMouse) {
     cancel();
     return true;
   }
+  if (supportPower_ >= 0) return supportEvent(e);
   const Vec2f g = scene_.groundAt(scene_.mouse());
   if (sellMode_) {
     if (down && e.button.button == SDL_BUTTON_LEFT) {
@@ -192,6 +200,7 @@ bool Sidebar::onEvent(const SDL_Event& e, bool uiMouse) {
 }
 
 void Sidebar::renderWorld(SpriteRenderer& r) {
+  if (supportPower_ >= 0 && !ImGui::GetIO().WantCaptureMouse) renderSupport(r);
   if (placeType_ < 0 || ImGui::GetIO().WantCaptureMouse) return;
   if (scene_.is3D() != r.in3D()) return;  // 3D: laid on the ground in the 3D pass
   const bool threeD = r.in3D();
@@ -436,10 +445,12 @@ void Sidebar::drawProduction(float width) {
   const uint8_t me = scene_.player();
   const PlayerState& ps = sim.playerState(me);
   const std::string& faction = scene_.players()[me].faction;
-  // Tabs: big plates with a pictogram each.
-  const float tw = (width - 6) / 4.0f;
-  const ui::Picto pictos[4] = {ui::Picto::Building, ui::Picto::Defence, ui::Picto::Infantry, ui::Picto::Vehicle};
-  for (int i = 0; i < 4; ++i) {
+  // Tabs: big plates with a pictogram each (a fifth for call-ins, when the side has any).
+  const int tabs = hasSupportTab() ? 5 : 4;
+  if (tab_ >= tabs) tab_ = 0;
+  const float tw = (width - 2 * (tabs - 1) - 0.5f) / tabs;
+  const ui::Picto pictos[5] = {ui::Picto::Building, ui::Picto::Defence, ui::Picto::Infantry, ui::Picto::Vehicle, ui::Picto::Plane};
+  for (int i = 0; i < tabs; ++i) {
     if (i) ImGui::SameLine(0, 2);
     // Flash a tab whose structure is ready to place.
     const bool ready = (i == 0 && ps.queues[0].ready) || (i == 1 && ps.queues[1].ready);
@@ -447,6 +458,10 @@ void Sidebar::drawProduction(float width) {
     ui::glowIfHighlighted((std::string("tab.") + kTabIds[i]).c_str());
   }
   ImGui::Dummy(ImVec2(0, 2));
+  if (tab_ == 4) {
+    drawSupport(width, std::max(60.0f, ImGui::GetContentRegionAvail().y - 168));
+    return;
+  }
   // Which types belong on this tab, under their group headings.
   std::vector<int> items;
   std::vector<std::string> groups;
@@ -743,6 +758,7 @@ void Sidebar::update(float dt) {
 
 void Sidebar::draw() {
   const ImGuiIO& io = ImGui::GetIO();
+  supportTooltip();
   // The side we command sets the colours: field grey or khaki.
   ui::setFaction(scene_.players()[scene_.player()].faction.c_str());
   ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - kWidth, 0));

@@ -272,5 +272,7 @@ VoxelModel makeBridgeSpan(int mask, bool wood);
 
 // The detailed vehicles and soldiers (unit_models.cpp).
 void addUnitModels(BakeQueue& q, SpriteCatalog& cat);
+// Aircraft, a warship and a landing craft for call-ins (air_models.cpp).
+void addCallInModels(BakeQueue& q, SpriteCatalog& cat);
 
 }  // namespace pioneer::art

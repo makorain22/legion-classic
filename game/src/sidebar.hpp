@@ -34,7 +34,7 @@ class Sidebar {
   bool onEvent(const SDL_Event& e, bool uiWantsMouse);
   void renderWorld(pioneer::SpriteRenderer& r);  // placement ghost
 
-  bool busy() const { return placeType_ >= 0 || sellMode_; }
+  bool busy() const { return placeType_ >= 0 || sellMode_ || supportPower_ >= 0; }
   int placingType() const { return placeType_; }
   // Where a building of `type` would stand with the mouse over `ground` (snapped to tiles).
   pioneer::Vec2i snappedCentre(int type, pioneer::Vec2f ground) const;
@@ -43,6 +43,9 @@ class Sidebar {
   void startPlacing(int type);
   // Placement for scripted sessions.
   bool placeAt(pioneer::Vec2i groundLeptons);
+  // Call-ins (9.14, call_ins.cpp): aiming one at the battlefield.
+  int aimingSupport() const { return supportPower_; }
+  void startSupport(int power);
 
  private:
   void drawMinimap(float width);
@@ -52,6 +55,12 @@ class Sidebar {
   // Tiles a fortification line covers from a to b (tile coordinates).
   std::vector<pioneer::Vec2i> lineTiles(pioneer::Vec2i a, pioneer::Vec2i b) const;
   bool validAt(int type, pioneer::Vec2i centre) const;
+  // The Support tab and aiming a call-in (call_ins.cpp).
+  bool hasSupportTab() const;
+  void drawSupport(float width, float height);
+  bool supportEvent(const SDL_Event& e);
+  void renderSupport(pioneer::SpriteRenderer& r);
+  void supportTooltip();
 
   GameScene& scene_;
   int tab_ = 0;
@@ -60,6 +69,9 @@ class Sidebar {
   bool dragging_ = false;  // fortification line being dragged
   pioneer::Vec2i dragFrom_;
   bool sellMode_ = false;
+  int supportPower_ = -1;          // call-in being aimed
+  bool supportDragging_ = false;   // left button held: dragging the line of a bombing or strafing run
+  pioneer::Vec2f supportFrom_;
 
   pioneer::gl::Texture minimap_;
   std::vector<uint32_t> minimapPixels_;

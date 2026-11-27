@@ -539,7 +539,7 @@ void Simulation::callSupport(const Command& cmd) {
   const int power = cmd.unitType;
   std::string why;
   if (!canCallSupport(cmd.player, power, cmd.target, &why)) {
-    supportEvent(EventType::CannotBuild, cmd.player, cmd.target, 0);
+    supportEvent(EventType::SupportCalled, cmd.player, cmd.target, 0, static_cast<uint16_t>(std::max(0, power)));  // refused
     return;
   }
   const SupportPowerDef& d = types_.support().get(power);
@@ -752,6 +752,8 @@ void Simulation::stepSupport() {
             for (const auto& [t, n] : d->units) total += n;
             const int each = (total + s.planes - 1) / s.planes;
             pendingDrops_.push_back({tick_ + kChuteTicks, s.owner, s.target, d->radius, i * each, each, s.power, s.id});
+            supportEvent(EventType::ChutesOpen, s.owner, s.target, std::min(each, std::max(0, total - i * each)));
+            events_.back().weapon = static_cast<uint16_t>(std::clamp(d->radius, 0, 65535));
           }
         }
         break;

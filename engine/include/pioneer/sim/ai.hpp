@@ -120,6 +120,7 @@ class SkirmishAi {
   bool manageEconomy(Simulation& sim, uint8_t p);  // true: expansion has first call on supplies
   void manageArmy(Simulation& sim, uint8_t p, bool saving);
   void fortify(Simulation& sim, uint8_t p);
+  void useSupport(Simulation& sim, uint8_t p);  // call-ins (9.14)
   bool placeStructure(Simulation& sim, uint8_t p, int type, bool defensive);
   bool placeNear(Simulation& sim, uint8_t p, int type, Vec2i want, int radius);
 

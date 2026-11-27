@@ -21,6 +21,21 @@
   over*, *Dogfight overhead*, *Plane comes down*.
 - Call-ins are data: `"support"` in `buildings.json`, merged by id from mods
   like everything else. Saves carry them (section `SUPP`).
+- **Part 2: on screen** (27 Nov). A **Support** tab in the sidebar with every
+  call-in, its charges, the next charge coming and its price; aiming on the
+  battlefield (a ring, a line you can drag for bombers and fighters, the beach
+  a landing will make for), with the reason when it can't be called there.
+  Planes in five roles for each army fly over with their shadows below,
+  warships lie off the coast and fire, landing craft run in, paratroopers and
+  crates come down under canopies, flak tracers and black bursts fill the sky,
+  and planes that are hit come down burning. New sounds, synthesised like the
+  rest (CC0): engines passing overhead, flak bursts, falling bombs, a
+  warship's guns.
+- **The computer player** builds a liaison post and flak, and calls in strikes
+  on enemies it can see (never on its own men), recon over your base,
+  paratroopers ahead of its attacks and supplies when short.
+- Console: `callin <id> [side] [centre]` (cheat). The `--bench` report lists
+  the call-ins each side used.
 
 ## 0.9.2 – in progress (Milestone 9.13: the Pioneer Engine)
 

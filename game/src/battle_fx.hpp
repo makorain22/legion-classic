@@ -64,6 +64,13 @@ class BattleFx {
   // Fire, smoke, flashes and tracers: drawn after the units.
   void drawAir(pioneer::SpriteRenderer& r, const pioneer::RectF& view, const FogAt& fog) const;
 
+  // Call-ins (9.14). Planes fly this high (classic pixels above the ground).
+  static constexpr float kAirPx = 137.0f;
+  // A plane that came down: a fireball where it hits and a wreck that burns a while.
+  void planeCrash(pioneer::Vec2i atLeptons, int frame, uint32_t team, bool visible);
+  // A canopy's worth of smoke trail behind a falling or hit plane (classic pixels above the ground).
+  void smokeTrail(pioneer::Vec2i atLeptons, float h);
+
   const std::vector<Wreck>& wrecks() const { return wrecks_; }
   // Fire drawn on burning wrecks needs the wreck's screen position; the scene
   // calls this from its unit pass so flames sit on top of the hull.

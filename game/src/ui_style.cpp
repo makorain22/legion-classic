@@ -211,6 +211,13 @@ void pictogram(ImDrawList* dl, Picto p, ImVec2 c, float s, ImU32 col) {
         for (int x = 0; x < 3; ++x) dl->AddCircleFilled(P(-0.28f + x * 0.28f, -0.28f + y * 0.28f), 0.07f * s, col);
       break;
     }
+    case Picto::Plane: {  // a plane seen from above, nose up
+      dl->AddLine(P(0, -0.42f), P(0, 0.4f), col, t * 1.6f);            // fuselage
+      dl->AddTriangleFilled(P(-0.46f, 0.02f), P(0.46f, 0.02f), P(0, -0.16f), col);  // wings
+      dl->AddLine(P(-0.46f, 0.04f), P(0.46f, 0.04f), col, t);
+      dl->AddLine(P(-0.18f, 0.36f), P(0.18f, 0.36f), col, t);          // tailplane
+      break;
+    }
   }
 }
 

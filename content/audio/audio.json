@@ -627,6 +627,77 @@
     "rec/cannon_6pdr_far_1.ogg"
    ],
    "farBelow": 0.3
+  },
+  "plane_heavy": {
+   "files": [
+    "sfx/plane_heavy_0.ogg",
+    "sfx/plane_heavy_1.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.75,
+   "range": 60,
+   "priority": 7,
+   "reverb": 0.3,
+   "pitch": 0.04,
+   "perSecond": 2,
+   "limit": 2
+  },
+  "plane_fighter": {
+   "files": [
+    "sfx/plane_fighter_0.ogg",
+    "sfx/plane_fighter_1.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.7,
+   "range": 50,
+   "priority": 6,
+   "reverb": 0.25,
+   "pitch": 0.06,
+   "perSecond": 3,
+   "limit": 3
+  },
+  "bomb_fall": {
+   "files": [
+    "sfx/bomb_fall_0.ogg",
+    "sfx/bomb_fall_1.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.45,
+   "range": 24,
+   "priority": 5,
+   "reverb": 0.25,
+   "pitch": 0.05,
+   "perSecond": 3,
+   "limit": 3
+  },
+  "naval_gun": {
+   "files": [
+    "sfx/naval_gun_0.ogg",
+    "sfx/naval_gun_1.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.85,
+   "range": 80,
+   "priority": 7,
+   "reverb": 0.35,
+   "pitch": 0.04,
+   "perSecond": 2,
+   "limit": 2
+  },
+  "flak_burst": {
+   "files": [
+    "sfx/flak_burst_0.ogg",
+    "sfx/flak_burst_1.ogg",
+    "sfx/flak_burst_2.ogg"
+   ],
+   "bus": "sfx",
+   "volume": 0.5,
+   "range": 40,
+   "priority": 4,
+   "reverb": 0.25,
+   "pitch": 0.08,
+   "perSecond": 10,
+   "limit": 5
   }
  },
  "music": {

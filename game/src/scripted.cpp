@@ -894,6 +894,14 @@ void GameScene::runBench() {
                   t.armyTicks ? static_cast<int>(t.bonusTicks * 10 / t.armyTicks % 10) : 0,
                   ai.mainEnemy < MAX_PLAYERS ? ai.mainEnemy : -1, ai.raids, ai.raidEnemy < MAX_PLAYERS ? ai.raidEnemy : -1, ai.wave.size(), ai.phase, ai.waves, ai.raiders.size(),
                   ai.capture.size(), t.lostMen, t.lostVehicles, t.lostStructures, fire.c_str());
+      {
+        // Call-ins (9.14): how many of each it has used.
+        std::string used;
+        for (size_t i = 0; i < sim_->support().size(); ++i)
+          if (const uint32_t n = sim_->supportState(p, static_cast<int>(i)).used)
+            used += " " + sim_->support().get(static_cast<int>(i)).id + " " + std::to_string(n);
+        if (!used.empty()) std::printf("      call-ins:%s\n", used.c_str());
+      }
       if (std::getenv("LEGION_BENCH_WAVE") && !ai.wave.empty()) {
         // Where the main force is and what its members are doing.
         int64_t x = 0, y = 0;

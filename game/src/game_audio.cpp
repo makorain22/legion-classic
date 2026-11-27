@@ -354,6 +354,31 @@ void GameAudio::onEvent(const SimEvent& ev, const Simulation& sim, uint8_t playe
     case EventType::ConvoyArrived:
       if (playing && ev.owner == player) play("ui_convoy");
       break;
+    // Call-ins (9.14).
+    case EventType::SupportCalled:
+      if (playing && ev.owner == player) play(ev.amount ? "radio" : "ui_denied");
+      break;
+    case EventType::SupportReady:
+      if (playing && ev.owner == player) play("ui_ready");
+      break;
+    case EventType::FlakFire:
+      if (ev.amount == 1) {
+        play("naval_gun", from);
+        addHeat(from.x, from.y, 4.0f);
+        break;
+      }
+      if (ev.weapon < sim.weapons().size() && !sim.weapons().get(ev.weapon).sound.empty())
+        play(sim.weapons().get(ev.weapon).sound, from);
+      play("flak_burst", at, 0.8f);
+      addHeat(from.x, from.y, 1.0f);
+      break;
+    case EventType::AircraftDown:
+      play("explosion_medium", at, 0.7f);
+      if (playing && ev.owner == player) say("vehicle_lost");
+      break;
+    case EventType::CrateTaken:
+      if (playing && ev.owner == player) play("ui_convoy");
+      break;
     default:
       break;
   }

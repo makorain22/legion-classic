@@ -1794,3 +1794,38 @@ pauses, a .glb round trip with clips; the orbit camera; the bank document's
 copy-on-edit, ranges, files, undo, duplicate, save, revert and layers).
 ctest `tool_validate`, `tool_cook`, `tool_validate_cooked`. The game:
 `--tools-selftest`.
+
+## After 9.13: call-ins (Milestone 9.14, `pioneer/sim/support.hpp`)
+
+Air strikes, recon, supply and paratroop drops, a warship's guns and
+landings from the sea. The game is too small for aircraft as units, so
+**aircraft are not units**: a call-in launches a `Strike`, whose flight is a
+pure function of ticks. `Strike::planeAt(i, tick, x, y)` gives where plane
+`i` of the flight is (a vee: the leader, then pairs either side, further
+back); the simulation drops bombs, opens chutes and lays crates at the ticks
+the planes pass over, and the renderer draws the same positions between
+ticks. Nothing about a flight needs to be stepped or saved beyond its
+numbers.
+
+| Piece | What |
+| --- | --- |
+| `SupportRegistry` | The call-ins from `"support"` in `buildings.json` (mods merge by id; the rules hash covers it). Kinds: `bombing`, `strafing`, `attack`, `recon`, `supply`, `paradrop`, `naval`, `landing`; `flyover`, `dogfight`, `crash` are set pieces for scripts only. |
+| `SupportState` | Per side and call-in: charges, progress to the next, cooldown, uses. Gate `Auto` (open while the side owns one of the call-in's `requires`), `On`, `Off` (scripts). |
+| `CommandType::CallSupport` | `unitType` = call-in, `target`; with `amount` 1 the planes fly along `facing` (the player dragged a line), else from the caller's side of the map. Refused calls send `SupportCalled` with `amount` 0; `canCallSupport()` says why. |
+| Flak | Weapons with `"antiAir": true`. Once a second each enemy gun in reach of a plane gets a roll at it (`aaChance` percent, per call-in); a flight that loses half its planes aborts. Downed planes fall on and burn (`DownedPlane`). |
+| The sea | Open sea is deep water (depth > 12) joined to the map's edge; `seaDistance()` is tiles from it (cached by map revision). Naval call-ins need the target within `seaRange`; landings find the nearest beach (land next to open sea that men can stand on) and a point out at sea to come from (`findLanding()`). |
+| Events | `SupportCalled`, `SupportReady`, `FlakFire` (`amount` 1: a ship's guns), `AircraftDown`, `CrateTaken`, `TroopsLanded`, `ChutesOpen` (presentation). |
+| Saves | Section `SUPP`: states, strikes in flight, landing parties, crates, wrecks, recon reveals, men under their chutes. Older saves load with nothing in the air. |
+| Scripts | Conditions `support_ready`, `support_used`; actions `support_enable`, `support_charges`, `support_call` (free), `landing` (any units, no call-in needed), `flyover`, `dogfight`, `plane_crash`. |
+| Computer player | Builds a liaison post (`role: "airpost"`) and flak pits (`model: "flak_pit"`) once its base is up, and every five seconds calls what is ready: strikes on the thickest knot of enemies it can see and well clear of its own men, recon over the enemy base, paratroopers ahead of an attack, supplies at home when short, landings when a beach is in reach. |
+
+The game draws planes 3.5 tiles up with their shadow on the ground, ships
+broadside off the coast, landing craft running in, chutes and crates
+(`game/src/call_ins.cpp`), with the Support tab in the sidebar and aiming
+on the battlefield. Voxel models: `plane_fighter`, `plane_attack`,
+`plane_bomber`, `plane_transport`, `plane_recon`, `warship`,
+`landing_boat`, `parachute` (`engine/src/assets/air_models.cpp`, baked
+without ground shadows).
+
+Console (cheat): `callin <id> [side] [centre]` opens, charges and calls a
+call-in free. Tests: `tests/test_support.cpp` (9).

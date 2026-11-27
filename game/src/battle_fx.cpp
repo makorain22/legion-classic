@@ -316,9 +316,121 @@ void BattleFx::onEvent(const SimEvent& ev, bool visible, const std::array<uint32
       }
       break;
     }
+    case EventType::FlakFire: {
+      if (!visible) return;
+      if (ev.amount == 1) {
+        // A warship's guns firing out at sea: a big flash and a bank of smoke on the water.
+        const Vec2f m = toScreen_(static_cast<float>(ev.from.x) + rnd(-200, 200), static_cast<float>(ev.from.y) + rnd(-200, 200));
+        const int ftx = ev.from.x >> LEPTON_SHIFT, fty = ev.from.y >> LEPTON_SHIFT;
+        Particle& f = add(Kind::Flash, m, ftx, fty);
+        f.frame = fx.flash[2];
+        f.additive = true;
+        f.h = 8;
+        f.life = 0.12f;
+        f.scale0 = 2.0f;
+        f.scale1 = 2.8f;
+        f.alpha0 = 1;
+        f.alpha1 = 0;
+        f.color = rgba8(255, 220, 160);
+        for (int i = 0; i < 4; ++i)
+          puff(m, ftx, fty, fx.smoke, 8, rnd(2.5f, 4.0f), 0.8f, 2.6f, 0.55f, rgba8(150, 148, 142), 6, 30);
+        break;
+      }
+      // Flak: tracer climbing from the gun, then a black burst up among the planes.
+      const int ftx = ev.from.x >> LEPTON_SHIFT, fty = ev.from.y >> LEPTON_SHIFT;
+      const Vec2f g = toScreen_(static_cast<float>(ev.from.x), static_cast<float>(ev.from.y));
+      const Vec2f sky = toScreen_(static_cast<float>(ev.at.x) + rnd(-260, 260), static_cast<float>(ev.at.y) + rnd(-260, 260));
+      Particle& tr = add(Kind::Tracer, g, ftx, fty);
+      tr.frame = fx.spark;
+      tr.additive = true;
+      tr.h = 8;
+      tr.x1 = sky.x;
+      tr.y1 = sky.y;
+      tr.gz1 = groundPx(sky.x, sky.y) + kAirPx * rnd(0.8f, 1.1f);
+      tr.life = 0.35f;
+      tr.alpha0 = 0.9f;
+      tr.alpha1 = 0.4f;
+      tr.color = rgba8(255, 200, 120);
+      for (int k = 0; k < 2; ++k) {
+        const Vec2f b{sky.x + rnd(-16, 16), sky.y + rnd(-8, 8)};
+        Particle& f = add(Kind::Flash, b, tx, ty);
+        f.frame = fx.flash[1];
+        f.additive = true;
+        f.h = kAirPx * rnd(0.85f, 1.15f);
+        f.life = 0.07f;
+        f.scale0 = 0.9f;
+        f.scale1 = 1.2f;
+        f.alpha0 = 0.9f;
+        f.alpha1 = 0;
+        f.color = rgba8(255, 210, 150);
+        Particle& p = add(Kind::Puff, b, tx, ty);
+        p.frame = fx.smoke;
+        p.h = f.h;
+        p.life = rnd(2.0f, 3.2f);
+        p.scale0 = 0.35f;
+        p.scale1 = 1.1f;
+        p.alpha0 = 0.8f;
+        p.alpha1 = 0;
+        p.color = rgba8(34, 32, 30);
+        p.vx = rnd(2, 8);
+        p.vh = rnd(-2, 3);
+        p.drag = 0.8f;
+      }
+      break;
+    }
+    case EventType::AircraftDown: {
+      // Hit: a flash and black smoke where it was hit (it falls a little way on).
+      if (!visible) return;
+      smokeTrail(ev.at, kAirPx * 0.6f);
+      break;
+    }
     default:
       break;
   }
+}
+
+void BattleFx::smokeTrail(Vec2i at, float h) {
+  const EffectArt& fx = art_->effects;
+  const int tx = at.x >> LEPTON_SHIFT, ty = at.y >> LEPTON_SHIFT;
+  const Vec2f s = toScreen_(static_cast<float>(at.x), static_cast<float>(at.y));
+  for (int i = 0; i < 3; ++i) {
+    Particle& p = add(Kind::Puff, {s.x + rnd(-6, 6), s.y + rnd(-3, 3)}, tx, ty);
+    p.frame = fx.smoke;
+    p.h = h + rnd(-6, 6);
+    p.life = rnd(2.5f, 4.0f);
+    p.scale0 = 0.4f;
+    p.scale1 = 1.6f;
+    p.alpha0 = 0.7f;
+    p.alpha1 = 0;
+    p.color = rgba8(40, 38, 36);
+    p.vx = rnd(3, 9);
+    p.vh = rnd(2, 8);
+    p.drag = 0.6f;
+  }
+  Particle& f = add(Kind::Flame, s, tx, ty);
+  f.frame = fx.fire[0];
+  f.additive = true;
+  f.h = h;
+  f.life = 0.3f;
+  f.scale0 = 0.7f;
+  f.scale1 = 0.2f;
+  f.alpha0 = 0.9f;
+  f.alpha1 = 0;
+  f.color = rgba8(255, 180, 110);
+}
+
+void BattleFx::planeCrash(Vec2i at, int frame, uint32_t team, bool visible) {
+  const int tx = at.x >> LEPTON_SHIFT, ty = at.y >> LEPTON_SHIFT;
+  const Vec2f s = toScreen_(static_cast<float>(at.x), static_cast<float>(at.y));
+  if (visible) explosion(s, tx, ty, 1.6f, true, true);
+  if (wrecks_.size() >= kMaxWrecks) wrecks_.erase(wrecks_.begin());
+  Wreck w;
+  w.lx = at.x;
+  w.ly = at.y;
+  w.bodyFrame = frame;
+  w.team = team;
+  w.burn = kBurnSeconds * 2.0f;
+  wrecks_.push_back(w);
 }
 
 void BattleFx::emitDamage(Vec2i at, int size, float severity, float dt) {

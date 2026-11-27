@@ -329,6 +329,37 @@ earns on a supply point any more: give it an `income` and a `perYard`
 instead. Maps keep their `supplyPoints` list; those are the logistics points
 now.
 
+## Call-ins: air and naval support (new in 0.9.3, Milestone 9.14)
+
+Call-ins live in `buildings.json` under `"support"`, a list beside
+`"units"`; a mod's list merges into the game's by `id` like units do.
+
+```json
+"support": [
+  {"id": "ger_bombing", "faction": "ger", "name": "He 111 bombing raid", "kind": "bombing",
+   "requires": ["ger_air_post"], "cost": 1100, "charges": 1, "recharge": 300, "cooldown": 30,
+   "planes": 3, "shots": 6, "weapon": "bomb_250", "length": 10, "speed": 100, "delay": 6, "aaChance": 10,
+   "description": "Bombers fly a line across the target..."}
+]
+```
+
+| Key | Meaning |
+| --- | --- |
+| `kind` | `bombing` and `strafing` (a line, `length` tiles, `shots` per plane), `attack` (`shots` per plane round one point, `radius`), `recon` (reveals `radius` tiles for `duration` seconds), `supply` (`crates` worth `crateValue` each; anyone may take them), `paradrop` and `landing` (`units`), `naval` (`shots` over `duration` seconds within `radius`; only within `seaRange` tiles of open sea). |
+| `aircraft` | `fighter`, `attack`, `bomber`, `transport` or `recon`: the model drawn (defaults by kind). |
+| `requires` | Structures that open it: while the side owns one, it recharges. Leave it out for a call-in only a mission's script opens. |
+| `cost`, `charges`, `recharge`, `cooldown` | Supplies per call; how many it holds; seconds for each new charge (they start empty); seconds between calls. |
+| `planes` (1-8), `speed` (leptons a tick), `delay` (seconds before they come) | The flight. |
+| `weapon` | From `weapons.json`: what the bombs, guns, rockets or shells do. |
+| `units` | `["ger_rifleman*8", "ger_mg_team*2"]`: who jumps or comes ashore. |
+| `aaChance` | Percent chance a flak gun under the flight brings a plane down, each second. |
+| `model` | Optional: the ship or boat model. |
+
+A weapon with `"antiAir": true` fires at planes overhead (and at the ground
+as usual). The game's armies each have a liaison post (`role: "airpost"`,
+one per construction yard) and a flak pit (`model: "flak_pit"`); the
+computer player builds those by role and model.
+
 ## The rules editor
 
 Open it from **Mods and creation tools**, or from the Live Scenario Editor

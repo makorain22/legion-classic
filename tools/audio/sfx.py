@@ -661,6 +661,56 @@ def trim(x, floor=0.0015):
     return fade(x[:end], 0, 0.05) if x.ndim == 1 else x[:end]
 
 
+# ---------------------------------------------------------------------------
+# Call-ins (9.14): planes overhead, flak, falling bombs, a warship's guns
+# ---------------------------------------------------------------------------
+def plane_pass(heavy, v):
+    """Piston engines coming over, passing and going away (the Doppler fall)."""
+    sec = 7.0 if heavy else 5.0
+    t = t_(sec)
+    mid = sec * rng.uniform(0.42, 0.5)
+    shift = 0.12 if heavy else 0.18
+    dop = 1 + shift * np.tanh((mid - t) * (1.4 if heavy else 2.2))       # pitch falls as it passes
+    s = np.zeros_like(t)
+    for e in range(4 if heavy else 1):                                    # several engines beat against each other
+        f0 = (62 if heavy else 105) * rng.uniform(0.985, 1.015) * (1 + 0.1 * v)
+        ph = 2 * np.pi * np.cumsum(f0 * dop * (1 + 0.006 * np.sin(2 * np.pi * rng.uniform(0.2, 0.5) * t))) / SR
+        for k, a in enumerate([1.0, 0.7, 0.5, 0.35, 0.25, 0.15, 0.1], 1):
+            s += a * np.sin(k * ph + rng.uniform(0, 6))
+    s = lp(s, 1800 if heavy else 2600) + bp(pink(sec), 200, 3000) * 0.6        # the props' rush
+    near = np.exp(-((t - mid) / (sec * (0.22 if heavy else 0.16))) ** 2)
+    s *= 0.08 + near
+    return norm(outdoors(fade(s, 0.4, 0.6), 1.6, 0.35, 3500), 0.8)
+
+
+def flak_burst(v):
+    """A shell bursting high up: a hard crack, a flat thud, echoes round the sky."""
+    s = mix(crack(0.005, 3200, 1.0), body(0.25, 300, 2500, 0.03, 0.8), thump(0.5, 110, 50, 0.08, 0.6))
+    s = mix(s, at(crack(0.004, 2600, 0.5), rng.uniform(0.05, 0.12)))  # often a second one close by
+    return norm(outdoors(s, 2.2 + 0.3 * v, 0.5, 2500), 0.7)
+
+
+def bomb_fall(v):
+    """The rising-then-falling shriek of bombs coming down."""
+    sec = 2.2
+    t = t_(sec)
+    f = (1500 - 650 * t / sec) * (1 + 0.05 * v)
+    tone = np.sin(2 * np.pi * np.cumsum(f) / SR)
+    air = bp(noise(sec), 900, 3000)
+    s = (tone * 0.6 + air * 0.4) * np.interp(t, [0, 0.4, sec - 0.15, sec], [0, 0.6, 1.0, 0])
+    return norm(fade(s, 0.05, 0.05), 0.55)
+
+
+def naval_gun(v):
+    """A warship's broadside heard from the shore: deep booms rolling in off the sea."""
+    sec = 4.0
+    s = np.zeros(n_(sec))
+    for k in range(2 + v):
+        boom = mix(thump(1.2, 70, 28, 0.25, 1.0), rumble(2.5, 90, 0.9, 0.6), body(0.3, 150, 900, 0.06, 0.4))
+        s += at(boom, k * rng.uniform(0.25, 0.5), sec)[:len(s)]
+    return norm(outdoors(lp(s, 1500), 2.5, 0.55, 1800), 0.85)
+
+
 def write_ogg(path, x, quality=4, loop=False):
     if not loop:
         x = trim(x)
@@ -710,7 +760,7 @@ def main():
     loops = {'tank_engine', 'truck_engine', 'march', 'fire'}
     only = set(sys.argv[2:])  # name some effects to make just those (the rest are left as they are)
     if only:
-        for name, make in jobs:
+        for name, make in jobs + call_in_jobs():
             if name in only:
                 write_ogg(os.path.join(sfx, name + '.ogg'), make(), loop=name in loops)
                 print('sfx', name, flush=True)
@@ -722,6 +772,20 @@ def main():
                        ('tropical', amb_tropical), ('urban', amb_urban), ('distant_battle', distant_battle)):
         write_ogg(os.path.join(amb, name + '.ogg'), make(), quality=3, loop=True)
         print('ambience', name, flush=True)
+    for name, make in call_in_jobs():
+        write_ogg(os.path.join(sfx, name + '.ogg'), make())
+        print('sfx', name, flush=True)
+
+
+def call_in_jobs():
+    """9.14's sounds: made after everything else so the older ones keep their seeds."""
+    jobs = []
+    for v in range(2):
+        jobs += [(f'plane_heavy_{v}', lambda v=v: plane_pass(True, v)), (f'plane_fighter_{v}', lambda v=v: plane_pass(False, v)),
+                 (f'bomb_fall_{v}', lambda v=v: bomb_fall(v)), (f'naval_gun_{v}', lambda v=v: naval_gun(v))]
+    for v in range(3):
+        jobs.append((f'flak_burst_{v}', lambda v=v: flak_burst(v)))
+    return jobs
 
 
 if __name__ == '__main__':

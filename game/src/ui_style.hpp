@@ -46,7 +46,7 @@ bool plateButton(const char* id, const char* label, ImVec2 size, bool lit = fals
                  bool enabled = true);
 
 // Little pictograms drawn with lines, for tabs and buttons.
-enum class Picto { Building, Defence, Infantry, Vehicle, Book, Sell, Deploy, Stance, Formation };
+enum class Picto { Building, Defence, Infantry, Vehicle, Book, Sell, Deploy, Stance, Formation, Plane };
 void pictogram(ImDrawList* dl, Picto p, ImVec2 centre, float size, ImU32 col);
 // A tab with a pictogram above a small label.
 bool iconTab(const char* id, Picto p, const char* label, ImVec2 size, bool lit, bool flash);
