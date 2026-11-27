@@ -11,6 +11,20 @@
   a message, a ring on the minimap, Ctrl+Space or J to go there). **Retreat**
   (H): back to the nearest construction yard at a forced march. Weapons may
   fire **smoke** (`"smoke": seconds`), laying a cloud as wide as their burst.
+- **Part 2, the soldier under fire** (27 Nov): **suppression** – rounds landing
+  close (high explosive most) get men's heads down: from 400 they go prone
+  (slower, harder to hit, slower to fire, drawn low), from 850 they are pinned
+  (they won't move and fire only now and then); it wears off when the firing
+  stops (an orange strip under the health bar). **Morale** wears down under
+  heavy fire and when friends die close by; men who break run for their base
+  until they steady. **Ambush:** a unit unseen for ten seconds while holding
+  its fire or hidden in woods gets one volley at three times the damage, six
+  times against what its weapons are made for. **Minefields** (Defend tab):
+  anti-personnel and anti-tank mines, unseen by the enemy, lifted by enemy
+  engineers who walk up to them; the computer lays anti-tank mines on its
+  approach. **Observers** (snipers, scout cars) halve the scatter of artillery
+  on what they watch. Skirmish options: **concealment in woods** (on), **hills
+  hide** and **night and weather** cutting sight (on).
 
 ## 0.9.3 – in progress (Milestone 9.14: air and naval support)
 

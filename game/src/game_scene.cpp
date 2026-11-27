@@ -460,6 +460,7 @@ void GameScene::replaceWorld(MapFile&& file, bool keepCamera) {
   if (editor_) editor_->onWorldReplaced();
   if (sidebar_) sidebar_->cancel();
   chutes_.clear();
+  brokeShownAt_ = -100.0f;
   heardStrikes_.clear();
   bombsHeard_.clear();
   crashed_.clear();
@@ -2530,6 +2531,13 @@ void GameScene::drawUnits(const RectF& view) {
       }
     }
     int bodyFrame = art.body.frame(facing, anim);
+    if (const CCondition* cond = reg.pool<CCondition>().tryGet(e);
+        cond && (cond->posture == Posture::Prone || cond->posture == Posture::Pinned) && u.type < postArt_.size() &&
+        (postArt_[u.type] & 1) && !reg.pool<CGarrisoned>().has(e)) {
+      // Heads down under fire (9.15): drawn low, as men in a scrape.
+      const CCombat* cb = combats.tryGet(e);
+      bodyFrame = dugArt_[u.type].body.frame(facing, cb && cb->target.valid() ? 1 : 0);
+    }
     if (const CGarrisoned* gar = reg.pool<CGarrisoned>().tryGet(e); gar && u.type < postArt_.size()) {
       // Manning a trench or a sandbag wall: drawn dug in, up to fire when
       // there is something to shoot at.
@@ -2662,6 +2670,16 @@ void GameScene::drawHealthBar(uint32_t e, bool selected) {
   const uint32_t col = frac > 0.6f ? kSelectGreen : frac > 0.3f ? rgba8(230, 200, 60) : kAttackRed;
   renderer_.rect(x - 1, y - 1, w + 2, 4, rgba8(10, 10, 8, selected ? 255 : 200));
   renderer_.rect(x, y, std::max(1.0f, std::floor(w * frac)), 2, col);
+  // Under fire (9.15): suppression as an orange strip below (red once pinned), white while it waits in ambush.
+  if (const CCondition* c = reg.pool<CCondition>().tryGet(e)) {
+    if (c->suppression > 0 && def.infantry()) {
+      const float sup = std::min(1.0f, c->suppression / 1000.0f);
+      renderer_.rect(x - 1, y + 3, w + 2, 3, rgba8(10, 10, 8, 200));
+      renderer_.rect(x, y + 4, std::max(1.0f, std::floor(w * sup)), 1,
+                     c->posture == Posture::Pinned ? rgba8(235, 70, 50) : rgba8(240, 150, 50));
+    }
+    if ((c->flags & CCondition::kAmbush) && u.owner == player_) renderer_.rect(x + w + 2, y - 1, 3, 4, rgba8(240, 240, 230, 230));
+  }
 }
 
 void GameScene::updateCursor() {

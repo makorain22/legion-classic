@@ -235,6 +235,14 @@ void GameScene::startSkirmish(const SkirmishSetup& s) {
     spawnAt(f + "_rifleman", i, front, 10);
     spawnAt(f + "_medium_tank", i, {front.x - fy * 3 * T + fx * T, front.y + fx * 3 * T + fy * T}, 2);
   }
+  {
+    Command v;
+    v.type = CommandType::SetVisionRules;
+    v.count = (s.concealment ? Simulation::VisionRules::kWoodland : 0) | (s.lineOfSight ? Simulation::VisionRules::kLineOfSight : 0) |
+              (s.weatherSight ? Simulation::VisionRules::kWeatherSight : 0);
+    v.amount = 100;
+    sim_->queue(v);
+  }
   sim_->tick();
   centerOn({players_[player_].startX, players_[player_].startY});
   // Nobody human: watch the computers fight.

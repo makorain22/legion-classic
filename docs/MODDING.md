@@ -360,6 +360,18 @@ as usual). The game's armies each have a liaison post (`role: "airpost"`,
 one per construction yard) and a flak pit (`model: "flak_pit"`); the
 computer player builds those by role and model.
 
+## Combat keys (new in 0.9.4, Milestone 9.15)
+
+| Key | On | Meaning |
+| --- | --- | --- |
+| `"smoke": seconds` | a weapon | Its rounds lay a smoke cloud where they land, as wide as their burst. |
+| `"spotter": true` | a unit | An observer: indirect fire on what it sees lands half as wide. |
+| `"mine": {"weapon": id, "against": "infantry" \| "vehicles" \| "any"}` | a fortification | A minefield: unseen by the enemy, goes off under the first enemy of that kind (then is gone); enemy engineers (`repair` > 0) lift it. Give it `"blocks": []`, `"autoTarget": false`, `"targetable": false`. |
+
+Indirect fire (shells reaching 12 tiles or more) gives the gun away to the
+enemy for three seconds. Suppression, morale, prone and pinned, and the
+ambush volley need no keys: they apply to every infantry unit.
+
 ## The rules editor
 
 Open it from **Mods and creation tools**, or from the Live Scenario Editor

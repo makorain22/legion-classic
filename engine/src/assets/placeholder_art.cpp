@@ -603,6 +603,24 @@ VoxelModel makeMgNestGun(const FactionLook&) {
   return m;
 }
 
+// A minefield as its own side sees it: turned earth over the charges and a
+// warning sign on a stake (9.15).
+VoxelModel makeMinefield(const FactionLook&) {
+  VoxelModel m(24, 24, 12);
+  const int mounds[5][2] = {{5, 6}, {14, 4}, {9, 13}, {18, 15}, {6, 19}};
+  for (const auto& c : mounds)
+    for (int y = c[1] - 2; y <= c[1] + 2; ++y)
+      for (int x = c[0] - 2; x <= c[0] + 2; ++x) {
+        const int d = std::abs(x - c[0]) + std::abs(y - c[1]);
+        if (d <= 3 && x >= 0 && y >= 0 && x < 24 && y < 24) m.set(x, y, 0, d <= 1 ? EARTH_DARK : EARTH);
+        if (d == 0) m.set(x, y, 1, EARTH_DARK);
+      }
+  m.box(19, 5, 0, 20, 6, 9, WOOD_DARK);   // the stake
+  m.box(17, 5, 6, 23, 6, 10, MARK_WHITE);  // the sign
+  m.box(18, 5, 7, 22, 6, 9, MARK_RED);
+  return m;
+}
+
 // A light anti-aircraft gun: a pedestal mount, the barrel pointing at the sky (9.14).
 VoxelModel makeFlakGun(const FactionLook& look) {
   VoxelModel m(12, 12, 10);
@@ -1003,6 +1021,7 @@ bool buildPlaceholderArt(SpriteCatalog& cat, std::string& error, const ArtOption
   addStructure(ab, cat, "atgun", &makeAtGunPit, &makeAtGun);
   addStructure(ab, cat, "flak_pit", &makeMgNest, &makeFlakGun);
   addStructure(ab, cat, "air_post", &makeAirPost);
+  addStructure(ab, cat, "mines", &makeMinefield, nullptr, kFineStructureVoxel);
   addStructure(ab, cat, "sandbags", &makeSandbagPiece, nullptr, kFineStructureVoxel);
   addStructure(ab, cat, "wire", &makeWirePiece, nullptr, kFineStructureVoxel);
   addStructure(ab, cat, "traps", &makeHedgehogPiece, nullptr, kFineStructureVoxel);

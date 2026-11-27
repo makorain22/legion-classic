@@ -225,6 +225,11 @@ void Simulation::tick() {
   }
   lap(stats_.msProjectiles);
   {
+    PNR_PROFILE("Sim: condition and mines");
+    stepCondition();
+    stepMines();
+  }
+  {
     PNR_PROFILE("Sim: groups and the dead");
     stepGroups();
     removeDead();

@@ -599,7 +599,7 @@ void SkirmishAi::fortify(Simulation& sim, uint8_t p) {
   Registry& reg = sim.reg_;
   const UnitTypeRegistry& types = sim.types_;
   std::string faction;
-  int trenches = 0, wire = 0, traps = 0;
+  int trenches = 0, wire = 0, traps = 0, mines = 0;
   for (uint32_t e : reg.pool<CUnit>().entities()) {
     const CUnit& u = reg.pool<CUnit>().get(e);
     if (u.owner != p) continue;
@@ -608,6 +608,7 @@ void SkirmishAi::fortify(Simulation& sim, uint8_t p) {
     trenches += d.model == "trench";
     wire += d.model == "wire";
     traps += d.model == "traps";
+    mines += d.isMine();
   }
   const Doctrine doc = doctrineFor(faction);
   if (doc.fortify == 0 || tune.trenchPieces == 0 || sim.players_[p].credits < 60) return;  // field works are cheap
@@ -618,8 +619,8 @@ void SkirmishAi::fortify(Simulation& sim, uint8_t p) {
   };
   const Vec2i side{-ai.toward.y, ai.toward.x};
   // A line `n` pieces long across the approach, `ahead` tiles out.
-  auto line = [&](const char* model, int ahead, int n, int gap) {
-    const int t = typeOf(model);
+  auto line = [&](const char* model, int ahead, int n, int gap, int type = -1) {
+    const int t = type >= 0 ? type : typeOf(model);
     if (t < 0 || !sim.canProduce(p, t)) return false;
     Command c;
     c.type = CommandType::PlaceWalls;
@@ -639,7 +640,14 @@ void SkirmishAi::fortify(Simulation& sim, uint8_t p) {
   const int pieces = tune.trenchPieces + (doc.fortify >= 3 ? 4 : 0);
   if (trenches < pieces && line("trench", 11, pieces + 1, 0)) return;
   if (doc.fortify >= 2 && wire < pieces && line("wire", 13, pieces + 4, 3)) return;
-  if (doc.fortify >= 3 && traps < 6) line("traps", 15, 12, 4);
+  if (doc.fortify >= 3 && traps < 6 && line("traps", 15, 12, 4)) return;
+  // Anti-tank mines across the way in, beyond the wire (9.15): not on easy.
+  if (doc.fortify >= 2 && mines < 6 && ai.difficulty != AiDifficulty::Easy) {
+    int atMine = -1;
+    for (int t = 0; t < static_cast<int>(types.size()) && atMine < 0; ++t)
+      if (types.get(t).faction == faction && types.get(t).isMine() && types.get(t).mineAgainst == 1) atMine = t;
+    if (atMine >= 0) line("", 18, 10, 3, atMine);
+  }
 }
 
 void SkirmishAi::manageArmy(Simulation& sim, uint8_t p, bool saving) {

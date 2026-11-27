@@ -717,6 +717,78 @@
       "muzzle": 1,
       "sound": "cannon_small",
       "antiAir": true
+    },
+    {
+      "id": "mine_ap",
+      "name": "Anti-personnel mine",
+      "warhead": "he",
+      "damage": 110,
+      "range": 1.0,
+      "cooldown": 1,
+      "projectile": "shell",
+      "speed": 400,
+      "splash": 0.9,
+      "muzzle": 0,
+      "sound": "",
+      "impact": "explosion_small"
+    },
+    {
+      "id": "mine_at",
+      "name": "Anti-tank mine",
+      "warhead": "ap_heavy",
+      "damage": 420,
+      "range": 1.0,
+      "cooldown": 1,
+      "projectile": "shell",
+      "speed": 400,
+      "splash": 0.6,
+      "muzzle": 0,
+      "sound": "",
+      "impact": "explosion_large"
+    },
+    {
+      "id": "smoke_shell",
+      "name": "Smoke round",
+      "warhead": "he",
+      "damage": 2,
+      "range": 22.0,
+      "cooldown": 60,
+      "projectile": "shell",
+      "speed": 120,
+      "splash": 1.6,
+      "muzzle": 2,
+      "sound": "howitzer",
+      "impact": "",
+      "smoke": 35
+    },
+    {
+      "id": "smoke_grenade",
+      "name": "Smoke grenade",
+      "warhead": "he",
+      "damage": 1,
+      "range": 4.0,
+      "cooldown": 30,
+      "projectile": "shell",
+      "speed": 40,
+      "splash": 1.2,
+      "muzzle": 0,
+      "sound": "",
+      "impact": "",
+      "smoke": 25
+    },
+    {
+      "id": "grenade",
+      "name": "Hand grenade",
+      "warhead": "he",
+      "damage": 75,
+      "range": 4.0,
+      "cooldown": 30,
+      "projectile": "shell",
+      "speed": 40,
+      "splash": 0.8,
+      "muzzle": 0,
+      "sound": "",
+      "impact": "explosion_small"
     }
   ]
 }

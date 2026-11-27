@@ -257,10 +257,12 @@ void Simulation::stepMovement() {
           if (reverse) desired = static_cast<Angle>((desired + ANGLE_FULL / 2) & ANGLE_MASK);
         }
 
-        // The ground underfoot sets the pace (slopes, mud, fords).
+        // The ground underfoot sets the pace (slopes, mud, fords); men under fire crawl, or don't move at all (9.15).
+        const int32_t under = def.infantry() ? conditionSpeedPercent(ei) : 100;
+        if (under == 0) return;
         const int32_t speed = std::max<int32_t>(
             1, def.speed * map_.speedPercent(pos.x >> LEPTON_SHIFT, pos.y >> LEPTON_SHIFT, def.locomotor) / 100 *
-                   (reverse ? kReverseSpeed : 100) / 100);
+                   (reverse ? kReverseSpeed : 100) / 100 * under / 100);
         auto arrive = [&]() {
           pos.x = wp.x;
           pos.y = wp.y;
@@ -503,12 +505,14 @@ void Simulation::stepVision() {
   // tiles is the same in any order, so the result does not depend on how many
   // threads there are.
   visionStamps_.clear();
+  int32_t sightNow = visionRules_.sightPercent;
+  if (visionRules_.weatherSight()) sightNow = std::max(10, sightNow * weatherSightPercent() / 100);
   reg_.each<CUnit, CPosition>([&](uint32_t, CUnit& u, CPosition& p) {
     if (u.owner >= MAX_PLAYERS) return;  // neutral: nobody sees through civilians' eyes
     const UnitTypeDef& def = types_.get(u.type);
     int r = def.sight >> LEPTON_SHIFT;
     if (r <= 0) return;
-    if (visionRules_.sightPercent != 100) r = std::max(1, r * visionRules_.sightPercent / 100);
+    if (sightNow != 100) r = std::max(1, r * sightNow / 100);
     vision_.prepare(r);
     visionStamps_.push_back({static_cast<int16_t>(p.x >> LEPTON_SHIFT), static_cast<int16_t>(p.y >> LEPTON_SHIFT),
                              static_cast<int16_t>(r), u.owner, static_cast<uint8_t>(def.scout ? 1 : 0)});

@@ -507,6 +507,22 @@ void GameScene::callInEvent(const SimEvent& ev) {
     case EventType::TroopsLanded:
       if (ev.owner == player_ && mode_ == Mode::Game && audio_) audio_->say("ready");
       break;
+    // Combat (9.15).
+    case EventType::Ambush:
+      if (mode_ != Mode::Game) break;
+      if (ev.owner == player_) showStatus("Ambush! Their first volley hits hard", 2.5f);
+      else if (sim_->allied(ev.owner, player_)) break;
+      else if (watching(ev.at.x, ev.at.y)) showStatus("Ambushed!", 2.5f);
+      break;
+    case EventType::UnitBroke:
+      if (ev.owner == player_ && mode_ == Mode::Game && time_ - brokeShownAt_ > 20.0f) {
+        brokeShownAt_ = time_;
+        showStatus("Our men are breaking and running for the base", 3);
+      }
+      break;
+    case EventType::MineCleared:
+      if (ev.owner == player_ && mode_ == Mode::Game) showStatus("Engineers lifted a mine", 2);
+      break;
     default:
       break;
   }

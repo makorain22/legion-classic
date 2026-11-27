@@ -421,6 +421,16 @@ void Menus::drawSkirmish() {
   if (ImGui::IsItemHovered())
     ImGui::SetTooltip("Teams on opposite sides: each team's bases stand together on its own side of the map,\n"
                       "facing the other across it.");
+  ImGui::Checkbox("Concealment in woods", &setup_.concealment);
+  if (ImGui::IsItemHovered())
+    ImGui::SetTooltip("Infantry deep in a wood is seen only by scouts close by (snipers, scout cars); men on its edge as\n"
+                      "usual. Hidden men who open fire are seen for a few seconds. Ambushes from cover hit far harder.");
+  ImGui::SameLine();
+  ImGui::Checkbox("Hills hide", &setup_.lineOfSight);
+  if (ImGui::IsItemHovered()) ImGui::SetTooltip("Rising ground hides what lies behind it.");
+  ImGui::SameLine();
+  ImGui::Checkbox("Night and weather", &setup_.weatherSight);
+  if (ImGui::IsItemHovered()) ImGui::SetTooltip("Darkness, rain, snow and mist cut how far everyone sees.");
 
   ImGui::SeparatorText("Sides");
   static const char* who[] = {"Closed", "Human", "Computer: easy", "Computer: normal", "Computer: hard"};

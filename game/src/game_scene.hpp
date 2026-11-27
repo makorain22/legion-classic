@@ -58,6 +58,10 @@ struct SkirmishSetup {
   int credits = 5000;
   int startLayout = 0;  // 0 teams on opposite sides (west / east), 1 fixed (W, E, N, S), 2 shuffled
   std::string mapFile;  // a ready-made skirmish map (full path), "" = generate one from size, biome and seed
+  // How the battle sees (9.15; the simulation's VisionRules).
+  bool concealment = true;   // infantry inside woods is seen only by scouts close by
+  bool lineOfSight = false;  // hills hide what lies behind them
+  bool weatherSight = true;  // night and bad weather cut how far everyone sees
   struct Side {
     bool open = false;
     std::string faction = "ger";
@@ -360,6 +364,7 @@ class GameScene final : public pioneer::Scene {
     uint32_t team = 0;
   };
   std::vector<Chute> chutes_;
+  float brokeShownAt_ = -100.0f;  // when "our men are breaking" was last said (9.15)
   std::unordered_set<uint32_t> heardStrikes_, bombsHeard_;
   std::unordered_set<uint64_t> crashed_;
   void queueCallIns(const pioneer::RectF& view, uint32_t& order);

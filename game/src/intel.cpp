@@ -32,6 +32,17 @@ bool GameScene::structureKnown(uint32_t e) const {
   Registry& reg = sim_->registry();
   const CUnit* u = reg.pool<CUnit>().tryGet(e);
   if (!u || u->owner >= MAX_PLAYERS || sim_->allied(u->owner, player_)) return true;  // ours, allies', the villages
+  if (types_.get(u->type).isMine()) {
+    // Enemy mines (9.15): seen only where one of our engineers is right by them.
+    const CPosition& mp = reg.pool<CPosition>().get(e);
+    for (uint32_t o : reg.pool<CUnit>().entities()) {
+      const CUnit& v = reg.pool<CUnit>().get(o);
+      if (v.owner != player_ || types_.get(v.type).repair <= 0 || !types_.get(v.type).infantry()) continue;
+      const CPosition& q = reg.pool<CPosition>().get(o);
+      if (distance(q.x - mp.x, q.y - mp.y) <= 3u * LEPTONS_PER_TILE) return true;
+    }
+    return false;
+  }
   const auto it = spotted_.find(e);
   return it != spotted_.end() && it->second == reg.handle(e).generation;
 }

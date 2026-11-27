@@ -81,6 +81,12 @@ struct UnitTypeDef {
   bool autoTarget = true;        // enemies attack it of their own accord
   bool targetable = true;        // can be attacked at all
   bool hidden = false;           // deleted by a rules change mid-battle: kept for what exists, never built
+  // Combat (9.15).
+  bool spotter = false;          // an observer: indirect fire on what it sees lands half as wide
+  std::string mineWeaponId;      // a minefield: the charge that goes off under an enemy ("mine" in the rules)...
+  int mineWeapon = -1;           // ...resolved
+  uint8_t mineAgainst = 0;       // ...set off by 0 infantry, 1 vehicles, 2 either
+  bool isMine() const { return mineWeapon >= 0; }
 
   bool isStructure() const { return footW > 0; }
   bool infantry() const { return locomotor == Locomotor::Foot && !isStructure(); }

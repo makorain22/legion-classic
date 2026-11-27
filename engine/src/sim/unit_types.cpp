@@ -119,6 +119,17 @@ bool UnitTypeRegistry::loadJson(const nlohmann::json& doc, std::string& error) {
       d.autoTarget = u.value("autoTarget", true);
       d.targetable = u.value("targetable", true);
       d.hidden = u.value("hidden", false);
+      d.spotter = u.value("spotter", false);
+      if (u.contains("mine")) {
+        const auto& m = u["mine"];
+        d.mineWeaponId = m.value("weapon", std::string());
+        const std::string against = m.value("against", std::string("infantry"));
+        d.mineAgainst = against == "vehicles" ? 1 : against == "any" ? 2 : 0;
+        if (d.mineWeaponId.empty() || (against != "infantry" && against != "vehicles" && against != "any")) {
+          error = "unit '" + d.id + "': \"mine\" needs a \"weapon\" and \"against\": infantry, vehicles or any";
+          return false;
+        }
+      }
       d.category = d.isStructure() ? UnitCategory::Building
                    : d.locomotor == Locomotor::Foot ? UnitCategory::Infantry : UnitCategory::Vehicle;
       if (u.contains("category") && !parseCategory(u["category"].get<std::string>(), d.category)) {
@@ -174,6 +185,14 @@ bool UnitTypeRegistry::resolveWeapons(const WeaponRegistry& weapons, std::string
     if (d.weapons.size() > 2) {
       error = "unit '" + d.id + "' has more than 2 weapons";
       return false;
+    }
+    d.mineWeapon = -1;
+    if (!d.mineWeaponId.empty()) {
+      d.mineWeapon = weapons.find(d.mineWeaponId);
+      if (d.mineWeapon < 0) {
+        error = "minefield '" + d.id + "' uses unknown weapon '" + d.mineWeaponId + "'";
+        return false;
+      }
     }
   }
   return true;

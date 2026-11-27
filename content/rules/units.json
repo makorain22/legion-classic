@@ -125,7 +125,8 @@
       "aiWeight": 1,
       "nato": "sniper",
       "group": "Specialists",
-      "description": "Picks off infantry from long range and sees far. Fragile, slow to fire, and no use against vehicles."
+      "description": "Picks off infantry from long range and sees far. Fragile, slow to fire, and no use against vehicles.",
+      "spotter": true
     },
     {
       "id": "ger_scout_car",
@@ -153,7 +154,8 @@
       "aiWeight": 1,
       "nato": "recon",
       "group": "Recon & transport",
-      "description": "A fast four-wheeled armoured car with a machine gun. Finds the enemy; does not stand and fight tanks."
+      "description": "A fast four-wheeled armoured car with a machine gun. Finds the enemy; does not stand and fight tanks.",
+      "spotter": true
     },
     {
       "id": "ger_halftrack",
@@ -478,7 +480,8 @@
       "aiWeight": 1,
       "nato": "sniper",
       "group": "Specialists",
-      "description": "Picks off infantry from long range and sees far. Fragile and slow to fire."
+      "description": "Picks off infantry from long range and sees far. Fragile and slow to fire.",
+      "spotter": true
     },
     {
       "id": "rus_scout_car",
@@ -506,7 +509,8 @@
       "aiWeight": 1,
       "nato": "recon",
       "group": "Recon & transport",
-      "description": "A small, fast armoured car. Finds the enemy; does not stand and fight tanks."
+      "description": "A small, fast armoured car. Finds the enemy; does not stand and fight tanks.",
+      "spotter": true
     },
     {
       "id": "rus_halftrack",
@@ -831,7 +835,8 @@
       "aiWeight": 1,
       "nato": "sniper",
       "group": "Specialists",
-      "description": "A trained marksman with a scoped rifle. Picks off infantry from long range and sees far; fragile and slow to fire."
+      "description": "A trained marksman with a scoped rifle. Picks off infantry from long range and sees far; fragile and slow to fire.",
+      "spotter": true
     },
     {
       "id": "gbr_scout_car",
@@ -859,7 +864,8 @@
       "aiWeight": 1,
       "nato": "recon",
       "group": "Recon & transport",
-      "description": "A small, very fast scout car with a Bren gun. Finds the enemy; does not stand and fight tanks."
+      "description": "A small, very fast scout car with a Bren gun. Finds the enemy; does not stand and fight tanks.",
+      "spotter": true
     },
     {
       "id": "gbr_halftrack",

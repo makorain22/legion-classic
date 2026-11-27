@@ -2296,6 +2296,168 @@
       ],
       "group": "Emplacements",
       "description": "A quick-firing anti-aircraft gun in a sandbagged pit. Fires at planes overhead and can bring them down or drive a raid off; it also cuts up infantry in the open."
+    },
+    {
+      "id": "ger_mines_ap",
+      "faction": "ger",
+      "armor": "structure",
+      "name": "Sch\u00fc-Minen (anti-personnel)",
+      "model": "mines",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 40,
+      "cost": 40,
+      "category": "fortification",
+      "blocks": [],
+      "autoTarget": false,
+      "targetable": false,
+      "builtAt": "yard",
+      "requires": [
+        "ger_barracks"
+      ],
+      "group": "Field works",
+      "mine": {
+        "weapon": "mine_ap",
+        "against": "infantry"
+      },
+      "description": "A buried charge that goes off under the first enemy soldier to step on it. The enemy cannot see it; their engineers find and lift mines they walk up to."
+    },
+    {
+      "id": "ger_mines_at",
+      "faction": "ger",
+      "armor": "structure",
+      "name": "Tellerminen (anti-tank)",
+      "model": "mines",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 40,
+      "cost": 90,
+      "category": "fortification",
+      "blocks": [],
+      "autoTarget": false,
+      "targetable": false,
+      "builtAt": "yard",
+      "requires": [
+        "ger_factory"
+      ],
+      "group": "Field works",
+      "mine": {
+        "weapon": "mine_at",
+        "against": "vehicles"
+      },
+      "description": "A heavy charge that breaks the tracks or belly of the first enemy vehicle over it; men walk across safely. Hidden from the enemy; their engineers lift mines they walk up to."
+    },
+    {
+      "id": "rus_mines_ap",
+      "faction": "rus",
+      "armor": "structure",
+      "name": "PMD-6 mines (anti-personnel)",
+      "model": "mines",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 40,
+      "cost": 40,
+      "category": "fortification",
+      "blocks": [],
+      "autoTarget": false,
+      "targetable": false,
+      "builtAt": "yard",
+      "requires": [
+        "rus_barracks"
+      ],
+      "group": "Field works",
+      "mine": {
+        "weapon": "mine_ap",
+        "against": "infantry"
+      },
+      "description": "A buried charge that goes off under the first enemy soldier to step on it. The enemy cannot see it; their engineers find and lift mines they walk up to."
+    },
+    {
+      "id": "rus_mines_at",
+      "faction": "rus",
+      "armor": "structure",
+      "name": "TM-35 mines (anti-tank)",
+      "model": "mines",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 40,
+      "cost": 90,
+      "category": "fortification",
+      "blocks": [],
+      "autoTarget": false,
+      "targetable": false,
+      "builtAt": "yard",
+      "requires": [
+        "rus_factory"
+      ],
+      "group": "Field works",
+      "mine": {
+        "weapon": "mine_at",
+        "against": "vehicles"
+      },
+      "description": "A heavy charge that breaks the tracks or belly of the first enemy vehicle over it; men walk across safely. Hidden from the enemy; their engineers lift mines they walk up to."
+    },
+    {
+      "id": "gbr_mines_ap",
+      "faction": "gbr",
+      "armor": "structure",
+      "name": "Anti-personnel mines",
+      "model": "mines",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 40,
+      "cost": 40,
+      "category": "fortification",
+      "blocks": [],
+      "autoTarget": false,
+      "targetable": false,
+      "builtAt": "yard",
+      "requires": [
+        "gbr_barracks"
+      ],
+      "group": "Field works",
+      "mine": {
+        "weapon": "mine_ap",
+        "against": "infantry"
+      },
+      "description": "A buried charge that goes off under the first enemy soldier to step on it. The enemy cannot see it; their engineers find and lift mines they walk up to."
+    },
+    {
+      "id": "gbr_mines_at",
+      "faction": "gbr",
+      "armor": "structure",
+      "name": "Mk V anti-tank mines",
+      "model": "mines",
+      "footprint": [
+        1,
+        1
+      ],
+      "health": 40,
+      "cost": 90,
+      "category": "fortification",
+      "blocks": [],
+      "autoTarget": false,
+      "targetable": false,
+      "builtAt": "yard",
+      "requires": [
+        "gbr_factory"
+      ],
+      "group": "Field works",
+      "mine": {
+        "weapon": "mine_at",
+        "against": "vehicles"
+      },
+      "description": "A heavy charge that breaks the tracks or belly of the first enemy vehicle over it; men walk across safely. Hidden from the enemy; their engineers lift mines they walk up to."
     }
   ],
   "support": [

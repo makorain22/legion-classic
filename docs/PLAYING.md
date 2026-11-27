@@ -430,6 +430,29 @@ guns and towers are built and placed like other structures.
   yard without stopping to fight.
 - Smoke rounds lay a cloud nobody sees through.
 
+### Under fire: suppression, morale, ambushes, mines (9.15)
+
+- Rounds landing close get men's heads down. **Prone** (from 400 of 1000,
+  an orange strip under the health bar): half speed, 30 % harder to hit, fire
+  more slowly. **Pinned** (from 850, red): they won't move and fire only now
+  and then. It wears off once the firing stops. Machine guns and artillery
+  pin; flank pinned men instead of walking into them.
+- **Morale** falls under heavy fire and when friends die close by. Men who
+  break run for the nearest construction yard until they steady.
+- **Ambush:** a unit unseen for ten seconds while holding its fire (stance
+  *Hold fire*) or hidden deep in a wood is marked white beside its health bar:
+  its first volley hits three times as hard, six times against what it is
+  made for (an anti-tank team on a tank).
+- **Mines** (Defend tab, *Field works*): anti-personnel mines go off under
+  enemy infantry, anti-tank mines under vehicles. The enemy can't see them;
+  their engineers find and lift mines they walk up to. Your engineers show you
+  the enemy's mines within three tiles.
+- **Observers:** snipers and scout cars watching a target halve the scatter
+  of your artillery on it.
+- Skirmish options: *Concealment in woods* (infantry deep in a wood is seen
+  only by scouts close by), *Hills hide*, *Night and weather* (darkness, rain,
+  snow and mist shorten everyone's sight).
+
 ### Call-ins (Support tab)
 
 Build your army's **liaison post** (Luftwaffe Liaison Post, Air Army

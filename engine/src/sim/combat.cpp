@@ -24,6 +24,10 @@ void Simulation::stepTargeting() {
     if ((tick_ + ei) % 4 != 0) return;  // scan for targets 4 times a second, staggered
 
     const UnitTypeDef& def = types_.get(u.type);
+    if (routing(ei)) {  // running for it: no fight left in them
+      c.target = kNullEntity;
+      return;
+    }
     reactToFire(ei, c, u, p, o);
     if (u.stance == Stance::HoldFire) {  // ambush: only an explicit attack order opens fire
       c.target = kNullEntity;
@@ -147,6 +151,8 @@ void Simulation::stepWeapons() {
           const int32_t per = 100 + fireRateBonus(u.owner, p.x, p.y);
           const int32_t dither = per > 100 ? static_cast<int32_t>(hash32(tick_ * 2654435761u + ei * 40503u + static_cast<uint32_t>(slot)) % static_cast<uint32_t>(per)) : 0;
           c.cooldown[slot] = static_cast<uint16_t>(std::max(1, (wd.cooldown * 100 + dither) / per));
+          if (const int32_t slow = conditionFirePercent(ei); slow != 100)  // prone or pinned men fire less (9.15)
+            c.cooldown[slot] = static_cast<uint16_t>(std::min<int32_t>(60000, c.cooldown[slot] * slow / 100));
           shots.push_back({ei, w, {p.x, p.y}, aim, ground ? kNullEntity : c.target});
         }
       });
@@ -162,14 +168,7 @@ void Simulation::stepWeapons() {
     fire.from = s.from;
     fire.at = s.at;
     events_.push_back(fire);
-    // Firing gives the shooter away (9.15): a gun firing indirectly to every enemy, for a few seconds (counter-battery
-    // fire answers it); a man hidden in the woods to those who can see the spot.
-    if (wd.indirect() || concealed(s.shooter)) {
-      CCondition& cond = conditionOf(reg_.handle(s.shooter));
-      cond.revealedTick = tick_;
-      if (wd.indirect()) cond.flags |= CCondition::kGunFlash;
-      else cond.flags &= static_cast<uint8_t>(~CCondition::kGunFlash);
-    }
+    openFire(s.shooter, wd);  // an ambush sprung, a gun given away (condition.cpp)
     if (wd.projectile == ProjectileKind::Instant) {
       if (s.target.valid() && static_cast<int32_t>(rng_.below(100)) < wd.accuracy) {
         impact(s.weapon, owner, s.at, s.target, s.from, reg_.handle(s.shooter));
@@ -180,7 +179,8 @@ void Simulation::stepWeapons() {
     } else {
       // Shells scatter more the farther they fly; salvo rockets scatter more still.
       const uint32_t d = distance(s.at.x - s.from.x, s.at.y - s.from.y);
-      const int32_t spread = static_cast<int32_t>(d / 20);
+      // An observer watching the target halves the scatter of indirect fire (9.15).
+      const int32_t spread = static_cast<int32_t>(d / 20) / (wd.indirect() && spotted(owner, s.at) ? 2 : 1);
       for (int32_t b = 0; b < wd.burst; ++b) {
         Vec2i aim = s.at;
         const int32_t sp = spread + (wd.burst > 1 ? wd.burstSpread : 0);
@@ -254,7 +254,8 @@ void Simulation::impact(int weapon, uint8_t owner, Vec2i at, Entity directTarget
   // A round landing on a structure's footprint hits the structure.
   const Entity building = structureAt(at.x >> LEPTON_SHIFT, at.y >> LEPTON_SHIFT);
   if (building.valid() && types_.get(units.get(building.index).type).targetable) {
-    int32_t dmg = weapons_.damageCenti(weapon, types_.get(units.get(building.index).type).armor) * bonus / 100;
+    const ArmorClass ba = types_.get(units.get(building.index).type).armor;
+    int32_t dmg = weapons_.damageCenti(weapon, ba) * bonus / 100 * ambushPercent(shooter, weapon, ba) / 100;
     if (allied(units.get(building.index).owner, owner)) dmg /= 2;
     damage(building.index, dmg, shooter);
     hit = true;
@@ -274,8 +275,10 @@ void Simulation::impact(int weapon, uint8_t owner, Vec2i at, Entity directTarget
       const uint32_t hull = vd.infantry() ? 0u : static_cast<uint32_t>(std::min(vd.radius / 2, kHullReach));
       d = d > hull ? d - hull : 0;
       if (d > static_cast<uint32_t>(wd.splash)) return;
-      int32_t dmg = static_cast<int32_t>(static_cast<int64_t>(weapons_.damageCenti(weapon, types_.get(v.type).armor, sideOf(o))) *
-                                         bonus / 100 * (wd.splash * 2 - static_cast<int32_t>(d)) / (wd.splash * 2));
+      const ArmorClass va = types_.get(v.type).armor;
+      int32_t dmg = static_cast<int32_t>(static_cast<int64_t>(weapons_.damageCenti(weapon, va, sideOf(o))) * bonus / 100 *
+                                         ambushPercent(shooter, weapon, va) / 100 * (wd.splash * 2 - static_cast<int32_t>(d)) /
+                                         (wd.splash * 2));
       if (allied(v.owner, owner)) dmg /= 2;
       damage(o, dmg, shooter);
       hit = true;
@@ -297,11 +300,14 @@ void Simulation::impact(int weapon, uint8_t owner, Vec2i at, Entity directTarget
       });
     }
     if (victim != UINT32_MAX) {
-      damage(victim, weapons_.damageCenti(weapon, types_.get(units.get(victim).type).armor, sideOf(victim)) * bonus / 100,
+      const ArmorClass va = types_.get(units.get(victim).type).armor;
+      damage(victim, weapons_.damageCenti(weapon, va, sideOf(victim)) * bonus / 100 * ambushPercent(shooter, weapon, va) / 100,
              shooter);
       hit = true;
     }
   }
+  // Men round where it landed get their heads down (9.15).
+  if (owner < MAX_PLAYERS) suppressAround(weapon, owner, at);
   // Smoke rounds (9.15) lay a cloud as wide as their burst.
   if (wd.smoke > 0 && smoke_.size() < 256)
     smoke_.push_back({at, std::clamp(std::max(wd.splash * 2, 2 * LEPTONS_PER_TILE), 256, 8 * LEPTONS_PER_TILE),
@@ -336,6 +342,8 @@ void Simulation::damage(uint32_t victim, int32_t amount, Entity shooter) {
     if (cover && !reg_.pool<CGarrisoned>().has(victim)) amount = std::max(1, static_cast<int32_t>(static_cast<int64_t>(amount) * (100 - cover) / 100));
     const int32_t shelter = shelterPercent(victim);
     if (shelter < 100) amount = std::max(1, static_cast<int32_t>(static_cast<int64_t>(amount) * shelter / 100));
+    const int32_t low = conditionShelterPercent(victim);  // prone or pinned: harder to hit (9.15)
+    if (low < 100) amount = std::max(1, static_cast<int32_t>(static_cast<int64_t>(amount) * low / 100));
   }
   // Remember who is shooting at us, so we can answer.
   if (shooter.valid() && reg_.alive(shooter) && reg_.has<CUnit>(shooter) &&
@@ -385,6 +393,7 @@ void Simulation::damage(uint32_t victim, int32_t amount, Entity shooter) {
     }
   }
   const CPosition& p = reg_.pool<CPosition>().get(victim);
+  if (vd.infantry() && u.owner < MAX_PLAYERS) shaken({p.x, p.y}, u.owner);  // friends close by are shaken (9.15)
   SimEvent ev;
   ev.type = EventType::UnitDied;
   ev.owner = u.owner;

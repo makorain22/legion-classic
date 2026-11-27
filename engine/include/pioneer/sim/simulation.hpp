@@ -218,6 +218,9 @@ enum class EventType : uint8_t {
   // --- Combat and controls (9.15) ---------------------------------------------------------
   UnderAttack,      // owner's unit or building (`unitType`) is hit by the enemy at `at`; at most one every few
                     // seconds for each side and place (the alert)
+  Ambush,           // owner's unit sprang an ambush from `at` (its volley hits three to six times as hard)
+  UnitBroke,        // owner's man (`unitType`) at `at` broke and runs for home
+  MineCleared,      // owner's engineers lifted a mine (`unitType`) at `at`
 };
 
 struct SimEvent {
@@ -306,12 +309,17 @@ class Simulation {
     enum : uint16_t {
       kWoodland = 1,     // infantry inside woodland is seen only by scouts (its outskirts are seen as usual)
       kLineOfSight = 2,  // rising ground hides what lies behind it
+      kWeatherSight = 4, // night, twilight and bad weather cut sight further (9.15; see weatherSightPercent)
     };
     uint16_t flags = 0;
     uint16_t sightPercent = 100;  // weather and time of day: every sight radius scaled
     bool woodland() const { return flags & kWoodland; }
     bool lineOfSight() const { return flags & kLineOfSight; }
+    bool weatherSight() const { return flags & kWeatherSight; }
   };
+  // How far one sees now for the hour and the weather, in percent (100 by day in fair weather; 9.15). Integer
+  // arithmetic only, so every machine in a multiplayer battle agrees.
+  int32_t weatherSightPercent() const;
   const VisionRules& visionRules() const { return visionRules_; }
   struct SmokeCloud {
     Vec2i at;
@@ -342,6 +350,12 @@ class Simulation {
   void setWeather(uint8_t weather, int32_t seconds);
   // Is this unit hidden where it stands (the rules and the ground say so)?
   bool concealed(uint32_t unit) const;
+  // Under fire (9.15): percent of its speed a man keeps (prone 55, pinned 0, running 115), of the usual time between
+  // his shots (prone 150, pinned 400), and of the damage he takes (prone 70, pinned 55); breaking and running.
+  int32_t conditionSpeedPercent(uint32_t unit) const;
+  int32_t conditionFirePercent(uint32_t unit) const;
+  int32_t conditionShelterPercent(uint32_t unit) const;
+  bool routing(uint32_t unit) const;
   // Does `player`'s side see this unit: its tile in sight, and the unit not hidden from it?
   bool unitVisibleTo(uint8_t player, uint32_t unit) const;
   // A unit's bearing (suppression, morale, posture...); null for one nothing has touched.
@@ -574,6 +588,15 @@ class Simulation {
   void reactToFire(uint32_t ei, CCombat& c, CUnit& u, const CPosition& p, COrder& o);
   void setOrderIdle(Entity e);
   void retreat(const std::vector<Entity>& units);
+  // The soldier's condition (condition.cpp, 9.15).
+  void suppress(uint32_t victim, int32_t amount);
+  void suppressAround(int weapon, uint8_t owner, Vec2i at);
+  void shaken(Vec2i at, uint8_t owner);
+  void openFire(uint32_t shooter, const WeaponDef& wd);
+  bool spotted(uint8_t owner, Vec2i at) const;
+  int32_t ambushPercent(Entity shooter, int weapon, ArmorClass armor) const;
+  void stepCondition();
+  void stepMines();
   void applyEdit(const UnitEdit& ed);
 
   // movement (movement.cpp)
