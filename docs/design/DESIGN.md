@@ -554,7 +554,13 @@ recognition flash on vehicles and a roundel in the interface.
      - **Review stop** (end of 9.13): the user looks over the engine before
        9.14; afterwards the engine moves to a repository of its own.
    - **9.14 Air and naval support** (added 25 Nov at the user's request;
-     skirmish and missions):
+     skirmish and missions) - **done 27 Nov** (`c394beb` sim, `20c1c31`
+     screen and computer player): eight call-ins per army opened by a
+     liaison post (recon, ground attack, bombing and strafing along a
+     draggable line, paratroopers, supply crates, a warship's guns, a
+     landing), flak pits, set pieces for scripts, Support tab, voxel planes,
+     ships, landing craft and parachutes, synthesised sounds; see
+     docs/ENGINE.md "call-ins". Planned as:
      - **Air call-ins, no air units** (user: "the game isnt big enough to
        afford actual planes to scale en masse"): a strike panel with charges
        and cooldowns. Strikes: bombing run (a real barrage along the pass),
@@ -581,7 +587,10 @@ recognition flash on vehicles and a roundel in the interface.
        aircraft per army (fighter, ground attack, bomber, transport) and
        offshore ships; no swastikas.
    - **9.15 Combat and controls** (brought forward 25 Nov at the user's
-     request): artillery firing at chips, attack-ground, counter-battery,
+     request) - **done 27 Nov** in four parts (`0ac7450` fire orders,
+     `4f7ad77` the soldier under fire, `367a62a` unit abilities, `e41a5c4`
+     controls); see docs/ENGINE.md "combat and controls". Planned as:
+     artillery firing at chips, attack-ground, counter-battery,
      units reacting when one of their group is hit, minefields, smoke
      shells, under-attack alert, retreat order, spotters, suppression,
      morale and prone (pinned men fire now and then), **woodland
