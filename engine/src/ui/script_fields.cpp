@@ -106,6 +106,37 @@ bool editAll(const script::Entry& e, T& item, const ScriptFieldContext& ctx) {
       ImGui::PopID();
       continue;
     }
+    if (f.slot == script::Slot::Text && f.kind == Kind::Support && ctx.types && ctx.types->support().size() > 0) {
+      // A call-in from the rules (9.14), by name.
+      const SupportRegistry& sr = ctx.types->support();
+      const int now = sr.find(item.text);
+      if (ImGui::BeginCombo("##v", now >= 0 ? sr.get(now).name.c_str() : (item.text.empty() ? "(choose)" : item.text.c_str()))) {
+        for (size_t i = 0; i < sr.size(); ++i) {
+          const SupportPowerDef& d = sr.get(static_cast<int>(i));
+          const std::string label = d.name + "  (" + d.id + ")";
+          if (ImGui::Selectable(label.c_str(), now == static_cast<int>(i))) {
+            item.text = d.id;
+            changed = true;
+          }
+        }
+        ImGui::EndCombo();
+      }
+      if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", f.help);
+      ImGui::PopID();
+      continue;
+    }
+    if (f.slot == script::Slot::Text && f.kind == Kind::UnitList) {
+      // "ger_rifleman*6, ger_halftrack": typed, checked as you go.
+      changed |= ImGui::InputTextWithHint("##v", "ger_rifleman*6, ger_halftrack", &item.text);
+      if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", f.help);
+      if (ctx.types && !item.text.empty()) {
+        std::vector<std::pair<int, int>> list;
+        std::string err;
+        if (!parseUnitList(item.text, *ctx.types, list, &err)) ImGui::TextColored(ImVec4(1, 0.45f, 0.35f, 1), "%s", err.c_str());
+      }
+      ImGui::PopID();
+      continue;
+    }
     if (f.slot == script::Slot::Text && f.kind == Kind::TimeOfDay) {
       // A slider in steps of a quarter of an hour, or typed exactly (hh:mm).
       int minute = 12 * 60;
